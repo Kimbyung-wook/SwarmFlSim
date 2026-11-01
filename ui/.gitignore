@@ -1,0 +1,4 @@
+# npm run gen:proto 생성물
+src/gen/
+# tsc -b 캐시
+*.tsbuildinfo
