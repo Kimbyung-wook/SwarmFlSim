@@ -1,0 +1,113 @@
+# WP3 Vehicle Agent 런타임 추적표 (모듈 AGT)
+
+- 패키지 `swarm-agent`, 실행 파일 `swarm-agent`. 한 프로세스가 여러 기체를 호스팅한다.
+- 기본 MA 플러그인은 `algorithms/`(IMP-AGT-011~)에 있다.
+
+## 구성
+
+```mermaid
+flowchart LR
+    TICK["sim/clock/tick"] --> RT
+    CMD["sim/ctrl/cmd<br/>LoadScenario · Start · Reset · Shutdown"] --> RT
+    NAV["onboard/&lt;id&gt;/NavigationReport<br/>Detection · *Activity · SystemStatus"] --> RT
+    RX["swarm/&lt;id&gt;/rx/**<br/>LinkEnvelope"] --> RT
+    subgraph RT["AgentRuntime (agent/)"]
+        V["Vehicle × N<br/>L1 포트 C2·VI·MS·MP·P2P·MD"]
+        MA["MA: 기체별 on_step · 일괄 on_step_batch"]
+        FA["FA (기본 default)"]
+        MA -- "ctx.ports" --> V
+        V -- "vi.command" --> FA
+    end
+    RT --> CO["onboard/&lt;id&gt;/ControlOutput · *Command"]
+    RT --> TX["swarm/&lt;id&gt;/tx/&lt;iface&gt;/&lt;msg&gt;<br/>LinkEnvelope"]
+    RT --> DONE["sim/clock/done/&lt;participant&gt;"]
+```
+
+- 틱 N 처리: 수신 버퍼 넘김·ctx 갱신 → MA(기체 ID 순, 일괄 MA는 플러그인 이름 순) → FA(틱 N 이전에 항법 보고를 받은 기체만) → ControlOutput 발행 → lockstep이면 FrameDone(N).
+- 수신 버퍼는 이중 버퍼다. 프레임 사이에 도착한 메시지는 다음 프레임 시작 때 inbox로 넘어가고, 읽지 않은 것은 그다음 프레임에 버린다.
+- 런타임은 `sim/ctrl/cmd`를 읽지만 어떤 포트로도 넘기지 않는다. `truth/**`, `link/**`는 구독하지 않는다 (DEC-013, DEC-014, PRP-SIM-003).
+- 맡는 기체: `--entities`가 있으면 그 기체, 없으면 `AutonomySpec`(ma_plugin 또는 fa_plugin)이 있는 기체. MA가 비면 `hold`, FA가 비면 `default`.
+- 난수: `ctx.rng = default_rng([seed, crc32(entity_id)])`. seed는 시나리오 `run.seed`, 첫 프레임 전에 `Start.seed`(≠0)가 오면 그것.
+- C2 송신 dst는 `controlling_gcs`(없으면 버리고 경고). P2P `to=None`은 dst를 비운다(브로드캐스트). 내부 메시지 `header`의 빈 항목(source, frame, sim_time_us, seq)은 런타임이 채운다.
+- 시나리오는 `LoadScenario.scenario`로 받는다. `--scenario <file>`(.pb, proto JSON, 시나리오 JSON)은 `swarm_core --scenario`로 시작해 LoadScenario가 버스에 나오지 않을 때 쓴다.
+
+## IMP
+
+| ID | 내용 | 위치 | 근거 | 시험 결과 |
+|---|---|---|---|---|
+| IMP-AGT-001 | 평면 근사 좌표 변환(북·동 오프셋, 역변환, 각 정규화), 스칼라·NumPy 공용 | `src/swarm_agent/geo.py` | DEC-006 | Pass (TC-AGT-001~003) |
+| IMP-AGT-002 | 메시지 이름 ⇄ 클래스(디스크립터 풀, swarm.v1만), 인코딩, header 빈 항목 채우기 | `src/swarm_agent/messages.py` | PRP-NET-003 | Pass (TC-AGT-009) |
+| IMP-AGT-003 | L1 포트 구현 C2·VI·MS·MP·P2P·MD, 프레임 이중 버퍼, MP 자기 작업·편대 필터와 링크 갱신, MS 잔량 갱신, MS 명령 → onboard | `src/swarm_agent/ports.py` | DEC-013, PRP-BHV-001 | Pass (TC-AGT-008, TC-AGT-009) |
+| IMP-AGT-004 | Vehicle: 포트·AgentContext·FA·항법 상태 보관, 송신 header·seq | `src/swarm_agent/vehicle.py` | DEC-013 | Pass (TC-AGT-006, TC-AGT-009) |
+| IMP-AGT-005 | 플러그인 로딩: entry point `swarm.ma`/`swarm.fa` 등록명, 기본값(hold/default), 시험용 덮어쓰기 | `src/swarm_agent/plugins.py` | PRP-BHV-001, REQ-BHV-004 | Pass (TC-AGT-006) |
+| IMP-AGT-006 | AgentRuntime: LoadScenario·Start·Reset·Shutdown, 호스팅 선택, 기체별·일괄 MA 호출(NavBatch), FA step, onboard·rx 수신, LinkEnvelope 송신(C2 → controlling_gcs), lockstep FrameDone, 시드 고정 rng, 플러그인 예외 격리, 처리 시간 통계, threaded(Zenoh)·동기(InMemory) 모드 | `src/swarm_agent/runtime.py` | DEC-005, DEC-006, DEC-013, DEC-014, PRP-BHV-002, PRP-SIM-002 | Pass (TC-AGT-006~011, TC-AGT-013) |
+| IMP-AGT-007 | 기본 FA `default`: HSA·Waypoint·Orbit 유도(직행, 벡터장), 침로 비례 선회율(최대 뱅크 제한)·고도 비례 상승률, KinematicCmd에 heading_rate와 협조선회 bank를 함께 채움(2/3-DoF 공용), 상태 ACCEPTED·REJECTED·EXECUTING·COMPLETED·CANCELLED, 완료 후 마지막 점 선회, 같은 command_id 갱신 | `src/swarm_agent/fa.py` | PRP-GNC-001, REQ-GNC-001, REQ-DYN-001 | Pass (TC-AGT-001~005) |
+| IMP-AGT-008 | 실행 파일 `swarm-agent`: `--participant`, `--entities`, `--scenario`, `--frames`, `--list-plugins`, 공통 버스 옵션(`--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast`), 종료 시 처리 시간 출력 | `src/swarm_agent/cli.py` | DEC-026 | Pass (TC-AGT-012, 수동 시험) |
+| IMP-AGT-009 | 시험 도구: 가짜 Core(2-DoF 운동학, truth·NavigationReport·tick 발행), 가짜 Datalink(tx → rx 즉시, 손실 함수), 시나리오 생성기, Harness, 일치 판정 캐시 InMemoryBus | `src/swarm_agent/testing.py` | DEC-015 | Pass (시험 전체) |
+| IMP-AGT-010 | FA·런타임 성능 측정 스크립트 | `bench/bench_fa.py` | REQ-PRF-001, REQ-PRF-002 | 아래 측정값 |
+
+## TC
+
+`uv run pytest agent/tests`
+
+| ID | 내용 | 위치 | 근거 | 결과 |
+|---|---|---|---|---|
+| TC-AGT-001 | HSA 침로·속도·고도 수렴, 명령 전 첫 상태 유지, 일부 항목만 준 HSA | `tests/test_agent_fa.py` | IMP-AGT-007 | Pass |
+| TC-AGT-002 | Waypoint 3점 순차 통과(수락 반경 또는 최소 선회 반경 안), EXECUTING → COMPLETED, 마지막 점 2·R_min 선회, 고도 | `tests/test_agent_fa.py` | IMP-AGT-007 | Pass |
+| TC-AGT-003 | Orbit 반경 400 m ±5% 수렴, CW·CCW 방향 | `tests/test_agent_fa.py` | IMP-AGT-007 | Pass |
+| TC-AGT-004 | 모드 없음·빈 경유점·반경 0 REJECTED, 다른 명령으로 바꾸면 이전 것 CANCELLED, 같은 command_id 갱신은 상태 없음 | `tests/test_agent_fa.py` | IMP-AGT-007 | Pass |
+| TC-AGT-005 | 속도 제한, 최대 뱅크 제한, bank = atan(V·ψ̇/g), 3-DoF(bank) 해석으로도 같은 침로 수렴 | `tests/test_agent_fa.py` | IMP-AGT-007, REQ-DYN-001 | Pass |
+| TC-AGT-006 | AutonomySpec 있는 기체만 호스팅, `--entities` 지정, entry point로 hold/default 로딩, 일괄 MA 한 인스턴스, 모든 기체 ControlOutput(같은 프레임), NavBatch 행 = 기체 | `tests/test_agent_runtime.py` | IMP-AGT-004~006 | Pass |
+| TC-AGT-007 | lockstep 틱마다 `sim/clock/done/agent-0`에 FrameDone(같은 frame), ControlOutput이 FrameDone보다 먼저, 기체 없어도 FrameDone, REALTIME에서는 보내지 않음 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-005 | Pass |
+| TC-AGT-008 | 런타임 구독이 `truth/**`·`link/**`와 겹치지 않고 처리한 키에도 없음, sim/ctrl·truth 메시지가 포트로 들어오지 않음, 포트에 버스 참조 없음 | `tests/test_agent_runtime.py` | IMP-AGT-003, IMP-AGT-006, DEC-013, PRP-SIM-003 | Pass |
+| TC-AGT-009 | LinkEnvelope 송신(키, dst, iface, msg_type, header, seq, 인코딩), 수신 해제(C2·P2P inbox), 모르는 msg_type·자기 송신 버림, GCS 수신, Detection·Activity·잔량, MS 명령 키, MP 필터·RoutePlan 링크 갱신, MD 기록 | `tests/test_agent_runtime.py` | IMP-AGT-002~004, IMP-AGT-006 | Pass |
+| TC-AGT-010 | 결정론: 같은 시드 두 번 실행의 ControlOutput 바이트열 일치(flocking + ctx.rng 흔들기), 다른 시드는 다름, Start.seed 적용 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-005 | Pass |
+| TC-AGT-011 | 플러그인 예외 격리(FA는 계속 출력), Reset 후 재구성, Shutdown | `tests/test_agent_runtime.py` | IMP-AGT-006 | Pass |
+| TC-AGT-012 | 명령행·버스 옵션 해석, 시나리오 파일 .pb·proto JSON·시나리오 JSON(예제 20대 flocking_basic 호스팅), `--list-plugins` | `tests/test_agent_runtime.py` | IMP-AGT-008 | Pass |
+| TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
+
+시험 결과(2026-11-01): `uv run pytest` 119 passed (agent 20, algorithms 12, 기존 87)
+
+## FA 성능 측정 (IMP-AGT-010)
+
+`uv run python agent/bench/bench_fa.py --seconds 10`, Windows 11, CPython 3.12. NullBus(발행 버림)라 전송 비용은 빠진다. flocking 행은 P2P 전달이 없어 이웃 계산이 빈 상태다.
+
+| 항목 | 20대 | 100대 | 300대 |
+|---|---|---|---|
+| FA step 1회 | 7.1 µs | | |
+| 런타임 프레임 처리, MA hold (ms/프레임) | 0.156 | 0.767 | 2.247 |
+| 그중 FA (step + ControlOutput 직렬화·발행) | 0.121 | 0.610 | 1.790 |
+| 50 Hz 최대 배속(런타임만) | 128× | 26× | 8.9× |
+| 런타임 프레임 처리, MA flocking (ms/프레임) | 0.456 | 1.785 | |
+
+- Zenoh 실측(아래 수동 시험, 20대 flocking + P2P): 프레임 처리 p50 1.53 ms, p99 3.81 ms. MA 0.84 ms, FA 0.81 ms/프레임.
+- 판단: FA는 기체당 약 6 µs(발행 포함)라 Python으로 둔다. REQ-PRF-002의 "3-DoF 100대 ≥10배"는 프레임 예산이 2 ms인데, 런타임 하나가 hold 0.77 ms, flocking 1.8 ms를 쓴다. 필요하면 `--entities`로 기체를 여러 호스트에 나눠 맞춘다. C++ 이식은 6-DoF 제어(액추에이터 출력)를 넣을 때 다시 측정해 정한다.
+
+## 수동 시험: swarm_core와 Zenoh 연동 (2026-11-01)
+
+- swarm_core: `wp0-contracts` 빌드(`build/msvc-debug/core/swarm_core.exe`, Zenoh 포함). 시나리오 `scenario/examples/korea_east_strike_20.json`을 `swarm-scenario export`로 .pb로 만들어 양쪽에 준다.
+- 데이터링크: WP4 swarm_datalink가 아직 없어 `FakeDatalink`를 Zenoh 위에서 돌렸다(링크 모델 없음, 즉시 전달).
+- 시작 순서: agent(listen) → 가짜 datalink(connect) → core(listen, connect agent) → 관측자(connect core, truth/state 구독). 멀티캐스트는 끈다.
+
+```bash
+uv run swarm-agent --scenario korea.pb --participant agent-0 --no-multicast --listen tcp/127.0.0.1:17461 --frames 6000
+```
+
+```bash
+swarm_core --scenario korea.pb --autostart --mode lockstep --rate 0 --participant agent-0 --frames 6000 --no-multicast --listen tcp/127.0.0.1:17462 --connect tcp/127.0.0.1:17461
+```
+
+| 항목 | 결과 |
+|---|---|
+| 호스팅 | 20대(flocking_basic 일괄 MA 1개) |
+| lockstep | 6000 프레임(120 s) 완료, Core overruns 0, 장벽 정지 없음 |
+| 진행 속도 | 120 s 시뮬레이션에 벽시계 41.9 s(평균 2.9×). SimStatus rate_actual 2.7~6.1 |
+| 군집 (alpha·bravo 각 10대) | 정렬도 0.991 → 0.997, 최대 간격 2181 → 1269 m, 최소 간격 525 → 88 m(분리 기준 80 m), 중심이 북동쪽 목표 방향으로 약 21 m/s 이동 |
+| 생존 | 20대 모두 alive |
+
+## 계약 변경 요청
+
+1. MD 포트 메시지·키가 없다. `MDPort.record`는 지금 런타임 메모리에만 남는다. 제안: `swarm.v1.MetricRecord { Header header; string name; oneof value { double number; string text; } }`(SIM)를 `onboard/<id>/MetricRecord`로 발행해 Logger가 MCAP에 기록.
+2. 고도 "미지정"을 표현할 수 없다. `Geodetic.alt_m`은 optional이 아니어서 MoveTo·Waypoint·Orbit에서 0이 "해수면"인지 "현재 고도 유지"인지 구분되지 않는다. 지금 FA는 `alt_m <= 0`을 "현재 고도 유지"로 해석한다. 제안: `MoveToTask`·`Waypoint`·`OrbitCurve`에 `optional double altitude_m`을 두거나, 이 해석을 §2 좌표 규칙에 적는다.
+3. 늦게 붙은 참여자: `swarm_core --scenario`로 시작하면 LoadScenario가 버스에 나오지 않아 Agent도 같은 파일(`--scenario`)을 받아야 한다. 또 Core는 틱 N을 한 번만 발행하므로, 참여자가 그 뒤에 구독하면 장벽에서 멈춘다(지금은 Agent를 먼저 띄워 피한다). 제안: Core가 적재한 Scenario를 `sim/ctrl/scenario`(또는 LoadScenario 재발행)로 알리고, 장벽 대기 중에는 같은 틱을 주기적으로 다시 발행한다.
+4. 문서 정정: `api/python/src/swarm_api/plugin.py`의 `FlightAutonomy` 설명은 "기본안은 C++(WP3)"인데, 2차 지시와 위 측정에 따라 기본 FA는 Python이다. `BatchMissionAutonomy` 설명의 "DEC-008: 기체는 데이터링크로 받은 정보만 본다"는 등록부상 PRP-SIM-003이다(DEC-008은 중앙·분산 의사결정).

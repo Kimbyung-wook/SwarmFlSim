@@ -1,0 +1,67 @@
+"""런타임이 호스팅하는 기체 한 대 (IMP-AGT-004)."""
+
+from collections import defaultdict
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+from google.protobuf.message import Message
+
+from swarm.v1 import entity_pb2, mp_pb2, vi_pb2
+from swarm_api import AgentContext, FlightAutonomy, MissionAutonomy
+
+from .messages import fill_header, full_name
+from .ports import PortsImpl
+
+if TYPE_CHECKING:
+    from .runtime import AgentRuntime
+
+
+class Vehicle:
+    def __init__(self, runtime: "AgentRuntime", spec: entity_pb2.EntitySpec, fa: FlightAutonomy,
+                 fa_params: Mapping[str, Any], ma_name: str, ma_params: Mapping[str, Any],
+                 rng: np.random.Generator, plan: mp_pb2.MissionPlan | None,
+                 criteria: mp_pb2.EngagementCriteria | None) -> None:
+        self._rt = runtime
+        self.spec = spec
+        self.entity_id = spec.id
+        self.fa = fa
+        self.capability: vi_pb2.FlightCapability = fa.on_init(spec.id, fa_params)
+        self.ma_name = ma_name
+        self.ma: MissionAutonomy | None = None  # 기체별 MA. 일괄 MA면 None
+        self.nav: vi_pb2.NavigationReport | None = None
+        self.nav_fresh = False  # 지난 프레임 이후 항법 보고를 받았는가
+        self.system_status: vi_pb2.SystemStatus | None = None
+        self.frame = 0
+        self.sim_time_us = 0
+        self._seq: dict[str, int] = defaultdict(int)
+        self.ports = PortsImpl(self, plan, criteria)
+        self.ctx = AgentContext(entity_id=spec.id, frame=0, sim_time_s=0.0, dt_s=0.0,
+                                ports=self.ports, params=ma_params, rng=rng)
+
+    def begin_frame(self, frame: int, sim_time_us: int, dt_s: float) -> None:
+        self.frame = frame
+        self.sim_time_us = sim_time_us
+        self.ctx.frame = frame
+        self.ctx.sim_time_s = sim_time_us * 1e-6
+        self.ctx.dt_s = dt_s
+        self.ports.flip()
+
+    def next_seq(self, key: str) -> int:
+        n = self._seq[key]
+        self._seq[key] = n + 1
+        return n
+
+    def stamp(self, msg: Message) -> None:
+        fill_header(msg, self.entity_id, self.frame, self.sim_time_us, self.next_seq(full_name(msg)))
+
+    def send_link(self, iface: str, msg: Message, dst: list[str]) -> None:
+        self.stamp(msg)
+        self._rt.send_link(self, iface, msg, dst)
+
+    def send_onboard(self, msg: Message) -> None:
+        self.stamp(msg)
+        self._rt.publish_onboard(self, msg)
+
+    def warn(self, text: str) -> None:
+        self._rt.warn(f"{self.entity_id}: {text}")

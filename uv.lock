@@ -4,6 +4,8 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
+    "swarm-agent",
+    "swarm-algorithms",
     "swarm-api",
     "swarm-flight",
     "swarm-scenario",
@@ -446,6 +448,42 @@ wheels = [
 ]
 
 [[package]]
+name = "swarm-agent"
+version = "0.1.0"
+source = { editable = "agent" }
+dependencies = [
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "swarm-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "protobuf", specifier = ">=5.28" },
+    { name = "swarm-api", editable = "api/python" },
+]
+
+[[package]]
+name = "swarm-algorithms"
+version = "0.1.0"
+source = { editable = "algorithms" }
+dependencies = [
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "swarm-agent" },
+    { name = "swarm-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "protobuf", specifier = ">=5.28" },
+    { name = "swarm-agent", editable = "agent" },
+    { name = "swarm-api", editable = "api/python" },
+]
+
+[[package]]
 name = "swarm-api"
 version = "0.2.0"
 source = { editable = "api/python" }
@@ -476,6 +514,8 @@ source = { virtual = "." }
 dev = [
     { name = "grpcio-tools" },
     { name = "pytest" },
+    { name = "swarm-agent" },
+    { name = "swarm-algorithms" },
     { name = "swarm-api", extra = ["zenoh"] },
     { name = "swarm-scenario" },
 ]
@@ -486,6 +526,8 @@ dev = [
 dev = [
     { name = "grpcio-tools", specifier = ">=1.66" },
     { name = "pytest", specifier = ">=8" },
+    { name = "swarm-agent", editable = "agent" },
+    { name = "swarm-algorithms", editable = "algorithms" },
     { name = "swarm-api", extras = ["zenoh"], editable = "api/python" },
     { name = "swarm-scenario", editable = "scenario" },
 ]
