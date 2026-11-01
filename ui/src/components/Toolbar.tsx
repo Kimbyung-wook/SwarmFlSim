@@ -1,11 +1,20 @@
 // IMP-UI-018: 상단 도구 막대. 2D/3D 전환(REQ-UI-001), 시뮬레이션 상태와 일시정지·배속(sim/ctrl/cmd, DEC-014)
+// IMP-UI-030: 시작·스텝·리셋, 데이터 소스 선택(목/버스), 브리지 연결 상태
 import type { SimStatus } from "../gen/swarm/v1/sim_pb";
 import { SimRunState } from "../gen/swarm/v1/sim_pb";
 import type { MapDataStatus } from "../cesium/viewer";
+import type { BridgeState } from "../data/bridgeTransport";
+import type { SourceKind } from "../data/sourceConfig";
 import type { ViewMode } from "./MapView";
 
+type ConnState = BridgeState;
+
 interface Props {
-  source: string;
+  source: SourceKind;
+  onSource(k: SourceKind): void;
+  /** 버스 소스의 브리지 연결 상태 */
+  conn: { state: ConnState; detail: string } | null;
+  gcs: string | null;
   status: SimStatus | null;
   /** 최신 truth/state 기준 (status는 1 Hz로 오므로 시각 표시는 truth를 쓴다) */
   simTimeUs: bigint;
@@ -14,8 +23,11 @@ interface Props {
   mapStatus: MapDataStatus | null;
   viewMode: ViewMode;
   onViewMode(m: ViewMode): void;
+  onStart(): void;
   onPause(): void;
   onResume(): void;
+  onStep(): void;
+  onReset(): void;
   onRate(r: number): void;
   onFit(): void;
 }
@@ -37,8 +49,14 @@ function fmtTime(us: bigint): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${sec.toFixed(1).padStart(4, "0")}`;
 }
 
-export function Toolbar({ source, status, simTimeUs, frame, entityCount, mapStatus, viewMode, onViewMode, onPause, onResume, onRate, onFit }: Props) {
-  const running = status?.state === SimRunState.RUNNING;
+const CONN_LABEL: Record<ConnState, string> = { connecting: "연결 중", open: "연결", closed: "끊김" };
+
+export function Toolbar(p: Props) {
+  const { source, onSource, conn, gcs, status, simTimeUs, frame, entityCount, mapStatus, viewMode, onViewMode, onRate, onFit } = p;
+  const state = status?.state;
+  const running = state === SimRunState.RUNNING;
+  const loaded = state === SimRunState.LOADED;
+  const paused = state === SimRunState.PAUSED;
   return (
     <div className="toolbar">
       <strong className="brand">Swarm GCS</strong>
@@ -51,15 +69,28 @@ export function Toolbar({ source, status, simTimeUs, frame, entityCount, mapStat
         <button onClick={onFit} title="전체 보기">전체</button>
       </div>
       <div className="group">
-        <button onClick={running ? onPause : onResume} disabled={!status}>{running ? "일시정지" : "재개"}</button>
+        {loaded ? (
+          <button onClick={p.onStart}>시작</button>
+        ) : (
+          <button onClick={running ? p.onPause : p.onResume} disabled={!running && !paused}>{running ? "일시정지" : "재개"}</button>
+        )}
+        <button onClick={p.onStep} disabled={!paused} title="한 프레임 진행">스텝</button>
+        <button onClick={p.onReset} disabled={!status || state === SimRunState.IDLE} title="처음 상태로">리셋</button>
         {RATES.map((r) => (
           <button key={r} className={status?.rateTarget === r ? "on" : undefined} onClick={() => onRate(r)} disabled={!status}>
             ×{r}
           </button>
         ))}
       </div>
+      <div className="group">
+        <select value={source} onChange={(e) => onSource(e.target.value as SourceKind)} title="데이터 소스">
+          <option value="mock">목 소스</option>
+          <option value="bus">버스(브리지)</option>
+        </select>
+      </div>
       <div className="stat">
-        <span>{source}</span>
+        {conn && <span className={`conn conn-${conn.state}`} title={conn.detail}>{CONN_LABEL[conn.state]}</span>}
+        {gcs && <span className="muted">{gcs}</span>}
         <span>{status ? STATE_LABEL[status.state] ?? "?" : "-"}</span>
         <span>T {fmtTime(simTimeUs)}</span>
         <span>F {frame.toString()}</span>

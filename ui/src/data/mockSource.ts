@@ -1,6 +1,12 @@
 // IMP-UI-010: 목 데이터 소스. Core 없이 MockScenario로 truth/state와 sim/ctrl/status를 흉내 낸다 (REQ-UI-001, DEC-005)
 // sim/ctrl/cmd 중 Start·Pause·Resume·StepFrames·SetRate·Reset을 처리한다.
-import { create } from "@bufbuild/protobuf";
+// IMP-UI-029: C2 TaskCommand에는 대상 기체마다 TaskStatus(ACCEPTED)를 rx로 돌려준다. 기동은 흉내 내지 않는다.
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
+import { CommandState } from "../gen/swarm/v1/common_pb";
+import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
+import { L1Interface } from "../gen/swarm/v1/options_pb";
+import type { OutgoingC2 } from "../model/commands";
 import type { SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
 import { RunMode, SimRunState, SimStatusSchema } from "../gen/swarm/v1/sim_pb";
 import type { DataHandlers, DataSource } from "./source";
@@ -33,6 +39,7 @@ const DEFAULTS: MockSourceOptions = { frameHz: 50, rate: 1, autoStart: true, max
 
 export class MockSource implements DataSource {
   readonly name = "mock";
+  readonly gcs = "gcs-01";
   private readonly handlers = new HandlerSet();
   private readonly opts: MockSourceOptions;
   private readonly scenario: MockScenario;
@@ -106,6 +113,30 @@ export class MockSource implements DataSource {
         return;
     }
     this.handlers.status(this.status());
+  }
+
+  sendC2(out: OutgoingC2): void {
+    const env = out.envelope;
+    if (env.msgType !== TaskCommandSchema.typeName) return;
+    const cmd = fromBinary(TaskCommandSchema, env.payload);
+    const simTimeUs = this.simTimeUs();
+    for (const id of cmd.assignees) {
+      const st = create(TaskStatusSchema, {
+        header: { simTimeUs, frame: this.frame, source: id, correlationId: cmd.taskId },
+        taskId: cmd.taskId,
+        state: cmd.cancel ? CommandState.CANCELLED : CommandState.ACCEPTED,
+        reason: "목 소스: 수락만 흉내 낸다",
+      });
+      const reply = create(LinkEnvelopeSchema, {
+        header: { simTimeUs, frame: this.frame, source: id },
+        dst: [this.gcs],
+        iface: L1Interface.C2,
+        msgType: TaskStatusSchema.typeName,
+        payload: toBinary(TaskStatusSchema, st),
+        rxTimeUs: simTimeUs,
+      });
+      this.handlers.rx(`swarm/${this.gcs}/rx/c2/TaskStatus`, reply);
+    }
   }
 
   status(): SimStatus {

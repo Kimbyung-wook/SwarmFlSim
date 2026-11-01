@@ -21,7 +21,9 @@ npm test
 ```
 
 - `npm run gen:proto`: `../proto/swarm/v1` → `src/gen/` (protobuf-es). `dev`·`build`·`test` 앞에 자동으로 실행된다. `src/gen/`은 커밋하지 않는다.
-- 데이터 소스 선택: `?source=mock`(기본), `?source=bus`(전송 계층 미구현, 연결 실패를 표시한다).
+- 데이터 소스 선택: 도구 막대의 소스 목록 또는 쿼리 `?source=mock`(기본) / `?source=bus`.
+  - 버스 소스는 WebSocket 브리지(`bridge/`, DEC-027)로 붙는다. `?bridge=ws://host:8765/bus`(기본 `ws://<페이지 호스트>:8765/bus`, 환경변수 `VITE_BRIDGE_URL`)
+  - `?gcs=gcs-01`(기본, 환경변수 `VITE_GCS`): 이 UI가 맡은 GCS. 비우면 관찰만 하고 C2 명령을 보내지 않는다.
 
 ## 구조
 
@@ -29,15 +31,19 @@ npm test
 flowchart LR
     subgraph SRC["data/ (DataSource)"]
         MOCK["MockSource<br/>MockScenario"]
-        BUS["BusSource<br/>BusTransport"]
+        BUS["BusSource<br/>BridgeTransport"]
     end
+    BR["swarm-bridge<br/>(WebSocket, 프로토콜 v1)"]
+    BUS <-- "ws://…/bus" --> BR
     LIVE["model/LiveState<br/>FrameView · TrailStore"]
     MAP["components/MapView<br/>cesium/EntityLayer"]
-    PANEL["SelectionPanel · Toolbar"]
+    PANEL["SelectionPanel · CommandPanel · Toolbar"]
     SEL["model/selection"]
 
     MOCK -- "TruthFrame · SimStatus" --> LIVE
     BUS -- "truth/state · sim/ctrl/status" --> LIVE
+    BUS -- "swarm/&lt;gcs&gt;/rx/**" --> TASK["model/TaskLog"]
+    CMD["model/C2Commander<br/>GroupStore"] -- "swarm/&lt;gcs&gt;/tx/c2/&lt;msg&gt;" --> SRC
     LIVE -- "렌더 루프(preRender)" --> MAP
     LIVE -- "250 ms 주기" --> PANEL
     MAP -- "화면 좌표" --> SEL
@@ -71,8 +77,18 @@ flowchart LR
 | Ctrl+A, Esc | 청군 UAV/FPV 전체 선택, 선택·추종 해제 |
 | 오른쪽 드래그, 휠 | 카메라 이동(3D 회전), 확대 |
 | 가운데 드래그, Ctrl+오른쪽 드래그 | 기울이기 |
+| 오른쪽 클릭(끌지 않음) | 선택한 아군 비행체에 MoveTo (고도는 대상 평균 고도) |
+| H, 명령 패널 | Hold. 명령 패널에서 RTB, 편대(모양·간격, 첫 선택 기체가 리더) |
+| Ctrl+숫자 또는 Alt+숫자 | 선택을 부대 그룹으로 지정(GroupAssignment). Chrome은 Ctrl+1~9를 탭 전환에 먼저 쓰므로 Alt+숫자를 쓴다 |
+| 숫자 (두 번) | 그룹 호출(선택). 빨리 두 번 누르면 첫 기체로 이동 |
 
-- 명령 전송(REQ-UI-003)과 부대 그룹 지정·호출은 다음 단계다.
+## 명령 전송 (REQ-UI-002~004, DEC-013, DEC-014)
+
+- 시뮬레이션 통제: 도구 막대의 시작(LOADED일 때)·일시정지·재개·스텝(1 프레임)·리셋·배속 → `sim/ctrl/cmd`(`SimCommand`, issuer = UI ID).
+- C2: `TaskCommand`(MoveTo·Hold·RTB), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
+- 응답: `swarm/<gcs>/rx/**`의 `TaskStatus`를 task_id로 명령에 붙여 기체별 상태·진행률을 명령 패널에 표시한다. 지도 전시는 `truth/state`를 쓴다.
+- task_id는 `<UI ID>-t<n>`이라 여러 UI가 동시에 명령해도 겹치지 않는다 (DEC-020).
+- 목 소스는 TaskCommand에 `TaskStatus(ACCEPTED)`만 돌려주고 기동은 흉내 내지 않는다.
 
 ## 카메라 시점 (REQ-UI-007, 구조만)
 
@@ -80,17 +96,18 @@ flowchart LR
 - `free`, `chase`(진행 방향 뒤·위), `fpv`(기체 자세 그대로), `gimbal`(수평 안정화 pan/tilt, 짐벌 각은 인자). 선택 패널에서 추적·1인칭을 고를 수 있다.
 - 짐벌 각을 `SensorActivity`에서 받는 연동은 다음 단계다.
 
-## 버스 연결 (제안, 다음 단계 구현)
+## 버스 연결 (DEC-027)
 
-`BusSource`는 `BusTransport`(open/subscribe/put/close)만 요구한다. 브라우저에서 Zenoh에 붙는 방식으로 두 가지를 검토했다.
+- 브라우저는 Zenoh에 직접 붙지 않고 `bridge/`(swarm-bridge)의 WebSocket 프로토콜 v1로만 붙는다(`docs/10_contracts.md` §3.5). 1차의 zenoh-ts 제안은 DEC-027로 대체되었다.
+- `BridgeTransport`가 `BusTransport`를 구현한다. hello(role=control, gcs) → welcome 뒤 구독을 보내고, 끊기면 2 s마다 다시 붙어 구독을 다시 보낸다.
+- 구독: `truth/state`(max_hz 30), `sim/ctrl/status`, `swarm/<gcs>/rx/**`. 바이너리 프레임에는 구독 ID가 없으므로 받은 키를 키 표현식으로 맞춰 나눈다. 겹치는 구독을 열지 않는다.
 
-| 항목 | A. zenoh-ts + zenohd remote-api 플러그인 | B. 자체 WebSocket 브리지 |
-|---|---|---|
-| 구성 | 브라우저 → WebSocket → zenohd(remote-api) | 브라우저 → WebSocket → 브리지 프로세스(zenoh-python 등) → Zenoh |
-| DEC-002(Zenoh만) | 그대로 맞음. 키 표현식·encoding을 그대로 쓴다 | 맞음. 다만 Zenoh 위에 별도 프로토콜을 하나 더 둔다 |
-| 다중 UI(DEC-020) | 각 UI가 라우터에 직접 세션을 연다 | 브리지가 연결을 관리한다 |
-| 전송량 조절 | 구독 쪽에서 버린다. 서버 측 간축은 없다 | 브리지에서 truth/state 간축(예: 50 → 20 Hz)·필터 가능 |
-| 유지 부담 | zenohd·remote-api 버전을 zenoh-c(WP1)와 맞춰야 한다 | 브리지 코드와 프레이밍을 직접 유지한다 |
+```bash
+uv run swarm-bridge --port 8765
+```
 
-- 제안: A를 기본으로 한다. Zenoh 의미를 그대로 쓰고 별도 서버 코드가 없다. truth/state 대역폭이 문제가 되면 같은 `BusTransport` 뒤에 B를 넣는다.
-- 확정하려면 OPN 등록과 사용자 결정이 필요하다. 라우터 구성은 WP1(ZenohBus) 결과와 함께 정한다.
+```bash
+npm run dev
+```
+
+- 브라우저: `http://localhost:5173/?source=bus&gcs=gcs-01`

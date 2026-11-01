@@ -1,19 +1,24 @@
-// TC-UI-008: 버스 소스 자리의 키·인코딩 (IMP-UI-011), 아이콘 생성 (IMP-UI-012)
+// TC-UI-008: 버스 소스의 키·인코딩·구독 주기, rx 해석, C2 송신 키 검사 (IMP-UI-011, IMP-UI-028), 아이콘 생성 (IMP-UI-012)
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 import { EntityKind, Side } from "../gen/swarm/v1/entity_pb";
+import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import { SimCommandSchema } from "../gen/swarm/v1/sim_pb";
 import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
+import { C2Commander, ENVELOPE_ENCODING } from "../model/commands";
 import { iconSvg, iconUrl, isDirectional, sideColor } from "../model/symbology";
-import type { BusTransport } from "./busSource";
-import { BusSource, KEY_SIM_CMD, KEY_TRUTH_STATE, UnimplementedTransport } from "./busSource";
+import type { BusTransport, SubscribeOptions, TransportCallback } from "./busSource";
+import { BusSource, KEY_SIM_CMD, KEY_SIM_STATUS, KEY_TRUTH_STATE } from "./busSource";
 
 class FakeTransport implements BusTransport {
-  subs = new Map<string, (p: Uint8Array) => void>();
+  subs = new Map<string, { cb: TransportCallback; opts?: SubscribeOptions }>();
   puts: { key: string; payload: Uint8Array; encoding: string }[] = [];
-  async open() {}
-  subscribe(key: string, cb: (p: Uint8Array) => void) {
-    this.subs.set(key, cb);
+  opened = false;
+  async open() {
+    this.opened = true;
+  }
+  subscribe(key: string, cb: TransportCallback, opts?: SubscribeOptions) {
+    this.subs.set(key, { cb, opts });
     return () => void this.subs.delete(key);
   }
   put(key: string, payload: Uint8Array, encoding: string) {
@@ -30,7 +35,7 @@ describe("BusSource", () => {
     src.subscribe({ truth: (f) => got.push(f.entities[0].id) });
     await src.connect();
     const f = create(TruthFrameSchema, { entities: [{ id: "uav-001" }] });
-    t.subs.get(KEY_TRUTH_STATE)!(toBinary(TruthFrameSchema, f));
+    t.subs.get(KEY_TRUTH_STATE)!.cb(toBinary(TruthFrameSchema, f), KEY_TRUTH_STATE, "");
     expect(got).toEqual(["uav-001"]);
 
     src.send(create(SimCommandSchema, { issuer: "ui-a1", cmd: { case: "pause", value: {} } }));
@@ -42,8 +47,41 @@ describe("BusSource", () => {
     expect(t.subs.size).toBe(0);
   });
 
-  it("전송 계층이 없으면 연결에 실패한다", async () => {
-    await expect(new BusSource(new UnimplementedTransport()).connect()).rejects.toThrow();
+  it("구독 키와 truth 다운샘플 주기, GCS가 없으면 rx를 구독하지 않는다", async () => {
+    const a = new FakeTransport();
+    await new BusSource(a, { gcs: "gcs-01", truthMaxHz: 20 }).connect();
+    expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE].sort());
+    expect(a.subs.get(KEY_TRUTH_STATE)!.opts?.maxHz).toBe(20);
+    expect(a.opened).toBe(true);
+
+    const b = new FakeTransport();
+    const src = new BusSource(b);
+    await src.connect();
+    expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_TRUTH_STATE].sort());
+    const out = new C2Commander("gcs-01", "ui-x").task("hold", ["uav-001"]);
+    expect(() => src.sendC2(out)).toThrow(/GCS/);
+  });
+
+  it("rx LinkEnvelope를 해석하고 C2를 자기 GCS tx 키로만 보낸다", async () => {
+    const t = new FakeTransport();
+    const errs: string[] = [];
+    const src = new BusSource(t, { gcs: "gcs-01", onDecodeError: (k) => errs.push(k) });
+    const rx: string[] = [];
+    src.subscribe({ rx: (k, env) => rx.push(`${k}|${env.header?.source}`) });
+    await src.connect();
+    const cb = t.subs.get("swarm/gcs-01/rx/**")!.cb;
+    const env = create(LinkEnvelopeSchema, { header: { source: "uav-003" }, msgType: "swarm.v1.TaskStatus" });
+    cb(toBinary(LinkEnvelopeSchema, env), "swarm/gcs-01/rx/c2/TaskStatus", ENVELOPE_ENCODING);
+    cb(new Uint8Array([0xff, 0xff, 0xff]), "swarm/gcs-01/rx/c2/Bad", ENVELOPE_ENCODING);
+    expect(rx).toEqual(["swarm/gcs-01/rx/c2/TaskStatus|uav-003"]);
+    expect(errs).toEqual(["swarm/gcs-01/rx/c2/Bad"]);
+
+    const out = new C2Commander("gcs-01", "ui-x").task("returnToBase", ["uav-001", "uav-002"]);
+    src.sendC2(out);
+    expect(t.puts[0].key).toBe("swarm/gcs-01/tx/c2/TaskCommand");
+    expect(t.puts[0].encoding).toBe(ENVELOPE_ENCODING);
+    expect(fromBinary(LinkEnvelopeSchema, t.puts[0].payload).dst).toEqual(["uav-001", "uav-002"]);
+    expect(() => src.sendC2(new C2Commander("gcs-02", "ui-x").task("hold", ["uav-001"]))).toThrow(/다른 GCS/);
   });
 });
 
