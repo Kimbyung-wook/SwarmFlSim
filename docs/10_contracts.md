@@ -190,6 +190,56 @@ Ubuntu / WSL2:
 sudo apt install build-essential cmake ninja-build libprotobuf-dev protobuf-compiler libeigen3-dev
 ```
 
+Zenoh (zenoh-c + zenoh-cpp 1.10.2, WP1):
+
+- vcpkg와 MSYS2·Ubuntu 배포판에 패키지가 없으므로 eclipse-zenoh 공식 릴리스의 standalone zip을 한 접두 경로에 풀고 `CMAKE_PREFIX_PATH`로 넘긴다.
+- zenoh-cpp는 헤더 전용이다(`zenohcpp-1.10.2-standalone.zip`). zenoh-c는 환경별 zip을 받는다.
+- Zenoh가 없으면 `core/`는 ZenohBus 없이(InMemoryBus만) 빌드된다.
+
+| 환경 | zenoh-c zip | 접두 경로 예 |
+|---|---|---|
+| MSVC | `zenoh-c-1.10.2-x86_64-pc-windows-msvc-standalone.zip` | `C:\dev\zenoh` |
+| MSYS2 UCRT64 | `zenoh-c-1.10.2-x86_64-pc-windows-gnu-standalone.zip` | `/ucrt64/opt/zenoh` |
+| Ubuntu / WSL2 | `zenoh-c-1.10.2-x86_64-unknown-linux-gnu-standalone.zip` | `/opt/zenoh` |
+
+MSVC (PowerShell):
+
+```bash
+curl.exe -LO https://github.com/eclipse-zenoh/zenoh-c/releases/download/1.10.2/zenoh-c-1.10.2-x86_64-pc-windows-msvc-standalone.zip
+```
+
+```bash
+curl.exe -LO https://github.com/eclipse-zenoh/zenoh-cpp/releases/download/1.10.2/zenohcpp-1.10.2-standalone.zip
+```
+
+```bash
+mkdir C:\dev\zenoh; tar -xf zenoh-c-1.10.2-x86_64-pc-windows-msvc-standalone.zip -C C:\dev\zenoh; tar -xf zenohcpp-1.10.2-standalone.zip -C C:\dev\zenoh
+```
+
+```bash
+setx CMAKE_PREFIX_PATH C:\dev\zenoh
+```
+
+MSYS2 UCRT64 / Ubuntu (`<zip>`, `<prefix>`는 위 표):
+
+```bash
+curl -LO https://github.com/eclipse-zenoh/zenoh-c/releases/download/1.10.2/<zip>
+```
+
+```bash
+curl -LO https://github.com/eclipse-zenoh/zenoh-cpp/releases/download/1.10.2/zenohcpp-1.10.2-standalone.zip
+```
+
+```bash
+mkdir -p <prefix> && unzip -o <zip> -d <prefix> && unzip -o zenohcpp-1.10.2-standalone.zip -d <prefix>
+```
+
+```bash
+export CMAKE_PREFIX_PATH=<prefix>
+```
+
+- Linux에서 빌드 트리 밖으로 옮긴 실행 파일은 `LD_LIBRARY_PATH=<prefix>/lib`로 실행한다. Windows는 빌드 후 `zenohc.dll`을 실행 파일 옆에 복사한다(`core/CMakeLists.txt`).
+
 공통 (Python):
 
 ```bash
