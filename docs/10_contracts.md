@@ -106,7 +106,33 @@ flowchart LR
   - 구독: 클라이언트가 키 표현식과 최대 전송 주기를 지정한다. 브리지가 클라이언트별로 다운샘플한다 (DEC-006).
   - 발행: 허용한 키만 받는다. 기본 허용은 `sim/ctrl/cmd`와 그 UI가 맡은 GCS의 `swarm/<gcs>/tx/**`
   - 역할별 권한(DEC-020, P6 이후)은 브리지에 붙인다.
-- 프레임 형식과 구현은 WP5가 `bridge/`에서 정하고 이 절에 추가한다.
+- 구현은 WP5가 `bridge/`에서 한다. 프로토콜은 아래와 같다 (WP5·WP6 공통).
+
+#### 브리지 프로토콜 v1
+
+- 접속: `ws://<host>:<port>/bus` (기본 포트 8765). 한 연결이 한 클라이언트다.
+- 텍스트 프레임(JSON)은 제어, 바이너리 프레임은 버스 메시지다.
+
+| 방향 | 텍스트 프레임 | 의미 |
+|---|---|---|
+| C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.2.0"}` | 접속 승인 |
+| C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
+| C → S | `{"op":"unsub","id":1}` | 구독 해제 |
+| S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
+
+- 바이너리 프레임 형식(양방향 같음, 정수는 little-endian):
+
+| 필드 | 형식 |
+|---|---|
+| 키 길이 | uint16 |
+| 키 | UTF-8 |
+| 인코딩 길이 | uint16 |
+| 인코딩 | UTF-8 (`application/protobuf;<전체 메시지 이름>`) |
+| 페이로드 | 나머지 바이트 (protobuf) |
+
+- 발행 허용(`role=control`): `sim/ctrl/cmd`, `swarm/<gcs>/tx/**`. 그 밖의 키는 `forbidden` 오류를 보내고 버린다. `observer`는 발행할 수 없다.
+- 구독 허용: 모든 키. 역할별 제한은 DEC-020(P6 이후)에서 정한다.
 
 ## 4. Protobuf 스키마
 
