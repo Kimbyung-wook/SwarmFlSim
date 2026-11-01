@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swarm-flight.local/schema/scenario-0.1.json",
+  "title": "Swarm flight scenario",
+  "description": "IMP-SCN-001. 엔티티 필드는 proto swarm.v1.EntitySpec과 같은 이름(snake_case)을 쓴다. 열거값은 proto 열거값에서 접두어를 뺀 소문자다 (REQ-CFG-001/002, PRP-CFG-001).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "map", "run", "entities"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "map": { "$ref": "#/$defs/MapSpec" },
+    "run": { "$ref": "#/$defs/RunSpec" },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/EntitySpec" }
+    },
+    "mission_plan": { "$ref": "#/$defs/MissionPlan" },
+    "engagement_criteria": { "$ref": "#/$defs/EngagementCriteria" }
+  },
+  "$defs": {
+    "EntityId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)+$",
+      "maxLength": 32
+    },
+    "EntityKind": {
+      "enum": ["uav", "gcs", "ground_target", "air_target", "missile", "fpv", "jammer_site"]
+    },
+    "Side": { "enum": ["blue", "red", "neutral"] },
+    "DynamicsKind": { "enum": ["dof2", "dof3", "dof5", "dof6", "scripted", "static"] },
+    "RunMode": { "enum": ["realtime", "lockstep", "freerun"] },
+    "FormationShape": { "enum": ["line", "column", "wedge", "echelon", "circle", "custom"] },
+
+    "Geodetic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lat_deg", "lon_deg"],
+      "properties": {
+        "lat_deg": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon_deg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "alt_m": { "type": "number" }
+      }
+    },
+    "Vec3": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "Quaternion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["w", "x", "y", "z"],
+      "properties": {
+        "w": { "type": "number" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "Area": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "circle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["center", "radius_m"],
+          "properties": {
+            "center": { "$ref": "#/$defs/Geodetic" },
+            "radius_m": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "polygon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vertices"],
+          "properties": {
+            "vertices": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/Geodetic" } }
+          }
+        },
+        "min_alt_m": { "type": "number" },
+        "max_alt_m": { "type": "number", "description": "0이면 상한 없음" }
+      },
+      "oneOf": [{ "required": ["circle"] }, { "required": ["polygon"] }]
+    },
+
+    "MapSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "extent"],
+      "properties": {
+        "origin": { "$ref": "#/$defs/Geodetic" },
+        "extent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["south_deg", "north_deg", "west_deg", "east_deg"],
+          "properties": {
+            "south_deg": { "type": "number" },
+            "north_deg": { "type": "number" },
+            "west_deg": { "type": "number" },
+            "east_deg": { "type": "number" }
+          }
+        }
+      }
+    },
+    "RunSpec": {
+      "description": "swarm.v1.Start에 대응 (DEC-005, REQ-DYN-003)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "frame_hz", "seed"],
+      "properties": {
+        "mode": { "$ref": "#/$defs/RunMode" },
+        "frame_hz": { "type": "integer", "minimum": 50, "maximum": 100 },
+        "seed": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615 },
+        "rate": { "type": "number", "exclusiveMinimum": 0, "description": "목표 배속. 생략하면 1" },
+        "duration_s": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "if": { "properties": { "mode": { "const": "realtime" } } },
+      "then": { "properties": { "rate": { "const": 1 } } }
+    },
+
+    "KinematicState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position"],
+      "properties": {
+        "position": { "$ref": "#/$defs/Geodetic" },
+        "velocity_ned_mps": { "$ref": "#/$defs/Vec3" },
+        "attitude": { "$ref": "#/$defs/Quaternion" },
+        "angular_rate_frd_rps": { "$ref": "#/$defs/Vec3" }
+      }
+    },
+    "PayloadSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 16 },
+        "type": { "enum": ["camera", "jammer", "aam_short", "agm_short", "fpv"] },
+        "profile": { "type": "string" },
+        "overrides": { "type": "object", "description": "DEC-019 공개 일반값 재정의" },
+        "count": { "type": "integer", "minimum": 0 }
+      },
+      "if": { "properties": { "type": { "enum": ["aam_short", "agm_short", "fpv"] } } },
+      "then": { "required": ["count"], "properties": { "count": { "minimum": 1 } } }
+    },
+    "AutonomySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ma_plugin": { "type": "string" },
+        "ma_params": { "type": "object" },
+        "fa_plugin": { "type": "string" },
+        "fa_params": { "type": "object" }
+      }
+    },
+    "EntitySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "side", "dynamics", "initial"],
+      "properties": {
+        "id": { "$ref": "#/$defs/EntityId" },
+        "kind": { "$ref": "#/$defs/EntityKind" },
+        "side": { "$ref": "#/$defs/Side" },
+        "dynamics": { "$ref": "#/$defs/DynamicsKind" },
+        "airframe": { "type": "string" },
+        "initial": { "$ref": "#/$defs/KinematicState" },
+        "payloads": { "type": "array", "items": { "$ref": "#/$defs/PayloadSpec" } },
+        "autonomy": { "$ref": "#/$defs/AutonomySpec" },
+        "link_profile": { "type": "string" },
+        "controlling_gcs": { "$ref": "#/$defs/EntityId" },
+        "script_path": { "type": "array", "items": { "$ref": "#/$defs/Geodetic" } }
+      },
+      "if": { "properties": { "dynamics": { "const": "scripted" } } },
+      "then": { "required": ["script_path"], "properties": { "script_path": { "minItems": 2 } } }
+    },
+
+    "TaskCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "assignees"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "assignees": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/EntityId" } },
+        "move_to": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["destination"],
+          "properties": {
+            "destination": { "$ref": "#/$defs/Geodetic" },
+            "speed_mps": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "search_area": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["area"],
+          "properties": { "area": { "$ref": "#/$defs/Area" } }
+        },
+        "track": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target_id"],
+          "properties": { "target_id": { "$ref": "#/$defs/EntityId" } }
+        },
+        "strike": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["target_id", "weapon_type"],
+          "properties": {
+            "target_id": { "$ref": "#/$defs/EntityId" },
+            "aim_point": { "$ref": "#/$defs/Geodetic" },
+            "weapon_type": { "enum": ["aam_short", "agm_short", "fpv"] }
+          }
+        },
+        "jam": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["area"],
+          "properties": {
+            "area": { "$ref": "#/$defs/Area" },
+            "duration_s": { "type": "number", "minimum": 0 }
+          }
+        },
+        "hold": { "type": "object", "additionalProperties": false },
+        "return_to_base": { "type": "object", "additionalProperties": false },
+        "cancel": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["move_to"] },
+        { "required": ["search_area"] },
+        { "required": ["track"] },
+        { "required": ["strike"] },
+        { "required": ["jam"] },
+        { "required": ["hold"] },
+        { "required": ["return_to_base"] }
+      ]
+    },
+    "FormationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "members", "shape"],
+      "properties": {
+        "group_id": { "type": "string", "minLength": 1 },
+        "members": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/EntityId" } },
+        "leader": { "$ref": "#/$defs/EntityId" },
+        "shape": { "$ref": "#/$defs/FormationShape" },
+        "spacing_m": { "type": "number", "exclusiveMinimum": 0 },
+        "custom_offsets_m": { "type": "array", "items": { "$ref": "#/$defs/Vec3" } }
+      },
+      "if": { "properties": { "shape": { "const": "custom" } } },
+      "then": { "required": ["custom_offsets_m"] }
+    },
+    "MissionPlan": {
+      "description": "swarm.v1.MissionPlan (header 제외)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_id"],
+      "properties": {
+        "plan_id": { "type": "string", "minLength": 1 },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskCommand" } },
+        "formations": { "type": "array", "items": { "$ref": "#/$defs/FormationCommand" } }
+      }
+    },
+    "EngagementCriteria": {
+      "description": "swarm.v1.EngagementCriteria (header 제외)",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hostile_sides": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/Side" } },
+        "require_approval": { "type": "boolean" },
+        "weapons_free": { "type": "array", "items": { "$ref": "#/$defs/Area" } },
+        "no_strike": { "type": "array", "items": { "$ref": "#/$defs/Area" } }
+      }
+    }
+  }
+}
