@@ -1,0 +1,34 @@
+{
+  "name": "swarm-monitor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "gen:proto": "node scripts/gen-proto.mjs",
+    "predev": "npm run gen:proto",
+    "dev": "vite",
+    "prebuild": "npm run gen:proto",
+    "build": "tsc -b && vite build",
+    "pretest": "npm run gen:proto",
+    "test": "vitest run",
+    "prebench": "npm run gen:proto",
+    "bench": "vitest run --config vitest.bench.config.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.16.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.75.0",
+    "@bufbuild/protoc-gen-es": "^2.16.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
