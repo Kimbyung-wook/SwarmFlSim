@@ -1,4 +1,5 @@
 // IMP-CORE-006: 실행 파일 swarm_core
+// IMP-CORE-012: WP2 동역학(--integrator), 평지 지형(--terrain-flat)
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -10,8 +11,8 @@
 #include <thread>
 
 #include "swarm/bus/open_bus.hpp"
-#include "swarm/core/mock_dynamics.hpp"
 #include "swarm/core/sim_core.hpp"
+#include "swarm/core/wp2_dynamics.hpp"
 
 namespace {
 
@@ -26,6 +27,9 @@ constexpr const char* kUsage = R"(usage: swarm_core [options]
   --seed <n>               난수 시드
   --participant <id>       lockstep 장벽 참여자 (반복 가능)
   --frames <n>             n 프레임 진행 후 종료
+  --integrator <name>      rk4 | rk45 (기본 rk45)
+  --terrain-flat <m>       평지 지형 고도 (기본 0). 지면 아래로 내려가면 kill(cause=ground)
+  --terrain-dem <file>     DEM 지형 (자리만 있음, DEC-016)
 )";
 
 swarm::core::SimCore* g_core = nullptr;
@@ -46,6 +50,8 @@ int main(int argc, char** argv) {
   int uavs = 20;
   bool autostart = false;
   core::CoreConfig cfg;
+  core::Wp2DynamicsOptions dyn_opt;
+  std::string dem_file;
   bus::BusConfig bus_cfg;
 
   for (int i = 1; i < argc; ++i) {
@@ -66,6 +72,9 @@ int main(int argc, char** argv) {
     else if (a == "--seed") seed = next();
     else if (a == "--participant") cfg.participants.push_back(next());
     else if (a == "--frames") cfg.stop_after_frames = std::stoull(next());
+    else if (a == "--integrator") dyn_opt.integrator = next();
+    else if (a == "--terrain-flat") dyn_opt.terrain_flat_m = std::stod(next());
+    else if (a == "--terrain-dem") dem_file = next();
     else if (bus::parse_bus_arg(bus_cfg, a, next)) continue;
     else {
       std::cerr << kUsage << bus::kBusUsage;
@@ -74,13 +83,16 @@ int main(int argc, char** argv) {
   }
 
   try {
+    // DEM 로더(dyn::DemLoader)는 WP2에 인터페이스만 있다. 구현되면 dyn_opt.terrain에 넣는다
+    if (!dem_file.empty()) throw std::runtime_error("--terrain-dem: DEM loader not implemented yet");
+    core::DynamicsProvider provider = core::wp2_provider(dyn_opt);
+
     const std::string bus_kind = bus_cfg.backend.empty() ? bus::default_backend() : bus_cfg.backend;
     std::unique_ptr<Bus> bus = bus::open_bus(bus_cfg);
 
     core::Scenario sc = scenario_file.empty() ? core::builtin_scenario(uavs)
                                               : core::read_scenario_file(scenario_file);
-    // WP2 통합 전에는 목 동역학을 쓴다 (DEC-006)
-    core::SimCore sim(*bus, core::mock::provider(), cfg);
+    core::SimCore sim(*bus, std::move(provider), cfg);
     if (!sim.load(sc)) return 1;
 
     g_core = &sim;
@@ -102,7 +114,8 @@ int main(int argc, char** argv) {
       sim.submit(cmd);
     }
 
-    std::fprintf(stderr, "[swarm_core] bus=%s, waiting for %s\n", bus_kind.c_str(),
+    std::fprintf(stderr, "[swarm_core] bus=%s, integrator=%s, terrain-flat=%.1f m, waiting for %s\n",
+                 bus_kind.c_str(), dyn_opt.integrator.c_str(), dyn_opt.terrain_flat_m,
                  autostart ? "frames" : "sim/ctrl/cmd");
     sim.run();
     std::fprintf(stderr, "[swarm_core] stopped at frame %llu, sim_time %.3f s, overruns %llu\n",

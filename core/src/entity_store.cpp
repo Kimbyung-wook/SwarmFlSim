@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "swarm/api/keys.hpp"
+#include "swarm/core/scripted.hpp"
 
 namespace swarm::core {
 
@@ -67,7 +68,8 @@ void EntityStore::build(const std::vector<v1::EntitySpec>& specs, const Dynamics
     const bool fixed = spec.dynamics() == v1::DYNAMICS_KIND_STATIC || spec.dynamics() == v1::DYNAMICS_KIND_UNSPECIFIED;
     if (!fixed) {
       model = provider.make_model ? provider.make_model(spec) : nullptr;
-      // 스크립트 경로 모델이 아직 없으면 초기 위치에 고정한다
+      // IMP-CORE-010: 공급자가 스크립트 모델을 주지 않으면 Core의 경로 추종 모델을 쓴다. 경로가 없으면 초기 위치 고정
+      if (!model && spec.dynamics() == v1::DYNAMICS_KIND_SCRIPTED) model = make_scripted_model(spec);
       if (!model && spec.dynamics() != v1::DYNAMICS_KIND_SCRIPTED)
         throw std::invalid_argument("unsupported dynamics for " + spec.id() + ": " +
                                     v1::DynamicsKind_Name(spec.dynamics()));

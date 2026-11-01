@@ -1,4 +1,5 @@
 # WP1 Sim Core (DEC-005, DEC-006, PRP-SIM-002)
+# 동역학은 WP2 swarm_dynamics(dynamics/)의 팩토리로 만든다 (IMP-CORE-008). 목 모델은 시험용으로 남긴다.
 # 버스는 공용 라이브러리 swarm_bus(bus/, DEC-026)로 연다. Zenoh 유무는 swarm_bus가 정한다.
 
 add_library(swarm_core_lib STATIC
@@ -6,9 +7,11 @@ add_library(swarm_core_lib STATIC
   src/scenario.cpp
   src/sim_core.cpp
   src/mock_dynamics.cpp
+  src/scripted.cpp
+  src/wp2_dynamics.cpp
 )
 target_include_directories(swarm_core_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(swarm_core_lib PUBLIC swarm_api)
+target_link_libraries(swarm_core_lib PUBLIC swarm_api swarm_dynamics)
 
 add_executable(swarm_core src/main.cpp)
 target_link_libraries(swarm_core PRIVATE swarm_core_lib swarm_bus)
