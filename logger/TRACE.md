@@ -20,6 +20,7 @@ flowchart LR
 | IMP-LOG-004 | `inspect()`: 채널별 메시지 수·인코딩·스키마, 시간 범위 | `src/mcap_log.cpp` | REQ-LOG-001 |
 | IMP-LOG-005 | 실행 파일 `swarm_logger info / record / replay [--rate] [--key] [--backend] [--dry-run]`. 버스 백엔드는 현재 `memory`만 있다(Zenoh는 통합 시 연결) | `src/main.cpp` | REQ-LOG-001, REQ-NET-001 |
 | IMP-LOG-006 | 의존성: vcpkg `mcap`(`unofficial-mcap`, 헤더 전용, 압축 없음). 없으면 `MCAP_INCLUDE_DIR`에서 헤더를 찾고, 둘 다 없으면 logger/를 건너뛴다 | `CMakeLists.txt`, 루트 `vcpkg.json` | DEC-022 |
+| IMP-LOG-007 | `swarm_logger`의 버스를 공용 `open_bus`로 연다. Zenoh 백엔드와 공통 버스 옵션(`--bus`, `--connect` 등) 지원 | `src/main.cpp`, `CMakeLists.txt` | DEC-026 |
 
 ## 시험
 

@@ -24,7 +24,7 @@ class ConstantVelocity2Dof final : public dyn::DynamicsModel {
   void derivatives(double t, std::span<const double> x, std::span<const double> u, const dyn::Environment& env,
                    std::span<double> dxdt) const override;
   bool map_control(const v1::ControlOutput& cmd, std::span<double> u) const override;
-  void to_kinematic(std::span<const double> x, dyn::KinematicSample& out) const override;
+  void to_kinematic(std::span<const double> x, const dyn::Environment& env, dyn::KinematicSample& out) const override;
   void from_kinematic(const dyn::KinematicSample& in, std::span<double> x) const override;
 
   // 초기 상태에서 입력을 정한다: 현재 속도·상승률 유지, 선회 없음

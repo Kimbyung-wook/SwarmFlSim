@@ -2,6 +2,7 @@
 
 uv run swarm-scenario validate <file.json>...
 uv run swarm-scenario show <file.json>
+uv run swarm-scenario export <file.json> --out <file.pb|file.json>   (swarm_core --scenario 입력, DEC-024)
 """
 
 import argparse
@@ -10,11 +11,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from google.protobuf import text_format
+from google.protobuf import json_format, text_format
 
 from swarm.v1 import entity_pb2
 
-from .convert import from_dict
+from .convert import from_dict, to_proto
 from .validate import validate
 
 
@@ -44,14 +45,29 @@ def _show(path: str) -> int:
     return 0
 
 
+def _export(path: str, out: str) -> int:
+    msg = to_proto(from_dict(json.loads(Path(path).read_text(encoding="utf-8"))))
+    if out.endswith(".pb"):
+        Path(out).write_bytes(msg.SerializeToString())
+    else:
+        Path(out).write_text(json_format.MessageToJson(msg, ensure_ascii=False), encoding="utf-8")
+    print(f"{out}: {len(msg.entities)} entities")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="swarm-scenario")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("validate").add_argument("files", nargs="+")
     sub.add_parser("show").add_argument("file")
+    exp = sub.add_parser("export")
+    exp.add_argument("file")
+    exp.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     if args.cmd == "validate":
         return _validate(args.files)
+    if args.cmd == "export":
+        return _export(args.file, args.out)
     return _show(args.file)
 
 

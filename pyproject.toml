@@ -12,13 +12,16 @@ members = ["api/python", "scenario"]
 
 [tool.uv.sources]
 swarm-api = { workspace = true }
+swarm-scenario = { workspace = true }
 
+# 워크스페이스 패키지를 추가하면 dev 그룹과 testpaths에도 넣는다
 [dependency-groups]
 dev = [
-    "swarm-api",
+    "swarm-api[zenoh]",
+    "swarm-scenario",
     "pytest>=8",
     "grpcio-tools>=1.66",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["api/python/tests"]
+testpaths = ["api/python/tests", "scenario/tests"]

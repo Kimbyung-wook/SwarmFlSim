@@ -536,12 +536,12 @@ flowchart LR
 
 | WP | 담당 에이전트(세션) | 주 디렉터리 | 산출물 |
 |---|---|---|---|
-| WP0 | 통합 담당 | `proto/`, `api/`, `scripts/`, `docs/`, 루트 빌드 | 스키마, 키 체계, API, CI ([10_contracts.md](10_contracts.md)) |
+| WP0 | 통합 담당 | `proto/`, `api/`, `bus/`, `scripts/`, `docs/`, 루트 빌드 | 스키마, 키 체계, API, 공용 버스, CI ([10_contracts.md](10_contracts.md)) |
 | WP1 | Core | `core/` | 스케줄러, 엔티티 저장소, lockstep |
 | WP2 | Dynamics | `dynamics/` | DoF 모델, 적분기, DEM 판정 |
 | WP3 | Agent | `agent/`, `algorithms/` | 런타임, 바인딩, 기본 알고리즘 |
 | WP4 | Datalink | `datalink/` | 링크·재밍 모델, 태깅 |
-| WP5 | UI | `ui/` | 지도, RTS 통제, 편집기, 이펙트 |
+| WP5 | UI | `ui/`, `bridge/` | 지도, RTS 통제, 편집기, 이펙트, WebSocket 브리지(DEC-027) |
 | WP6 | Monitor | `ui/monitor/` | 트래픽 모니터 |
 | WP7 | Scenario/Log | `scenario/`, `logger/` | JSON Schema, MCAP |
 | WP8 | Payload | `payload/` | 센서, 재머, 무장, 표적 |

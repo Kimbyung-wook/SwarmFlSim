@@ -1,10 +1,10 @@
 // IMP-LOG-005: swarm_logger 실행 파일
 //
 //   swarm_logger info <file.mcap>
-//   swarm_logger record --out <file.mcap> [--key <expr>] [--backend <name>]
-//   swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [--backend <name>] [--dry-run]
+//   swarm_logger record --out <file.mcap> [--key <expr>] [버스 옵션]
+//   swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [버스 옵션] [--dry-run]
 //
-// 버스 백엔드는 make_bus()가 고른다. Zenoh 백엔드(WP1)는 통합 단계에서 연결한다.
+// 버스는 공용 open_bus()로 연다 (DEC-026). 버스 옵션은 swarm/bus/open_bus.hpp의 kBusUsage.
 #include <atomic>
 #include <csignal>
 #include <cstdio>
@@ -17,6 +17,7 @@
 #include <thread>
 #include <vector>
 
+#include "swarm/bus/open_bus.hpp"
 #include "swarm/logger/mcap_log.hpp"
 
 namespace {
@@ -25,16 +26,11 @@ std::atomic<bool> g_interrupted{false};
 
 void on_signal(int) { g_interrupted = true; }
 
-std::unique_ptr<swarm::Bus> make_bus(const std::string& backend) {
-  if (backend == "memory") return std::make_unique<swarm::InMemoryBus>();
-  throw std::invalid_argument("unknown bus backend: " + backend + " (available: memory)");
-}
-
 struct Args {
   std::string cmd;
   std::string file;
   std::string key = "**";
-  std::string backend = "memory";
+  swarm::bus::BusConfig bus;
   double rate = 1.0;
   bool dry_run = false;
 };
@@ -43,8 +39,10 @@ int usage() {
   std::fprintf(stderr,
                "usage:\n"
                "  swarm_logger info <file.mcap>\n"
-               "  swarm_logger record --out <file.mcap> [--key <expr>] [--backend <name>]\n"
-               "  swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [--backend <name>] [--dry-run]\n");
+               "  swarm_logger record --out <file.mcap> [--key <expr>] [bus options]\n"
+               "  swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [bus options] [--dry-run]\n"
+               "bus options:\n%s",
+               swarm::bus::kBusUsage);
   return 2;
 }
 
@@ -59,7 +57,8 @@ bool parse(int argc, char** argv, Args& a) {
     };
     if (s == "--out") a.file = value();
     else if (s == "--key") a.key = value();
-    else if (s == "--backend") a.backend = value();
+    else if (s == "--backend") a.bus.backend = value();  // 이전 이름
+    else if (swarm::bus::parse_bus_arg(a.bus, s, value)) continue;
     else if (s == "--rate") a.rate = std::stod(value());
     else if (s == "--dry-run") a.dry_run = true;
     else if (!s.starts_with("--") && a.file.empty()) a.file = s;
@@ -79,7 +78,7 @@ int cmd_info(const Args& a) {
 }
 
 int cmd_record(const Args& a) {
-  auto bus = make_bus(a.backend);
+  auto bus = swarm::bus::open_bus(a.bus);
   swarm::logger::Recorder rec(*bus, a.file, {.keyexpr = a.key});
   std::printf("recording %s -> %s (Ctrl+C to stop)\n", a.key.c_str(), a.file.c_str());
   while (!g_interrupted) std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -98,7 +97,7 @@ int cmd_replay(const Args& a) {
       std::printf("%s %zu B %s\n", s.key.c_str(), s.payload.size(), s.encoding.c_str());
     });
   } else {
-    bus = make_bus(a.backend);
+    bus = swarm::bus::open_bus(a.bus);
   }
   std::stop_source stop;
   std::jthread watch([&](std::stop_token st) {

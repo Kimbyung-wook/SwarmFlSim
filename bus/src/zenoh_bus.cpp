@@ -1,5 +1,5 @@
-// IMP-CORE-001: ZenohBus (zenoh-cpp, zenoh-c 백엔드)
-#include "swarm/core/zenoh_bus.hpp"
+// IMP-API-007: ZenohBus (zenoh-cpp, zenoh-c 백엔드). WP1 IMP-CORE-001에서 옮김 (DEC-026)
+#include "swarm/bus/zenoh_bus.hpp"
 
 #include <optional>
 #include <stdexcept>
@@ -7,7 +7,7 @@
 
 #include "zenoh.hxx"
 
-namespace swarm::core {
+namespace swarm::bus {
 
 namespace {
 
@@ -75,4 +75,4 @@ std::unique_ptr<Subscription> ZenohBus::subscribe(std::string_view keyexpr, Samp
   return std::make_unique<ZenohSubscription>(std::move(sub));
 }
 
-}  // namespace swarm::core
+}  // namespace swarm::bus

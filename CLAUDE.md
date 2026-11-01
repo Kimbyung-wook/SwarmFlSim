@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 - 군집/편대 알고리즘 연구용 군집 무인항공기 시뮬레이터다.
 - 모노레포이며, 작업 패키지(WP)별 디렉터리로 나눈다 (DEC-021). 디렉터리 배정은 `docs/00_proposal.md` §12를 따른다.
-- 현재 WP0(계약: 스키마, 키 체계, 플러그인 API) 단계다.
+- 계약 버전 0.2.0. 1차 WP(WP1·WP2·WP5·WP7)가 통합되었다.
 - 빌드는 CMake 프리셋 `msvc-*`(vcpkg), `mingw-*`(MSYS2 UCRT64), `linux-*`를 모두 지원한다 (DEC-022). 설치·빌드·시험 명령은 `docs/10_contracts.md` §7에 있다.
 - C++ 의존성은 `find_package`로만 찾는다. 툴체인 전용 설정을 CMake에 넣지 않는다.
 
@@ -25,7 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `docs/01_id_convention.md`: ID 규칙 (REQ / PRP / OPN / DEC / IMP / TC)
 - `docs/02_registry.md`: 요구·제안·결정사항 등록부, A-GRA 메시지 매핑 표
 - `docs/03_traceability.md`: 추적 매트릭스
-- `docs/10_contracts.md`: WP0 계약 (Protobuf 패키지, Zenoh 키, 플러그인 API)
+- `docs/10_contracts.md`: WP0 계약 (Protobuf 패키지, Zenoh 키, 공용 버스, 브라우저 연동, 플러그인 API, 빌드)
+- `docs/11_wp_briefs.md`: WP 세션 지시문
 
 ## Working rules
 - 모든 구현은 하나 이상의 REQ 또는 DEC에 연결한다. 구현 항목에 `IMP-<모듈>-NNN`, 시험에 `TC-<모듈>-NNN`을 부여하고 `docs/03_traceability.md`를 갱신한다.
@@ -46,7 +47,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Multi-agent development (DEC-015, DEC-021)
 - WP0(Protobuf 스키마, Zenoh 키, 플러그인 API)을 먼저 고정한다. 이후 작업 패키지별 세션이 worktree에서 병렬로 개발한다.
-- 각 세션은 자기 WP 디렉터리만 수정한다. `proto/`와 `docs/10_contracts.md`의 계약 변경은 WP0을 거친다.
+- 각 세션은 자기 WP 디렉터리만 수정한다. `proto/`, `api/`, `bus/`, `docs/10_contracts.md`의 계약 변경은 WP0을 거친다.
+- 프로세스는 버스를 `open_bus`로 연다 (DEC-026). 브라우저는 WebSocket 브리지로만 버스에 붙는다 (DEC-027).
 
 ## Reference material
 - `../open_arsenal/`: A-GRA 6.0a, AMS-GRA v14, OMS/UCI 표준 자료와 `agra_lacal`(Python OMS LA-CAL 서버/클라이언트, A-GRA 6.0a XSD 검증, uv 기반)

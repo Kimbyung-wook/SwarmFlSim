@@ -3,6 +3,8 @@
 
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
 #include <numbers>
 #include <stdexcept>
 
@@ -62,6 +64,43 @@ Scenario parse_scenario_json(const std::string& json) {
     sc.entities.push_back(std::move(spec));
   }
   return sc;
+}
+
+Scenario from_proto(const v1::Scenario& msg) {
+  Scenario sc;
+  sc.name = msg.name();
+  const auto& run = msg.run();
+  if (run.frame_hz() != 0) sc.frame_hz = run.frame_hz();
+  if (run.mode() != v1::RUN_MODE_UNSPECIFIED) sc.mode = run.mode();
+  if (run.rate() != 0.0) sc.rate = run.rate();
+  sc.seed = run.seed();
+  sc.participants.assign(run.participants().begin(), run.participants().end());
+  sc.entities.assign(msg.entities().begin(), msg.entities().end());
+  return sc;
+}
+
+Scenario read_scenario_file(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) throw std::invalid_argument("cannot open " + path);
+  std::ostringstream ss;
+  ss << in.rdbuf();
+  const std::string text = ss.str();
+
+  if (path.size() >= 3 && path.compare(path.size() - 3, 3, ".pb") == 0) {
+    v1::Scenario msg;
+    if (!msg.ParseFromString(text)) throw std::invalid_argument("scenario pb: parse failed: " + path);
+    return from_proto(msg);
+  }
+  pb::Struct root;
+  if (auto st = pb::util::JsonStringToMessage(text, &root); !st.ok())
+    throw std::invalid_argument("scenario json: " + std::string(st.message()));
+  if (const auto it = root.fields().find("run"); it != root.fields().end() && it->second.has_struct_value()) {
+    v1::Scenario msg;
+    if (auto st = pb::util::JsonStringToMessage(text, &msg); !st.ok())
+      throw std::invalid_argument("scenario proto json: " + std::string(st.message()));
+    return from_proto(msg);
+  }
+  return parse_scenario_json(text);
 }
 
 Scenario builtin_scenario(int uav_count) {

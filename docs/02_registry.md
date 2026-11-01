@@ -96,6 +96,11 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-020 | 통제 UI: 여러 UI의 동시 접속(관전·통제)을 지금 구조에 반영한다. 역할별 권한(A-GRA C2 RBAC)은 P6 이후에 추가한다 | OPN-020 | Confirmed |
 | DEC-021 | 저장소: 현재 저장소 하나를 모노레포로 쓰고, WP별 디렉터리로 나눈다. 병렬 세션은 worktree로 작업한다 | OPN-021 | Confirmed |
 | DEC-022 | 빌드 툴체인을 하나로 고정하지 않는다. MSVC + vcpkg, MSYS2 UCRT64 GCC + pacman 패키지, Linux/WSL2 GCC + 배포판 패키지를 모두 CMake 프리셋으로 지원한다. 의존성은 `find_package`로만 찾는다 | DEC-010, 사용자: "msvc 와 vcpkg 가 없이 사용하는 안에 대해서도 대응되도록" (MSVC 라이선스 검토) | Confirmed |
+| DEC-023 | `DynamicsModel::to_kinematic`에 `const Environment&`를 인자로 추가한다. 바람을 반영한 대지 속도와 실제 중력값을 출력에 쓴다 | OPN-022, WP2 계약 변경 요청 | Confirmed |
+| DEC-024 | 시나리오를 proto `Scenario` 메시지(map, run, entities, mission_plan, engagement_criteria)로 정의하고 WP7 JSON Schema와 구조를 맞춘다. `LoadScenario.scenario`로 전달하며 `scenario_json`은 폐기 예정 | OPN-023, WP7 계약 변경 요청 | Confirmed |
+| DEC-025 | lockstep 참여자 목록은 `RunSpec.participants`에 둔다. 동적 참여자 등록은 2차에 검토한다 | OPN-024, WP1 계약 변경 요청 | Confirmed |
+| DEC-026 | 버스 구현(InMemory, Zenoh)을 공용 라이브러리 `bus/`(WP0 소유)로 두고 `open_bus(BusConfig)`로 생성한다. Python은 `swarm_api.open_bus` | OPN-025, WP7 계약 변경 요청 | Confirmed |
+| DEC-027 | 브라우저(UI, Traffic Monitor)는 Zenoh에 직접 붙지 않고 WebSocket 브리지로만 연동한다. 브리지는 Python, `bridge/`, WP5 담당. 발행 허용 키 제한과 클라이언트별 전송 주기 제한을 브리지에서 한다 | OPN-026, 사용자: "일관성을 위해서 WebSocket 브리지로만 연동" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -122,6 +127,11 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-019 | 미사일·FPV 성능 파라미터 출처 | Resolved by DEC-019 |
 | OPN-020 | 다중 통제 UI 동시 접속과 역할 기반 권한 | Resolved by DEC-020 |
 | OPN-021 | 저장소 구조 | Resolved by DEC-021 |
+| OPN-022 | 동역학 출력에 바람(대지 속도) 반영 방법 | Resolved by DEC-023 |
+| OPN-023 | 시나리오 전달 형식 (JSON 원문 vs proto) | Resolved by DEC-024 |
+| OPN-024 | lockstep 참여자 목록의 위치 | Resolved by DEC-025 |
+| OPN-025 | 프로세스 간 버스 생성의 공통화 | Resolved by DEC-026 |
+| OPN-026 | 브라우저의 Zenoh 연동 방식 | Resolved by DEC-027 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

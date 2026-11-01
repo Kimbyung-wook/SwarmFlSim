@@ -37,7 +37,7 @@ double GridTerrain::elevation_m(double lat_deg, double lon_deg) const {
 EventFn make_ground_event(const DynamicsModel& model, const Terrain& terrain, double clearance_m) {
   return [&model, &terrain, clearance_m](double, std::span<const double> x) {
     KinematicSample k;
-    model.to_kinematic(x, k);
+    model.to_kinematic(x, Environment{}, k);  // 위치만 쓰므로 바람과 무관
     return k.alt_m - (terrain.elevation_m(k.lat_deg, k.lon_deg) + clearance_m);
   };
 }

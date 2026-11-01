@@ -1,12 +1,16 @@
 [project]
 name = "swarm-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "Swarm flight plugin API and bus contract (WP0)"
 requires-python = ">=3.12"
 dependencies = [
     "protobuf>=5.28",
     "numpy>=2.0",
 ]
+
+[project.optional-dependencies]
+# 프로세스 간 버스 (DEC-026). C++ zenoh-c/zenoh-cpp와 같은 버전을 쓴다
+zenoh = ["eclipse-zenoh>=1.10,<1.11"]
 
 [build-system]
 requires = ["hatchling"]

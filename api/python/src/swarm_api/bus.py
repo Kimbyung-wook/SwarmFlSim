@@ -1,11 +1,13 @@
 """ASB(Abstract Service Bus) 계약 (PRP-NET-001).
 
-Zenoh 백엔드는 WP1이 구현한다. InMemoryBus는 각 WP의 단독 시험용이다.
+InMemoryBus는 각 WP의 단독 시험용이다. 프로세스 간 통신은 open_bus()로 Zenoh 백엔드를 연다 (DEC-026).
+Zenoh 백엔드는 선택 의존성이다: uv sync --extra zenoh (eclipse-zenoh)
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Protocol
+import json
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
 from .keys import keyexpr_matches
 
@@ -64,3 +66,81 @@ class InMemoryBus:
 
     def close(self) -> None:
         self._subs.clear()
+
+
+class _ZenohSubscription:
+    def __init__(self, sub: Any):
+        self._sub = sub
+
+    def close(self) -> None:
+        if self._sub is not None:
+            self._sub.undeclare()
+            self._sub = None
+
+
+class ZenohBus:
+    """Zenoh 백엔드. 구독 콜백은 Zenoh 내부 스레드에서 호출된다."""
+
+    def __init__(self, config: "BusConfig"):
+        import zenoh
+
+        conf = zenoh.Config.from_file(config.zenoh_config_file) if config.zenoh_config_file else zenoh.Config()
+        if config.zenoh_mode:
+            conf.insert_json5("mode", json.dumps(config.zenoh_mode))
+        if config.connect:
+            conf.insert_json5("connect/endpoints", json.dumps(list(config.connect)))
+        if config.listen:
+            conf.insert_json5("listen/endpoints", json.dumps(list(config.listen)))
+        if not config.multicast_scouting:
+            conf.insert_json5("scouting/multicast/enabled", "false")
+        self._session = zenoh.open(conf)
+
+    def put(self, key: str, payload: bytes, encoding: str) -> None:
+        if "*" in key:
+            raise ValueError(f"wildcard in put key: {key!r}")
+        self._session.put(key, payload, encoding=encoding or None)
+
+    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None]) -> Subscription:
+        def on_sample(z: Any) -> None:
+            callback(Sample(str(z.key_expr), z.payload.to_bytes(), str(z.encoding)))
+
+        return _ZenohSubscription(self._session.declare_subscriber(keyexpr, on_sample))
+
+    def close(self) -> None:
+        self._session.close()
+
+
+@dataclass
+class BusConfig:
+    """C++ swarm::bus::BusConfig와 같은 항목 (DEC-026)"""
+
+    backend: str = ""  # "zenoh" | "memory". 비우면 default_backend()
+    zenoh_config_file: str = ""
+    zenoh_mode: str = ""  # peer | client | router
+    connect: Sequence[str] = field(default_factory=list)
+    listen: Sequence[str] = field(default_factory=list)
+    multicast_scouting: bool = True
+
+
+def zenoh_available() -> bool:
+    try:
+        import zenoh  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def default_backend() -> str:
+    return "zenoh" if zenoh_available() else "memory"
+
+
+def open_bus(config: BusConfig | None = None) -> Bus:
+    """버스를 연다. 지원하지 않는 백엔드면 ValueError"""
+    config = config or BusConfig()
+    backend = config.backend or default_backend()
+    if backend == "memory":
+        return InMemoryBus()
+    if backend == "zenoh" and zenoh_available():
+        return ZenohBus(config)
+    available = "zenoh, memory" if zenoh_available() else "memory"
+    raise ValueError(f"unsupported bus backend: {backend} (available: {available})")

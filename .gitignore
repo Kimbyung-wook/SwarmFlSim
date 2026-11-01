@@ -25,3 +25,6 @@ data/dem/
 .vs/
 .vscode/
 .idea/
+
+# Claude Code 세션 worktree
+.claude/

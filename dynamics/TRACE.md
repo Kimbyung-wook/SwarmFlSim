@@ -26,6 +26,7 @@ flowchart LR
 | IMP-DYN-004 | RK45 Dormand-Prince 5(4) 프레임 안 가변 스텝(rtol/atol, 성분별 허용치 가중 `ErrorScaleProvider`). 두 적분기 공통으로 EventFn 영점 교차를 이분법으로 찾아 교차 직후 시점에서 멈춤 | `include/swarm/dyn/integrators.hpp`, `src/integrators.cpp` | REQ-DYN-003, REQ-DYN-004, DEC-005, PRP-DYN-002 |
 | IMP-DYN-005 | 평지, 위경도 격자 DEM 쌍선형 보간, 한반도 DEM 로더 인터페이스(`DemLoader`, 구현 없음), 지면 교차 이벤트 `make_ground_event` | `include/swarm/dyn/terrain.hpp`, `src/terrain.cpp` | REQ-SIM-003, DEC-004, DEC-005, DEC-016 |
 | IMP-DYN-006 | 모델·적분기 팩토리(이름·DynamicsKind → 인스턴스, 파라미터 재정의). dof5/dof6은 자리만(nullptr) | `include/swarm/dyn/factory.hpp`, `src/factory.cpp` | REQ-DYN-001, REQ-DYN-004 |
+| IMP-DYN-007 | 바람 반영: 위치 변화와 `to_kinematic` 속도 = 대기 속도 + `env.wind_ned_mps`, 2-DoF 뱅크·3-DoF 선회율에 `env.gravity_mps2` | `src/models.cpp` | DEC-023 |
 
 ## 시험 (TC)
 
@@ -43,6 +44,7 @@ flowchart LR
 | TC-DYN-010 | 격자 쌍선형 보간(평면 재현, 안장), 격자 밖 값, 크기 불일치 예외, 평지 | `tests/test_dynamics.cpp` | IMP-DYN-005 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-011 | to_kinematic/from_kinematic 왕복, NED 속도, 쿼터니언(방위·비행경로각·뱅크) | `tests/test_dynamics.cpp` | IMP-DYN-001, IMP-DYN-002 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-012 | 팩토리: 이름·DynamicsKind 생성, 예약 모델 nullptr, 파라미터 재정의, 모르는 파라미터 예외 | `tests/test_dynamics.cpp` | IMP-DYN-006 | 통과 (msvc-debug, 2026-11-01) |
+| TC-DYN-013 | 바람: 북향 50 m/s, 동풍 10 m/s 60 s 비행의 북·동 이동 거리, 대지 속도 출력, 3-DoF 선회율의 중력값 | `tests/test_dynamics.cpp` | IMP-DYN-007 | 통과 (msvc-debug, 2026-11-01) |
 
 ## 제약과 계약 변경 요청
 

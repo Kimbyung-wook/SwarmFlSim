@@ -55,7 +55,7 @@ class Oscillator final : public DynamicsModel {
     dxdt[1] = -x[0];
   }
   bool map_control(const swarm::v1::ControlOutput&, std::span<double>) const override { return false; }
-  void to_kinematic(std::span<const double>, KinematicSample&) const override {}
+  void to_kinematic(std::span<const double>, const Environment&, KinematicSample&) const override {}
   void from_kinematic(const KinematicSample&, std::span<double>) const override {}
 };
 
@@ -318,7 +318,7 @@ void tc011() {
     Dof3Model m;
     const std::vector<double> x = {kLat0, kLon0, 800.0, 50.0, 1.0, 0.1, 0.3};
     KinematicSample k;
-    m.to_kinematic(x, k);
+    m.to_kinematic(x, Environment{}, k);
     check_near(k.lat_deg, 37.5, 1e-12, "tc011 dof3 lat deg");
     check_near(k.vel_ned_mps[0], 50.0 * std::cos(0.1) * std::cos(1.0), 1e-12, "tc011 dof3 vn");
     check_near(k.vel_ned_mps[1], 50.0 * std::cos(0.1) * std::sin(1.0), 1e-12, "tc011 dof3 ve");
@@ -337,7 +337,7 @@ void tc011() {
     Dof2Model m;
     const std::vector<double> x = {kLat0, kLon0, 300.0, 40.0, -2.0, 0.1, 3.0};
     KinematicSample k;
-    m.to_kinematic(x, k);
+    m.to_kinematic(x, Environment{}, k);
     double yaw, pitch, roll;
     geo::quat_to_euler(k.quat_ned_frd, yaw, pitch, roll);
     check(quat_unit(k.quat_ned_frd), "tc011 dof2 unit quaternion");
@@ -374,6 +374,37 @@ void tc012() {
   check(threw, "tc012 unknown parameter throws");
 }
 
+// ---------------------------------------------------------------- TC-DYN-013 바람: 대지 속도·위치 표류 (DEC-023)
+void tc013() {
+  Environment env;
+  env.wind_ned_mps[1] = 10.0;  // 동풍 성분 10 m/s
+  const double v = 50.0, T = 60.0;
+  for (auto& integ : both_integrators()) {
+    Dof2Model m;
+    std::vector<double> x = {kLat0, kLon0, 500.0, v, 0.0, 0.0, 0.0};  // 북쪽 수평 비행
+    run(*integ, m, x, {v, 0.0, 0.0}, env, T, 0.02);
+    double n, e;
+    local_ne(x[Dof2Model::kLat], x[Dof2Model::kLon], x[Dof2Model::kAlt], n, e);
+    check_near(n, v * T, 0.5, "tc013 dof2 north distance");
+    check_near(e, 10.0 * T, 0.5, "tc013 dof2 east drift by wind");
+    KinematicSample k;
+    m.to_kinematic(x, env, k);
+    check_near(k.vel_ned_mps[0], v, 1e-9, "tc013 dof2 ground vn");
+    check_near(k.vel_ned_mps[1], 10.0, 1e-9, "tc013 dof2 ground ve = wind");
+  }
+  {
+    Dof3Model m;
+    Environment g;
+    g.gravity_mps2 = 9.0;
+    const std::vector<double> x = {kLat0, kLon0, 800.0, 50.0, 0.0, 0.0, 0.3};
+    KinematicSample k;
+    m.to_kinematic(x, g, k);
+    double yaw, pitch, roll;
+    geo::quat_to_euler(k.quat_ned_frd, yaw, pitch, roll);
+    check_near(k.rate_frd_rps[2] / std::cos(roll), 9.0 * std::tan(0.3) / 50.0, 1e-9, "tc013 dof3 turn rate uses env gravity");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -382,7 +413,7 @@ struct Case {
 const Case kCases[] = {
     {"TC-DYN-001", tc001}, {"TC-DYN-002", tc002}, {"TC-DYN-003", tc003}, {"TC-DYN-004", tc004},
     {"TC-DYN-005", tc005}, {"TC-DYN-006", tc006}, {"TC-DYN-007", tc007}, {"TC-DYN-008", tc008},
-    {"TC-DYN-009", tc009}, {"TC-DYN-010", tc010}, {"TC-DYN-011", tc011}, {"TC-DYN-012", tc012},
+    {"TC-DYN-009", tc009}, {"TC-DYN-010", tc010}, {"TC-DYN-011", tc011}, {"TC-DYN-012", tc012}, {"TC-DYN-013", tc013},
 };
 
 }  // namespace

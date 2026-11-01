@@ -1,6 +1,16 @@
 """WP7 시나리오: JSON Schema, 검증기, JSON ⇄ proto 변환기."""
 
-from .convert import SCHEMA_VERSION, MapExtent, Scenario, from_dict, load, sim_commands, to_dict
+from .convert import (
+    SCHEMA_VERSION,
+    MapExtent,
+    Scenario,
+    from_dict,
+    from_proto,
+    load,
+    sim_commands,
+    to_dict,
+    to_proto,
+)
 from .validate import KOREA_BOUNDS, Issue, ScenarioError, check, schema, validate
 
 __all__ = [
@@ -12,9 +22,11 @@ __all__ = [
     "ScenarioError",
     "check",
     "from_dict",
+    "from_proto",
     "load",
     "schema",
     "sim_commands",
     "to_dict",
+    "to_proto",
     "validate",
 ]

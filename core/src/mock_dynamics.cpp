@@ -16,12 +16,13 @@ enum : std::size_t { kLat, kLon, kAlt, kSpeed, kHeading, kClimb };
 }  // namespace
 
 void ConstantVelocity2Dof::derivatives(double, std::span<const double> x, std::span<const double> u,
-                                       const dyn::Environment&, std::span<double> dxdt) const {
+                                       const dyn::Environment& env, std::span<double> dxdt) const {
   const double v = x[kSpeed], psi = x[kHeading];
+  const double* w = env.wind_ned_mps;
   const double cos_lat = std::max(std::cos(x[kLat] / kDeg), 1e-6);
-  dxdt[kLat] = v * std::cos(psi) / kEarthRadiusM * kDeg;
-  dxdt[kLon] = v * std::sin(psi) / (kEarthRadiusM * cos_lat) * kDeg;
-  dxdt[kAlt] = x[kClimb];
+  dxdt[kLat] = (v * std::cos(psi) + w[0]) / kEarthRadiusM * kDeg;
+  dxdt[kLon] = (v * std::sin(psi) + w[1]) / (kEarthRadiusM * cos_lat) * kDeg;
+  dxdt[kAlt] = x[kClimb] - w[2];
   dxdt[kSpeed] = (u[0] - v) / kTauS;
   dxdt[kHeading] = u[1];
   dxdt[kClimb] = (u[2] - x[kClimb]) / kTauS;
@@ -37,14 +38,16 @@ bool ConstantVelocity2Dof::map_control(const v1::ControlOutput& cmd, std::span<d
   return true;
 }
 
-void ConstantVelocity2Dof::to_kinematic(std::span<const double> x, dyn::KinematicSample& out) const {
+void ConstantVelocity2Dof::to_kinematic(std::span<const double> x, const dyn::Environment& env,
+                                        dyn::KinematicSample& out) const {
   const double v = x[kSpeed], psi = x[kHeading], climb = x[kClimb];
+  const double* w = env.wind_ned_mps;
   out.lat_deg = x[kLat];
   out.lon_deg = x[kLon];
   out.alt_m = x[kAlt];
-  out.vel_ned_mps[0] = v * std::cos(psi);
-  out.vel_ned_mps[1] = v * std::sin(psi);
-  out.vel_ned_mps[2] = -climb;
+  out.vel_ned_mps[0] = v * std::cos(psi) + w[0];
+  out.vel_ned_mps[1] = v * std::sin(psi) + w[1];
+  out.vel_ned_mps[2] = -climb + w[2];
   // 요(방위각) → 피치(비행경로각) 순서의 NED→FRD 회전
   const double gamma = std::atan2(climb, std::max(v, 1e-9));
   const double cy = std::cos(psi / 2), sy = std::sin(psi / 2), cp = std::cos(gamma / 2), sp = std::sin(gamma / 2);

@@ -1,8 +1,9 @@
 # WP0 계약
 
-- WP 세션들은 이 문서와 `proto/`, `api/`만으로 서로 연결한다 (DEC-015).
+- WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.1.0
+- 계약 버전: 0.2.0
+  - 0.2.0: `to_kinematic`에 `Environment` 추가(DEC-023), `Scenario`·`RunSpec` 메시지(DEC-024, DEC-025), 공용 버스 `bus/`와 `open_bus`(DEC-026), 브라우저 연동은 WebSocket 브리지(DEC-027)
 
 ## 1. 산출물
 
@@ -14,6 +15,7 @@
 | ASB 버스 계약 + 인메모리 백엔드 | `api/python/src/swarm_api/bus.py`, `api/cpp/include/swarm/api/bus.hpp` | IMP-API-004 |
 | 플러그인 API (MA/FA, L1 포트) | `api/python/src/swarm_api/{ports,plugin}.py`, `api/cpp/include/swarm/api/plugin.hpp` | IMP-API-005 |
 | Core ⇄ 동역학 인터페이스 | `api/cpp/include/swarm/api/dynamics.hpp` | IMP-API-006 |
+| 공용 버스 라이브러리 (InMemory, Zenoh, `open_bus`) | `bus/` (C++ `swarm_bus`), `api/python/src/swarm_api/bus.py` | IMP-API-007 |
 
 ## 2. 좌표와 단위
 
@@ -83,6 +85,29 @@ flowchart LR
 - MA 플러그인은 버스에 직접 접근하지 않는다. 런타임은 `sim/ctrl/`, `truth/`, `link/` 접두어를 플러그인에 노출하지 않는다 (`MA_FORBIDDEN_PREFIXES`).
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
 
+### 3.4 버스 열기 (DEC-026)
+
+- 프로세스는 버스 구현을 직접 만들지 않고 `open_bus(BusConfig)`로 연다.
+  - C++: `swarm/bus/open_bus.hpp` (타깃 `swarm_bus`). Zenoh가 빌드에 없으면 memory만 된다.
+  - Python: `swarm_api.open_bus(BusConfig(...))`. Zenoh는 `swarm-api[zenoh]`(eclipse-zenoh 1.10)
+- `BusConfig`: `backend`(zenoh | memory, 비우면 Zenoh가 있으면 zenoh), `zenoh_config_file`, `zenoh_mode`, `connect`, `listen`, `multicast_scouting`
+- 실행 파일의 명령행 옵션은 같은 이름을 쓴다: `--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast` (`parse_bus_arg`, `kBusUsage`)
+
+### 3.5 브라우저 연동 (DEC-027)
+
+```mermaid
+flowchart LR
+    UI["GCS/UI · Traffic Monitor<br/>(브라우저)"] <-- "WebSocket<br/>바이너리 프레임: 키 + protobuf" --> BR["WebSocket 브리지<br/>bridge/ (Python)"]
+    BR <-- "open_bus (Zenoh)" --> BUS["Zenoh 버스"]
+```
+
+- 브라우저는 Zenoh에 직접 붙지 않는다. 모든 송수신은 브리지를 거친다.
+- 브리지가 하는 일:
+  - 구독: 클라이언트가 키 표현식과 최대 전송 주기를 지정한다. 브리지가 클라이언트별로 다운샘플한다 (DEC-006).
+  - 발행: 허용한 키만 받는다. 기본 허용은 `sim/ctrl/cmd`와 그 UI가 맡은 GCS의 `swarm/<gcs>/tx/**`
+  - 역할별 권한(DEC-020, P6 이후)은 브리지에 붙인다.
+- 프레임 형식과 구현은 WP5가 `bridge/`에서 정하고 이 절에 추가한다.
+
 ## 4. Protobuf 스키마
 
 - 패키지: `swarm.v1`. 호환을 깨는 변경은 `swarm.v2`로 한다.
@@ -103,8 +128,10 @@ flowchart LR
 | `mp.proto` | MissionPlan, RoutePlan, EngagementCriteria | STD |
 | `fa.proto` | ControlOutput (Kinematic/Attitude/Actuator) | SIM |
 | `link.proto` | LinkEnvelope, LinkOutcome, LinkState | SIM |
-| `sim.proto` | SimCommand, SimStatus, ClockTick, FrameDone | SIM |
+| `sim.proto` | SimCommand, SimStatus, ClockTick, FrameDone, Scenario(MapSpec, RunSpec) | SIM |
 | `truth.proto` | TruthFrame, TruthEvent | SIM |
+
+- 시나리오: `LoadScenario.scenario`(`Scenario`)로 보낸다. `scenario_json`은 폐기 예정이다 (DEC-024). `Scenario`의 필드 구성은 `scenario/` JSON Schema와 같고, 변환은 `swarm_scenario.to_proto` / `from_proto`가 한다. `swarm_core --scenario`에 줄 파일은 `swarm-scenario export`로 만든다.
 
 - 코드 생성
   - C++: CMake `protobuf_generate` (`proto/CMakeLists.txt`, 타깃 `swarm_proto`)
@@ -137,7 +164,9 @@ flowchart TB
 
 ## 6. Core ⇄ 동역학 (`dynamics.hpp`)
 
-- `DynamicsModel`: `derivatives(t, x, u, env, dxdt)`, `map_control(ControlOutput, u)`, `to_kinematic` / `from_kinematic`
+- `DynamicsModel`: `derivatives(t, x, u, env, dxdt)`, `map_control(ControlOutput, u)`, `to_kinematic(x, env, out)` / `from_kinematic(in, x)`
+  - 상태의 속도는 대기 속도다. `to_kinematic`은 바람(`env.wind_ned_mps`)을 더한 대지 속도를 내고, 중력은 `env.gravity_mps2`를 쓴다 (DEC-023).
+  - `from_kinematic`은 입력 속도를 대기 속도로 해석한다(초기 상태 설정용).
 - `Integrator::step(model, t0, dt, x, u, env, event)`: 프레임 한 칸을 적분한다. RK45는 프레임 안에서 가변 스텝을 쓴다.
 - `EventFn`: 영점 교차 함수(예: 고도 − DEM 고도). 적분기는 교차 시점을 이분법으로 찾아 그 시점에서 멈춘다 (DEC-005).
 - `Terrain::elevation_m(lat, lon)`: DEM 조회. 구현은 WP2가 맡는다.
@@ -148,7 +177,7 @@ flowchart TB
 
 | 프리셋 | 환경 | C++ 의존성 | 셸 |
 |---|---|---|---|
-| `msvc-debug`, `msvc-release` | Windows, MSVC | vcpkg 매니페스트(`vcpkg.json`), `VCPKG_ROOT` 필요 | Developer PowerShell for VS 2022 |
+| `msvc-debug`, `msvc-release` | Windows, MSVC | vcpkg 매니페스트(`vcpkg.json`), `VCPKG_ROOT` 필요 | `vcvars64.bat`를 부른 cmd (x64 Native Tools) |
 | `mingw-debug`, `mingw-release` | Windows, MSYS2 UCRT64 GCC | pacman 패키지 | MSYS2 UCRT64 |
 | `linux-debug`, `linux-release` | Linux/WSL2, GCC | 배포판 패키지 | bash |
 | `linux-vcpkg-debug` | Linux/WSL2, GCC | vcpkg | bash |
@@ -190,11 +219,20 @@ Ubuntu / WSL2:
 sudo apt install build-essential cmake ninja-build libprotobuf-dev protobuf-compiler libeigen3-dev
 ```
 
-Zenoh (zenoh-c + zenoh-cpp 1.10.2, WP1):
+MCAP (WP7 `logger/`):
+
+- MSVC + vcpkg: `vcpkg.json`의 `mcap` 포트로 자동 설치된다.
+- MSYS2·Ubuntu: 패키지가 없다. mcap 저장소의 C++ 헤더를 받아 `-DMCAP_INCLUDE_DIR=<mcap>/cpp/mcap/include`로 넘긴다. 지정하지 않으면 경고를 내고 `logger/`를 건너뛴다.
+
+```bash
+git clone --depth 1 https://github.com/foxglove/mcap <mcap>
+```
+
+Zenoh (zenoh-c + zenoh-cpp 1.10.2):
 
 - vcpkg와 MSYS2·Ubuntu 배포판에 패키지가 없으므로 eclipse-zenoh 공식 릴리스의 standalone zip을 한 접두 경로에 풀고 `CMAKE_PREFIX_PATH`로 넘긴다.
 - zenoh-cpp는 헤더 전용이다(`zenohcpp-1.10.2-standalone.zip`). zenoh-c는 환경별 zip을 받는다.
-- Zenoh가 없으면 `core/`는 ZenohBus 없이(InMemoryBus만) 빌드된다.
+- Zenoh가 없으면 `bus/`는 memory 백엔드만 들어간 채로 빌드되고, Zenoh 시험은 빠진다.
 
 | 환경 | zenoh-c zip | 접두 경로 예 |
 |---|---|---|
@@ -238,7 +276,7 @@ mkdir -p <prefix> && unzip -o <zip> -d <prefix> && unzip -o zenohcpp-1.10.2-stan
 export CMAKE_PREFIX_PATH=<prefix>
 ```
 
-- Linux에서 빌드 트리 밖으로 옮긴 실행 파일은 `LD_LIBRARY_PATH=<prefix>/lib`로 실행한다. Windows는 빌드 후 `zenohc.dll`을 실행 파일 옆에 복사한다(`core/CMakeLists.txt`).
+- Linux에서 빌드 트리 밖으로 옮긴 실행 파일은 `LD_LIBRARY_PATH=<prefix>/lib`로 실행한다. Windows는 빌드 후 `zenohc.dll`을 실행 파일 옆에 복사한다(`swarm_copy_runtime_dlls`, `bus/CMakeLists.txt`).
 
 공통 (Python):
 
@@ -266,6 +304,8 @@ ctest --preset <preset>
 uv sync
 ```
 
+- `uv sync`는 dev 그룹으로 워크스페이스 패키지 전체와 `eclipse-zenoh`를 설치한다. `uv run pytest`는 `api/python/tests`와 `scenario/tests`를 모두 돈다.
+
 ```bash
 uv run python scripts/gen_proto.py
 ```
@@ -280,4 +320,4 @@ uv run pytest
   - MSVC: python.org 또는 uv가 받은 CPython
   - MSYS2: MSYS2의 `mingw-w64-ucrt-x86_64-python`. uv가 받은 CPython과는 섞지 않는다
 - 바인딩이 없는 Python 코드(MA 플러그인, Gateway, 시나리오, 시험)는 툴체인과 관계없이 uv 환경에서 실행한다.
-- Zenoh(zenoh-c/zenoh-cpp) 의존성은 WP1이 추가한다. 세 환경 모두에서 받는 방법을 7.2에 함께 적는다.
+- Zenoh는 C++(zenoh-c/zenoh-cpp)와 Python(eclipse-zenoh)이 같은 1.10 버전을 쓴다. 받는 방법은 7.2에 있다.

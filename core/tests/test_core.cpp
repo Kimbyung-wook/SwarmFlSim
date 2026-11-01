@@ -1,4 +1,4 @@
-// TC-CORE-002~009: SimCore 단위 시험 (InMemoryBus, 목 동역학)
+// TC-CORE-002~012: SimCore 단위 시험 (InMemoryBus, 목 동역학)
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -420,6 +420,32 @@ void test_run_loop() {
   CHECK(wall > 0.45 && wall < 0.75);
 }
 
+// TC-CORE-012: proto 시나리오(LoadScenario.scenario)와 RunSpec.participants (DEC-024, DEC-025)
+void test_proto_scenario() {
+  v1::Scenario msg;
+  msg.set_name("proto-demo");
+  msg.mutable_run()->set_mode(v1::RUN_MODE_LOCKSTEP);
+  msg.mutable_run()->set_frame_hz(60);
+  msg.mutable_run()->set_seed(7);
+  msg.mutable_run()->add_participants("agent-host-1");
+  for (const auto& e : one_uav().entities) *msg.add_entities() = e;
+
+  const auto sc = core::from_proto(msg);
+  CHECK(sc.name == "proto-demo" && sc.frame_hz == 60 && sc.mode == v1::RUN_MODE_LOCKSTEP && sc.seed == 7);
+  CHECK(sc.participants == std::vector<std::string>{"agent-host-1"} && sc.entities.size() == 2);
+  CHECK(sc.rate == 1.0);  // 0은 기본값 유지
+
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  v1::SimCommand load;
+  *load.mutable_load()->mutable_scenario() = msg;
+  put(bus, std::string(keys::kSimCtrlCmd), load);
+  sim.poll(Clock::now());
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && sim.entities().size() == 2);
+  CHECK(rec.statuses.back().scenario_name() == "proto-demo");
+}
+
 }  // namespace
 
 int main() {
@@ -432,6 +458,7 @@ int main() {
   test_control_input();
   test_scenario_status_reset();
   test_run_loop();
+  test_proto_scenario();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

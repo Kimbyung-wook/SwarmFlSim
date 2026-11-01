@@ -1,4 +1,5 @@
-// IMP-CORE-001: swarm::Bus의 Zenoh 백엔드 (PRP-NET-001, DEC-002, REQ-NET-001)
+// IMP-API-007: swarm::Bus의 Zenoh 백엔드. WP1 IMP-CORE-001에서 옮김 (PRP-NET-001, DEC-002, DEC-026)
+// 직접 만들기보다 open_bus.hpp의 open_bus()를 쓴다.
 #pragma once
 
 #include <memory>
@@ -7,7 +8,7 @@
 
 #include "swarm/api/bus.hpp"
 
-namespace swarm::core {
+namespace swarm::bus {
 
 struct ZenohOptions {
   std::string config_file;              // json5 설정 파일. 비우면 기본 설정
@@ -34,4 +35,4 @@ class ZenohBus final : public Bus {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace swarm::core
+}  // namespace swarm::bus

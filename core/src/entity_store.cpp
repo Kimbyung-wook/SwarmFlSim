@@ -58,6 +58,7 @@ bool needs_onboard(const v1::EntitySpec& s) {
 
 void EntityStore::build(const std::vector<v1::EntitySpec>& specs, const DynamicsProvider& provider) {
   *this = EntityStore{};
+  env_ = provider.env;
   for (const auto& spec : specs) {
     if (!keys::is_valid_entity_id(spec.id())) throw std::invalid_argument("invalid entity id: " + spec.id());
     if (!index_.emplace(spec.id(), id_.size()).second) throw std::invalid_argument("duplicate entity id: " + spec.id());
@@ -117,7 +118,7 @@ void EntityStore::kinematics(std::size_t i, v1::KinematicState& out) const {
     return;
   }
   dyn::KinematicSample s;
-  model_[i]->to_kinematic(x(i), s);
+  model_[i]->to_kinematic(x(i), env_, s);
   from_sample(s, out);
 }
 

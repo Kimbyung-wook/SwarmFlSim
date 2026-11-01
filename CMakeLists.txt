@@ -30,6 +30,7 @@ endif()
 # WP0 계약
 add_subdirectory(proto)
 add_subdirectory(api/cpp)
+add_subdirectory(bus)
 
 # WP별 C++ 모듈. 각 WP 세션이 디렉터리를 만들면 자동으로 포함된다 (DEC-021)
 foreach(wp_dir core dynamics datalink logger payload agent)

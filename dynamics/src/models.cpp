@@ -55,10 +55,11 @@ double heading_of(const KinematicSample& in) {
 
 // ---------------------------------------------------------------- 2-DoF
 
-void Dof2Model::derivatives(double, std::span<const double> x, std::span<const double> u, const Environment&,
+void Dof2Model::derivatives(double, std::span<const double> x, std::span<const double> u, const Environment& env,
                             std::span<double> dxdt) const {
   const double v = x[kSpeed], psi = x[kHeading];
-  const double vn = v * std::cos(psi), ve = v * std::sin(psi), vd = -x[kClimbRate];
+  const double* w = env.wind_ned_mps;
+  const double vn = v * std::cos(psi) + w[0], ve = v * std::sin(psi) + w[1], vd = -x[kClimbRate] + w[2];
   geo::geodetic_rates(x[kLat], x[kAlt], vn, ve, vd, dxdt[kLat], dxdt[kLon], dxdt[kAlt]);
 
   const double v_c = std::clamp(u[kSpeedCmd], p_.min_speed_mps, p_.max_speed_mps);
@@ -80,14 +81,15 @@ bool Dof2Model::map_control(const swarm::v1::ControlOutput& cmd, std::span<doubl
 }
 
 // 자세: yaw = ψ, pitch = 비행경로각, roll = 선회율에 해당하는 협조선회 뱅크 atan(V·ψ̇/g)
-void Dof2Model::to_kinematic(std::span<const double> x, KinematicSample& out) const {
+void Dof2Model::to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const {
   set_position(x, kLat, kLon, kAlt, out);
   const double v = x[kSpeed], psi = x[kHeading], hdot = x[kClimbRate], rate = x[kHeadingRate];
-  out.vel_ned_mps[0] = v * std::cos(psi);
-  out.vel_ned_mps[1] = v * std::sin(psi);
-  out.vel_ned_mps[2] = -hdot;
+  const double* w = env.wind_ned_mps;
+  out.vel_ned_mps[0] = v * std::cos(psi) + w[0];
+  out.vel_ned_mps[1] = v * std::sin(psi) + w[1];
+  out.vel_ned_mps[2] = -hdot + w[2];
   const double pitch = std::atan2(hdot, std::max(v, 1e-9));
-  const double roll = std::atan(v * rate / geo::kStdGravity);
+  const double roll = std::atan(v * rate / env.gravity_mps2);
   geo::euler_to_quat(psi, pitch, roll, out.quat_ned_frd);
   geo::yaw_rate_to_body_rates(rate, pitch, roll, out.rate_frd_rps);
 }
@@ -112,8 +114,9 @@ void Dof3Model::derivatives(double, std::span<const double> x, std::span<const d
                             std::span<double> dxdt) const {
   const double v = x[kSpeed], psi = x[kHeading], gamma = x[kGamma], phi = x[kBank];
   const double vh = v * std::cos(gamma);
-  geo::geodetic_rates(x[kLat], x[kAlt], vh * std::cos(psi), vh * std::sin(psi), -v * std::sin(gamma), dxdt[kLat],
-                      dxdt[kLon], dxdt[kAlt]);
+  const double* w = env.wind_ned_mps;
+  geo::geodetic_rates(x[kLat], x[kAlt], vh * std::cos(psi) + w[0], vh * std::sin(psi) + w[1],
+                      -v * std::sin(gamma) + w[2], dxdt[kLat], dxdt[kLon], dxdt[kAlt]);
 
   const double v_c = std::clamp(u[kSpeedCmd], p_.min_speed_mps, p_.max_speed_mps);
   const double phi_c = std::clamp(u[kBankCmd], -p_.max_bank_rad, p_.max_bank_rad);
@@ -136,16 +139,17 @@ bool Dof3Model::map_control(const swarm::v1::ControlOutput& cmd, std::span<doubl
   return true;
 }
 
-// 각속도는 롤·피치 변화율을 0으로 둔 정상 선회값이다 (표준 중력 사용)
-void Dof3Model::to_kinematic(std::span<const double> x, KinematicSample& out) const {
+// 각속도는 롤·피치 변화율을 0으로 둔 정상 선회값이다
+void Dof3Model::to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const {
   set_position(x, kLat, kLon, kAlt, out);
   const double v = x[kSpeed], psi = x[kHeading], gamma = x[kGamma], phi = x[kBank];
   const double vh = v * std::cos(gamma);
-  out.vel_ned_mps[0] = vh * std::cos(psi);
-  out.vel_ned_mps[1] = vh * std::sin(psi);
-  out.vel_ned_mps[2] = -v * std::sin(gamma);
+  const double* w = env.wind_ned_mps;
+  out.vel_ned_mps[0] = vh * std::cos(psi) + w[0];
+  out.vel_ned_mps[1] = vh * std::sin(psi) + w[1];
+  out.vel_ned_mps[2] = -v * std::sin(gamma) + w[2];
   geo::euler_to_quat(psi, gamma, phi, out.quat_ned_frd);
-  const double rate = geo::kStdGravity * std::tan(phi) / std::max(vh, p_.min_speed_mps);
+  const double rate = env.gravity_mps2 * std::tan(phi) / std::max(vh, p_.min_speed_mps);
   geo::yaw_rate_to_body_rates(rate, gamma, phi, out.rate_frd_rps);
 }
 

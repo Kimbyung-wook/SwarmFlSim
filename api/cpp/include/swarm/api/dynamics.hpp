@@ -49,7 +49,9 @@ class DynamicsModel {
   // ControlOutput의 oneof 중 이 모델이 받는 형식을 u로 바꾼다. 받지 않는 형식이면 false
   virtual bool map_control(const swarm::v1::ControlOutput& cmd, std::span<double> u) const = 0;
 
-  virtual void to_kinematic(std::span<const double> x, KinematicSample& out) const = 0;
+  // vel_ned_mps는 대지 속도다. 바람(env.wind_ned_mps)을 더한다 (DEC-023)
+  virtual void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const = 0;
+  // 초기 상태 설정용. in.vel_ned_mps는 대기 속도로 해석한다
   virtual void from_kinematic(const KinematicSample& in, std::span<double> x) const = 0;
 };
 

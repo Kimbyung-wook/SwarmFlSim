@@ -52,6 +52,7 @@ class EntityStore {
   std::vector<std::uint8_t> onboard_;  // 기체 런타임이 붙는 엔티티: NavigationReport 발행 대상
   std::vector<double> energy_;
   std::vector<std::unique_ptr<dyn::DynamicsModel>> model_;
+  dyn::Environment env_{};  // to_kinematic의 바람·중력 (DEC-023)
   std::vector<v1::KinematicState> fixed_;  // 모델이 없는 엔티티의 고정 상태
   std::vector<std::size_t> x_off_, x_len_, u_off_, u_len_;
   std::vector<double> x_, u_, x0_, u0_;

@@ -2,7 +2,7 @@
 //
 // 공통
 // - 위치 상태는 위도·경도(rad), 고도(m, MSL). to_kinematic이 deg로 바꾼다.
-// - 속도 상태는 대기 속도다. 바람은 반영하지 않는다(to_kinematic이 Environment를 받지 않음).
+// - 속도 상태는 대기 속도다. 위치 변화와 to_kinematic 출력은 대기 속도 + 바람(대지 속도)이다 (DEC-023).
 // - 자세 쿼터니언은 속도 방향(ψ, 비행경로각 γ)과 뱅크각 φ로 만든다. 받음각·옆미끄럼각은 0으로 본다.
 // - 명령 추종은 1차 지연이다. 시정수는 RK4 프레임 스텝보다 충분히 커야 한다(τ > dt/2 권장).
 #pragma once
@@ -39,7 +39,7 @@ class Dof2Model final : public DynamicsModel, public ErrorScaleProvider {
   void derivatives(double t, std::span<const double> x, std::span<const double> u, const Environment& env,
                    std::span<double> dxdt) const override;
   bool map_control(const swarm::v1::ControlOutput& cmd, std::span<double> u) const override;
-  void to_kinematic(std::span<const double> x, KinematicSample& out) const override;
+  void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const override;
   void from_kinematic(const KinematicSample& in, std::span<double> x) const override;
   void error_scale(std::span<double> abs_scale, std::span<double> rel_scale) const override;
   const Params& params() const { return p_; }
@@ -75,7 +75,7 @@ class Dof3Model final : public DynamicsModel, public ErrorScaleProvider {
   void derivatives(double t, std::span<const double> x, std::span<const double> u, const Environment& env,
                    std::span<double> dxdt) const override;
   bool map_control(const swarm::v1::ControlOutput& cmd, std::span<double> u) const override;
-  void to_kinematic(std::span<const double> x, KinematicSample& out) const override;
+  void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const override;
   void from_kinematic(const KinematicSample& in, std::span<double> x) const override;
   void error_scale(std::span<double> abs_scale, std::span<double> rel_scale) const override;
   const Params& params() const { return p_; }

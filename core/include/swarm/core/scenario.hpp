@@ -1,5 +1,7 @@
-// IMP-CORE-006: 최소 시나리오 (WP7 스키마 확정 전 임시 형식, REQ-CFG-001)
+// IMP-CORE-006: 시나리오 (REQ-CFG-001)
+// IMP-CORE-007: swarm.v1.Scenario(proto)를 기본 형식으로 받는다 (DEC-024, DEC-025)
 //
+// 아래 최소 JSON 형식은 폐기 예정(LoadScenario.scenario_json)이며 호환을 위해 남겨 둔다.
 // {
 //   "name": "demo", "frame_hz": 50, "mode": "lockstep", "rate": 0, "seed": 1,
 //   "participants": ["agent-host-1"],
@@ -29,6 +31,12 @@ struct Scenario {
 
 // 형식 오류면 std::invalid_argument
 Scenario parse_scenario_json(const std::string& json);
+
+Scenario from_proto(const v1::Scenario& msg);
+
+// 파일: .pb는 swarm.v1.Scenario 바이너리, 그 밖은 JSON.
+// JSON에 "run" 객체가 있으면 swarm.v1.Scenario의 proto JSON(swarm-scenario export 출력), 없으면 최소 형식
+Scenario read_scenario_file(const std::string& path);
 
 // 내장 시나리오: 한반도 중부 상공 고정익 n대(2-DoF) + GCS 1
 Scenario builtin_scenario(int uav_count = 20);

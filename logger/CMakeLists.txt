@@ -24,7 +24,8 @@ target_link_libraries(swarm_logger PUBLIC swarm_api PRIVATE ${SWARM_MCAP_TARGET}
 
 add_executable(swarm_logger_cli src/main.cpp)
 set_target_properties(swarm_logger_cli PROPERTIES OUTPUT_NAME swarm_logger)
-target_link_libraries(swarm_logger_cli PRIVATE swarm_logger)
+target_link_libraries(swarm_logger_cli PRIVATE swarm_logger swarm_bus)
+swarm_copy_runtime_dlls(swarm_logger_cli)
 
 if(SWARM_BUILD_TESTS)
   add_executable(swarm_logger_tests tests/test_logger.cpp)

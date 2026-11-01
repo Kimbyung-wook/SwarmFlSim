@@ -11,7 +11,7 @@
 #include "swarm/api/keys.hpp"
 #include "swarm/core/mock_dynamics.hpp"
 #include "swarm/core/sim_core.hpp"
-#include "swarm/core/zenoh_bus.hpp"
+#include "swarm/bus/open_bus.hpp"
 #include "swarm/v1/truth.pb.h"
 
 namespace {
@@ -43,15 +43,18 @@ bool wait_for(Pred p, std::chrono::milliseconds timeout = 3000ms) {
 
 int main() {
   // 멀티캐스트 스카우팅에 의존하지 않도록 한쪽이 듣고 다른 쪽이 접속한다
-  core::ZenohOptions a_opt, b_opt;
-  a_opt.mode = b_opt.mode = "peer";
+  bus::BusConfig a_opt, b_opt;
+  a_opt.backend = b_opt.backend = "zenoh";
+  a_opt.zenoh_mode = b_opt.zenoh_mode = "peer";
   a_opt.multicast_scouting = b_opt.multicast_scouting = false;
   a_opt.listen = {"tcp/127.0.0.1:17447"};
   b_opt.connect = {"tcp/127.0.0.1:17447"};
   b_opt.listen = {"tcp/127.0.0.1:17448"};
 
-  core::ZenohBus a(a_opt);
-  core::ZenohBus b(b_opt);
+  auto a_bus = bus::open_bus(a_opt);
+  auto b_bus = bus::open_bus(b_opt);
+  Bus& a = *a_bus;
+  Bus& b = *b_bus;
 
   // 1. 와일드카드 구독, 페이로드·인코딩·키 보존
   std::mutex mu;

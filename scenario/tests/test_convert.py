@@ -4,7 +4,7 @@ import pytest
 from google.protobuf.descriptor import FieldDescriptor
 
 from swarm.v1 import c2_pb2, common_pb2, entity_pb2, mp_pb2, sim_pb2
-from swarm_scenario import from_dict, schema, sim_commands, to_dict
+from swarm_scenario import from_dict, from_proto, schema, sim_commands, to_dict, to_proto
 from swarm_scenario.enums import full_to_short
 
 
@@ -99,7 +99,8 @@ def test_to_dict_rejects_invalid(doc):
 def test_sim_commands(doc):
     load, start = sim_commands(doc, issuer="ui-01")
     assert load.issuer == "ui-01" and load.WhichOneof("cmd") == "load"
-    assert json.loads(load.load.scenario_json) == doc
+    assert load.load.scenario_json == ""
+    assert to_dict(from_proto(load.load.scenario)) == to_dict(from_dict(doc))
     assert start.WhichOneof("cmd") == "start" and start.start.mode == sim_pb2.RUN_MODE_LOCKSTEP
     assert sim_pb2.SimCommand.FromString(load.SerializeToString()) == load
 
@@ -118,6 +119,8 @@ _SCHEMA_TO_PROTO = {
     "EngagementCriteria": mp_pb2.EngagementCriteria,
     "FormationCommand": c2_pb2.FormationCommand,
     "TaskCommand": c2_pb2.TaskCommand,
+    "MapSpec": sim_pb2.MapSpec,
+    "RunSpec": sim_pb2.RunSpec,
 }
 _ENUMS = {
     "EntityKind": entity_pb2.EntityKind,
@@ -153,3 +156,19 @@ def test_scalar_field_types():
                 assert prop.get("type") == "integer", (name, f.name)
             elif f.type == FieldDescriptor.TYPE_DOUBLE:
                 assert prop.get("type") == "number", (name, f.name)
+
+
+def test_scenario_top_level_matches_proto():
+    """TC-SCN-007: 최상위 필드 = swarm.v1.Scenario (DEC-024)"""
+    assert set(schema()["properties"]) == {f.name for f in sim_pb2.Scenario.DESCRIPTOR.fields}
+
+
+# TC-SCN-008: Scenario ⇄ swarm.v1.Scenario 왕복, lockstep 참여자 (DEC-024, DEC-025)
+def test_proto_round_trip(doc):
+    doc = dict(doc, run=dict(doc["run"], participants=["agent-host-1", "datalink-0"]))
+    sc = from_dict(doc)
+    msg = to_proto(sc)
+    assert list(msg.run.participants) == ["agent-host-1", "datalink-0"]
+    assert len(msg.entities) == len(doc["entities"])
+    back = sim_pb2.Scenario.FromString(msg.SerializeToString())
+    assert to_dict(from_proto(back)) == to_dict(sc)

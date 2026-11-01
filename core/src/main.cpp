@@ -9,16 +9,15 @@
 #include <string>
 #include <thread>
 
+#include "swarm/bus/open_bus.hpp"
 #include "swarm/core/mock_dynamics.hpp"
 #include "swarm/core/sim_core.hpp"
-#ifdef SWARM_CORE_WITH_ZENOH
-#include "swarm/core/zenoh_bus.hpp"
-#endif
 
 namespace {
 
 constexpr const char* kUsage = R"(usage: swarm_core [options]
-  --scenario <file.json>   시나리오 파일. 없으면 내장 시나리오(고정익 --uavs 대 + GCS 1)
+  --scenario <file>        시나리오 파일(.pb 또는 proto JSON, swarm-scenario export로 만든다).
+                           없으면 내장 시나리오(고정익 --uavs 대 + GCS 1)
   --uavs <n>               내장 시나리오 기체 수 (기본 20)
   --autostart              불러온 뒤 바로 시작한다. 없으면 sim/ctrl/cmd의 Start를 기다린다
   --mode <m>               realtime | lockstep | freerun (--autostart 시)
@@ -27,11 +26,6 @@ constexpr const char* kUsage = R"(usage: swarm_core [options]
   --seed <n>               난수 시드
   --participant <id>       lockstep 장벽 참여자 (반복 가능)
   --frames <n>             n 프레임 진행 후 종료
-  --bus <zenoh|memory>     버스 백엔드 (기본 zenoh, 없으면 memory)
-  --zenoh-config <file>    zenoh json5 설정
-  --zenoh-mode <m>         peer | client | router
-  --connect <endpoint>     예: tcp/127.0.0.1:7447 (반복 가능)
-  --listen <endpoint>      예: tcp/0.0.0.0:7447 (반복 가능)
 )";
 
 swarm::core::SimCore* g_core = nullptr;
@@ -44,28 +38,15 @@ void on_signal(int) {
   g_core->submit(cmd);
 }
 
-std::string read_file(const std::string& path) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) throw std::runtime_error("cannot open " + path);
-  std::ostringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
   using namespace swarm;
-  std::string scenario_file, bus_kind, mode, rate, hz, seed;
+  std::string scenario_file, mode, rate, hz, seed;
   int uavs = 20;
   bool autostart = false;
   core::CoreConfig cfg;
-#ifdef SWARM_CORE_WITH_ZENOH
-  core::ZenohOptions zopt;
-  bus_kind = "zenoh";
-#else
-  bus_kind = "memory";
-#endif
+  bus::BusConfig bus_cfg;
 
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -85,29 +66,19 @@ int main(int argc, char** argv) {
     else if (a == "--seed") seed = next();
     else if (a == "--participant") cfg.participants.push_back(next());
     else if (a == "--frames") cfg.stop_after_frames = std::stoull(next());
-    else if (a == "--bus") bus_kind = next();
-#ifdef SWARM_CORE_WITH_ZENOH
-    else if (a == "--zenoh-config") zopt.config_file = next();
-    else if (a == "--zenoh-mode") zopt.mode = next();
-    else if (a == "--connect") zopt.connect.push_back(next());
-    else if (a == "--listen") zopt.listen.push_back(next());
-#endif
+    else if (bus::parse_bus_arg(bus_cfg, a, next)) continue;
     else {
-      std::cerr << kUsage;
+      std::cerr << kUsage << bus::kBusUsage;
       return a == "--help" || a == "-h" ? 0 : 2;
     }
   }
 
   try {
-    std::unique_ptr<Bus> bus;
-#ifdef SWARM_CORE_WITH_ZENOH
-    if (bus_kind == "zenoh") bus = std::make_unique<core::ZenohBus>(zopt);
-#endif
-    if (bus_kind == "memory") bus = std::make_unique<InMemoryBus>();
-    if (!bus) throw std::runtime_error("unsupported bus: " + bus_kind);
+    const std::string bus_kind = bus_cfg.backend.empty() ? bus::default_backend() : bus_cfg.backend;
+    std::unique_ptr<Bus> bus = bus::open_bus(bus_cfg);
 
     core::Scenario sc = scenario_file.empty() ? core::builtin_scenario(uavs)
-                                              : core::parse_scenario_json(read_file(scenario_file));
+                                              : core::read_scenario_file(scenario_file);
     // WP2 통합 전에는 목 동역학을 쓴다 (DEC-006)
     core::SimCore sim(*bus, core::mock::provider(), cfg);
     if (!sim.load(sc)) return 1;

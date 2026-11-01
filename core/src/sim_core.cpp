@@ -208,7 +208,8 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
   switch (cmd.cmd_case()) {
     case C::kLoad:
       try {
-        load(parse_scenario_json(cmd.load().scenario_json()));
+        load(cmd.load().has_scenario() ? from_proto(cmd.load().scenario())
+                                       : parse_scenario_json(cmd.load().scenario_json()));
       } catch (const std::exception& e) {
         log(std::string("load failed: ") + e.what());
       }

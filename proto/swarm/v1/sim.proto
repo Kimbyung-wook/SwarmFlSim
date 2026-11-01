@@ -4,6 +4,9 @@ syntax = "proto3";
 
 package swarm.v1;
 
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/mp.proto";
 import "swarm/v1/options.proto";
 
 enum RunMode {
@@ -23,8 +26,45 @@ enum FaultKind {
   FAULT_KIND_KILL = 6;
 }
 
+message MapExtent {
+  double south_deg = 1;
+  double north_deg = 2;
+  double west_deg = 3;
+  double east_deg = 4;
+}
+
+message MapSpec {
+  Geodetic origin = 1;
+  MapExtent extent = 2;
+}
+
+// 실행 설정. Start와 같은 값에 lockstep 참여자 목록을 더한다 (DEC-025)
+message RunSpec {
+  RunMode mode = 1;
+  uint32 frame_hz = 2;                // 50..100
+  uint64 seed = 3;
+  double rate = 4;                    // 목표 배속. REALTIME은 1
+  double duration_s = 5;              // 0이면 제한 없음
+  repeated string participants = 6;   // lockstep 장벽 참여자 (sim/clock/done/<participant>)
+}
+
+// 시나리오 (DEC-024). 필드 구성은 scenario/ JSON Schema와 같다
+message Scenario {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  string schema_version = 1;
+  string name = 2;
+  string description = 3;
+  MapSpec map = 4;
+  RunSpec run = 5;
+  repeated EntitySpec entities = 6;
+  MissionPlan mission_plan = 7;
+  EngagementCriteria engagement_criteria = 8;
+}
+
 message LoadScenario {
-  string scenario_json = 1;  // WP7 JSON Schema를 따르는 본문
+  string scenario_json = 1;  // 폐기 예정 (DEC-024). scenario를 쓴다
+  Scenario scenario = 2;
 }
 
 message Start {

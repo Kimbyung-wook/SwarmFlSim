@@ -2,10 +2,11 @@
 
 JSON → EntitySpec·MissionPlan·EngagementCriteria·Start, 그리고 역변환.
 역변환이 있어 GUI(proto 객체)와 파일(JSON)이 같은 형식을 공유한다.
+IMP-SCN-006: Scenario ⇄ swarm.v1.Scenario. Core에는 proto로 보낸다 (DEC-024).
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,7 @@ class Scenario:
     entities: list[entity_pb2.EntitySpec]
     description: str = ""
     duration_s: float | None = None
+    participants: list[str] = field(default_factory=list)
     mission_plan: mp_pb2.MissionPlan | None = None
     engagement_criteria: mp_pb2.EngagementCriteria | None = None
 
@@ -74,6 +76,7 @@ def from_dict(doc: dict[str, Any]) -> Scenario:
         extent=MapExtent(**doc["map"]["extent"]),
         start=start,
         duration_s=run.get("duration_s"),
+        participants=list(run.get("participants", [])),
         entities=[_parse(e, entity_pb2.EntitySpec()) for e in doc["entities"]],
         mission_plan=_parse(doc["mission_plan"], mp_pb2.MissionPlan()) if "mission_plan" in doc else None,
         engagement_criteria=(_parse(doc["engagement_criteria"], mp_pb2.EngagementCriteria())
@@ -91,6 +94,8 @@ def to_dict(sc: Scenario) -> dict[str, Any]:
     }
     if sc.duration_s is not None:
         run["duration_s"] = sc.duration_s
+    if sc.participants:
+        run["participants"] = list(sc.participants)
     doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION, "name": sc.name}
     if sc.description:
         doc["description"] = sc.description
@@ -109,11 +114,50 @@ def load(path: str | Path) -> Scenario:
     return from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
+def to_proto(sc: Scenario) -> sim_pb2.Scenario:
+    msg = sim_pb2.Scenario(
+        schema_version=SCHEMA_VERSION,
+        name=sc.name,
+        description=sc.description,
+        map=sim_pb2.MapSpec(origin=sc.origin, extent=sim_pb2.MapExtent(**vars(sc.extent))),
+        run=sim_pb2.RunSpec(
+            mode=sc.start.mode,
+            frame_hz=sc.start.frame_hz,
+            seed=sc.start.seed,
+            rate=sc.start.rate,
+            duration_s=sc.duration_s or 0.0,
+            participants=sc.participants,
+        ),
+        entities=sc.entities,
+    )
+    if sc.mission_plan is not None:
+        msg.mission_plan.CopyFrom(sc.mission_plan)
+    if sc.engagement_criteria is not None:
+        msg.engagement_criteria.CopyFrom(sc.engagement_criteria)
+    return msg
+
+
+def from_proto(msg: sim_pb2.Scenario) -> Scenario:
+    run = msg.run
+    e = msg.map.extent
+    return Scenario(
+        name=msg.name,
+        description=msg.description,
+        origin=common_pb2.Geodetic.FromString(msg.map.origin.SerializeToString()),
+        extent=MapExtent(e.south_deg, e.north_deg, e.west_deg, e.east_deg),
+        start=sim_pb2.Start(mode=run.mode, rate=run.rate, frame_hz=run.frame_hz, seed=run.seed),
+        duration_s=run.duration_s or None,
+        participants=list(run.participants),
+        entities=list(msg.entities),
+        mission_plan=msg.mission_plan if msg.HasField("mission_plan") else None,
+        engagement_criteria=msg.engagement_criteria if msg.HasField("engagement_criteria") else None,
+    )
+
+
 def sim_commands(doc: dict[str, Any], issuer: str) -> list[sim_pb2.SimCommand]:
     """Core에 보낼 sim/ctrl/cmd 순서: LoadScenario → Start"""
     sc = from_dict(doc)
-    text = json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
     return [
-        sim_pb2.SimCommand(issuer=issuer, load=sim_pb2.LoadScenario(scenario_json=text)),
+        sim_pb2.SimCommand(issuer=issuer, load=sim_pb2.LoadScenario(scenario=to_proto(sc))),
         sim_pb2.SimCommand(issuer=issuer, start=sc.start),
     ]

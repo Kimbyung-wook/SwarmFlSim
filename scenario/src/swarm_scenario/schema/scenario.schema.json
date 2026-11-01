@@ -111,7 +111,7 @@
       }
     },
     "RunSpec": {
-      "description": "swarm.v1.Start에 대응 (DEC-005, REQ-DYN-003)",
+      "description": "swarm.v1.RunSpec에 대응 (DEC-005, DEC-025, REQ-DYN-003)",
       "type": "object",
       "additionalProperties": false,
       "required": ["mode", "frame_hz", "seed"],
@@ -120,7 +120,13 @@
         "frame_hz": { "type": "integer", "minimum": 50, "maximum": 100 },
         "seed": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615 },
         "rate": { "type": "number", "exclusiveMinimum": 0, "description": "목표 배속. 생략하면 1" },
-        "duration_s": { "type": "number", "exclusiveMinimum": 0 }
+        "duration_s": { "type": "number", "exclusiveMinimum": 0 },
+        "participants": {
+          "description": "lockstep 장벽 참여자(프로세스) ID. sim/clock/done/<participant> (DEC-025)",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/EntityId" }
+        }
       },
       "if": { "properties": { "mode": { "const": "realtime" } } },
       "then": { "properties": { "rate": { "const": 1 } } }
