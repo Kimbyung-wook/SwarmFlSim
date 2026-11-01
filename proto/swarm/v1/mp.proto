@@ -1,0 +1,44 @@
+// MP: 임무 계획. PRP-CFG-001
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/c2.proto";
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/options.proto";
+import "swarm/v1/vi.proto";
+
+message MissionPlan {
+  option (uci_name) = "MA_MissionPlan";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MP;
+
+  Header header = 1;
+  string plan_id = 2;
+  repeated TaskCommand tasks = 3;
+  repeated FormationCommand formations = 4;
+}
+
+message RoutePlan {
+  option (uci_name) = "MA_RoutePlan";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MP;
+
+  Header header = 1;
+  string route_id = 2;
+  string entity_id = 3;
+  repeated Waypoint waypoints = 4;
+}
+
+message EngagementCriteria {
+  option (uci_name) = "MA_EngagementCriteria";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MP;
+
+  Header header = 1;
+  repeated Side hostile_sides = 2;
+  bool require_approval = 3;     // true면 발사 전 ApprovalRequest
+  repeated Area weapons_free = 4;
+  repeated Area no_strike = 5;
+}

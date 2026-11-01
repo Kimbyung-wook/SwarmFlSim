@@ -1,0 +1,73 @@
+// Datalink Emulator 계약. PRP-LNK-001, PRP-LNK-002, REQ-UI-005
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/options.proto";
+
+// 송신 엔티티가 swarm/<src>/tx/** 에 발행하고, 데이터링크가 swarm/<dst>/rx/** 로 전달한다
+message LinkEnvelope {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;            // source = 송신 엔티티
+  repeated string dst = 2;      // 비우면 링크가 닿는 모든 엔티티(브로드캐스트)
+  L1Interface iface = 3;
+  string msg_type = 4;          // 전체 이름. 예: swarm.v1.FlightCommand
+  bytes payload = 5;            // msg_type의 직렬화 바이트
+  uint32 priority = 6;          // 0이 가장 높음
+  uint64 rx_time_us = 7;        // 데이터링크가 전달 시 채움
+}
+
+enum LinkOutcomeKind {
+  LINK_OUTCOME_KIND_UNSPECIFIED = 0;
+  LINK_OUTCOME_KIND_DELIVERED = 1;
+  LINK_OUTCOME_KIND_DROPPED = 2;
+}
+
+enum DropReason {
+  DROP_REASON_NONE = 0;
+  DROP_REASON_JAMMED = 1;
+  DROP_REASON_NO_LOS = 2;
+  DROP_REASON_OUT_OF_RANGE = 3;
+  DROP_REASON_BURST_LOSS = 4;
+  DROP_REASON_QUEUE_OVERFLOW = 5;
+  DROP_REASON_NODE_DEAD = 6;
+  DROP_REASON_FAULT_INJECTED = 7;
+}
+
+// 수신자 한 명당 하나. Traffic Monitor와 MCAP이 구독한다
+message LinkOutcome {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  string src = 1;
+  string dst = 2;
+  uint32 seq = 3;               // LinkEnvelope.header.seq
+  L1Interface iface = 4;
+  string msg_type = 5;
+  uint32 size_bytes = 6;
+  LinkOutcomeKind outcome = 7;
+  DropReason reason = 8;
+  uint64 tx_time_us = 9;
+  uint64 rx_time_us = 10;       // DROPPED면 0
+}
+
+enum LinkStateKind {
+  LINK_STATE_KIND_UNSPECIFIED = 0;
+  LINK_STATE_KIND_UP = 1;
+  LINK_STATE_KIND_DEGRADED = 2;
+  LINK_STATE_KIND_DOWN = 3;
+}
+
+message LinkState {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  string a = 2;
+  string b = 3;
+  LinkStateKind state = 4;
+  double snr_db = 5;
+  double loss_rate = 6;  // 최근 구간 손실률
+  bool los = 7;
+  bool jammed = 8;
+}

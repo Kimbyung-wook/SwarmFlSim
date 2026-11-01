@@ -1,0 +1,30 @@
+// A-GRA/UCI 매핑 주석용 커스텀 옵션 (DEC-013, DEC-014, PRP-STD-001)
+// Gateway(WP9)는 이 옵션을 읽어 매핑 표를 만들고, STD 메시지만 외부로 내보낸다.
+syntax = "proto3";
+
+package swarm.v1;
+
+import "google/protobuf/descriptor.proto";
+
+enum MappingClass {
+  MAPPING_CLASS_UNSPECIFIED = 0;
+  MAPPING_CLASS_STD = 1;  // UCI 메시지에 대응. 외부로 내보낼 수 있다
+  MAPPING_CLASS_EXT = 2;  // UCI 패턴을 따르는 확장 메시지. 외부 비공개
+  MAPPING_CLASS_SIM = 3;  // 시뮬레이터 내부 전용 (sim/**, onboard/**, link/**, truth/**)
+}
+
+enum L1Interface {
+  L1_INTERFACE_UNSPECIFIED = 0;
+  L1_INTERFACE_C2 = 1;
+  L1_INTERFACE_VI = 2;
+  L1_INTERFACE_MS = 3;
+  L1_INTERFACE_MP = 4;
+  L1_INTERFACE_MD = 5;
+  L1_INTERFACE_P2P = 6;
+}
+
+extend google.protobuf.MessageOptions {
+  string uci_name = 51001;        // 공개 XSD의 UCI 메시지명. EXT/SIM은 비워 둔다
+  MappingClass mapping = 51002;
+  L1Interface l1 = 51003;
+}

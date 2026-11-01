@@ -1,0 +1,61 @@
+// 공통 타입. 좌표·단위 규칙은 docs/10_contracts.md §2를 따른다.
+syntax = "proto3";
+
+package swarm.v1;
+
+message Header {
+  uint64 sim_time_us = 1;     // 발행 시점의 시뮬레이션 시각
+  uint64 frame = 2;           // 프레임 번호
+  string source = 3;          // 발행 엔티티 ID (예: uav-001, gcs-01)
+  uint32 seq = 4;             // 발행자·키별 일련번호
+  string correlation_id = 5;  // 명령과 상태 보고를 잇는 ID
+}
+
+message Vec3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// WGS84. 고도는 평균해수면(MSL) 기준
+message Geodetic {
+  double lat_deg = 1;
+  double lon_deg = 2;
+  double alt_m = 3;
+}
+
+// 회전: NED 좌표계 → 기체 FRD 좌표계
+message Quaternion {
+  double w = 1;
+  double x = 2;
+  double y = 3;
+  double z = 4;
+}
+
+message Circle {
+  Geodetic center = 1;
+  double radius_m = 2;
+}
+
+message Polygon {
+  repeated Geodetic vertices = 1;
+}
+
+message Area {
+  oneof shape {
+    Circle circle = 1;
+    Polygon polygon = 2;
+  }
+  double min_alt_m = 3;
+  double max_alt_m = 4;  // 0이면 상한 없음
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMAND_STATE_ACCEPTED = 1;
+  COMMAND_STATE_REJECTED = 2;
+  COMMAND_STATE_EXECUTING = 3;
+  COMMAND_STATE_COMPLETED = 4;
+  COMMAND_STATE_FAILED = 5;
+  COMMAND_STATE_CANCELLED = 6;
+}

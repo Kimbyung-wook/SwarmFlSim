@@ -1,0 +1,120 @@
+// VI: MA ⇄ FA (비행체 인터페이스). PRP-GNC-001, DEC-013
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/options.proto";
+
+// Heading/Speed/Altitude
+message HsaCommand {
+  optional double heading_deg = 1;
+  optional double speed_mps = 2;
+  optional double altitude_m = 3;
+}
+
+message Waypoint {
+  Geodetic position = 1;
+  optional double speed_mps = 2;
+  double acceptance_radius_m = 3;
+}
+
+message WaypointCommand {
+  repeated Waypoint waypoints = 1;
+  bool loop = 2;
+}
+
+enum TurnDirection {
+  TURN_DIRECTION_UNSPECIFIED = 0;
+  TURN_DIRECTION_CW = 1;
+  TURN_DIRECTION_CCW = 2;
+}
+
+message OrbitCurve {
+  Geodetic center = 1;
+  double radius_m = 2;
+  TurnDirection direction = 3;
+  optional double speed_mps = 4;
+}
+
+message CurveCommand {
+  oneof curve {
+    OrbitCurve orbit = 1;
+  }
+}
+
+message FlightCommand {
+  option (uci_name) = "MA_FlightCommand";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_VI;
+
+  Header header = 1;
+  string command_id = 2;
+  oneof mode {
+    HsaCommand hsa = 3;
+    WaypointCommand waypoint = 4;
+    CurveCommand curve = 5;
+  }
+}
+
+message FlightCommandStatus {
+  option (uci_name) = "MA_FlightCommandStatus";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_VI;
+
+  Header header = 1;
+  string command_id = 2;
+  CommandState state = 3;
+  string reason = 4;
+}
+
+message FlightCapability {
+  option (uci_name) = "MA_FlightCapability";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_VI;
+
+  Header header = 1;
+  double min_speed_mps = 2;
+  double max_speed_mps = 3;
+  double max_climb_mps = 4;
+  double max_bank_deg = 5;
+  double max_altitude_m = 6;
+  bool supports_hsa = 7;
+  bool supports_waypoint = 8;
+  bool supports_curve = 9;
+}
+
+// 센서 잡음이 포함된 항법 상태. ground truth가 아니다 (PRP-SIM-003)
+message NavigationReport {
+  option (uci_name) = "MA_NavigationReport";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_VI;
+
+  Header header = 1;
+  KinematicState kinematics = 2;
+  double position_sigma_m = 3;
+}
+
+enum Health {
+  HEALTH_UNSPECIFIED = 0;
+  HEALTH_NOMINAL = 1;
+  HEALTH_DEGRADED = 2;
+  HEALTH_FAILED = 3;
+}
+
+message SubsystemStatus {
+  string name = 1;  // engine | nav | link | cam0 | ...
+  Health health = 2;
+}
+
+message SystemStatus {
+  option (uci_name) = "SystemStatus";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_VI;
+
+  Header header = 1;
+  Health health = 2;
+  double energy_frac = 3;
+  repeated SubsystemStatus subsystems = 4;
+}

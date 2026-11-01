@@ -1,0 +1,118 @@
+// MS: 임무장비·무장. PRP-PAY-001, DEC-018, DEC-019
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/options.proto";
+
+message GimbalPointing {
+  oneof target {
+    Vec3 az_el_deg = 1;     // x=방위, y=고각 (기체 FRD 기준), z 미사용
+    Geodetic geo_point = 2;
+    string track_entity = 3;
+  }
+}
+
+message SensorCommand {
+  option (uci_name) = "PO_Command";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  bool enable = 3;
+  GimbalPointing pointing = 4;
+}
+
+message SensorActivity {
+  option (uci_name) = "PO_Activity";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  bool active = 3;
+  Vec3 boresight_ned = 4;  // 단위 벡터
+  double hfov_deg = 5;
+  double vfov_deg = 6;
+  double max_range_m = 7;
+}
+
+// 자기 센서의 탐지 결과. FOV·거리·가시선 판정만 쓴다 (DEC-018)
+message Detection {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  string target_id = 3;
+  EntityKind kind = 4;
+  Side side = 5;
+  Geodetic position = 6;
+  Vec3 velocity_ned_mps = 7;
+  double range_m = 8;
+}
+
+message JammerCommand {
+  option (uci_name) = "EA_Command";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  bool enable = 3;
+  double radius_m = 4;  // 0이면 프로파일 기본값
+}
+
+message JammerActivity {
+  option (uci_name) = "EA_Activity";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  bool active = 3;
+  Circle zone = 4;
+}
+
+message StrikeCommand {
+  option (uci_name) = "StrikeCommand";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;           // 발사할 스테이션
+  string target_id = 3;
+  optional Geodetic aim_point = 4;  // 좌표 유도
+}
+
+enum StrikeState {
+  STRIKE_STATE_UNSPECIFIED = 0;
+  STRIKE_STATE_LAUNCHED = 1;
+  STRIKE_STATE_REJECTED = 2;   // 락온 실패, 잔량 없음 등
+  STRIKE_STATE_IMPACT = 3;
+  STRIKE_STATE_MISSED = 4;
+}
+
+message StrikeActivity {
+  option (uci_name) = "StrikeActivity";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  string payload_id = 2;
+  string weapon_entity = 3;  // 발사된 탄체·FPV 엔티티 ID
+  StrikeState state = 4;
+  string reason = 5;
+}
+
+message StoreLoadout {
+  option (uci_name) = "StoreLoadoutConfiguration";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_MS;
+
+  Header header = 1;
+  repeated PayloadSpec stores = 2;  // count는 현재 잔량
+}

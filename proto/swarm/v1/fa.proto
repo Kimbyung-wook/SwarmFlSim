@@ -1,0 +1,42 @@
+// FA → 동역학 제어 출력. 기체 내부(onboard/**) 전용, 데이터링크를 거치지 않는다
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/options.proto";
+
+// 2/3-DoF용
+message KinematicCmd {
+  double speed_mps = 1;
+  double bank_rad = 2;          // 3-DoF 협조선회
+  double heading_rate_rps = 3;  // 2-DoF
+  double climb_rate_mps = 4;
+}
+
+// 5-DoF용
+message AttitudeCmd {
+  double roll_rad = 1;
+  double pitch_rad = 2;
+  double yaw_rate_rps = 3;
+  double throttle = 4;  // 0..1
+}
+
+// 6-DoF용. 단위는 rad, throttle은 0..1
+message ActuatorCmd {
+  double aileron = 1;
+  double elevator = 2;
+  double rudder = 3;
+  double throttle = 4;
+}
+
+message ControlOutput {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  oneof cmd {
+    KinematicCmd kinematic = 2;
+    AttitudeCmd attitude = 3;
+    ActuatorCmd actuator = 4;
+  }
+}

@@ -1,0 +1,57 @@
+// P2P: 기체 간 통신. 모든 메시지는 Datalink Emulator를 거친다 (PRP-LNK-002)
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/options.proto";
+
+// 군집 상태 공유 (분산 알고리즘의 기본 입력)
+message PeerStatus {
+  option (uci_name) = "MA_PackagePartnerStatusReport";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_P2P;
+
+  Header header = 1;
+  KinematicState kinematics = 2;  // 자기 항법 상태 (잡음 포함)
+  string current_task_id = 3;
+  string group_id = 4;
+  double energy_frac = 5;
+}
+
+message LeaderUpdate {
+  option (uci_name) = "MA_LeaderUpdateRequest";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_P2P;
+
+  Header header = 1;
+  string group_id = 2;
+  string leader = 3;
+  uint64 term = 4;
+}
+
+// 탐지 표적 공유
+message TrackShare {
+  option (uci_name) = "MA_Entity";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_P2P;
+
+  Header header = 1;
+  string track_id = 2;
+  string target_id = 3;  // 식별된 경우
+  Geodetic position = 4;
+  Vec3 velocity_ned_mps = 5;
+  EntityKind kind = 6;
+  uint64 observed_time_us = 7;
+}
+
+// 사용자 알고리즘 전용 메시지 (합의, 경매 등). payload 형식은 알고리즘이 정한다
+message PeerAlgorithmMessage {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_P2P;
+
+  Header header = 1;
+  string topic = 2;
+  bytes payload = 3;
+}

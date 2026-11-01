@@ -1,0 +1,56 @@
+// Ground truth (truth/**). UI, Traffic Monitor, Logger만 구독한다 (PRP-SIM-003)
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/entity.proto";
+import "swarm/v1/options.proto";
+
+message TruthFrame {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  repeated EntityState entities = 2;
+}
+
+message LaunchEvent {
+  string shooter = 1;
+  string weapon_entity = 2;
+  string target_id = 3;
+}
+
+message ImpactEvent {
+  string weapon_entity = 1;
+  Geodetic position = 2;
+  double lethal_radius_m = 3;
+  repeated string killed = 4;  // DEC-012 살상반경 즉시 파괴
+}
+
+message KillEvent {
+  string entity_id = 1;
+  string cause = 2;  // impact | collision | ground | fault
+}
+
+message JamZoneEvent {
+  string owner = 1;
+  Circle zone = 2;
+  bool active = 3;
+}
+
+message SpawnEvent {
+  EntityState entity = 1;
+}
+
+message TruthEvent {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  oneof event {
+    LaunchEvent launch = 2;
+    ImpactEvent impact = 3;
+    KillEvent kill = 4;
+    JamZoneEvent jam_zone = 5;
+    SpawnEvent spawn = 6;
+  }
+}

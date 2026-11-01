@@ -1,0 +1,115 @@
+// 시뮬레이션 통제(sim/ctrl/**)와 시간 분배(sim/clock/**). DEC-005, DEC-014
+// MA 플러그인은 이 채널에 접근할 수 없다.
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/options.proto";
+
+enum RunMode {
+  RUN_MODE_UNSPECIFIED = 0;
+  RUN_MODE_REALTIME = 1;
+  RUN_MODE_LOCKSTEP = 2;  // 가속, 결정론적
+  RUN_MODE_FREERUN = 3;   // 가속, 비결정론적
+}
+
+enum FaultKind {
+  FAULT_KIND_UNSPECIFIED = 0;
+  FAULT_KIND_LINK_CUT = 1;      // 대상 엔티티의 모든 링크 차단
+  FAULT_KIND_GCS_LINK_CUT = 2;  // 대상 엔티티와 GCS 간 링크만 차단
+  FAULT_KIND_ENGINE = 3;
+  FAULT_KIND_SENSOR = 4;
+  FAULT_KIND_NAV = 5;
+  FAULT_KIND_KILL = 6;
+}
+
+message LoadScenario {
+  string scenario_json = 1;  // WP7 JSON Schema를 따르는 본문
+}
+
+message Start {
+  RunMode mode = 1;
+  double rate = 2;           // 목표 배속. REALTIME은 1
+  uint32 frame_hz = 3;       // 50..100
+  uint64 seed = 4;
+}
+
+message Pause {}
+message Resume {}
+
+message StepFrames {
+  uint32 frames = 1;
+}
+
+message SetRate {
+  double rate = 1;
+}
+
+message Reset {}
+message Shutdown {}
+
+message InjectFault {
+  string entity_id = 1;
+  FaultKind fault = 2;
+  double duration_s = 3;  // 0이면 해제 명령까지
+  bool clear = 4;
+}
+
+message SimCommand {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  string issuer = 1;  // UI 인스턴스 ID (DEC-020)
+  oneof cmd {
+    LoadScenario load = 2;
+    Start start = 3;
+    Pause pause = 4;
+    Resume resume = 5;
+    StepFrames step = 6;
+    SetRate set_rate = 7;
+    Reset reset = 8;
+    Shutdown shutdown = 9;
+    InjectFault fault = 10;
+  }
+}
+
+enum SimRunState {
+  SIM_RUN_STATE_UNSPECIFIED = 0;
+  SIM_RUN_STATE_IDLE = 1;
+  SIM_RUN_STATE_LOADED = 2;
+  SIM_RUN_STATE_RUNNING = 3;
+  SIM_RUN_STATE_PAUSED = 4;
+  SIM_RUN_STATE_STOPPED = 5;
+}
+
+message SimStatus {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  SimRunState state = 1;
+  RunMode mode = 2;
+  uint64 sim_time_us = 3;
+  uint64 frame = 4;
+  uint32 frame_hz = 5;
+  double rate_target = 6;
+  double rate_actual = 7;
+  uint32 entity_count = 8;
+  uint64 frame_overruns = 9;
+  string scenario_name = 10;
+}
+
+// 프레임 시작 신호 (AMS-GRA Time Distribution 개념)
+message ClockTick {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  uint64 frame = 1;
+  uint64 sim_time_us = 2;
+  uint32 dt_us = 3;
+  RunMode mode = 4;
+}
+
+// lockstep 장벽 응답. 참여자가 해당 프레임 처리를 끝냈음을 알린다
+message FrameDone {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  string participant = 1;
+  uint64 frame = 2;
+}

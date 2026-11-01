@@ -1,0 +1,83 @@
+// 엔티티 정의와 상태. 시나리오(WP7)와 Core(WP1)가 공유한다.
+syntax = "proto3";
+
+package swarm.v1;
+
+import "google/protobuf/struct.proto";
+import "swarm/v1/common.proto";
+
+enum EntityKind {
+  ENTITY_KIND_UNSPECIFIED = 0;
+  ENTITY_KIND_UAV = 1;
+  ENTITY_KIND_GCS = 2;
+  ENTITY_KIND_GROUND_TARGET = 3;
+  ENTITY_KIND_AIR_TARGET = 4;
+  ENTITY_KIND_MISSILE = 5;
+  ENTITY_KIND_FPV = 6;
+  ENTITY_KIND_JAMMER_SITE = 7;
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BLUE = 1;
+  SIDE_RED = 2;
+  SIDE_NEUTRAL = 3;
+}
+
+// REQ-DYN-001, DEC-017
+enum DynamicsKind {
+  DYNAMICS_KIND_UNSPECIFIED = 0;
+  DYNAMICS_KIND_DOF2 = 1;
+  DYNAMICS_KIND_DOF3 = 2;
+  DYNAMICS_KIND_DOF5 = 3;
+  DYNAMICS_KIND_DOF6 = 4;
+  DYNAMICS_KIND_SCRIPTED = 5;  // 스크립트 경로 (표적·적 기본)
+  DYNAMICS_KIND_STATIC = 6;    // GCS, 고정 재머 등
+}
+
+message KinematicState {
+  Geodetic position = 1;
+  Vec3 velocity_ned_mps = 2;
+  Quaternion attitude = 3;          // 2/3-DoF는 속도·뱅크각에서 만든 값
+  Vec3 angular_rate_frd_rps = 4;
+}
+
+message EntityState {
+  string id = 1;
+  EntityKind kind = 2;
+  Side side = 3;
+  KinematicState kinematics = 4;
+  bool alive = 5;
+  double energy_frac = 6;  // 연료·배터리 잔량 0..1
+}
+
+// 임무장비·무장 구성 (REQ-PAY-001, DEC-019)
+message PayloadSpec {
+  string id = 1;                       // 기체 안에서 고유 (예: cam0, jam0, sta1)
+  string type = 2;                     // camera | jammer | aam_short | agm_short | fpv
+  string profile = 3;                  // 공개 일반값 프로파일명
+  google.protobuf.Struct overrides = 4;  // 시나리오 JSON의 재정의 값
+  uint32 count = 5;                    // 무장 수량. 센서는 0
+}
+
+message AutonomySpec {
+  string ma_plugin = 1;  // 플러그인 등록명 (entry point 이름)
+  google.protobuf.Struct ma_params = 2;
+  string fa_plugin = 3;  // 비우면 기본 FA
+  google.protobuf.Struct fa_params = 4;
+}
+
+// 시나리오의 엔티티 한 개 (REQ-CFG-001)
+message EntitySpec {
+  string id = 1;
+  EntityKind kind = 2;
+  Side side = 3;
+  DynamicsKind dynamics = 4;
+  string airframe = 5;          // aerosonde | skywalker_x8 | ...
+  KinematicState initial = 6;
+  repeated PayloadSpec payloads = 7;
+  AutonomySpec autonomy = 8;
+  string link_profile = 9;
+  string controlling_gcs = 10;  // 통제 GCS 엔티티 ID
+  repeated Geodetic script_path = 11;  // DYNAMICS_KIND_SCRIPTED 경로
+}

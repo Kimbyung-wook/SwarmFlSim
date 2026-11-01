@@ -1,0 +1,24 @@
+[project]
+name = "swarm-flight"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.uv]
+package = false
+
+# Python 패키지를 만드는 WP는 여기에 디렉터리를 추가한다 (DEC-021)
+[tool.uv.workspace]
+members = ["api/python"]
+
+[tool.uv.sources]
+swarm-api = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "swarm-api",
+    "pytest>=8",
+    "grpcio-tools>=1.66",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["api/python/tests"]

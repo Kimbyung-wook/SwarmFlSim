@@ -1,0 +1,123 @@
+// C2: GCS ⇄ MA. DEC-013, DEC-014
+syntax = "proto3";
+
+package swarm.v1;
+
+import "swarm/v1/common.proto";
+import "swarm/v1/options.proto";
+
+message MoveToTask {
+  Geodetic destination = 1;
+  optional double speed_mps = 2;
+}
+
+message SearchAreaTask {
+  Area area = 1;
+}
+
+message TrackTask {
+  string target_id = 1;
+}
+
+message StrikeTask {
+  string target_id = 1;
+  optional Geodetic aim_point = 2;  // 좌표 유도 무장용
+  string weapon_type = 3;           // aam_short | agm_short | fpv
+}
+
+message JamTask {
+  Area area = 1;
+  double duration_s = 2;  // 0이면 해제 명령까지
+}
+
+message HoldTask {}
+
+message ReturnToBaseTask {}
+
+message TaskCommand {
+  option (uci_name) = "MA_TaskCommand";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string task_id = 2;
+  repeated string assignees = 3;  // 엔티티 ID. 그룹은 펼쳐서 보낸다
+  oneof task {
+    MoveToTask move_to = 4;
+    SearchAreaTask search_area = 5;
+    TrackTask track = 6;
+    StrikeTask strike = 7;
+    JamTask jam = 8;
+    HoldTask hold = 9;
+    ReturnToBaseTask return_to_base = 10;
+  }
+  bool cancel = 11;  // true면 task_id 작업 취소
+}
+
+message TaskStatus {
+  option (uci_name) = "MA_TaskStatus";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string task_id = 2;
+  CommandState state = 3;
+  double progress = 4;  // 0..1
+  string reason = 5;
+}
+
+enum FormationShape {
+  FORMATION_SHAPE_UNSPECIFIED = 0;
+  FORMATION_SHAPE_LINE = 1;
+  FORMATION_SHAPE_COLUMN = 2;
+  FORMATION_SHAPE_WEDGE = 3;
+  FORMATION_SHAPE_ECHELON = 4;
+  FORMATION_SHAPE_CIRCLE = 5;
+  FORMATION_SHAPE_CUSTOM = 6;
+}
+
+// A-GRA에 대응 메시지가 없는 편대 명령 (DEC-014)
+message FormationCommand {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string group_id = 2;
+  repeated string members = 3;
+  string leader = 4;                  // 비우면 알고리즘이 정한다
+  FormationShape shape = 5;
+  double spacing_m = 6;
+  repeated Vec3 custom_offsets_m = 7;  // CUSTOM: 리더 기준 FRD 오프셋, members 순서
+}
+
+// RTS 그룹 지정 (REQ-UI-002)
+message GroupAssignment {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string group_id = 2;
+  repeated string members = 3;
+}
+
+message ApprovalRequest {
+  option (uci_name) = "MA_ApprovalRequest";
+  option (mapping) = MAPPING_CLASS_STD;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string request_id = 2;
+  string task_id = 3;
+  string target_id = 4;
+  string description = 5;
+}
+
+// 대응 UCI 응답 메시지는 WP9에서 XSD로 확정한다. 확정 전에는 EXT
+message ApprovalResponse {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;
+  string request_id = 2;
+  bool approved = 3;
+}

@@ -1,0 +1,27 @@
+# C++
+build/
+out/
+vcpkg_installed/
+compile_commands.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# scripts/gen_proto.py 생성물
+api/python/src/swarm/
+
+# Node
+node_modules/
+dist/
+
+# 기록·지형 데이터
+*.mcap
+data/tiles/
+data/dem/
+
+# IDE
+.vs/
+.vscode/
+.idea/

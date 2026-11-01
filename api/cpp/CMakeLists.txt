@@ -1,0 +1,10 @@
+add_library(swarm_api INTERFACE)
+target_include_directories(swarm_api INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(swarm_api INTERFACE swarm_proto)
+target_compile_features(swarm_api INTERFACE cxx_std_20)
+
+if(SWARM_BUILD_TESTS)
+  add_executable(swarm_api_tests tests/test_api.cpp)
+  target_link_libraries(swarm_api_tests PRIVATE swarm_api)
+  add_test(NAME swarm_api_tests COMMAND swarm_api_tests)
+endif()
