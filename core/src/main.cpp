@@ -1,5 +1,6 @@
 // IMP-CORE-006: 실행 파일 swarm_core
 // IMP-CORE-012: WP2 동역학(--integrator), 평지 지형(--terrain-flat)
+// IMP-CORE-013: Windows Ctrl+Break(SIGBREAK) 정상 종료
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -98,6 +99,10 @@ int main(int argc, char** argv) {
     g_core = &sim;
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
+#ifdef SIGBREAK
+    // Windows: 별도 프로세스 그룹으로 띄운 경우 Ctrl+Break로 멈춘다 (IMP-CORE-013)
+    std::signal(SIGBREAK, on_signal);
+#endif
 
     if (autostart) {
       v1::SimCommand cmd;
