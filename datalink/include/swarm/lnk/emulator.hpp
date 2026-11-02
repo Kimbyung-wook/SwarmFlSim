@@ -36,6 +36,11 @@ struct DatalinkConfig {
   double degraded_margin_db = 6.0;            // SNR이 snr_min + 이 값보다 낮으면 DEGRADED
   double degraded_loss_rate = 0.1;            // 최근 구간 손실률이 이 값 이상이면 DEGRADED
   double los_step_m = 100.0;
+  // 입력 폭주 보호 (DEC-039). 한도를 넘는 메시지는 QUEUE_OVERFLOW로 기록하고 버린다
+  std::size_t max_pending = 20000;           // 처리 전 입력 큐 상한(메시지 수)
+  std::size_t max_routes_per_tick = 20000;   // 틱당 처리하는 (메시지, 수신자) 쌍 상한. 남은 것은 다음 틱으로 넘긴다
+  std::size_t max_in_flight = 100000;        // 전송 중 목록 상한
+  std::size_t max_overflow_outcomes = 1000;  // 틱당 폭주 폐기 LinkOutcome 상한. 넘는 분은 건수만 기록한다
   std::map<std::string, LinkProfile> profiles;  // 내장 프로파일에 더하거나 덮어쓴다
   std::function<void(const std::string&)> log;
 };
@@ -71,6 +76,7 @@ class Datalink {
   std::uint64_t sim_time_us() const;
   std::uint64_t seed() const;
   std::size_t in_flight() const;
+  std::size_t pending() const;
   PairState pair_state(const std::string& a, const std::string& b) const;
 
  private:
@@ -127,6 +133,8 @@ class Datalink {
 
   void on_tx(const Sample& s);
   void on_tick(const Sample& s);
+  void on_done(const Sample& s);
+  void run_tick();
   void on_truth(const Sample& s);
   void on_event(const Sample& s);
   void on_cmd(const Sample& s);
@@ -146,6 +154,9 @@ class Datalink {
   v1::DropReason static_check_locked(const Node* src, const Node* dst) const;
   void process_locked(Pending& p, std::vector<Out>& out);
   void route_locked(const Pending& p, const std::string& dst, std::vector<Out>& out);
+  std::size_t route_count_locked(const Pending& p) const;
+  void overflow_locked(Pending&& p);
+  void flush_overflow_locked(std::vector<Out>& out);
   void deliver_locked(std::vector<Out>& out);
   void publish_states_locked(std::vector<Out>& out);
   void outcome_locked(const std::string& src, const std::string& dst, const v1::LinkEnvelope& env, std::size_t size,
@@ -168,6 +179,8 @@ class Datalink {
   std::map<std::string, JamArea> jam_zones_;          // 소유자 → 영역
   std::vector<Fault> faults_;
   std::vector<Pending> pending_;
+  std::vector<Pending> overflow_;  // 폭주로 버린 입력(payload 제거). 틱에서 LinkOutcome으로 내보낸다
+  std::uint64_t overflow_dropped_ = 0;  // overflow_에 담지 못하고 건수만 센 것
   std::vector<InFlight> in_flight_;
   std::uint64_t seed_ = 0;
   std::string loaded_name_;  // 마지막으로 적재한 시나리오 이름. sim/ctrl/scenario 중복 판정 (DEC-037)
@@ -175,6 +188,12 @@ class Datalink {
   std::uint64_t now_us_ = 0;
   std::uint64_t frame_ = 0;
   std::uint64_t arrival_ = 0;
+  // lockstep 대기 (DEC-039): 다른 참여자의 FrameDone을 받은 뒤에 틱을 처리한다
+  std::vector<std::string> required_;
+  std::map<std::string, std::uint64_t> done_frame_;  // 참여자 → 다음 틱 번호(마지막 FrameDone frame + 1)
+  v1::ClockTick waiting_;
+  bool has_waiting_ = false;
+  std::uint64_t ticks_seen_ = 0;
   std::uint64_t next_state_us_ = 0;
   std::uint32_t state_seq_ = 0;
   mutable std::map<std::string, bool> warned_;

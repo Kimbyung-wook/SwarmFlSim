@@ -66,6 +66,7 @@ Datalink::Datalink(Bus& bus, const dyn::Terrain* terrain, DatalinkConfig cfg)
   subs_.push_back(bus_.subscribe(keys::kSimCtrlCmd, [this](const Sample& s) { on_cmd(s); }));
   subs_.push_back(bus_.subscribe(std::string(keys::kSimCtrlScenario), [this](const Sample& s) { on_scenario(s); }));
   subs_.push_back(bus_.subscribe(keys::kClockTick, [this](const Sample& s) { on_tick(s); }));
+  subs_.push_back(bus_.subscribe("sim/clock/done/*", [this](const Sample& s) { on_done(s); }));
 }
 
 Datalink::~Datalink() { subs_.clear(); }
@@ -114,6 +115,11 @@ std::size_t Datalink::in_flight() const {
   return in_flight_.size();
 }
 
+std::size_t Datalink::pending() const {
+  std::lock_guard lock(mu_);
+  return pending_.size();
+}
+
 PairState Datalink::pair_state(const std::string& a, const std::string& b) const {
   std::lock_guard lock(mu_);
   const auto ia = nodes_.find(a), ib = nodes_.find(b);
@@ -140,8 +146,14 @@ void Datalink::on_tx(const Sample& s) {
     return;
   }
   std::lock_guard lock(mu_);
-  pending_.push_back(Pending{now_us_, src, s.key, env.header().seq(), arrival_++, suffix, s.payload.size(),
-                             std::move(env)});
+  // 송신 시각은 헤더의 sim_time_us를 쓴다(DEC-039: 받은 시점·도착 순서에 의존하지 않는다). 없으면 마지막 tick 시각
+  const std::uint64_t tx_us = env.header().sim_time_us() != 0 ? env.header().sim_time_us() : now_us_;
+  Pending p{tx_us, src, s.key, env.header().seq(), arrival_++, suffix, s.payload.size(), std::move(env)};
+  if (pending_.size() >= cfg_.max_pending) {
+    overflow_locked(std::move(p));
+    return;
+  }
+  pending_.push_back(std::move(p));
 }
 
 void Datalink::on_truth(const Sample& s) {
@@ -237,7 +249,10 @@ void Datalink::on_cmd(const Sample& s) {
 // 이름이 이전과 같으면 무시하고(상태·준비 신호 유지), 다르면 다시 적재한다
 void Datalink::on_scenario(const Sample& s) {
   v1::Scenario sc;
-  if (!parse(s, sc)) return;
+  if (!parse(s, sc)) {
+    log("sim/ctrl/scenario: unparsable Scenario (" + std::to_string(s.payload.size()) + " bytes)");
+    return;
+  }
   {
     std::lock_guard lock(mu_);
     if (loaded_ && sc.name() == loaded_name_) return;
@@ -262,22 +277,84 @@ void Datalink::send_ready(bool lockstep) {
 void Datalink::on_tick(const Sample& s) {
   v1::ClockTick tick;
   if (!parse(s, tick)) return;
-  std::vector<Out> out;
   {
     std::lock_guard lock(mu_);
-    if (tick.sim_time_us() < now_us_) reset_locked();  // 시각이 되돌아가면(Reset) 큐를 비운다
+    if (tick.sim_time_us() < now_us_ || tick.frame() < frame_) {  // 시각이 되돌아가면(Reset) 큐를 비운다
+      reset_locked();
+      done_frame_.clear();
+      ticks_seen_ = 0;
+    }
+    waiting_ = tick;
+    has_waiting_ = true;
+  }
+  run_tick();
+}
+
+// 다른 참여자의 FrameDone (DEC-039). 참여자는 tx를 보낸 뒤에 FrameDone을 보내므로, 같은 연결의 순서 보장으로
+// 이전 프레임의 FrameDone을 받았다면 그 프레임의 tx도 받은 것이다
+void Datalink::on_done(const Sample& s) {
+  v1::FrameDone d;
+  if (!parse(s, d) || d.participant() == cfg_.participant_id) return;
+  {
+    std::lock_guard lock(mu_);
+    if (ticks_seen_ == 0) return;  // 첫 틱 전의 frame 0은 준비 신호다
+    auto& f = done_frame_[d.participant()];
+    f = std::max(f, d.frame() + 1);
+  }
+  run_tick();
+}
+
+// lockstep에서는 프레임 f-1의 FrameDone을 모든 참여자에게서 받은 뒤에 틱 f를 처리한다. 그래야 메시지가
+// 틱보다 먼저 도착하느냐에 따라 처리 프레임이 달라지지 않는다. 대기 중에도 콜백을 막지 않는다
+void Datalink::run_tick() {
+  std::vector<Out> out;
+  v1::ClockTick tick;
+  {
+    std::lock_guard lock(mu_);
+    if (!has_waiting_) return;
+    if (waiting_.mode() == v1::RUN_MODE_LOCKSTEP && waiting_.frame() > 0 && ticks_seen_ > 0) {
+      for (const auto& p : required_)
+        if (const auto it = done_frame_.find(p); it == done_frame_.end() || it->second < waiting_.frame()) return;
+    }
+    tick = waiting_;
+    has_waiting_ = false;
+    ++ticks_seen_;
     now_us_ = tick.sim_time_us();
     frame_ = tick.frame();
     std::erase_if(faults_, [&](const Fault& f) { return f.until_us != 0 && now_us_ >= f.until_us; });
 
-    std::vector<Pending> batch;
-    batch.swap(pending_);
-    std::sort(batch.begin(), batch.end(), [](const Pending& a, const Pending& b) {
+    // 이전 틱 시각에 송신된 메시지만 처리한다. 도착이 tick보다 앞서든 뒤서든 같은 틱에서 처리해 결정론을 지킨다
+    auto by_order = [](const Pending& a, const Pending& b) {
       return std::tie(a.tx_time_us, a.src, a.key, a.seq, a.arrival) <
              std::tie(b.tx_time_us, b.src, b.key, b.seq, b.arrival);
-    });
-    for (auto& p : batch) process_locked(p, out);
+    };
+    const std::uint64_t cutoff = now_us_;
+    auto held = std::stable_partition(pending_.begin(), pending_.end(),
+                                      [&](const Pending& p) { return p.tx_time_us < cutoff || p.tx_time_us == 0; });
+    std::vector<Pending> batch(std::make_move_iterator(pending_.begin()), std::make_move_iterator(held));
+    pending_.erase(pending_.begin(), held);
+    std::sort(batch.begin(), batch.end(), by_order);
+    // 틱당 처리량 상한: 남은 것은 다음 틱으로 넘겨 frame_done을 막지 않는다 (DEC-039)
+    std::size_t routes = 0, done = 0;
+    for (; done < batch.size(); ++done) {
+      const std::size_t n = route_count_locked(batch[done]);
+      if (done > 0 && routes + n > cfg_.max_routes_per_tick) break;
+      routes += n;
+      process_locked(batch[done], out);
+    }
+    if (done < batch.size()) {
+      pending_.insert(pending_.end(), std::make_move_iterator(batch.begin() + static_cast<std::ptrdiff_t>(done)),
+                      std::make_move_iterator(batch.end()));
+      std::sort(pending_.begin(), pending_.end(), by_order);
+    }
+    // 입력 큐 상한: 가장 늦은 것부터 버린다
+    if (pending_.size() > cfg_.max_pending) {
+      std::sort(pending_.begin(), pending_.end(), by_order);
+      for (std::size_t i = cfg_.max_pending; i < pending_.size(); ++i) overflow_locked(std::move(pending_[i]));
+      pending_.resize(cfg_.max_pending);
+    }
     deliver_locked(out);
+    flush_overflow_locked(out);
     publish_states_locked(out);
   }
   publish(out);
@@ -335,6 +412,13 @@ void Datalink::load_locked(const v1::Scenario& sc) {
     }
   }
   if (sc.has_run() && sc.run().seed() != 0) seed_ = sc.run().seed();
+  required_.clear();
+  if (sc.has_run())
+    for (const auto& p : sc.run().participants())
+      if (p != cfg_.participant_id) required_.push_back(p);
+  done_frame_.clear();
+  has_waiting_ = false;
+  ticks_seen_ = 0;
   faults_.clear();
   jam_zones_.clear();
   reset_locked();
@@ -343,6 +427,8 @@ void Datalink::load_locked(const v1::Scenario& sc) {
 void Datalink::reset_locked() {
   channels_.clear();
   pending_.clear();
+  overflow_.clear();
+  overflow_dropped_ = 0;
   in_flight_.clear();
   next_state_us_ = now_us_;
 }
@@ -462,6 +548,40 @@ void Datalink::process_locked(Pending& p, std::vector<Out>& out) {
     if (id != p.src && comm_node(n) && peers(src->second, n)) route_locked(p, id, out);
 }
 
+std::size_t Datalink::route_count_locked(const Pending& p) const {
+  if (p.env.dst_size() > 0) return static_cast<std::size_t>(p.env.dst_size());
+  return std::max<std::size_t>(nodes_.size(), 1);
+}
+
+// 폭주로 버리는 입력. payload를 지워 메모리를 줄이고 기록 수에도 상한을 둔다
+void Datalink::overflow_locked(Pending&& p) {
+  if (overflow_.size() >= cfg_.max_overflow_outcomes) {
+    ++overflow_dropped_;
+    return;
+  }
+  p.env.clear_payload();
+  overflow_.push_back(std::move(p));
+}
+
+void Datalink::flush_overflow_locked(std::vector<Out>& out) {
+  for (const auto& p : overflow_) {
+    if (p.env.dst_size() > 0) {
+      for (const auto& d : p.env.dst())
+        if (d != p.src && keys::is_valid_entity_id(d))
+          outcome_locked(p.src, d, p.env, p.size, v1::DROP_REASON_QUEUE_OVERFLOW, p.tx_time_us, 0, out);
+    } else {
+      // 브로드캐스트는 수신자별로 펼치지 않고 송신자 한 건으로 기록한다
+      outcome_locked(p.src, p.src, p.env, p.size, v1::DROP_REASON_QUEUE_OVERFLOW, p.tx_time_us, 0, out);
+    }
+  }
+  if (!overflow_.empty() || overflow_dropped_ != 0) {
+    log("input overflow: " + std::to_string(overflow_.size() + overflow_dropped_) + " messages dropped (" +
+        std::to_string(overflow_dropped_) + " without outcome)");
+  }
+  overflow_.clear();
+  overflow_dropped_ = 0;
+}
+
 void Datalink::route_locked(const Pending& p, const std::string& dst, std::vector<Out>& out) {
   const auto is = nodes_.find(p.src), id = nodes_.find(dst);
   const Node* s = is == nodes_.end() ? nullptr : &is->second;
@@ -479,6 +599,7 @@ void Datalink::route_locked(const Pending& p, const std::string& dst, std::vecto
   if (reason == v1::DROP_REASON_NONE && !ch.bucket.admit(p.tx_time_us, p.size, depart))
     reason = v1::DROP_REASON_QUEUE_OVERFLOW;
   if (reason == v1::DROP_REASON_NONE && ch.ge.lost(prof.ge, ch.rng)) reason = v1::DROP_REASON_BURST_LOSS;
+  if (reason == v1::DROP_REASON_NONE && in_flight_.size() >= cfg_.max_in_flight) reason = v1::DROP_REASON_QUEUE_OVERFLOW;
   if (reason == v1::DROP_REASON_NONE) {
     const std::uint64_t arrive = depart + sample_delay_us(prof, ch.rng);
     in_flight_.push_back(InFlight{arrive, p.tx_time_us, p.src, dst, p.suffix, p.size,
