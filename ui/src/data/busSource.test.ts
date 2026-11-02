@@ -8,7 +8,7 @@ import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
 import { C2Commander, ENVELOPE_ENCODING } from "../model/commands";
 import { iconSvg, iconUrl, isDirectional, sideColor } from "../model/symbology";
 import type { BusTransport, SubscribeOptions, TransportCallback } from "./busSource";
-import { BusSource, KEY_SIM_CMD, KEY_SIM_STATUS, KEY_TRUTH_STATE } from "./busSource";
+import { BusSource, KEY_SIM_CMD, KEY_SIM_PARAMS, KEY_SIM_STATUS, KEY_TRUTH_STATE } from "./busSource";
 
 class FakeTransport implements BusTransport {
   subs = new Map<string, { cb: TransportCallback; opts?: SubscribeOptions }>();
@@ -50,14 +50,14 @@ describe("BusSource", () => {
   it("구독 키와 truth 다운샘플 주기, GCS가 없으면 rx를 구독하지 않는다", async () => {
     const a = new FakeTransport();
     await new BusSource(a, { gcs: "gcs-01", truthMaxHz: 20 }).connect();
-    expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE].sort());
+    expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE].sort());
     expect(a.subs.get(KEY_TRUTH_STATE)!.opts?.maxHz).toBe(20);
     expect(a.opened).toBe(true);
 
     const b = new FakeTransport();
     const src = new BusSource(b);
     await src.connect();
-    expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_TRUTH_STATE].sort());
+    expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, KEY_TRUTH_STATE].sort());
     const out = new C2Commander("gcs-01", "ui-x").task("hold", ["uav-001"]);
     expect(() => src.sendC2(out)).toThrow(/GCS/);
   });

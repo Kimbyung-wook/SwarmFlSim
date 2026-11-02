@@ -264,6 +264,31 @@ def test_queue_overflow_drops_oldest():
     run(t, BridgeOptions(queue_limit=8))
 
 
+# TC-UI-028: 기체별 매개변수 (DEC-035) ----------------------------------------
+def test_param_subscribe_and_set_params_publish():
+    """sim/param/**은 구독으로 전달되고, set_params는 sim/ctrl/cmd 발행 허용 안에서 통과한다"""
+    PENC = "application/protobuf;swarm.v1.EntityParams"
+    CENC = "application/protobuf;swarm.v1.SimCommand"
+
+    async def t(server, bus):
+        seen: list[Sample] = []
+        bus.subscribe("sim/ctrl/cmd", seen.append)
+        async with connect(url(server)) as ws:
+            await hello(ws, gcs="gcs-01")
+            await ws.send(json.dumps({"op": "sub", "id": 1, "key": "sim/param/**", "max_hz": 0}))
+            await settle()
+            for owner in ("dynamics", "fa", "ma"):
+                bus.put(f"sim/param/uav-001/{owner}", owner.encode(), PENC)
+            bus.put("sim/ctrl/status", b"s", "x")  # 구독 밖
+            got = [decode_frame(m) for m in await drain(ws)]
+            assert got == [(f"sim/param/uav-001/{o}", PENC, o.encode()) for o in ("dynamics", "fa", "ma")]
+            await ws.send(encode_frame("sim/ctrl/cmd", CENC, b"set_params"))
+            await settle()
+            assert seen == [Sample("sim/ctrl/cmd", b"set_params", CENC)]
+
+    run(t)
+
+
 # TC-UI-014: 발행 허용 키 ---------------------------------------------------
 def test_publish_allowed_rule():
     assert publish_allowed("sim/ctrl/cmd", "control", None)

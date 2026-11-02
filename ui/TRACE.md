@@ -51,6 +51,9 @@
 | IMP-UI-042 | 레이스트랙 도형 계산: 클릭점=두 원 중심의 중점, 중심=중점±(leg/2)·축(진북 시계 [0,360)), 접점 4개·폐곡선, 시계/반시계 | `src/model/racetrack.ts` | REQ-BHV-002, DEC-034 | TC-UI-026 |
 | IMP-UI-043 | 명령·도형 연결: HoldTask.racetrack·LoiterAction.racetrack 생성(leg 0이면 원형), 지도 미리보기와 보낸 임무 도형을 폐곡선으로 전시 | `src/model/commands.ts`, `src/model/missionOverlay.ts` | REQ-BHV-002, DEC-034 | TC-UI-026 |
 | IMP-UI-044 | 임무 창 "레이스트랙 선회" 메뉴(반경·직선 길이·축·방향·시간), 항로점 선회 행위의 원형/레이스트랙 선택, 목 소스 레이스트랙 비행. 지도 끌기로 축·길이 지정은 미구현 | `src/components/MissionPanel.tsx`, `src/data/mockGuidance.ts`, `src/styles.css` | REQ-BHV-002, DEC-034 | TC-UI-026, TC-UI-027 |
+| IMP-UI-045 | 매개변수 모델: EntityParams 보관(`ParamStore`), 선택 기체 항목을 계층(기체·제어·유도·행위·결정)별로 구성(여러 기체는 소유자·이름이 같은 항목만 합침, 값이 다르면 "혼합"), ParamSpec 형식·min/max 입력 검사, `set_params` 생성(기체·소유자마다 하나, 바꿀 이름만), 기본값 되돌리기, 적용 판정(`values` 기준) | `src/model/params.ts` | REQ-CFG-003, DEC-035 | TC-UI-029, TC-UI-030 |
+| IMP-UI-046 | 데이터 소스 연결: `sim/param/**` 구독(BusSource), `DataHandlers.params`, 목 소스의 동역학·FA·MA 선언·적용·거부(unknown·type·range·not_runtime)와 1초 발행. 브리지는 구독 키 제한이 없고 `set_params`가 `sim/ctrl/cmd` 발행 허용 안에 있어 코드 변경 없음(시험으로 확인) | `src/data/source.ts`, `src/data/busSource.ts`, `src/data/mockParams.ts`, `src/data/mockSource.ts`, `bridge/tests/test_bridge.py` | REQ-CFG-003, DEC-035, DEC-027 | TC-UI-028, TC-UI-030 |
+| IMP-UI-047 | 매개변수 패널: 기체 선택 시 계층별 항목, 기본값·현재값 병기, 입력 검사 오류, 적용·기본값 버튼, `runtime`=false 비활성, 거부 사유 표시, 보낸 직후 "대기"·`values` 갱신 후 "적용됨" | `src/components/ParamPanel.tsx`, `src/App.tsx`, `src/styles.css` | REQ-CFG-003, DEC-035 | TC-UI-029, TC-UI-031 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -73,6 +76,10 @@
 | TC-UI-024 | 목 소스 임무 비행: 이동 도착·완료 보고, 비대상 기체 불변, 선회 반경, 항로 진행 보고, 정찰 원, 타격 접근, 거부·취소, 되감기 (9건) | `src/data/mockGuidance.test.ts` | IMP-UI-041 | 통과 |
 | TC-UI-026 | 레이스트랙: 원 중심(중점 ± leg/2·축)·접점·폐곡선 닫힘, 시계/반시계, 축 정규화, HoldTask/LoiterAction 메시지(`racetrack` 필드, leg 0이면 생략), 지도 도형 | `src/model/racetrack.test.ts` | IMP-UI-042~044 | 통과 |
 | TC-UI-027 | 목 소스 레이스트랙 비행: 시계·반시계 모두 직선 구간 따라 도형 안을 유지 | `src/model/racetrack.test.ts` | IMP-UI-044 | 통과 |
+| TC-UI-028 | 브리지: `sim/param/**` 구독 전달(동역학·FA·MA 3키, 구독 밖 키 제외), control 클라이언트의 `set_params`(`sim/ctrl/cmd`)가 버스에 그대로 전달 (1건) | `bridge/tests/test_bridge.py` | IMP-UI-046, DEC-035 | 통과 |
+| TC-UI-029 | 매개변수 항목 구성·검사·메시지: 계층 순서와 기본값·현재값, 다기체 합침·혼합·선언 누락, 입력 검사(숫자·범위·문자열·참/거짓), `set_params` 직렬화 왕복, 기본값 되돌리기 (5건) | `src/model/params.test.ts` | IMP-UI-045 | 통과 |
+| TC-UI-030 | 적용·거부 표시와 소스 연결: 거부 4종 사유·값 불변, 적용 판정, 목 소스 `set_params` 왕복·다른 기체 불변·리셋, 버스 소스 `sim/param/**` 구독·`sim/ctrl/cmd` 발행 (4건) | `src/model/params.test.ts` | IMP-UI-045, IMP-UI-046 | 통과 |
+| TC-UI-031 | 수동(브라우저, 목 소스): 24기 선택 → 공통 항목 패널, 범위 밖 입력 오류 표시, 60 적용 → "현재 60·적용됨", `runtime`=false 항목 비활성. 화면: `docs/screenshots/tc-ui-031-params.jpg` | 브라우저 확인 | IMP-UI-047 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
 
 

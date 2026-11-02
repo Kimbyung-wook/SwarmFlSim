@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { create } from "@bufbuild/protobuf";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { FormationShape } from "./gen/swarm/v1/c2_pb";
+import type { ParamOwner } from "./gen/swarm/v1/sim_pb";
 import { SimCommandSchema } from "./gen/swarm/v1/sim_pb";
 import { BridgeTransport } from "./data/bridgeTransport";
 import type { BridgeState } from "./data/bridgeTransport";
@@ -19,7 +20,10 @@ import { MapView } from "./components/MapView";
 import { CommandPanel } from "./components/CommandPanel";
 import type { MenuState } from "./components/MissionPanel";
 import { MissionMenu, RouteEditor } from "./components/MissionPanel";
+import { ParamPanel } from "./components/ParamPanel";
 import { SelectionPanel } from "./components/SelectionPanel";
+import { ParamStore, setParamsCommands } from "./model/params";
+import type { ParamScalar } from "./model/params";
 import { Toolbar } from "./components/Toolbar";
 import type { CameraMode } from "./model/camera";
 import type { GeoPoint, MissionSpec, OutgoingC2, TaskKind } from "./model/commands";
@@ -88,6 +92,7 @@ export function App() {
   const source = useMemo(() => makeSource(cfg, setConn, flash), [cfg, flash]);
   const live = useMemo(() => new LiveState(), []);
   const tasks = useMemo(() => new TaskLog(), []);
+  const params = useMemo(() => new ParamStore(), []);
   const groups = useMemo(() => new GroupStore(), []);
   const commander = useMemo(() => (source.gcs ? new C2Commander(source.gcs, UI_ID, () => live.frame) : null), [source, live]);
   const [selection, setSelection] = useState<readonly string[]>([]);
@@ -111,6 +116,7 @@ export function App() {
       truth: (f) => live.onTruth(f),
       status: (s) => live.onStatus(s),
       rx: (k, env) => tasks.received(k, env),
+      params: (p) => params.onParams(p),
     });
     source
       .connect()
@@ -120,7 +126,7 @@ export function App() {
       unsub();
       source.close();
     };
-  }, [source, live, tasks]);
+  }, [source, live, tasks, params]);
 
   useEffect(() => {
     if (conn?.state === "open") setError(null);
@@ -140,6 +146,18 @@ export function App() {
     (cmd: MessageInitShape<typeof SimCommandSchema>["cmd"]) => {
       try {
         source.send(create(SimCommandSchema, { issuer: UI_ID, cmd }));
+      } catch (e) {
+        flash(`sim/ctrl/cmd 전송 실패: ${errText(e)}`);
+      }
+    },
+    [source, flash],
+  );
+
+  /** 매개변수 변경(DEC-035). 적용 여부는 EntityParams로 돌아온 값으로만 안다 */
+  const setParams = useCallback(
+    (owner: ParamOwner, ids: readonly string[], values: Record<string, ParamScalar>) => {
+      try {
+        for (const c of setParamsCommands(UI_ID, ids, owner, values)) source.send(c);
       } catch (e) {
         flash(`sim/ctrl/cmd 전송 실패: ${errText(e)}`);
       }
@@ -425,6 +443,15 @@ export function App() {
             onClear={() => setSelection([])}
             onCamera={(id, mode) => setCamera({ id, mode })}
           />
+          {selection.length > 0 && (
+            <ParamPanel
+              store={params}
+              version={params.version}
+              ids={selection}
+              disabledReason={null}
+              onSet={setParams}
+            />
+          )}
           <CommandPanel
             targets={targets}
             disabledReason={disabledReason}

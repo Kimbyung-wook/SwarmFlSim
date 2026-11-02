@@ -1,10 +1,12 @@
 // IMP-UI-010: 목 데이터 소스. Core 없이 MockScenario로 truth/state와 sim/ctrl/status를 흉내 낸다 (REQ-UI-001, DEC-005)
 // sim/ctrl/cmd 중 Start·Pause·Resume·StepFrames·SetRate·Reset을 처리한다.
 // IMP-UI-029: C2 TaskCommand에는 대상 기체마다 TaskStatus(ACCEPTED)를 rx로 돌려준다.
+// IMP-UI-046: UAV마다 동역학·FA·MA 매개변수(EntityParams)를 sim/param으로 내고, set_params를 검사해 적용·거부한다 (DEC-035).
 // IMP-UI-041: 대상 UAV는 임무대로 비행하고(MockScenario.command), 구간 진행·완료를 TaskStatus(EXECUTING·COMPLETED)로 보낸다.
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
+import { EntityKind } from "../gen/swarm/v1/entity_pb";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import { L1Interface } from "../gen/swarm/v1/options_pb";
 import type { OutgoingC2 } from "../model/commands";
@@ -14,6 +16,7 @@ import type { DataHandlers, DataSource } from "./source";
 import { HandlerSet } from "./source";
 import type { MockScenarioOptions } from "./mockScenario";
 import { MockScenario } from "./mockScenario";
+import { MOCK_OWNERS, MockParams } from "./mockParams";
 
 export interface MockClock {
   now(): number; // ms
@@ -44,6 +47,7 @@ export class MockSource implements DataSource {
   private readonly handlers = new HandlerSet();
   private readonly opts: MockSourceOptions;
   private readonly scenario: MockScenario;
+  private params = new MockParams();
   private frame = 0n;
   private state = SimRunState.IDLE;
   private rate: number;
@@ -69,6 +73,7 @@ export class MockSource implements DataSource {
   async connect(): Promise<void> {
     this.state = SimRunState.LOADED;
     this.publish();
+    this.publishParams();
     if (this.opts.autoStart) this.run();
   }
 
@@ -107,8 +112,18 @@ export class MockSource implements DataSource {
         this.halt();
         this.frame = 0n;
         this.state = SimRunState.LOADED;
+        this.params = new MockParams();
         this.publish();
+        this.publishParams();
         break;
+      case "setParams": {
+        // 다음 프레임 시작에 적용하는 것을 즉시 적용으로 흉내 낸다. 거부는 EntityParams.rejected로 돌려준다
+        const v = c.value;
+        if (!this.scenario.actors.some((a) => a.id === v.entityId && a.kind === EntityKind.UAV)) return;
+        this.params.apply(v.entityId, v.owner, v.values ?? {});
+        this.handlers.params(this.params.snapshot(v.entityId, v.owner, this.simTimeUs()));
+        return;
+      }
       default:
         // load·shutdown·fault는 목 소스에서 다루지 않는다
         return;
@@ -190,12 +205,22 @@ export class MockSource implements DataSource {
     this.frame += BigInt(n);
     this.rateActual = this.rate;
     this.publish();
-    if (this.frame % BigInt(this.opts.frameHz) < BigInt(n)) this.handlers.status(this.status());
+    if (this.frame % BigInt(this.opts.frameHz) < BigInt(n)) {
+      this.handlers.status(this.status());
+      this.publishParams();
+    }
   }
 
   private advance(): void {
     this.frame += 1n;
     this.publish();
+  }
+
+  /** UAV마다 소유자별 EntityParams. 적재 직후와 1초마다 */
+  private publishParams(): void {
+    const t = this.simTimeUs();
+    for (const a of this.scenario.actors)
+      if (a.kind === EntityKind.UAV) for (const o of MOCK_OWNERS) this.handlers.params(this.params.snapshot(a.id, o, t));
   }
 
   private publish(): void {

@@ -104,3 +104,18 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 4
 .wp-no { display: inline-block; min-width: 18px; text-align: center; background: var(--sel); color: #000; border-radius: 9px; }
 .wp-tools { margin-left: auto; display: flex; gap: 2px; }
 .wp-tools button { padding: 0 5px; font-size: 11px; }
+
+/* IMP-UI-047: 기체별 매개변수 패널 (DEC-035) */
+.params { display: flex; flex-direction: column; max-height: 45%; min-height: 0; border-top: 1px solid var(--line); }
+.params-body { overflow-y: auto; }
+.param-group h4 { margin: 0; padding: 4px 10px; font-size: 12px; color: var(--accent); background: #101a2e; position: sticky; top: 0; }
+.param-row { padding: 5px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.param-row.rejected { background: #2a1a1a; }
+.param-name { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.param-vals { display: flex; gap: 12px; font-variant-numeric: tabular-nums; }
+.param-edit { display: flex; gap: 4px; align-items: center; }
+.param-edit input[type="text"] { width: 90px; }
+.param-edit button { padding: 1px 7px; font-size: 12px; }
+.param-note { font-size: 12px; }
+.param-err { color: #fca5a5; }
+.param-ok { color: #86efac; }
