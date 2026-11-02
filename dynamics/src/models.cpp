@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "swarm/dyn/geo.hpp"
 #include "swarm/v1/fa.pb.h"
@@ -51,9 +52,70 @@ double heading_of(const KinematicSample& in) {
   return yaw;
 }
 
+using L = ParamLayer;
+
+// 선언 표와 필드 표는 같은 순서다
+template <class P>
+bool set_field(P& p, const std::vector<double P::*>& fields, std::span<const ParamDesc> descs, std::string_view name,
+               double value) {
+  for (std::size_t i = 0; i < descs.size(); ++i) {
+    if (descs[i].name != name) continue;
+    if (!(value >= descs[i].min && value <= descs[i].max)) return false;  // NaN 포함
+    p.*fields[i] = value;
+    return true;
+  }
+  return false;
+}
+
+template <class P>
+double get_field(const P& p, const std::vector<double P::*>& fields, std::span<const ParamDesc> descs,
+                 std::string_view name) {
+  for (std::size_t i = 0; i < descs.size(); ++i)
+    if (descs[i].name == name) return p.*fields[i];
+  return 0.0;
+}
+
+// 시정수 하한 0.05 s는 프레임 스텝(최대 20 ms)의 절반보다 크다 (RK4 안정성)
+const ParamDesc kDof2Descs[] = {
+    {"tau_speed_s", L::kControl, 1.0, "s", 0.05, 30.0, true, "속도 명령 1차 지연 시정수"},
+    {"tau_heading_rate_s", L::kControl, 0.2, "s", 0.05, 10.0, true, "선회율 명령 1차 지연 시정수"},
+    {"tau_climb_s", L::kControl, 0.5, "s", 0.05, 20.0, true, "상승률 명령 1차 지연 시정수"},
+    {"min_speed_mps", L::kAirframe, 0.0, "m/s", 0.0, 100.0, true, "속도 명령 하한(실속 속도)"},
+    {"max_speed_mps", L::kAirframe, 400.0, "m/s", 1.0, 1000.0, true, "속도 명령 상한"},
+    {"max_heading_rate_rps", L::kAirframe, 1.0, "rad/s", 0.01, 5.0, true, "선회율 명령 한계"},
+    {"max_climb_rate_mps", L::kAirframe, 50.0, "m/s", 0.0, 200.0, true, "상승·하강률 명령 한계"},
+};
+const std::vector<double Dof2Model::Params::*> kDof2Fields = {
+    &Dof2Model::Params::tau_speed_s,   &Dof2Model::Params::tau_heading_rate_s,   &Dof2Model::Params::tau_climb_s,
+    &Dof2Model::Params::min_speed_mps, &Dof2Model::Params::max_speed_mps,
+    &Dof2Model::Params::max_heading_rate_rps, &Dof2Model::Params::max_climb_rate_mps,
+};
+
+const ParamDesc kDof3Descs[] = {
+    {"tau_speed_s", L::kControl, 1.0, "s", 0.05, 30.0, true, "속도 명령 1차 지연 시정수"},
+    {"tau_bank_s", L::kControl, 0.3, "s", 0.05, 10.0, true, "뱅크 명령 1차 지연 시정수"},
+    {"tau_gamma_s", L::kControl, 0.5, "s", 0.05, 20.0, true, "비행경로각 명령 1차 지연 시정수"},
+    {"min_speed_mps", L::kAirframe, 1.0, "m/s", 0.1, 100.0, true, "속도 명령 하한, 선회율·비행경로각 계산의 분모 하한"},
+    {"max_speed_mps", L::kAirframe, 400.0, "m/s", 1.0, 1000.0, true, "속도 명령 상한"},
+    {"max_bank_rad", L::kAirframe, 1.0471975511965976, "rad", 0.05, 1.4, true, "뱅크 명령 한계"},
+    {"max_climb_rate_mps", L::kAirframe, 50.0, "m/s", 0.0, 200.0, true, "상승·하강률 명령 한계"},
+    {"max_gamma_rad", L::kAirframe, 0.5235987755982988, "rad", 0.05, 1.4, true, "비행경로각 명령 한계"},
+};
+const std::vector<double Dof3Model::Params::*> kDof3Fields = {
+    &Dof3Model::Params::tau_speed_s,   &Dof3Model::Params::tau_bank_s,    &Dof3Model::Params::tau_gamma_s,
+    &Dof3Model::Params::min_speed_mps, &Dof3Model::Params::max_speed_mps, &Dof3Model::Params::max_bank_rad,
+    &Dof3Model::Params::max_climb_rate_mps, &Dof3Model::Params::max_gamma_rad,
+};
+
 }  // namespace
 
 // ---------------------------------------------------------------- 2-DoF
+
+std::span<const ParamDesc> Dof2Model::param_descs() const { return kDof2Descs; }
+double Dof2Model::get_param(std::string_view name) const { return get_field(p_, kDof2Fields, kDof2Descs, name); }
+bool Dof2Model::set_param(std::string_view name, double value) {
+  return set_field(p_, kDof2Fields, kDof2Descs, name, value);
+}
 
 void Dof2Model::derivatives(double, std::span<const double> x, std::span<const double> u, const Environment& env,
                             std::span<double> dxdt) const {
@@ -109,6 +171,12 @@ void Dof2Model::error_scale(std::span<double> abs_scale, std::span<double> rel_s
 }
 
 // ---------------------------------------------------------------- 3-DoF
+
+std::span<const ParamDesc> Dof3Model::param_descs() const { return kDof3Descs; }
+double Dof3Model::get_param(std::string_view name) const { return get_field(p_, kDof3Fields, kDof3Descs, name); }
+bool Dof3Model::set_param(std::string_view name, double value) {
+  return set_field(p_, kDof3Fields, kDof3Descs, name, value);
+}
 
 void Dof3Model::derivatives(double, std::span<const double> x, std::span<const double> u, const Environment& env,
                             std::span<double> dxdt) const {

@@ -1,4 +1,5 @@
 // IMP-CORE-003: 엔티티 저장소 (SoA). 상태·입력 벡터는 연속 버퍼에 둔다 (DEC-006, REQ-PRF-001)
+// IMP-CORE-013: 동역학 매개변수 (DEC-035). 기본값 → airframe 표 → EntitySpec.dynamics_params → SetParams
 #pragma once
 
 #include <cstddef>
@@ -12,6 +13,7 @@
 
 #include "swarm/core/dynamics_provider.hpp"
 #include "swarm/v1/entity.pb.h"
+#include "swarm/v1/sim.pb.h"
 
 namespace swarm::core {
 
@@ -40,6 +42,16 @@ class EntityStore {
   std::span<double> u(std::size_t i) { return {u_.data() + u_off_[i], u_len_[i]}; }
   std::span<const double> u(std::size_t i) const { return {u_.data() + u_off_[i], u_len_[i]}; }
 
+  // 동역학 매개변수 (DEC-035). 모델이 선언한 매개변수가 없으면 has_params가 false
+  bool has_params(std::size_t i) const { return model_[i] && !model_[i]->param_descs().empty(); }
+  // values의 이름을 모델에 적용하고 거부한 항목을 돌려준다(이름순). runtime_only면 runtime=false 항목은 not_runtime으로 거부한다.
+  // 거부 목록은 rejected(i)가 되고, 적용한 항목은 바로 모델에 반영된다
+  const std::vector<v1::ParamRejection>& apply_params(std::size_t i, const google::protobuf::Struct& values,
+                                                      bool runtime_only);
+  const std::vector<v1::ParamRejection>& rejected(std::size_t i) const { return rejected_[i]; }
+  // 선언(specs), 적용 중인 값 전체(values), 직전 거부(rejected)를 채운다. sim_time_us는 호출자가 채운다
+  void fill_params(std::size_t i, v1::EntityParams& out) const;
+
   // 현재 상태를 KinematicState(proto)로 꺼낸다
   void kinematics(std::size_t i, v1::KinematicState& out) const;
   void fill_state(std::size_t i, v1::EntityState& out) const;
@@ -56,6 +68,8 @@ class EntityStore {
   std::vector<v1::KinematicState> fixed_;  // 모델이 없는 엔티티의 고정 상태
   std::vector<std::size_t> x_off_, x_len_, u_off_, u_len_;
   std::vector<double> x_, u_, x0_, u0_;
+  std::vector<std::vector<double>> param0_;            // 적재 시점(시나리오 적용 후) 매개변수 값. Reset이 되돌린다
+  std::vector<std::vector<v1::ParamRejection>> rejected_, rejected0_;
   std::unordered_map<std::string, std::size_t> index_;
 };
 
