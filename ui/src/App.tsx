@@ -1,5 +1,6 @@
 // IMP-UI-019: GCS 화면 구성 (REQ-UI-001, REQ-UI-002, REQ-UI-007)
 // IMP-UI-034: 버스 소스(브리지) 선택, C2 명령 전송·상태 표시, 부대 그룹 단축키 (REQ-UI-002~004, DEC-027)
+// IMP-UI-040: 우클릭 임무 메뉴·Ctrl+우클릭 항로 편집·보낸 임무 지도 표시 연결 (REQ-UI-003, REQ-UI-004, DEC-033)
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { create } from "@bufbuild/protobuf";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -16,15 +17,24 @@ import type { MapDataStatus } from "./cesium/viewer";
 import type { MapApi, ViewMode } from "./components/MapView";
 import { MapView } from "./components/MapView";
 import { CommandPanel } from "./components/CommandPanel";
+import type { MenuState } from "./components/MissionPanel";
+import { MissionMenu, RouteEditor } from "./components/MissionPanel";
 import { SelectionPanel } from "./components/SelectionPanel";
 import { Toolbar } from "./components/Toolbar";
 import type { CameraMode } from "./model/camera";
-import type { OutgoingC2, TaskKind } from "./model/commands";
+import type { GeoPoint, MissionSpec, OutgoingC2, TaskKind } from "./model/commands";
 import { C2Commander } from "./model/commands";
 import type { GroupSlot } from "./model/groups";
 import { GroupStore, groupId, slotFromKey } from "./model/groups";
 import { isAirborneKind } from "./model/entityView";
 import { LiveState } from "./model/liveState";
+import type { MapPoint, RightClick } from "./model/mapInput";
+import type { Overlay } from "./model/missionOverlay";
+import { combine, draftOverlay, emptyOverlay, missionOverlay } from "./model/missionOverlay";
+import type { RouteDraft } from "./model/routeDraft";
+import * as route from "./model/routeDraft";
+import { Side } from "./gen/swarm/v1/entity_pb";
+import { commandStateLabel } from "./model/taskLog";
 import type { SelectMode } from "./model/selection";
 import { applySelection, isControllable, pruneSelection } from "./model/selection";
 import { TaskLog } from "./model/taskLog";
@@ -57,6 +67,14 @@ function errText(e: unknown): string {
   return String(e instanceof Error ? e.message : e);
 }
 
+/** 기체 평균 위치 (미리보기 선의 시작점) */
+function avgPos(live: LiveState, ids: readonly string[]): GeoPoint | undefined {
+  const es = ids.map((id) => live.get(id)).filter((e) => e !== undefined);
+  if (!es.length) return undefined;
+  const n = es.length;
+  return { latDeg: es.reduce((a, e) => a + e.lat, 0) / n, lonDeg: es.reduce((a, e) => a + e.lon, 0) / n, altM: es.reduce((a, e) => a + e.alt, 0) / n };
+}
+
 export function App() {
   const cfg = useMemo(() => parseSourceConfig(location.search, import.meta.env, location.hostname), []);
   const [conn, setConn] = useState<Conn | null>(cfg.kind === "bus" ? { state: "connecting", detail: cfg.bridgeUrl } : null);
@@ -80,6 +98,13 @@ export function App() {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const api = useRef<MapApi | null>(null);
   const lastRecall = useRef<{ slot: GroupSlot; at: number } | null>(null);
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [preview, setPreview] = useState<MissionSpec | null>(null);
+  const [draft, setDraft] = useState<RouteDraft | null>(null);
+  const menuRef = useRef(menu);
+  menuRef.current = menu;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   useEffect(() => {
     const unsub = source.subscribe({
@@ -161,17 +186,57 @@ export function App() {
     [issue],
   );
 
-  const moveTo = useCallback(
-    (latDeg: number, lonDeg: number) => {
+  /** 대상 기체 평균 고도(MSL). 없으면 1000 m */
+  const avgAlt = useCallback(
+    (ids: readonly string[]) => {
+      const alts = ids.map((id) => live.get(id)?.alt).filter((a): a is number => a !== undefined);
+      return alts.length ? Math.round(alts.reduce((a, b) => a + b, 0) / alts.length) : 1000;
+    },
+    [live],
+  );
+
+  const sendMission = useCallback(
+    (spec: MissionSpec) => {
       const ids = targetsRef.current;
       if (ids.length === 0) return;
-      // 목적지 고도: 대상 기체 평균 고도(MSL)
-      const alts = ids.map((id) => live.get(id)?.alt ?? 0);
-      const altM = Math.round(alts.reduce((a, b) => a + b, 0) / alts.length);
-      issue((c) => c.task("moveTo", ids, { latDeg, lonDeg, altM }));
+      issue((c) => c.mission(spec, ids));
+      setMenu(null);
     },
-    [issue, live],
+    [issue],
   );
+
+  /** 항로 전송. 한 번 보낸 항로는 같은 task_id로 다시 보내 전체를 바꾼다 */
+  const sendRoute = useCallback(() => {
+    const d = draftRef.current;
+    if (!d) return;
+    const ids = targetsRef.current.length ? targetsRef.current : d.assignees;
+    if (ids.length === 0) return;
+    let taskId = d.taskId;
+    issue((c) => {
+      const out = c.mission(route.routeSpec(d), ids, d.taskId ?? undefined);
+      taskId = out.taskId ?? null;
+      return out;
+    });
+    setDraft((cur) => (cur ? { ...cur, taskId, assignees: [...ids] } : cur));
+  }, [issue]);
+
+  const onRightClick = useCallback(
+    (rc: RightClick) => {
+      if (rc.kind === "menu") {
+        const e = rc.entityId ? live.get(rc.entityId) : undefined;
+        const targetId = e && e.alive && e.side === Side.RED ? e.id : null;
+        setMenu({ point: rc.point, targetId });
+      } else if (rc.kind === "waypoint") {
+        setMenu(null);
+        setDraft((d) => route.addWaypoint(d ?? route.emptyRoute(), rc.point, { altM: avgAlt(targetsRef.current) }));
+      }
+    },
+    [live, avgAlt],
+  );
+
+  const onWaypointDrag = useCallback((i: number, p: MapPoint) => {
+    setDraft((d) => (d && i < d.waypoints.length ? route.moveWaypoint(d, i, p) : d));
+  }, []);
 
   const formation = useCallback(
     (shape: FormationShape, spacingM: number) => {
@@ -217,6 +282,12 @@ export function App() {
       // ev.code(Digit1)로 읽어 Shift·키보드 배치에 상관없이 숫자를 얻는다
       const digit = ev.code.startsWith("Digit") ? slotFromKey(ev.code.slice(5)) : null;
       if (ev.key === "Escape") {
+        // 열린 임무 창을 먼저 닫는다
+        if (menuRef.current || draftRef.current) {
+          setMenu(null);
+          setDraft(null);
+          return;
+        }
         setSelection([]);
         setCamera({ id: null, mode: "free" });
       } else if (ev.key.toLowerCase() === "a" && (ev.ctrlKey || ev.metaKey)) {
@@ -250,6 +321,25 @@ export function App() {
     : cfg.kind === "bus" && conn?.state !== "open"
       ? "브리지 미연결"
       : null;
+
+  // 지도 도형: 편집 중 항로, 메뉴 미리보기, 보낸 임무(기체별 최근, 진행 중)
+  const overlays: Overlay[] = [];
+  if (draft) overlays.push(draftOverlay(draft));
+  if (menu && preview) overlays.push(missionOverlay(preview, "pending", "", avgPos(live, targets)));
+  for (const t of tasks.activeMissions()) {
+    if (draft && t.id === draft.taskId) continue; // 편집 중인 항로는 편집 도형으로 그린다
+    let m = t.mission!;
+    if (m.kind === "strike" && !m.aimPoint && m.targetId) {
+      const e = live.get(m.targetId);
+      if (e) m = { ...m, aimPoint: { latDeg: e.lat, lonDeg: e.lon, altM: e.alt } };
+    }
+    const st = [...t.reports.values()].pop();
+    const label = `${t.summary}${st ? ` · ${commandStateLabel(st.state)}${st.progress > 0 ? ` ${Math.round(st.progress * 100)}%` : ""}` : ""}`;
+    overlays.push(missionOverlay(m, "sent", label));
+  }
+  const overlayKey = JSON.stringify(overlays);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const overlay = useMemo(() => (overlays.length ? combine(...overlays) : emptyOverlay()), [overlayKey]);
 
   return (
     <div className="app">
@@ -290,13 +380,38 @@ export function App() {
             api.current = a;
             setMapStatus(s);
           }}
-          onCommandPoint={(lat, lon) => {
-            if (targetsRef.current.length === 0) return;
-            if (disabledReason) flash(`이동 명령 불가: ${disabledReason}`);
-            else moveTo(lat, lon);
-          }}
+          hasTargets={targets.length > 0}
+          onRightClick={onRightClick}
+          overlay={overlay}
+          onWaypointDrag={onWaypointDrag}
         />
         <aside className="panel">
+          {menu && !draft && (
+            <MissionMenu
+              menu={menu}
+              targetCount={targets.length}
+              disabledReason={disabledReason}
+              defaultAltM={avgAlt(targets)}
+              onPreview={setPreview}
+              onSend={sendMission}
+              onClose={() => setMenu(null)}
+            />
+          )}
+          {draft && (
+            <RouteEditor
+              draft={draft}
+              targetCount={targets.length}
+              disabledReason={disabledReason}
+              onAltitude={(i, v) => setDraft((d) => d && route.setAltitude(d, i, v))}
+              onSpeed={(i, v) => setDraft((d) => d && route.setSpeed(d, i, v))}
+              onAction={(i, a) => setDraft((d) => d && route.setAction(d, i, a))}
+              onRemove={(i) => setDraft((d) => d && route.removeWaypoint(d, i))}
+              onReorder={(f, t) => setDraft((d) => d && route.reorderWaypoint(d, f, t))}
+              onLoop={(loop) => setDraft((d) => d && { ...d, loop })}
+              onSend={sendRoute}
+              onCancel={() => setDraft(null)}
+            />
+          )}
           <SelectionPanel
             ids={selection}
             entities={selection.map((id) => live.get(id))}
@@ -321,6 +436,11 @@ export function App() {
             onFormation={formation}
             onAssignGroup={assignGroup}
             onRecallGroup={recallGroup}
+            onEditRoute={(t) => {
+              if (t.mission?.kind !== "route") return;
+              setMenu(null);
+              setDraft(route.draftFromSpec(t.mission, t.id, t.assignees));
+            }}
           />
         </aside>
       </div>

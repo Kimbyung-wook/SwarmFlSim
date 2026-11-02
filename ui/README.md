@@ -77,7 +77,8 @@ flowchart LR
 | Ctrl+A, Esc | 청군 UAV/FPV 전체 선택, 선택·추종 해제 |
 | 오른쪽 드래그, 휠 | 카메라 이동(3D 회전), 확대 |
 | 가운데 드래그, Ctrl+오른쪽 드래그 | 기울이기 |
-| 오른쪽 클릭(끌지 않음) | 선택한 아군 비행체에 MoveTo (고도는 대상 평균 고도) |
+| 오른쪽 클릭(끌지 않음) | 선택한 아군 비행체가 있으면 임무 창을 연다: 이동 · 선회 대기(반경·시간·방향·고도) · 타격 지정(적 위면 target_id, 아니면 aim_point; 무장 aam_short/agm_short/fpv) · 정찰(원 반경). 선택 전체가 한 `TaskCommand`의 대상이 된다 |
+| Ctrl(Cmd)+오른쪽 클릭 | 항로점을 순서대로 추가한다. 임무 창에서 항로점별 고도·속력·행위(통과/선회 대기/정찰)를 고치고, 위/아래/삭제로 순서를 바꾼다. 지도에서 점을 왼쪽 버튼으로 끌어 위치를 옮긴다. 전송하면 `RouteTask`로 보내고, 같은 task_id로 다시 보내면 항로 전체가 바뀐다. Esc·취소로 편집을 버린다 |
 | H, 명령 패널 | Hold. 명령 패널에서 RTB, 편대(모양·간격, 첫 선택 기체가 리더) |
 | Ctrl+숫자 또는 Alt+숫자 | 선택을 부대 그룹으로 지정(GroupAssignment). Chrome은 Ctrl+1~9를 탭 전환에 먼저 쓰므로 Alt+숫자를 쓴다 |
 | 숫자 (두 번) | 그룹 호출(선택). 빨리 두 번 누르면 첫 기체로 이동 |
@@ -85,7 +86,7 @@ flowchart LR
 ## 명령 전송 (REQ-UI-002~004, DEC-013, DEC-014)
 
 - 시뮬레이션 통제: 도구 막대의 시작(LOADED일 때)·일시정지·재개·스텝(1 프레임)·리셋·배속 → `sim/ctrl/cmd`(`SimCommand`, issuer = UI ID).
-- C2: `TaskCommand`(MoveTo·Hold·RTB), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
+- C2: `TaskCommand`(MoveTo·Hold·Strike·SearchArea·Route·RTB), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
 - 응답: `swarm/<gcs>/rx/**`의 `TaskStatus`를 task_id로 명령에 붙여 기체별 상태·진행률을 명령 패널에 표시한다. 지도 전시는 `truth/state`를 쓴다.
 - task_id는 `<UI ID>-t<n>`이라 여러 UI가 동시에 명령해도 겹치지 않는다 (DEC-020).
 - 목 소스는 TaskCommand에 `TaskStatus(ACCEPTED)`만 돌려주고 기동은 흉내 내지 않는다.

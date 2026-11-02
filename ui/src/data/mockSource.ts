@@ -1,6 +1,7 @@
 // IMP-UI-010: 목 데이터 소스. Core 없이 MockScenario로 truth/state와 sim/ctrl/status를 흉내 낸다 (REQ-UI-001, DEC-005)
 // sim/ctrl/cmd 중 Start·Pause·Resume·StepFrames·SetRate·Reset을 처리한다.
-// IMP-UI-029: C2 TaskCommand에는 대상 기체마다 TaskStatus(ACCEPTED)를 rx로 돌려준다. 기동은 흉내 내지 않는다.
+// IMP-UI-029: C2 TaskCommand에는 대상 기체마다 TaskStatus(ACCEPTED)를 rx로 돌려준다.
+// IMP-UI-041: 대상 UAV는 임무대로 비행하고(MockScenario.command), 구간 진행·완료를 TaskStatus(EXECUTING·COMPLETED)로 보낸다.
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
@@ -119,24 +120,31 @@ export class MockSource implements DataSource {
     const env = out.envelope;
     if (env.msgType !== TaskCommandSchema.typeName) return;
     const cmd = fromBinary(TaskCommandSchema, env.payload);
-    const simTimeUs = this.simTimeUs();
+    const rejected = new Set(this.scenario.command(cmd, Number(this.simTimeUs()) / 1e6));
     for (const id of cmd.assignees) {
-      const st = create(TaskStatusSchema, {
-        header: { simTimeUs, frame: this.frame, source: id, correlationId: cmd.taskId },
-        taskId: cmd.taskId,
-        state: cmd.cancel ? CommandState.CANCELLED : CommandState.ACCEPTED,
-        reason: "목 소스: 수락만 흉내 낸다",
-      });
-      const reply = create(LinkEnvelopeSchema, {
-        header: { simTimeUs, frame: this.frame, source: id },
-        dst: [this.gcs],
-        iface: L1Interface.C2,
-        msgType: TaskStatusSchema.typeName,
-        payload: toBinary(TaskStatusSchema, st),
-        rxTimeUs: simTimeUs,
-      });
-      this.handlers.rx(`swarm/${this.gcs}/rx/c2/TaskStatus`, reply);
+      const state = cmd.cancel ? CommandState.CANCELLED : rejected.has(id) ? CommandState.REJECTED : CommandState.ACCEPTED;
+      this.reply(id, cmd.taskId, state, 0, rejected.has(id) ? "목 소스: 다룰 수 없는 임무" : "목 소스: 수락");
     }
+  }
+
+  private reply(id: string, taskId: string, state: CommandState, progress: number, reason: string): void {
+    const simTimeUs = this.simTimeUs();
+    const st = create(TaskStatusSchema, {
+      header: { simTimeUs, frame: this.frame, source: id, correlationId: taskId },
+      taskId,
+      state,
+      progress,
+      reason,
+    });
+    const reply = create(LinkEnvelopeSchema, {
+      header: { simTimeUs, frame: this.frame, source: id },
+      dst: [this.gcs],
+      iface: L1Interface.C2,
+      msgType: TaskStatusSchema.typeName,
+      payload: toBinary(TaskStatusSchema, st),
+      rxTimeUs: simTimeUs,
+    });
+    this.handlers.rx(`swarm/${this.gcs}/rx/c2/TaskStatus`, reply);
   }
 
   status(): SimStatus {
@@ -192,5 +200,6 @@ export class MockSource implements DataSource {
 
   private publish(): void {
     this.handlers.truth(this.scenario.frameAt(this.frame, this.opts.frameHz));
+    for (const r of this.scenario.takeReports()) this.reply(r.entityId, r.taskId, r.state, r.progress, r.reason);
   }
 }

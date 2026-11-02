@@ -79,3 +79,28 @@ select, input { background: #1b2740; color: var(--fg); border: 1px solid var(--l
 .conn-connecting { background: #713f12; }
 .conn-closed { background: #4c1d1d; }
 .notice { padding: 4px 10px; background: #1e3a5f; color: #dbeafe; }
+
+/* IMP-UI-039: 임무 창 (우클릭 메뉴·항로 편집) */
+button.link { background: none; border: none; color: var(--accent); padding: 0 4px; }
+.mission { display: flex; flex-direction: column; min-height: 0; max-height: 55%; border-bottom: 1px solid #a16207; background: #141f33; }
+.mission.route { border-bottom-color: var(--sel); }
+.mission-point { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 6px 10px; font-variant-numeric: tabular-nums; }
+.mission-point .tgt { color: #fca5a5; }
+.mission-kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 0 10px 6px; }
+.mission-kinds button { padding: 3px 0; }
+.mission-form { display: flex; flex-direction: column; gap: 4px; padding: 0 10px; }
+.mission .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mission .row > span:first-child { width: 28px; color: var(--muted); }
+.mission .row.sub { margin-left: 22px; }
+.mission .num { display: inline-flex; align-items: center; gap: 2px; }
+.mission .num input { width: 72px; }
+.mission button.primary { background: #a16207; border-color: #ca8a04; }
+.mission.route button.primary { background: #854d0e; }
+.mission .check { display: inline-flex; align-items: center; gap: 3px; margin-right: auto; }
+.mission .hint { padding: 0 10px 4px; font-size: 12px; }
+.wp-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--line); }
+.wp-list li { padding: 4px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+.wp-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.wp-no { display: inline-block; min-width: 18px; text-align: center; background: var(--sel); color: #000; border-radius: 9px; }
+.wp-tools { margin-left: auto; display: flex; gap: 2px; }
+.wp-tools button { padding: 0 5px; font-size: 11px; }

@@ -1,5 +1,5 @@
 // IMP-UI-031: 명령 패널. 선택한 기체에 Hold·RTB TaskCommand, 편대 FormationCommand, 부대 그룹 지정·호출 (REQ-UI-002~004)
-// MoveTo는 지도 우클릭. 명령 상태는 swarm/<gcs>/rx/**의 TaskStatus로 표시한다.
+// 지도 임무는 우클릭 임무 창(IMP-UI-039). 보낸 항로는 여기서 다시 편집한다(IMP-UI-040). 명령 상태는 swarm/<gcs>/rx/**의 TaskStatus로 표시한다.
 import { useState } from "react";
 import { FormationShape } from "../gen/swarm/v1/c2_pb";
 import type { GroupSlot } from "../model/groups";
@@ -20,6 +20,8 @@ interface Props {
   onFormation(shape: FormationShape, spacingM: number): void;
   onAssignGroup(slot: GroupSlot): void;
   onRecallGroup(slot: GroupSlot): void;
+  /** 보낸 항로를 다시 편집 */
+  onEditRoute(t: TaskEntry): void;
 }
 
 const SHAPES: [FormationShape, string][] = [
@@ -48,7 +50,7 @@ export function CommandPanel(p: Props) {
       <div className="cmd-row">
         <button disabled={off} title={title} onClick={p.onHold}>대기(Hold)</button>
         <button disabled={off} title={title} onClick={p.onRtb}>귀환(RTB)</button>
-        <span className="muted">이동: 지도 우클릭</span>
+        <span className="muted">임무: 지도 우클릭 · 항로: Ctrl+우클릭</span>
       </div>
       <div className="cmd-row">
         <select value={shape} onChange={(e) => setShape(Number(e.target.value) as FormationShape)}>
@@ -99,6 +101,9 @@ export function CommandPanel(p: Props) {
               <b>{t.summary}</b>
               <span className="muted">{t.assignees.length}대</span>
               <span className="muted task-id">{t.id}</span>
+              {t.mission?.kind === "route" && !t.error && (
+                <button className="link" onClick={() => p.onEditRoute(t)} title="항로를 다시 편집해 같은 task_id로 보낸다">편집</button>
+              )}
             </div>
             {t.error ? (
               <div className="task-reports">전송 실패: {t.error}</div>
