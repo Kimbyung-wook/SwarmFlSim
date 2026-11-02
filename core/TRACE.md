@@ -54,6 +54,8 @@ flowchart LR
 | IMP-CORE-016 | 시나리오 재발행 보강 (DEC-037): lockstep 준비 대기 중(RUNNING, 첫 틱 전)에도 1초(벽시계)마다 `sim/ctrl/scenario`를 재발행하고 첫 틱 이후는 멈춘다. CLI `--mode`·`--rate`·`--hz`·`--seed` 재정의(`apply_run_override`)는 적재 필드와 재발행 `Scenario.run`에 함께 반영하고, `--autostart`의 Start도 같은 값을 쓴다 | `include/swarm/core/scenario.hpp`, `src/scenario.cpp`, `src/sim_core.cpp`, `src/main.cpp` | DEC-037, IMP-CORE-015 | TC-CORE-026, TC-CORE-027 |
 | IMP-CORE-017 | 입력 검증 (DEC-038): `validate_scenario`(비유한 값·위경도 범위·빈 엔티티·frame_hz 50..100·배속·없는 링크 프로파일), 없는 airframe 거부(`known_airframe`), dof5/dof6 적재 거부. 거부 시 `load`는 false를 돌려주고 기존 시나리오·상태를 유지한다. Start·SetRate 배속은 유한·0..1000만 받는다(0은 제한 없음, Start의 hz 0은 시나리오 값). 시작 시나리오가 거부돼도 `swarm_core`는 종료하지 않고 LoadScenario를 기다린다 | `include/swarm/core/scenario.hpp`, `src/scenario.cpp`, `src/sim_core.cpp`, `src/wp2_dynamics.cpp`, `src/main.cpp` | DEC-038, QA-001, QA-003, D-3 | TC-CORE-028, TC-CORE-029, TC-CORE-030 |
 | IMP-CORE-018 | 대기 참여자 로그 (QA-004): lockstep 준비·프레임 완료를 기다리는 동안 5초마다 대기 중인 참여자를 로그에 남긴다. 상태 메시지 필드는 계약 변경이 필요해 로그만 한다 | `src/sim_core.cpp` | DEC-038, QA-004 | TC-CORE-031 |
+| IMP-CORE-019 | msvc 프리셋의 vcpkg 의존성을 C++20으로 빌드: 오버레이 트리플렛 `triplets/x64-windows-cxx20.cmake` (QA-007, protobuf ABI 불일치로 msvc-release 링크 실패). 계약 §7.1에 안내 | `../triplets/x64-windows-cxx20.cmake`, `../CMakePresets.json` | DEC-022, QA-007 | 처음부터 빌드한 msvc-debug·msvc-release ctest 35/35 (2026-11-02) |
+| IMP-CORE-020 | lockstep 응답 없는 참여자 표시 (DEC-041): 준비·프레임 완료 대기가 벽시계 5 s를 넘으면 해당 참여자를 `SimStatus.waiting_participants`에 싣고 기다리는 동안 status를 1초마다 발행한다. 응답·Reset·정지하면 비운다. 재합류는 지원하지 않는다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-041, DEC-038 | TC-CORE-032 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -91,6 +93,7 @@ flowchart LR
 | TC-CORE-029 | dof5·dof6 적재는 예외 없이 거부, Core 생존, LoadScenario 명령도 동일 | `tests/test_core.cpp` | IMP-CORE-017 | 통과 (msvc-debug, 2026-11-02) |
 | TC-CORE-030 | Start·SetRate 배속 검증: NaN·inf·음수·과대 거부, 0 허용, Start hz 0은 시나리오 값 | `tests/test_core.cpp` | IMP-CORE-017 | 통과 (msvc-debug, 2026-11-02) |
 | TC-CORE-031 | 대기 참여자 로그: 준비·프레임 완료 대기 시 5초마다 대기 중 참여자 이름 출력 | `tests/test_core.cpp` | IMP-CORE-018 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-032 | 응답 없는 참여자 표시: 5 s 전에는 비어 있고 5 s 넘으면 이름이 status에 나타나며 대기 중 status가 계속 발행된다. 응답하면 비고, Reset하면 비며, 다시 시작해 멈추면 또 나타난다 | `tests/test_core.cpp` | IMP-CORE-020 | 통과 (msvc-debug, 2026-11-03) |
 
 ## 제약과 후속
 
