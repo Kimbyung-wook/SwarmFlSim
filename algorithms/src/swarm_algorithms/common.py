@@ -7,6 +7,7 @@ import math
 from collections import deque
 from dataclasses import dataclass
 
+from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, common_pb2, p2p_pb2, vi_pb2
@@ -208,10 +209,42 @@ def _bad_area(a) -> str:
     return ""
 
 
+_REAL = (FieldDescriptor.TYPE_DOUBLE, FieldDescriptor.TYPE_FLOAT)
+
+
+def non_finite_field(msg: Message, path: str = "") -> str:
+    """메시지의 모든 실수 필드(중첩·반복 포함)에서 NaN·inf를 찾아 경로를 돌려준다. 없으면 빈 문자열.
+    필드 종류별 검사보다 먼저 한 곳에서 수행하므로 새 필드가 늘어도 빠지지 않는다 (QA-014)"""
+    for fd in msg.DESCRIPTOR.fields:
+        if fd.is_repeated:
+            vals = getattr(msg, fd.name)
+            items = list(enumerate(vals))
+            if fd.message_type is not None and fd.message_type.GetOptions().map_entry:
+                continue
+        elif fd.type == FieldDescriptor.TYPE_MESSAGE:
+            if not msg.HasField(fd.name):
+                continue
+            items = [(None, getattr(msg, fd.name))]
+        else:
+            items = [(None, getattr(msg, fd.name))]
+        for i, v in items:
+            name = f"{path}{fd.name}" + (f"[{i}]" if i is not None else "")
+            if fd.type == FieldDescriptor.TYPE_MESSAGE:
+                r = non_finite_field(v, name + ".")
+                if r:
+                    return r
+            elif fd.type in _REAL and not math.isfinite(v):
+                return name
+    return ""
+
+
 def invalid_reason(t: c2_pb2.TaskCommand) -> str:
     """임무 값 검증. 사유를 돌려주고, 문제가 없으면 빈 문자열 (DEC-038)"""
     if not t.task_id:
         return "empty task_id"
+    bad = non_finite_field(t)
+    if bad:
+        return f"{bad} not finite"
     kind = t.WhichOneof("task")
     if kind == "move_to":
         return (_bad_geo(t.move_to.destination, "destination")
