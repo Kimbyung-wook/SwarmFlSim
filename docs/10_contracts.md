@@ -95,6 +95,7 @@ flowchart LR
 - 시나리오 배포와 lockstep 시작 (DEC-037)
   - Core는 시나리오를 적재한 직후(`LoadScenario` 또는 `--scenario`)와 적재 상태와 lockstep 준비 대기 중(첫 틱 전)에 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행한다. CLI의 실행 모드·배속 재정의(`--mode`, `--rate`)는 발행하는 `Scenario.run`에 반영한다. 그래서 준비 대기 중에 늦게 켠 참여자도 시나리오와 실행 모드를 받는다. 다른 참여자는 `LoadScenario`를 받지 못했어도 이 키에서 시나리오를 얻는다.
   - lockstep 참여자는 시나리오를 적재해 준비되면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}`을 보낸다. Core는 `RunSpec.participants` 전원의 준비 신호를 받은 뒤에 첫 틱을 낸다. 이후 늦게 붙는 참여자는 시작 후에는 허용하지 않는다. 실행 중 이탈한 참여자의 재합류도 지원하지 않는다(Reset+Start로 복구, DEC-038).
+  - lockstep 수신 결정성(DEC-040): Datalink는 틱 f의 rx를 모두 발행한 뒤 `FrameDone{f}`를 보낸다. Agent는 틱 f+1 처리 전에 Datalink의 `FrameDone{f}`를 받아야 하며(Datalink가 `participants`에 있을 때), 틱 t에서는 `rx_time_us <= t`인 rx만 소비한다. realtime과 free-run에는 적용하지 않는다.
   - 입력 검증(DEC-038): 시나리오·`SimCommand`·임무·매개변수의 비유한 값과 범위 밖 값은 거부한다. 지원하지 않는 DoF 시나리오는 적재를 거부하고 Core는 종료하지 않는다. `assignees`가 비면 임무를 거부한다.
   - 참여자는 받은 시나리오의 `name`이 이전과 다르면 다시 적재하고 준비 신호를 다시 보낸다. 같으면 무시한다.
 - 기체별 매개변수 (DEC-035)
