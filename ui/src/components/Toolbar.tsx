@@ -18,6 +18,10 @@ interface Props {
   status: SimStatus | null;
   /** Core가 truth·status를 모두 멈춘 상태 (QA-015). 정상 일시정지와 다르다 */
   stalled?: boolean;
+  /** DEC-041: 응답 없는 참여자 경고 문구. 없으면 null */
+  waitingWarning?: string | null;
+  /** DEC-042: 재생 중 누락된 프레임 수 */
+  missedFrames?: number;
   /** 최신 truth/state 기준 (status는 1 Hz로 오므로 시각 표시는 truth를 쓴다) */
   simTimeUs: bigint;
   frame: bigint;
@@ -101,6 +105,12 @@ export function Toolbar(p: Props) {
         <span>{status ? STATE_LABEL[status.state] ?? "?" : "-"}</span>
         {p.stalled && <span className="stall-badge" title="3초 넘게 Core에서 상태를 받지 못했다. 다시 받으면 사라진다">시뮬레이션 응답 없음</span>}
         {replay && <span className="replay-badge" title="MCAP 재생 중">재생</span>}
+        {replay && (p.missedFrames ?? 0) > 0 && (
+          <span className="missed-badge" title="재생기는 배속·역압이 없어 빠르게 돌리면 프레임이 빠진다. truth/state 프레임 번호 공백을 센 값이다">
+            누락 프레임 {p.missedFrames}
+          </span>
+        )}
+        {p.waitingWarning && <span className="stall-badge waiting-badge">{p.waitingWarning}</span>}
         <span>T {fmtTime(simTimeUs)}</span>
         <span>F {frame.toString()}</span>
         <span>엔티티 {entityCount}</span>

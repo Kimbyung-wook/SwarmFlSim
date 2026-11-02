@@ -114,6 +114,7 @@ export function App() {
   useEffect(() => {
     const unsub = source.subscribe({
       truth: (f) => live.onTruth(f),
+      frameSeq: (n) => live.onFrameSeq(n),
       status: (s) => live.onStatus(s),
       rx: (k, env) => tasks.received(k, env),
       params: (p) => params.onParams(p),
@@ -368,6 +369,8 @@ export function App() {
         gcs={source.gcs}
         status={live.status}
         stalled={conn?.state !== "closed" && live.stalled()}
+        waitingWarning={live.waitingWarning()}
+        missedFrames={live.missedFrames}
         simTimeUs={live.frame.simTimeUs}
         frame={live.frame.frame}
         entityCount={live.frame.entities.length}

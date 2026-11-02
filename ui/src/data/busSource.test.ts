@@ -51,7 +51,8 @@ describe("BusSource", () => {
     const a = new FakeTransport();
     await new BusSource(a, { gcs: "gcs-01", truthMaxHz: 20 }).connect();
     expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE].sort());
-    expect(a.subs.get(KEY_TRUTH_STATE)!.opts?.maxHz).toBe(20);
+    // 브리지 다운샘플은 걸지 않는다 (프레임 번호 공백 계산, DEC-042)
+    expect(a.subs.get(KEY_TRUTH_STATE)!.opts?.maxHz).toBeUndefined();
     expect(a.opened).toBe(true);
 
     const b = new FakeTransport();
@@ -60,6 +61,24 @@ describe("BusSource", () => {
     expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, KEY_TRUTH_STATE].sort());
     const out = new C2Commander("gcs-01", "ui-x").task("hold", ["uav-001"]);
     expect(() => src.sendC2(out)).toThrow(/GCS/);
+  });
+
+  it("TC-UI-043 truth는 모든 프레임 번호를 알리고, 엔티티 해석은 truthMaxHz로 줄인다 (IMP-UI-059, DEC-042)", async () => {
+    const t = new FakeTransport();
+    let ms = 0;
+    const src = new BusSource(t, { truthMaxHz: 10, clock: () => ms });
+    const seq: bigint[] = [];
+    let truths = 0;
+    src.subscribe({ frameSeq: (n) => seq.push(n), truth: () => truths++ });
+    await src.connect();
+    const cb = t.subs.get(KEY_TRUTH_STATE)!.cb;
+    for (let n = 1n; n <= 25n; n++) {
+      cb(toBinary(TruthFrameSchema, create(TruthFrameSchema, { header: { frame: n } })), KEY_TRUTH_STATE, "");
+      ms += 20; // 50 Hz
+    }
+    expect(seq).toHaveLength(25);
+    expect(seq[24]).toBe(25n);
+    expect(truths).toBe(5); // 100 ms마다 한 번
   });
 
   it("rx LinkEnvelope를 해석하고 C2를 자기 GCS tx 키로만 보낸다", async () => {

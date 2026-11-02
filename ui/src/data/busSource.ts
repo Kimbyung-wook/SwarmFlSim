@@ -9,6 +9,7 @@ import { EntityParamsSchema, SimCommandSchema, SimStatusSchema } from "../gen/sw
 import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
 import type { OutgoingC2 } from "../model/commands";
 import { ENVELOPE_ENCODING } from "../model/commands";
+import { peekFrameNumber } from "../model/frameGap";
 import type { DataHandlers, DataSource } from "./source";
 import { HandlerSet } from "./source";
 
@@ -43,6 +44,8 @@ export interface BusSourceOptions {
   gcs: string | null;
   /** truth/state 최대 수신 주기 (지도 렌더 주기보다 높을 필요가 없다) */
   truthMaxHz: number;
+  /** 벽시계(ms). 시험에서 바꿔 끼운다 */
+  clock?: () => number;
   /** 해석 실패 보고 */
   onDecodeError?: (key: string, e: unknown) => void;
 }
@@ -55,6 +58,7 @@ export class BusSource implements DataSource {
   private readonly handlers = new HandlerSet();
   private readonly opts: BusSourceOptions;
   private unsubs: (() => void)[] = [];
+  private lastTruthMs = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly transport: BusTransport,
@@ -72,9 +76,9 @@ export class BusSource implements DataSource {
   async connect(): Promise<void> {
     const t = this.transport;
     this.unsubs = [
-      t.subscribe(KEY_TRUTH_STATE, (p, k) => this.decode(k, () => this.handlers.truth(fromBinary(TruthFrameSchema, p))), {
-        maxHz: this.opts.truthMaxHz,
-      }),
+      // 브리지에서는 다운샘플하지 않는다. 프레임 번호 공백을 세려면 모든 프레임이 와야 하므로(DEC-042)
+      // 엔티티 해석만 truthMaxHz로 줄이고 번호는 매번 헤더만 읽는다
+      t.subscribe(KEY_TRUTH_STATE, (p, k) => this.decode(k, () => this.onTruthPayload(p))),
       t.subscribe(KEY_SIM_STATUS, (p, k) => this.decode(k, () => this.handlers.status(fromBinary(SimStatusSchema, p)))),
       t.subscribe(KEY_SIM_PARAMS, (p, k) => this.decode(k, () => this.handlers.params(fromBinary(EntityParamsSchema, p)))),
     ];
@@ -100,6 +104,15 @@ export class BusSource implements DataSource {
     for (const u of this.unsubs) u();
     this.unsubs = [];
     this.transport.close();
+  }
+
+  private onTruthPayload(p: Uint8Array): void {
+    const n = peekFrameNumber(p);
+    if (n !== null) this.handlers.frameSeq(n);
+    const nowMs = (this.opts.clock ?? Date.now)();
+    if (this.opts.truthMaxHz > 0 && nowMs - this.lastTruthMs < 1000 / this.opts.truthMaxHz) return;
+    this.lastTruthMs = nowMs;
+    this.handlers.truth(fromBinary(TruthFrameSchema, p));
   }
 
   private decode(key: string, fn: () => void): void {

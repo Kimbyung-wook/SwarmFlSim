@@ -12,6 +12,8 @@ export interface DataHandlers {
   truth?: (f: TruthFrame) => void;
   /** sim/ctrl/status */
   status?: (s: SimStatus) => void;
+  /** truth/state를 받을 때마다(다운샘플 전) 프레임 번호. 재생 중 누락 프레임 계산용 (DEC-042) */
+  frameSeq?: (frame: bigint) => void;
   /** swarm/<gcs>/rx/** (데이터링크가 전달한 LinkEnvelope) */
   rx?: (key: string, env: LinkEnvelope) => void;
   /** sim/param/<entity>/<owner> (DEC-035) */
@@ -42,6 +44,10 @@ export class HandlerSet {
 
   truth(f: TruthFrame): void {
     for (const h of this.set) h.truth?.(f);
+  }
+
+  frameSeq(frame: bigint): void {
+    for (const h of this.set) h.frameSeq?.(frame);
   }
 
   status(s: SimStatus): void {

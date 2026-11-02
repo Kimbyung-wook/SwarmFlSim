@@ -70,6 +70,12 @@ export function Header(props: {
           {st.scenarioName ? ` · ${st.scenarioName}` : ""}
         </span>
       )}
+      {replay && store.missedFrames > 0 && (
+        <span className="kv warn" title="재생기는 배속·역압이 없어 빠르게 돌리면 프레임이 빠진다. truth/state 프레임 번호 공백을 센 값이다">
+          누락 프레임 {store.missedFrames}
+        </span>
+      )}
+      {store.waitingWarning && <span className="kv warn waiting">{store.waitingWarning}</span>}
       {store.rewinds > 0 && <span className="kv warn">되감기 {store.rewinds}회</span>}
       {store.linkLagUs > 1_000_000 && (
         <span className="kv warn" title="outcome을 받은 순간의 (sim 시각 − 그 outcome의 tx 시각). 둘 다 sim 시각이라 재생 배속과 무관하다. outcome이 없는 구간은 지연으로 보지 않는다">

@@ -31,7 +31,8 @@ export const MONITOR_SUBSCRIPTIONS: readonly Subscription[] = [
   { key: "link/state/**", max_hz: 2 },
   { key: "swarm/*/tx/**", max_hz: 0 },
   { key: "swarm/*/rx/**", max_hz: 0 },
-  { key: "truth/state", max_hz: 1 },
+  // 프레임 번호 공백을 세려면 모든 프레임이 와야 한다(DEC-042). 해석은 store가 1 Hz로 줄인다
+  { key: "truth/state", max_hz: 0 },
   { key: "truth/event/**", max_hz: 0 },
   { key: "sim/ctrl/status", max_hz: 2 },
 ];

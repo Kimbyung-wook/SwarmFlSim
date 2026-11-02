@@ -64,6 +64,12 @@
 | IMP-UI-055 | QA-015: truth·status를 3초 넘게 받지 못하면 도구 막대에 "시뮬레이션 응답 없음" 표시. status가 계속 오는 일시정지와 구분, 다시 받으면 해제 | `src/model/liveState.ts`, `src/components/Toolbar.tsx`, `src/App.tsx` | DEC-039 | TC-UI-039 |
 | IMP-UI-056 | D-10: 선택 기체의 MA 플러그인이 flocking이면 Route 편집기에 미지원 안내(툴팁). 전송은 막지 않고 거부 사유는 명령 패널에 표시 | `src/model/params.ts`, `src/components/MissionPanel.tsx`, `src/App.tsx` | DEC-039 | TC-UI-040 |
 | IMP-UI-057 | QA-017: 브리지가 버스 스레드 샘플을 클라이언트별 대기열로 묶어 이벤트 루프에 넘기고(`DRAIN_BATCH`), 송신 큐가 넘치면 경고 로그(5 s 주기)를 남긴다. 100기 flocking에서 클라이언트 전달률 22%→약 95% | `bridge/src/swarm_bridge/server.py` | DEC-027, DEC-039 | TC-UI-041 |
+| TC-UI-042 | 툴바: waiting_participants 경고 표시·해제, 재생 중에만 누락 프레임 표시 (2건) | `ui/src/components/panels.test.tsx` | IMP-UI-058, IMP-UI-059 | 통과 |
+| TC-UI-043 | 헤더 엿보기, 공백 계산(중복·재생 전환·되감기), BusSource가 모든 프레임 번호를 알리고 해석만 줄임 (4+1건) | `ui/src/model/frameGap.test.ts`, `ui/src/data/busSource.test.ts` | IMP-UI-059 | 통과 |
+| TC-UI-044 | Monitor store: 경고 문구, 재생 중 공백 계산(해석을 줄여도 번호는 매번), 실시간은 0 (3건) | `ui/monitor/src/model/store.test.ts` | IMP-UI-058, IMP-UI-059 | 통과 |
+| TC-UI-045 | Monitor 쪽 frameGap 단위 시험 (4건) | `ui/monitor/src/model/frameGap.test.ts` | IMP-UI-059 | 통과 |
+| IMP-UI-058 | DEC-041: `SimStatus.waiting_participants`가 비어 있지 않으면 UI 툴바와 Monitor 헤더에 "참여자 응답 없음: <이름> — Reset 후 Start로 복구"를 보이고, 비면 지운다 | `ui/src/components/Toolbar.tsx`, `ui/src/model/liveState.ts`, `ui/monitor/src/components/Header.tsx`, `ui/monitor/src/model/store.ts` | DEC-041 | TC-UI-042, TC-UI-044 |
+| IMP-UI-059 | DEC-042: 재생(`SimStatus.replay`) 중 `truth/state` 프레임 번호 공백으로 누락 프레임을 세어 UI 툴바·Monitor 헤더에 표시. 브리지 다운샘플로는 공백을 셀 수 없어 truth를 무제한 구독하고 헤더만 읽어 번호를 세며, 엔티티 해석은 UI 30 Hz·Monitor 1 Hz(벽시계)로 줄인다. 재생기는 건드리지 않는다 | `ui/src/model/frameGap.ts`, `ui/src/data/busSource.ts`, `ui/monitor/src/model/frameGap.ts`, `ui/monitor/src/bridge/source.ts` | DEC-042 | TC-UI-042~045 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
