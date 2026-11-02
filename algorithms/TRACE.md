@@ -54,4 +54,4 @@ flowchart LR
 | TC-AGT-025 | 편대 리더 Route 수행·추종기 이탈 800 m 미만, flocking Route REJECTED, flocking Hold 3대 반경 600 m ±25%·duration 후 COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-016~018 | Pass |
 | TC-AGT-028 | 레이스트랙: Hold(중심·반경 300 m·축 90°·duration) 명령이 FA 레이스트랙으로 전달되고 duration 뒤 COMPLETED, Route Loiter 레이스트랙 수행 후 다음 항로점·COMPLETED, `leg_length_m < 0` REJECTED, flocking Hold 레이스트랙 duration 후 COMPLETED. 수렴 정확도는 TC-AGT-027 | `tests/test_alg_mission.py` | IMP-AGT-020 | Pass |
 
-시험 결과(2026-11-02): algorithms/tests 26 passed (기존 12 + DEC-033 11 + DEC-034 3)
+시험 결과(2026-11-02): algorithms/tests 51 passed (기존 26 + DEC-038 임무 값 검증 25, TC-AGT-040~042는 agent/TRACE.md)

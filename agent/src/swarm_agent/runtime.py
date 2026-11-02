@@ -19,7 +19,6 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 import numpy as np
-from google.protobuf import json_format
 from google.protobuf.message import Message
 
 from swarm.v1 import entity_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
@@ -64,8 +63,25 @@ class RuntimeStats:
     frame_s: list[float] = field(default_factory=list)  # 틱 처리 시간 (최근 것만)
 
 
+def _py_value(v):
+    """Struct Value → Python. MessageToDict는 NaN·inf에서 예외를 내므로 직접 변환한다 (DEC-038)"""
+    kind = v.WhichOneof("kind")
+    if kind == "number_value":
+        n = v.number_value
+        return int(n) if n.is_integer() and abs(n) < 2**53 else n
+    if kind == "string_value":
+        return v.string_value
+    if kind == "bool_value":
+        return v.bool_value
+    if kind == "struct_value":
+        return {k: _py_value(x) for k, x in v.struct_value.fields.items()}
+    if kind == "list_value":
+        return [_py_value(x) for x in v.list_value.values]
+    return None
+
+
 def _struct_dict(s) -> dict:
-    return json_format.MessageToDict(s) if s.ListFields() else {}
+    return {k: _py_value(x) for k, x in s.fields.items()}
 
 
 def vehicle_rng(seed: int, entity_id: str) -> np.random.Generator:
@@ -120,6 +136,15 @@ class AgentRuntime:
             self.handle(s)
 
     def handle(self, s: Sample) -> None:
+        """입력 하나를 처리한다. 어떤 입력도 프로세스를 죽이지 못한다 (DEC-038): 예외는 로그로 남기고 넘어간다"""
+        try:
+            self._handle(s)
+        except Exception:
+            if self.config.strict:
+                raise
+            self.warn(f"input on '{s.key}' dropped\n{traceback.format_exc()}")
+
+    def _handle(self, s: Sample) -> None:
         key = s.key
         if key == keys.CLOCK_TICK:
             self._on_tick(sim_pb2.ClockTick.FromString(s.payload))

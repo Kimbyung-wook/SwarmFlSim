@@ -49,6 +49,7 @@ flowchart LR
 | IMP-AGT-019 | 기본 FA 레이스트랙(`CurveCommand.racetrack`, DEC-034): 반경 R 두 원 + 접선 직선 두 개의 폐경로. 매개변수 `racetrack_guidance` = `dubins`(기본: 원 구간 벡터장 + 직선 구간 횡오차 진입각 `ψ − χ∞·(2/π)·atan(k·e)`) 또는 `vector_field`(MATLAB `reference/racetrack_vectorfield.m`: 원 구간 수렴+접선 합성장, 직선 구간 `χ∞ = atan2(10R, L)`, `atan(k·√|e|)`). 구간은 축 방향 투영으로 나눈다. 반경 ≤ 0·길이 < 0 REJECTED | `src/swarm_agent/racetrack.py`, `src/swarm_agent/fa.py` | REQ-GNC-001, REQ-BHV-002, DEC-034 | Pass (TC-AGT-026, TC-AGT-027) |
 | IMP-AGT-021 | 기체별 매개변수 런타임(DEC-035): `ParamSet`이 기본값 → 시나리오 → 실행 중 `SetParams` 순으로 값을 정한다(`resolve_params`). `sim/ctrl/cmd`의 `set_params`는 자기 기체의 FA·MA 소유자만 받아 다음 프레임 시작에 적용하고 `on_params`로 알린다. 적용·거부(unknown/type/range/not_runtime)를 `EntityParams`로 `sim/param/<기체>/<fa|ma>`에 게시(적재 직후·변경 직후·벽시계 1 s마다). 기본 FA는 `PARAMS` 14개(기체 한계 5개 `runtime=False`, 제어 2개, 유도 7개)를 선언. `PARAMS`가 없는 플러그인은 시나리오 값을 그대로 받고 실행 중 변경은 모두 unknown | `src/swarm_agent/params.py`, `runtime.py`, `vehicle.py`, `fa.py` | REQ-CFG-003, DEC-035 | Pass (TC-AGT-029~035) |
 | IMP-AGT-023 | 시나리오 구독 적재(DEC-037): `sim/ctrl/scenario`를 구독해 `LoadScenario`를 받지 못해도 적재. 이미 적재한 시나리오와 `name`이 같으면 무시, 다르면 다시 적재. 적재 직후 lockstep이면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}` 준비 신호 | `src/swarm_agent/runtime.py` | DEC-037, DEC-025 | Pass (TC-AGT-036, TC-AGT-037) |
+| IMP-AGT-024 | 입력 검증(DEC-038, QA-002·QA-005): 매개변수 NaN·inf는 `range`로 거부(`ParamSet.load/change`, 선언 유무와 무관), `Struct` 변환은 비유한 값에서도 예외를 내지 않음, `AgentRuntime.handle`이 예외를 격리해 로그로 남기고 계속 처리(strict면 다시 던짐). 임무 값 검증(`invalid_reason`): 빈 task_id, 지도 밖·비유한 좌표, 고도 0..30000 m, 속도·반경·시간·레이스트랙 범위, 경로 점 200개·다각형 꼭짓점 100개 상한을 `TaskStatus` REJECTED(사유)로 거부. 빈 `assignees`는 받은 기체마다 REJECTED. 같은 `task_id`는 이전 임무를 대체(취소 보고 없음) | `src/swarm_agent/params.py`, `src/swarm_agent/runtime.py`, `../algorithms/src/swarm_algorithms/common.py` | DEC-038, DEC-035, DEC-033 | Pass (TC-AGT-038~042) |
 
 ## TC
 
@@ -80,8 +81,13 @@ flowchart LR
 | TC-AGT-035 | 열거형 매개변수(DEC-036): `racetrack_guidance`의 `ParamSpec.choices` 게시, 시나리오·실행 중 잘못된 값은 `choice`로 거부(기본값 유지, 예외 없음), 유효한 값은 적용 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
 | TC-AGT-036 | `sim/ctrl/scenario`만으로 적재, 같은 name 재발행은 무시(기체 객체 유지), 다른 name은 다시 적재 | `tests/test_agent_scenario_feed.py` | IMP-AGT-023 | Pass |
 | TC-AGT-037 | lockstep 적재 직후 `FrameDone{frame=0}` 1회, 같은 name은 재전송 없음, 다시 적재하면 재전송, free-run은 보내지 않음. (TC-AGT-013은 첫 done이 준비 신호임을 반영) | `tests/test_agent_scenario_feed.py` | IMP-AGT-023 | Pass |
+| TC-AGT-038 | MA·FA 매개변수의 NaN·inf(실행 중 SetParams, 시나리오 값)가 `range`로 거부되고 프로세스·기존 값 유지, 이어지는 정상 변경 적용 | `tests/test_agent_params.py` | IMP-AGT-024 | Pass |
+| TC-AGT-039 | 해석할 수 없는 페이로드(`sim/ctrl/cmd`, `sim/ctrl/scenario`, `sim/clock/tick`)에도 런타임이 살아 있고 이후 SetParams 처리 | `tests/test_agent_params.py` | IMP-AGT-024 | Pass |
+| TC-AGT-040 | 잘못된 임무 값(alt inf·음수·100 km, lat 200, lon NaN, 지도 밖·0/0, 속도·반경·시간 NaN, 반경 1e9, 레이스트랙 축 NaN·999, 경로 500점, 경로 NaN, 다각형 2점 등)과 빈 task_id가 REJECTED(사유). 경계값 수용, 다른 기체 대상 명령 무시, flocking 공유, 레이스트랙 leg 0은 ACCEPTED→EXECUTING | `../algorithms/tests/test_alg_validation.py` | IMP-AGT-024 | Pass |
+| TC-AGT-041 | 빈 `assignees`: 받은 기체 전원이 REJECTED("empty assignees"), 비행 계속 | `../algorithms/tests/test_alg_validation.py` | IMP-AGT-024 | Pass |
+| TC-AGT-042 | 같은 task_id 재전송은 이전 임무를 대체(취소 보고 없음, ACCEPTED 2회, 새 목적지로 비행) | `../algorithms/tests/test_alg_validation.py` | IMP-AGT-024 | Pass |
 
-시험 결과(2026-11-02): `uv run pytest` 194 passed (agent 39, algorithms 26, 그 밖 129)
+시험 결과(2026-11-02): `uv run pytest` 228 passed (agent 42, algorithms 51, 그 밖 135)
 
 ## FA 성능 측정 (IMP-AGT-010)
 

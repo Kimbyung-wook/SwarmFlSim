@@ -250,6 +250,7 @@ def test_tc_agt_025_flocking_route_rejected_hold_orbit():
     set_pos(t.hold.center, 1500, 1500)
     t.hold.radius_m, t.hold.duration_s = 600.0, 60.0
     for uav in ("uav-001", "uav-002", "uav-003"):
+        t.assignees[:] = [uav]
         send_c2(h.bus, "gcs-01", t, [uav])
     h.run_s(1.0)
     assert [s.state for s in statuses(h, "t1")] == [S.COMMAND_STATE_REJECTED]
@@ -298,8 +299,7 @@ def test_tc_agt_028_loiter_racetrack_in_route():
 
 def test_tc_agt_028_negative_leg_rejected_flocking_racetrack_hold():
     h = Harness(make_scenario(2, "flocking", spacing_m=150.0, course_deg=0.0))
-    bad = task("bad", "")
-    bad.ClearField("assignees")
+    bad = task("bad")
     bad.hold.racetrack.leg_length_m = -1.0
     send_c2(h.bus, "gcs-01", bad, [UAV])
     h.run_s(1.0)
@@ -309,6 +309,7 @@ def test_tc_agt_028_negative_leg_rejected_flocking_racetrack_hold():
     t.hold.radius_m, t.hold.duration_s = 400.0, 40.0
     t.hold.racetrack.leg_length_m, t.hold.racetrack.axis_heading_deg = 1200.0, 45.0
     for uav in ("uav-001", "uav-002"):
+        t.assignees[:] = [uav]
         send_c2(h.bus, "gcs-01", t, [uav])
     h.run_s(300.0)
     assert statuses(h, "rk")[-1].state == S.COMMAND_STATE_COMPLETED
