@@ -339,7 +339,7 @@ def test_tc_agt_013_zenoh_threaded():
             tick = sim_pb2.ClockTick(frame=f, sim_time_us=f * 20000, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
             bus.put(keys.CLOCK_TICK, tick.SerializeToString(), "")
             t0 = time.time()
-            while len(got_done) <= f and time.time() - t0 < 5:
+            while len(got_done) <= f + 1 and time.time() - t0 < 5:  # +1: 적재 직후 준비 신호 (DEC-037)
                 time.sleep(0.005)
         # 키가 다른 발행은 수신 순서가 보장되지 않으므로 ControlOutput 도착을 잠시 기다린다
         t0 = time.time()
