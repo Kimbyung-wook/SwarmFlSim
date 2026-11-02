@@ -22,6 +22,7 @@ def main() -> None:
     ap.add_argument("--connect", default="tcp/127.0.0.1:18101")
     ap.add_argument("--seconds", type=float, default=40.0)
     ap.add_argument("--out", default="")
+    ap.add_argument("--verbose", default="", help="msg_type에 이 문자열이 있는 결과를 한 줄씩 출력")
     a = ap.parse_args()
     from swarm_api import BusConfig, open_bus
     sim, truth, link, *_ = h.pb()
@@ -32,6 +33,8 @@ def main() -> None:
 
     def on(s):
         o = link.LinkOutcome.FromString(s.payload)
+        if a.verbose and a.verbose in o.msg_type:
+            print(time.strftime("%H:%M:%S"), " ".join(str(o).split()), flush=True)
         with lock:
             d = out[o.src]
             d["n"] += 1
