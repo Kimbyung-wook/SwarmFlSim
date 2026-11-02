@@ -80,6 +80,22 @@ Scenario from_proto(const v1::Scenario& msg) {
   return sc;
 }
 
+void apply_run_override(Scenario& sc, const RunOverride& o) {
+  if (o.mode == "realtime") sc.mode = v1::RUN_MODE_REALTIME;
+  else if (o.mode == "lockstep") sc.mode = v1::RUN_MODE_LOCKSTEP;
+  else if (o.mode == "freerun") sc.mode = v1::RUN_MODE_FREERUN;
+  else if (!o.mode.empty()) throw std::invalid_argument("unknown mode: " + o.mode);
+  if (!o.rate.empty()) sc.rate = std::stod(o.rate);
+  if (!o.hz.empty()) sc.frame_hz = static_cast<std::uint32_t>(std::stoul(o.hz));
+  if (!o.seed.empty()) sc.seed = std::stoull(o.seed);
+  if (!sc.source) return;
+  auto* run = sc.source->mutable_run();
+  if (!o.mode.empty()) run->set_mode(sc.mode);
+  if (!o.rate.empty()) run->set_rate(sc.rate);
+  if (!o.hz.empty()) run->set_frame_hz(sc.frame_hz);
+  if (!o.seed.empty()) run->set_seed(sc.seed);
+}
+
 v1::Scenario to_proto(const Scenario& sc) {
   if (sc.source) return *sc.source;
   v1::Scenario msg;

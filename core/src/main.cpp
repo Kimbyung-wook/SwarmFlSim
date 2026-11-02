@@ -93,6 +93,8 @@ int main(int argc, char** argv) {
 
     core::Scenario sc = scenario_file.empty() ? core::builtin_scenario(uavs)
                                               : core::read_scenario_file(scenario_file);
+    // --mode/--rate/--hz/--seed 재정의는 적재할 시나리오와 재발행하는 Scenario.run에 반영한다 (DEC-037)
+    core::apply_run_override(sc, {mode, rate, hz, seed});
     core::SimCore sim(*bus, std::move(provider), cfg);
     if (!sim.load(sc)) return 1;
 
@@ -109,13 +111,9 @@ int main(int argc, char** argv) {
       cmd.set_issuer("cli");
       auto* s = cmd.mutable_start();
       s->set_mode(sc.mode);
-      if (mode == "realtime") s->set_mode(v1::RUN_MODE_REALTIME);
-      else if (mode == "lockstep") s->set_mode(v1::RUN_MODE_LOCKSTEP);
-      else if (mode == "freerun") s->set_mode(v1::RUN_MODE_FREERUN);
-      else if (!mode.empty()) throw std::runtime_error("unknown mode: " + mode);
-      s->set_rate(rate.empty() ? sc.rate : std::stod(rate));
-      s->set_frame_hz(hz.empty() ? sc.frame_hz : static_cast<std::uint32_t>(std::stoul(hz)));
-      s->set_seed(seed.empty() ? sc.seed : std::stoull(seed));
+      s->set_rate(sc.rate);
+      s->set_frame_hz(sc.frame_hz);
+      s->set_seed(sc.seed);
       sim.submit(cmd);
     }
 

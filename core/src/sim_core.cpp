@@ -370,7 +370,14 @@ bool SimCore::poll(Clock::time_point now) {
   if (state_ != v1::SIM_RUN_STATE_RUNNING && !stepping) return false;
   if (!frame_published_) {
     // lockstep은 참여자 전원이 준비되어야 첫 틱을 낸다. 시작 후 동적 참여는 없다 (DEC-037)
-    if (mode_ == v1::RUN_MODE_LOCKSTEP && frame_ == 0 && ready_.size() < done_.size()) return false;
+    if (mode_ == v1::RUN_MODE_LOCKSTEP && frame_ == 0 && ready_.size() < done_.size()) {
+      // 준비 대기 중에도 시나리오를 1초마다 재발행해 늦게 켠 참여자가 받게 한다
+      if (now - last_params_wall_ >= std::chrono::seconds(1)) {
+        publish_scenario();
+        last_params_wall_ = now;
+      }
+      return false;
+    }
     publish_frame();
   }
   if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) return false;

@@ -36,6 +36,13 @@ Scenario parse_scenario_json(const std::string& json);
 
 Scenario from_proto(const v1::Scenario& msg);
 
+// CLI 실행 재정의. 빈 문자열은 재정의 없음. 모드가 틀리면 std::invalid_argument
+struct RunOverride {
+  std::string mode, rate, hz, seed;
+};
+// 적재할 필드와 재발행할 원본(source.run)에 같이 반영한다 (DEC-037)
+void apply_run_override(Scenario& sc, const RunOverride& o);
+
 // sim/ctrl/scenario 재발행용 (DEC-037). 원본이 있으면 그대로, 없으면 Scenario 필드에서 만든다
 v1::Scenario to_proto(const Scenario& sc);
 
