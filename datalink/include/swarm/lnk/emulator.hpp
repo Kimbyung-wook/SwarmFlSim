@@ -130,6 +130,7 @@ class Datalink {
   void on_truth(const Sample& s);
   void on_event(const Sample& s);
   void on_cmd(const Sample& s);
+  void on_scenario(const Sample& s);
 
   // 아래는 mu_를 잡은 상태에서 부른다
   void load_locked(const v1::Scenario& sc);
@@ -152,6 +153,8 @@ class Datalink {
   void log(const std::string& msg) const;
 
   void publish(std::vector<Out>& out);
+  // DEC-037: lockstep 시나리오를 적재했으면 FrameDone{frame=0} 준비 신호를 보낸다
+  void send_ready(bool lockstep);
 
   Bus& bus_;
   const dyn::Terrain* terrain_;
@@ -167,6 +170,8 @@ class Datalink {
   std::vector<Pending> pending_;
   std::vector<InFlight> in_flight_;
   std::uint64_t seed_ = 0;
+  std::string loaded_name_;  // 마지막으로 적재한 시나리오 이름. sim/ctrl/scenario 중복 판정 (DEC-037)
+  bool loaded_ = false;
   std::uint64_t now_us_ = 0;
   std::uint64_t frame_ = 0;
   std::uint64_t arrival_ = 0;

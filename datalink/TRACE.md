@@ -1,6 +1,6 @@
 # WP4 데이터링크 추적표 (LNK)
 
-- 범위: `datalink/`. Datalink Emulator (PRP-LNK-001, PRP-LNK-002, REQ-LNK-001~004, DEC-009, DEC-028~030, DEC-032). 계약 0.3.0.
+- 범위: `datalink/`. Datalink Emulator (PRP-LNK-001, PRP-LNK-002, REQ-LNK-001~004, DEC-009, DEC-028~030, DEC-032, DEC-037). 계약 0.8.0.
 - 라이브러리 `swarm_datalink_lib`, 실행 파일 `swarm_datalink`, 시험 `swarm_datalink_tests`(CTest 이름 `lnk.TC-LNK-NNN`).
 - 버스는 `swarm_bus`의 `open_bus`(DEC-026), 지형은 `swarm_dynamics`의 `FlatTerrain`/`GridTerrain`(`dyn::Terrain`).
 
@@ -30,6 +30,7 @@ flowchart LR
 - 재밍 영역 (DEC-030): `area`(원 또는 다각형 × 고도대)로 판정하고, `area`가 없을 때만 폐기 예정 `zone`(고도 무관 원)을 쓴다. 다각형은 위경도 평면 반직선 교차 판정, 고도대는 `min_alt_m ≤ alt ≤ max_alt_m`(경계 포함, `max_alt_m` 0이면 상한 없음).
 - 가시선: 두 점을 잇는 직선이 지형 + 유효 지구 반경(4/3·R) 곡률 처짐보다 위에 있어야 한다. 실행 파일 기본 지형은 평지 0 m(`--terrain-flat`), DEM 로더는 WP2 인터페이스만 있어 연결 자리만 둔다 (DEC-016).
 - 브로드캐스트(`dst` 비움): 송신자를 뺀, 같은 편(또는 편 미지정)의 무전기 엔티티(UAV·GCS·FPV 또는 `link_profile` 지정)에 각각 링크 모델을 적용한다. 닿지 않는 수신자마다 사유를 담은 `LinkOutcome`을 낸다 (DEC-032).
+- 시나리오 배포 (DEC-037): `sim/ctrl/scenario`를 구독해 `LoadScenario` 없이도 적재한다. 마지막 적재와 `name`이 같으면 무시(내용이 달라도, 1 s 재발행에 상태가 초기화되지 않도록), 다르면 다시 적재한다. lockstep(`run.mode`)이면 적재 직후 `FrameDone{frame=0}`을 보낸다. `LoadScenario`는 항상 적재하고, 이후 같은 `name`의 재발행은 무시한다. `TaskStatus` 등이 지연·지터로 뒤바뀌는 것은 현실 모사로 유지한다.
 - 고장: `LINK_CUT`은 대상의 모든 링크, `GCS_LINK_CUT`은 대상↔GCS 링크(대상이 GCS면 그 GCS의 모든 링크). `duration_s` 뒤 자동 해제, `clear`로 해제. 그 밖의 고장은 Core 담당이라 무시한다.
 - `NODE_DEAD`: 송신·수신자가 죽었거나(truth `alive`, `truth/event/kill`) 엔티티 표에 없을 때. 전송 중 수신자가 죽거나 링크 고장이 들어오면 전달 시점에 버린다.
 - `LinkState`: `--state-period`(기본 1 s)마다 같은 편 무전기 엔티티의 모든 쌍. `DOWN` = 위치 모름·사망·고장·재밍·거리 밖·가시선 없음, `DEGRADED` = SNR < 최소 SNR + 6 dB 또는 구간 손실률 ≥ 0.1, 그 밖 `UP`. `snr_db`는 두 방향 중 낮은 값, `loss_rate`는 직전 발행 이후 두 방향 합산.
@@ -52,6 +53,8 @@ flowchart LR
 | IMP-LNK-012 | 재밍 판정을 수신단 기준으로 변경(`static_check_locked`), `link/state`는 양쪽 기준 유지 | `src/emulator.cpp` | DEC-028, REQ-LNK-002 |
 | IMP-LNK-013 | `JamZoneEvent.area` 판정: 원·다각형(`in_polygon`) × 고도대(`in_jam_area`), `area` 없을 때 `zone` 대체 | `include/swarm/lnk/channel.hpp`, `src/channel.cpp`, `src/emulator.cpp` | DEC-030, DEC-009 |
 | IMP-LNK-014 | 시나리오 `link_profiles` 적용: base 선택, optional 필드 덮어쓰기(`apply_override`), `ge` 전체 대체, 재적재 시 초기화 | `include/swarm/lnk/profile.hpp`, `src/profile.cpp`, `src/emulator.cpp` | DEC-029, REQ-LNK-004 |
+| IMP-LNK-015 | `sim/ctrl/scenario` 구독(`on_scenario`): `LoadScenario` 없이 링크 프로파일·엔티티·시드 적재. `name`이 마지막 적재와 같으면 무시, 다르면 재적재 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-037, DEC-025 |
+| IMP-LNK-016 | lockstep 준비 신호 `send_ready`: 적재(`LoadScenario`·`sim/ctrl/scenario`·`load()`) 직후 `run.mode`가 LOCKSTEP이고 `participant_id`가 비어 있지 않으면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}` | `src/emulator.cpp` | DEC-037, DEC-005 |
 | IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
@@ -73,6 +76,7 @@ flowchart LR
 | TC-LNK-013 | 오목 다각형 내부·홈·외부, 고도대 경계(최소·최대 포함, 0.1 m 밖 제외, 상한 0 무제한), 원 `zone` 고도 무관. 버스: 다각형×고도대 안 JAMMED, 대역 위·아래 전달, `area`가 `zone`보다 우선, `area` 없으면 `zone` | `tests/test_datalink.cpp` | IMP-LNK-013 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-014 | `apply_override`(설정 필드·명시 0 덮어쓰기, 미설정 유지, `ge` 네 값 대체). 버스(LoadScenario): base 지정 max_range 5 km(송·수신 모두), base 비움 같은 이름 재정의 지연 40 ms, 앞 항목 base 연쇄(지연 100 ms + max_range 상속), 모르는 base 기록, 재적재 시 재정의 제거 | `tests/test_datalink.cpp` | IMP-LNK-014 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-015 | 브로드캐스트 1건: 같은 편 수신자마다 outcome 하나(전달·OUT_OF_RANGE·NODE_DEAD·JAMMED), 다른 편 없음, rx는 닿은 수신자만 | `tests/test_datalink.cpp` | IMP-LNK-008, DEC-032 | 통과 (msvc-debug, 2026-11-02) |
+| TC-LNK-016 | `sim/ctrl/scenario`만으로 적재(시드·엔티티), lockstep 준비 신호 1건(`datalink-0`, frame 0), 같은 name 재발행(내용이 달라도) 무시, 다른 name 재적재·재신호, `LoadScenario` 후 같은 name 무시, 실시간은 신호 없음, 빈 participant는 신호 없음, 시나리오 프로파일 지연 100 ms 반영 | `tests/test_datalink.cpp` | IMP-LNK-015, IMP-LNK-016 | 통과 (msvc-debug, 2026-11-02) |
 
 ## 제약과 다음 단계
 
