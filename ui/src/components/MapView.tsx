@@ -1,14 +1,19 @@
 // IMP-UI-016: 지도 뷰. Viewer 생성, 렌더 루프에서 엔티티 갱신, 클릭·드래그 박스 선택 입력 (REQ-UI-001, REQ-UI-002)
 // IMP-UI-032: 우클릭(끌지 않음) 지점을 MoveTo 목적지로 넘기고 잠시 표시한다 (REQ-UI-003)
+// IMP-UI-037: 우클릭 → 임무 메뉴, Ctrl+우클릭 → 항로점 추가, 항로점 손잡이 왼쪽 끌기 → 위치 변경 (DEC-033)
 import { useEffect, useRef, useState } from "react";
 import type { Viewer } from "cesium";
-import { Cartesian2, Cartesian3, Cartographic, Color, Math as CesiumMath, SceneMode } from "cesium";
+import { Cartesian2, Cartographic, Math as CesiumMath, SceneMode } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { EntityLayer } from "../cesium/entityLayer";
+import { MissionLayer } from "../cesium/missionLayer";
 import type { MapDataStatus } from "../cesium/viewer";
 import { createViewer } from "../cesium/viewer";
 import type { CameraMode } from "../model/camera";
 import type { LiveState } from "../model/liveState";
+import type { MapPoint, RightClick } from "../model/mapInput";
+import { classifyRightClick, pickHandle } from "../model/mapInput";
+import type { Overlay } from "../model/missionOverlay";
 import type { Rect, SelectMode } from "../model/selection";
 import { isDrag, modeFromModifiers, normalizeRect, pickAt, pickInRect } from "../model/selection";
 
@@ -27,39 +32,45 @@ interface Props {
   cameraMode: CameraMode;
   followId: string | null;
   onReady(api: MapApi, status: MapDataStatus): void;
-  /** 우클릭 지점 (위경도 deg) */
-  onCommandPoint?(latDeg: number, lonDeg: number): void;
+  /** 명령 대상 기체가 있는지 (우클릭 임무 메뉴 조건) */
+  hasTargets: boolean;
+  /** 우클릭(끌지 않음) 판정 결과 */
+  onRightClick(rc: RightClick): void;
+  /** 임무 도형 (편집 중 항로·메뉴 지점·보낸 임무) */
+  overlay: Overlay;
+  /** 항로점 손잡이를 끄는 중. done이면 놓았다 */
+  onWaypointDrag(index: number, point: MapPoint, done: boolean): void;
 }
 
-const MARKER_MS = 2500;
-
 /** 화면 좌표 → 지면(지형이 있으면 지형, 없으면 타원체) 위경도 */
-function pickGround(viewer: Viewer, x: number, y: number): { lat: number; lon: number } | null {
+function pickGround(viewer: Viewer, x: number, y: number): MapPoint | null {
   const scene = viewer.scene;
   const ray = viewer.camera.getPickRay(new Cartesian2(x, y));
   const p = (ray && scene.mode === SceneMode.SCENE3D ? scene.globe.pick(ray, scene) : undefined) ??
     viewer.camera.pickEllipsoid(new Cartesian2(x, y), scene.globe.ellipsoid);
   if (!p) return null;
   const c = Cartographic.fromCartesian(p);
-  return { lat: CesiumMath.toDegrees(c.latitude), lon: CesiumMath.toDegrees(c.longitude) };
+  return { latDeg: CesiumMath.toDegrees(c.latitude), lonDeg: CesiumMath.toDegrees(c.longitude), heightM: Math.max(0, c.height) };
 }
 
 const MORPH_S = 0.8;
 
-export function MapView({ live, selection, onSelect, viewMode, cameraMode, followId, onReady, onCommandPoint }: Props) {
+export function MapView(props: Props) {
+  const { live, selection, onSelect, viewMode, cameraMode, followId, onReady, overlay } = props;
   const host = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const layerRef = useRef<EntityLayer | null>(null);
+  const missionRef = useRef<MissionLayer | null>(null);
   const follow = useRef({ id: followId, mode: cameraMode });
   const onSelectRef = useRef(onSelect);
   const onReadyRef = useRef(onReady);
-  const onPointRef = useRef(onCommandPoint);
+  const propsRef = useRef(props);
   const [box, setBox] = useState<Rect | null>(null);
 
   follow.current = { id: followId, mode: cameraMode };
   onSelectRef.current = onSelect;
   onReadyRef.current = onReady;
-  onPointRef.current = onCommandPoint;
+  propsRef.current = props;
 
   useEffect(() => {
     let disposed = false;
@@ -73,6 +84,9 @@ export function MapView({ live, selection, onSelect, viewMode, cameraMode, follo
       viewerRef.current = viewer;
       const layer = new EntityLayer(viewer.scene);
       layerRef.current = layer;
+      const missions = new MissionLayer(viewer);
+      missionRef.current = missions;
+      missions.set(propsRef.current.overlay);
       let seen = -1;
       let fitted = false;
       const onPreRender = () => {
@@ -98,14 +112,8 @@ export function MapView({ live, selection, onSelect, viewMode, cameraMode, follo
         const r = canvas.getBoundingClientRect();
         return { x: ev.clientX - r.left, y: ev.clientY - r.top };
       };
-      // 오른쪽 버튼: 끌면 카메라(viewer.ts), 끌지 않으면 명령 지점
+      // 오른쪽 버튼: 끌면 카메라(viewer.ts), 끌지 않으면 임무 메뉴 또는 (Ctrl) 항로점
       let rstart: { x: number; y: number } | null = null;
-      let markerTimer: ReturnType<typeof setTimeout> | null = null;
-      const marker = viewer.entities.add({
-        show: false,
-        position: Cartesian3.ZERO,
-        point: { pixelSize: 12, color: Color.YELLOW.withAlpha(0.2), outlineColor: Color.YELLOW, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
-      });
       const noMenu = (ev: Event) => ev.preventDefault();
       const rdown = (ev: PointerEvent) => {
         if (ev.button === 2) rstart = pos(ev);
@@ -115,31 +123,53 @@ export function MapView({ live, selection, onSelect, viewMode, cameraMode, follo
         const p = pos(ev);
         const r = { x0: rstart.x, y0: rstart.y, x1: p.x, y1: p.y };
         rstart = null;
-        if (isDrag(r) || !onPointRef.current) return;
-        const g = pickGround(viewer, p.x, p.y);
-        if (!g) return;
-        onPointRef.current(g.lat, g.lon);
-        marker.position = Cartesian3.fromDegrees(g.lon, g.lat, 0) as never;
-        marker.show = true;
-        if (markerTimer) clearTimeout(markerTimer);
-        markerTimer = setTimeout(() => (marker.show = false), MARKER_MS);
+        const point = isDrag(r) ? null : pickGround(viewer, p.x, p.y);
+        const entityId = point ? pickAt(layer.project(), p.x, p.y) : null;
+        const rc = classifyRightClick(r, ev, point, { hasTargets: propsRef.current.hasTargets, entityId });
+        if (rc.kind !== "none") propsRef.current.onRightClick(rc);
       };
       canvas.addEventListener("contextmenu", noMenu);
       canvas.addEventListener("pointerdown", rdown);
       window.addEventListener("pointerup", rup);
 
+      // 항로점 손잡이 끌기. 끄는 동안 카메라 입력을 끈다
+      let dragging: number | null = null;
+      const camera = viewer.scene.screenSpaceCameraController;
+      const dragTo = (ev: PointerEvent, done: boolean) => {
+        const p = pos(ev);
+        const g = pickGround(viewer, p.x, p.y);
+        if (g && dragging !== null) propsRef.current.onWaypointDrag(dragging, g, done);
+      };
+
       const down = (ev: PointerEvent) => {
         if (ev.button !== 0) return;
-        start = pos(ev);
+        const p0 = pos(ev);
+        const h = pickHandle(missions.projectHandles(), p0.x, p0.y);
+        if (h !== null) {
+          dragging = h;
+          camera.enableInputs = false;
+          return;
+        }
+        start = p0;
         rect = { x0: start.x, y0: start.y, x1: start.x, y1: start.y };
       };
       const move = (ev: PointerEvent) => {
+        if (dragging !== null) {
+          dragTo(ev, false);
+          return;
+        }
         if (!start || !rect) return;
         const p = pos(ev);
         rect = { ...rect, x1: p.x, y1: p.y };
         setBox(isDrag(rect) ? normalizeRect(rect) : null);
       };
       const up = (ev: PointerEvent) => {
+        if (ev.button === 0 && dragging !== null) {
+          dragTo(ev, true);
+          dragging = null;
+          camera.enableInputs = true;
+          return;
+        }
         if (ev.button !== 0 || !start || !rect) return;
         const p = pos(ev);
         rect = { ...rect, x1: p.x, y1: p.y };
@@ -167,10 +197,11 @@ export function MapView({ live, selection, onSelect, viewMode, cameraMode, follo
         canvas.removeEventListener("contextmenu", noMenu);
         canvas.removeEventListener("pointerdown", rdown);
         window.removeEventListener("pointerup", rup);
-        if (markerTimer) clearTimeout(markerTimer);
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         viewer.scene.preRender.removeEventListener(onPreRender);
+        missions.destroy();
+        missionRef.current = null;
         layer.destroy();
         viewer.destroy();
         viewerRef.current = null;
@@ -186,6 +217,10 @@ export function MapView({ live, selection, onSelect, viewMode, cameraMode, follo
   useEffect(() => {
     layerRef.current?.setSelection(new Set(selection));
   }, [selection]);
+
+  useEffect(() => {
+    missionRef.current?.set(overlay);
+  }, [overlay]);
 
   useEffect(() => {
     const v = viewerRef.current;

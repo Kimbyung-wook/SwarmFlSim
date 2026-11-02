@@ -4,7 +4,7 @@ import { fromBinary } from "@bufbuild/protobuf";
 import { TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
 import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
-import type { OutgoingC2 } from "./commands";
+import type { MissionSpec, OutgoingC2 } from "./commands";
 
 export interface ReportView {
   state: CommandState;
@@ -22,6 +22,8 @@ export interface TaskEntry {
   /** 전송 실패 사유. 성공이면 비어 있다 */
   error: string;
   reports: Map<string, ReportView>;
+  /** 지도 임무면 그 내용 (IMP-UI-038) */
+  mission?: MissionSpec;
 }
 
 export interface RxView {
@@ -42,6 +44,8 @@ const STATE_LABEL: Record<CommandState, string> = {
   [CommandState.CANCELLED]: "취소",
 };
 
+const TERMINAL = new Set([CommandState.COMPLETED, CommandState.CANCELLED, CommandState.FAILED, CommandState.REJECTED]);
+
 export function commandStateLabel(s: CommandState): string {
   return STATE_LABEL[s] ?? "?";
 }
@@ -60,7 +64,15 @@ export class TaskLog {
   sent(out: OutgoingC2, error = ""): TaskEntry {
     // TaskCommand는 task_id, 그 밖(편대·그룹)은 메시지 이름#seq로 구분한다
     const id = out.taskId ?? `${out.key.slice(out.key.lastIndexOf("/") + 1)}#${out.envelope.header?.seq ?? 0}`;
-    const e: TaskEntry = { id, summary: out.summary, assignees: out.assignees, sentAt: Date.now(), error, reports: new Map() };
+    const e: TaskEntry = {
+      id,
+      summary: out.summary,
+      assignees: out.assignees,
+      sentAt: Date.now(),
+      error,
+      reports: new Map(),
+      mission: out.mission,
+    };
     this.tasks.delete(id);
     this.tasks.set(id, e);
     while (this.tasks.size > this.maxTasks) this.tasks.delete(this.tasks.keys().next().value!);
@@ -94,6 +106,24 @@ export class TaskLog {
   /** 최근 것이 먼저 */
   list(): TaskEntry[] {
     return [...this.tasks.values()].reverse();
+  }
+
+  /**
+   * 지도에 그릴 임무: 기체마다 가장 최근 지도 임무이고, 전송에 성공했고, 모든 대상 기체가 끝난 상태가 아닌 것.
+   * 같은 task_id로 다시 보내면 기록이 새로 시작된다.
+   */
+  activeMissions(): TaskEntry[] {
+    const latest = new Map<string, TaskEntry>();
+    for (const e of this.tasks.values()) {
+      if (!e.mission || e.error) continue;
+      for (const a of e.assignees) latest.set(a, e);
+    }
+    const out = new Set<TaskEntry>();
+    for (const e of latest.values()) {
+      const done = e.assignees.length > 0 && e.assignees.every((id) => { const r = e.reports.get(id); return r !== undefined && TERMINAL.has(r.state); });
+      if (!done) out.add(e);
+    }
+    return [...out];
   }
 
   get(id: string): TaskEntry | undefined {

@@ -1,11 +1,16 @@
 // IMP-UI-009: 목 시나리오. 시각 t에서 TruthFrame을 해석적으로 만든다 (결정론적, REQ-UI-001)
+// IMP-UI-041: TaskCommand를 받은 기체는 그때부터 유도 비행(mockGuidance)으로 바뀐다. 시각을 되돌리면 해석 궤도로 돌아간다.
 // 청군 UAV 4개 편대×6대가 선회하고, 적 지상표적·공중표적·재밍기지와 GCS가 있다. 좌표는 충청 내륙.
 import { create } from "@bufbuild/protobuf";
 import type { EntityState } from "../gen/swarm/v1/entity_pb";
 import { EntityKind, EntityStateSchema, Side } from "../gen/swarm/v1/entity_pb";
 import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
 import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
+import type { TaskCommand } from "../gen/swarm/v1/c2_pb";
+import { HoldTaskSchema } from "../gen/swarm/v1/c2_pb";
 import { DEG, eulerToQuat, flightPathAngle } from "../model/attitude";
+import type { GuideEvent, Ned2, PlanContext } from "./mockGuidance";
+import { Guided, planFor } from "./mockGuidance";
 
 const R_EARTH = 6378137;
 const G = 9.80665;
@@ -31,6 +36,16 @@ interface Actor {
   side: Side;
   at(t: number): Sample;
 }
+
+export function geodeticToNed(g: { latDeg: number; lonDeg: number }): Ned2 {
+  const lat0 = MOCK_ORIGIN.lat * DEG;
+  return {
+    n: (g.latDeg - MOCK_ORIGIN.lat) * DEG * R_EARTH,
+    e: (g.lonDeg - MOCK_ORIGIN.lon) * DEG * R_EARTH * Math.cos(lat0),
+  };
+}
+
+const GUIDE_STEP_S = 0.1;
 
 function nedToGeodetic(p: Ned) {
   const lat0 = MOCK_ORIGIN.lat * DEG;
@@ -93,8 +108,16 @@ export interface MockScenarioOptions {
   perFlight: number;    // 편대당 기체 수
 }
 
+export interface GuideReport extends GuideEvent {
+  entityId: string;
+}
+
 export class MockScenario {
   readonly actors: Actor[] = [];
+  /** 명령을 받아 유도 비행 중인 기체 */
+  private readonly guided = new Map<string, Guided>();
+  private guidedT = 0;
+  private readonly pending: GuideReport[] = [];
 
   constructor(opts: MockScenarioOptions = { flights: 4, perFlight: 6 }) {
     this.actors.push({ id: "gcs-01", kind: EntityKind.GCS, side: Side.BLUE, at: stationary(-6000, -8000, 80) });
@@ -137,8 +160,93 @@ export class MockScenario {
     });
   }
 
+  /** 시각 t의 위치 (유도 중이면 유도 상태) */
+  private sample(a: Actor, t: number): Sample {
+    const g = this.guided.get(a.id);
+    if (!g) return a.at(t);
+    const s = g.state;
+    return {
+      pos: { n: s.n, e: s.e, d: -s.alt },
+      vel: { n: s.speed * Math.cos(s.heading), e: s.speed * Math.sin(s.heading), d: s.vd },
+      roll: s.roll,
+    };
+  }
+
+  private context(t: number): PlanContext {
+    const gcs = this.actors.find((a) => a.kind === EntityKind.GCS);
+    const home = gcs ? gcs.at(t).pos : { n: 0, e: 0 };
+    return {
+      toNed: geodeticToNed,
+      entityNed: (id) => {
+        const a = this.actors.find((x) => x.id === id);
+        if (!a) return null;
+        const p = this.sample(a, this.guidedT).pos;
+        return { n: p.n, e: p.e };
+      },
+      home: { n: home.n, e: home.e },
+    };
+  }
+
+  /**
+   * 시각 t에 받은 TaskCommand. 대상 UAV를 유도 비행으로 바꾼다.
+   * 취소면 그 임무를 하던 기체를 그 자리 선회로 바꾼다. 다룰 수 없는 임무를 받은 기체 ID를 돌려준다.
+   */
+  command(cmd: TaskCommand, t: number): string[] {
+    this.advanceTo(t);
+    const rejected: string[] = [];
+    const ctx = this.context(t);
+    cmd.assignees.forEach((id, k) => {
+      const a = this.actors.find((x) => x.id === id && x.kind === EntityKind.UAV);
+      if (!a) return void rejected.push(id);
+      const prev = this.guided.get(id);
+      const s = this.sample(a, t);
+      const state = prev?.state ?? {
+        n: s.pos.n, e: s.pos.e, alt: -s.pos.d,
+        heading: Math.atan2(s.vel.e, s.vel.n), speed: Math.hypot(s.vel.n, s.vel.e), vd: s.vel.d, roll: s.roll,
+      };
+      const cruise = prev?.cruise ?? Math.max(20, state.speed);
+      if (cmd.cancel) {
+        if (prev && prev.plan.taskId === cmd.taskId) {
+          const hold = planFor({ ...cmd, task: { case: "hold", value: create(HoldTaskSchema, {}) } }, 0, state, ctx);
+          if (hold) this.guided.set(id, new Guided(state, hold, cruise));
+        }
+        return;
+      }
+      const plan = planFor(cmd, k, state, ctx);
+      if (!plan) return void rejected.push(id);
+      this.guided.set(id, new Guided(state, plan, cruise));
+    });
+    return rejected;
+  }
+
+  /** 유도 기체를 t까지 진행한다. t가 과거면 유도를 모두 풀어 해석 궤도로 돌아간다 */
+  private advanceTo(t: number): void {
+    if (t < this.guidedT) {
+      this.guided.clear();
+      this.pending.length = 0;
+    }
+    if (this.guided.size === 0) {
+      this.guidedT = t;
+      return;
+    }
+    while (this.guidedT < t - 1e-9) {
+      const dt = Math.min(GUIDE_STEP_S, t - this.guidedT);
+      this.guidedT += dt;
+      for (const [id, g] of this.guided) for (const ev of g.step(dt)) this.pending.push({ ...ev, entityId: id });
+    }
+  }
+
+  /** 지난 호출 뒤 생긴 진행 보고 */
+  takeReports(): GuideReport[] {
+    return this.pending.splice(0);
+  }
+
+  isGuided(id: string): boolean {
+    return this.guided.has(id);
+  }
+
   entityAt(a: Actor, t: number): EntityState {
-    const s = a.at(t);
+    const s = this.sample(a, t);
     const yaw = Math.atan2(s.vel.e, s.vel.n);
     const moving = Math.hypot(s.vel.n, s.vel.e) > 0.01;
     return create(EntityStateSchema, {
@@ -163,6 +271,7 @@ export class MockScenario {
   frameAt(frame: bigint, frameHz: number): TruthFrame {
     const simTimeUs = (frame * 1_000_000n) / BigInt(frameHz);
     const t = Number(simTimeUs) / 1e6;
+    this.advanceTo(t);
     return create(TruthFrameSchema, {
       header: { simTimeUs, frame, source: MOCK_SOURCE_ID, seq: Number(frame & 0xffffffffn) },
       entities: this.actors.map((a) => this.entityAt(a, t)),
