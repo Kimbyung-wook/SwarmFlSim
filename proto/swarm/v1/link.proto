@@ -71,3 +71,30 @@ message LinkState {
   bool los = 7;
   bool jammed = 8;
 }
+
+// 링크 프로파일 (DEC-029). EntitySpec.link_profile이 name으로 참조한다.
+// base 프로파일(비우면 같은 이름의 내장 프로파일, 없으면 default)을 복사한 뒤 값이 있는 필드만 덮어쓴다
+message GilbertElliottParams {
+  double p_gb = 1;       // Good → Bad
+  double p_bg = 2;       // Bad → Good
+  double loss_good = 3;
+  double loss_bad = 4;
+}
+
+message LinkProfile {
+  string name = 1;
+  string base = 2;
+  optional double freq_mhz = 3;
+  optional double tx_power_dbm = 4;
+  optional double antenna_gain_dbi = 5;
+  optional double noise_floor_dbm = 6;
+  optional double snr_min_db = 7;        // 이보다 낮으면 OUT_OF_RANGE
+  optional double max_range_m = 8;       // 0이면 SNR로만 판정
+  optional bool unlimited_range = 9;
+  optional double latency_ms = 10;
+  optional double jitter_ms = 11;        // 정규 지터 표준편차
+  optional double bandwidth_bps = 12;    // 0이면 무제한
+  optional double bucket_bytes = 13;
+  optional uint32 queue_len = 14;        // 0이면 무제한
+  GilbertElliottParams ge = 15;          // 있으면 네 값 모두 덮어쓴다
+}

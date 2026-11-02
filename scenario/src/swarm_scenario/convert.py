@@ -13,7 +13,7 @@ from typing import Any
 from google.protobuf import json_format
 from google.protobuf.message import Message
 
-from swarm.v1 import common_pb2, entity_pb2, mp_pb2, sim_pb2
+from swarm.v1 import common_pb2, entity_pb2, link_pb2, mp_pb2, sim_pb2
 
 from .enums import from_proto_json, full_to_short, short_to_full, to_proto_json
 from .validate import check
@@ -41,6 +41,7 @@ class Scenario:
     participants: list[str] = field(default_factory=list)
     mission_plan: mp_pb2.MissionPlan | None = None
     engagement_criteria: mp_pb2.EngagementCriteria | None = None
+    link_profiles: list[link_pb2.LinkProfile] = field(default_factory=list)  # DEC-029
 
     def entity(self, entity_id: str) -> entity_pb2.EntitySpec:
         return next(e for e in self.entities if e.id == entity_id)
@@ -81,6 +82,7 @@ def from_dict(doc: dict[str, Any]) -> Scenario:
         mission_plan=_parse(doc["mission_plan"], mp_pb2.MissionPlan()) if "mission_plan" in doc else None,
         engagement_criteria=(_parse(doc["engagement_criteria"], mp_pb2.EngagementCriteria())
                              if "engagement_criteria" in doc else None),
+        link_profiles=[_parse(p, link_pb2.LinkProfile()) for p in doc.get("link_profiles", [])],
     )
 
 
@@ -106,6 +108,8 @@ def to_dict(sc: Scenario) -> dict[str, Any]:
         doc["mission_plan"] = _dump(sc.mission_plan)
     if sc.engagement_criteria is not None:
         doc["engagement_criteria"] = _dump(sc.engagement_criteria)
+    if sc.link_profiles:
+        doc["link_profiles"] = [_dump(p) for p in sc.link_profiles]
     check(doc)
     return doc
 
@@ -129,6 +133,7 @@ def to_proto(sc: Scenario) -> sim_pb2.Scenario:
             participants=sc.participants,
         ),
         entities=sc.entities,
+        link_profiles=sc.link_profiles,
     )
     if sc.mission_plan is not None:
         msg.mission_plan.CopyFrom(sc.mission_plan)
@@ -151,6 +156,7 @@ def from_proto(msg: sim_pb2.Scenario) -> Scenario:
         entities=list(msg.entities),
         mission_plan=msg.mission_plan if msg.HasField("mission_plan") else None,
         engagement_criteria=msg.engagement_criteria if msg.HasField("engagement_criteria") else None,
+        link_profiles=list(msg.link_profiles),
     )
 
 

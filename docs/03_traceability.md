@@ -18,45 +18,45 @@
 | REQ | PRP | DEC | WP | IMP | TC | 검증 상태 |
 |---|---|---|---|---|---|---|
 | REQ-UI-001 | PRP-UI-001 | DEC-003, DEC-004 | WP5 | IMP-UI-003~005, 008~010, 012, 014~016, 018~019 | TC-UI-001~003, 005~006, 008~009 | 구현중 |
-| REQ-UI-002 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-006, 016~017, 019 | TC-UI-004, 009 | 구현중 |
-| REQ-UI-003 | PRP-UI-001 | DEC-014 | WP5 | | | - |
-| REQ-UI-004 | PRP-UI-001, PRP-BHV-001 | DEC-008 | WP5, WP3 | | | - |
-| REQ-UI-005 | PRP-UI-002, PRP-LNK-002 | DEC-011 | WP6, WP4 | | | - |
-| REQ-UI-006 | PRP-UI-001, PRP-NET-002 | DEC-020 | WP5 | | | - |
+| REQ-UI-002 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-006, 016~017, 019, 025~026, 031, 034 | TC-UI-004, 009, 018~019 | 구현중 |
+| REQ-UI-003 | PRP-UI-001 | DEC-014 | WP5 | IMP-UI-025, 027~032, 034 | TC-UI-008, 018~019 | 구현중 |
+| REQ-UI-004 | PRP-UI-001, PRP-BHV-001 | DEC-008 | WP5, WP3 | IMP-UI-025, 027, 031, 034 | TC-UI-018~019 | 구현중 |
+| REQ-UI-005 | PRP-UI-002, PRP-LNK-002 | DEC-011 | WP6, WP4 | IMP-MON-001~022, IMP-LNK-008~009 | TC-MON-001~010, TC-LNK-001, 004~006, 008~011 | 구현중 |
+| REQ-UI-006 | PRP-UI-001, PRP-NET-002 | DEC-020 | WP5 | IMP-UI-021~022, 024, 034, IMP-MON-003 | TC-UI-011~017, 019, TC-MON-002 | 구현중 |
 | REQ-UI-007 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-003, 007, 014, 017 | TC-UI-001, 007, 009 | 구현중 |
-| REQ-DYN-001 | PRP-DYN-001 | DEC-007 | WP2 | IMP-CORE-004, IMP-DYN-001~002, 006 | TC-CORE-005, 007~008, TC-DYN-001~003, 009, 011~012 | 구현중 |
+| REQ-DYN-001 | PRP-DYN-001 | DEC-007 | WP2 | IMP-CORE-004, 008, IMP-DYN-001~002, 006 | TC-CORE-005, 007~008, 013, 017, TC-DYN-001~003, 009, 011~012 | 구현중 |
 | REQ-DYN-002 | PRP-DYN-001 | DEC-007 | WP2 | IMP-DYN-001~002, 007 | TC-DYN-001~003, 009, 011, 013 | 구현중 |
 | REQ-DYN-003 | PRP-DYN-002, PRP-SIM-002 | DEC-005 | WP1, WP2 | IMP-API-006, IMP-CORE-002, IMP-DYN-004 | TC-CORE-001~006, 009~010, TC-DYN-001, 005~008 | 검증완료 |
-| REQ-DYN-004 | PRP-DYN-002 | DEC-005 | WP2 | IMP-API-006, IMP-DYN-003~004, 006 | TC-DYN-001, 004~008, 012 | 검증완료 |
+| REQ-DYN-004 | PRP-DYN-002 | DEC-005 | WP2 | IMP-API-006, IMP-CORE-008, IMP-DYN-003~004, 006 | TC-CORE-013, 017, TC-DYN-001, 004~008, 012 | 검증완료 |
 | REQ-DYN-005 | PRP-DYN-003 | DEC-012 | WP2, WP8 | | | - |
 | REQ-GNC-001 | PRP-GNC-001, PRP-BHV-001 | DEC-013 | WP3 | | | - |
 | REQ-BHV-001 | PRP-BHV-001, PRP-SIM-003 | DEC-008, DEC-013 | WP3 | | | - |
 | REQ-BHV-002 | PRP-BHV-001, PRP-BHV-003 | DEC-013 | WP3 | | | - |
 | REQ-BHV-003 | PRP-BHV-001, PRP-BHV-003 | DEC-008 | WP3 | | | - |
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001 | WP3 | IMP-API-005 |  | 구현중 |
-| REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LOG-005, 007, IMP-UI-001, 011 | TC-API-001~005, TC-CORE-012, TC-UI-002, 008 | 구현중 |
-| REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP10 | IMP-CORE-003, IMP-SCN-005 | TC-CORE-002, 007, TC-SCN-001 | 구현중 |
+| REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022 | TC-API-001~005, TC-CORE-012, TC-UI-002, 008, 010~016 | 구현중 |
+| REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001 | 구현중 |
 | REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006 | WP10 | | | - |
-| REQ-LNK-001 | PRP-LNK-001 | DEC-002 | WP4 | | | - |
-| REQ-LNK-002 | PRP-LNK-001 | DEC-009 | WP4 | | | - |
-| REQ-LNK-003 | PRP-LNK-001 | DEC-009 | WP4 | | | - |
-| REQ-LNK-004 | PRP-LNK-001, PRP-LNK-002 | DEC-008 | WP4 | | | - |
-| REQ-CFG-001 | PRP-CFG-001 |  | WP5, WP7 | IMP-API-008, IMP-CORE-006~007, IMP-SCN-001, 003, 006 | TC-CORE-009, 011~012, TC-SCN-001~002, 004~008 | 구현중 |
+| REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032 | WP4 | IMP-LNK-001~006, 008, 011 | TC-LNK-001~002, 004~006, 008~009, 011 | 구현중 |
+| REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030 | WP4 | IMP-CORE-011, IMP-LNK-007, 010 | TC-CORE-016, TC-LNK-003, 007 | 구현중 |
+| REQ-LNK-003 | PRP-LNK-001 | DEC-009 | WP4 | IMP-CORE-011, IMP-LNK-010 | TC-CORE-016, TC-LNK-007 | 구현중 |
+| REQ-LNK-004 | PRP-LNK-001, PRP-LNK-002 | DEC-008 | WP4 | IMP-LNK-001, 008 | TC-LNK-001, 004~006, 008~009, 011 | 구현중 |
+| REQ-CFG-001 | PRP-CFG-001 | DEC-029 | WP5, WP7 | IMP-API-008~009, IMP-CORE-006~007, IMP-SCN-001, 003, 006~007 | TC-CORE-009, 011~012, TC-SCN-001~002, 004~009 | 구현중 |
 | REQ-CFG-002 | PRP-CFG-001 |  | WP7 | IMP-SCN-001~004 | TC-SCN-001~007 | 구현중 |
 | REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | | WP8 | | | - |
 | REQ-PAY-002 | PRP-PAY-001 | DEC-018 | WP8 | | | - |
 | REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009 | WP8, WP4 | | | - |
 | REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012 | WP8 | | | - |
 | REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | | | - |
-| REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | | | - |
+| REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005 | WP1 | IMP-CORE-002, 007, IMP-SCN-006 | TC-CORE-001~006, 009~010, 012, TC-SCN-008 | 검증완료 |
-| REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016 | WP5, WP2 | IMP-DYN-005, IMP-SCN-002, 005, IMP-UI-002, 013 | TC-DYN-008, 010, TC-SCN-001~003, TC-UI-009 | 구현중 |
-| REQ-LOG-001 | PRP-LOG-001 | DEC-011 | WP7 | IMP-LOG-001~005 | TC-LOG-001~006 | 검증완료 |
+| REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016 | WP5, WP2 | IMP-CORE-009, IMP-DYN-005, IMP-SCN-002, 005, IMP-UI-002, 013 | TC-CORE-014, TC-DYN-008, 010, TC-SCN-001~003, TC-UI-009 | 구현중 |
+| REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008 | TC-LOG-001~007 | 검증완료 |
 | REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014 | WP0, WP9 | IMP-API-002, 005 |  | 구현중 |
 
 ## 구현·시험 항목
 
-- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `ui/`, `scenario/`, `logger/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
+- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
 - `검증완료`는 그 REQ의 범위를 구현했고 연결된 TC가 모두 통과한 경우다. 일부만 구현했으면 TC가 통과해도 `구현중`으로 둔다.
 - 아래 표는 WP0(`API`) 항목이다.
 
@@ -70,6 +70,7 @@
 | IMP-API-006 | Core ⇄ 동역학 인터페이스. 0.2.0: `to_kinematic`에 `Environment` | `api/cpp/include/swarm/api/dynamics.hpp` | PRP-DYN-002, DEC-005, DEC-023 |
 | IMP-API-007 | 공용 버스 라이브러리 `swarm_bus`(InMemory, Zenoh, `open_bus`, 공통 명령행 옵션)와 Python `open_bus` | `bus/`, `api/python/src/swarm_api/bus.py` | PRP-NET-001, DEC-026 |
 | IMP-API-008 | 계약 0.2.0: `Scenario`·`MapSpec`·`RunSpec` 메시지, `LoadScenario.scenario` | `proto/swarm/v1/sim.proto` | DEC-024, DEC-025 |
+| IMP-API-009 | 계약 0.3.0: `LinkProfile`·`Scenario.link_profiles`, `JamZoneEvent.area`, `SimStatus.replay`, 데이터링크 판정 규칙 | `proto/swarm/v1/{link,sim,truth}.proto`, `docs/10_contracts.md` §3.3 | DEC-028~032 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |

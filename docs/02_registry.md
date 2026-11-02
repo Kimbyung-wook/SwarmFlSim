@@ -101,6 +101,11 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-025 | lockstep 참여자 목록은 `RunSpec.participants`에 둔다. 동적 참여자 등록은 2차에 검토한다 | OPN-024, WP1 계약 변경 요청 | Confirmed |
 | DEC-026 | 버스 구현(InMemory, Zenoh)을 공용 라이브러리 `bus/`(WP0 소유)로 두고 `open_bus(BusConfig)`로 생성한다. Python은 `swarm_api.open_bus` | OPN-025, WP7 계약 변경 요청 | Confirmed |
 | DEC-027 | 브라우저(UI, Traffic Monitor)는 Zenoh에 직접 붙지 않고 WebSocket 브리지로만 연동한다. 브리지는 Python, `bridge/`, WP5 담당. 발행 허용 키 제한과 클라이언트별 전송 주기 제한을 브리지에서 한다 | OPN-026, 사용자: "일관성을 위해서 WebSocket 브리지로만 연동" | Confirmed |
+| DEC-028 | 재밍 판정은 수신단 기준이다. 메시지의 수신 엔티티가 재밍 영역 안이면 손실(JAMMED). 링크 상태(`link/state`)는 양쪽 중 하나라도 영역 안이면 jammed로 표시한다. DEC-009를 구체화한다 | OPN-027, DEC-009, 제안서 §4, 사용자: "권고대로 진행" | Confirmed |
+| DEC-029 | 링크 프로파일을 시나리오 `link_profiles`(proto `LinkProfile`)로 추가·재정의한다. base 프로파일을 복사한 뒤 값이 있는 필드만 덮어쓴다. `EntitySpec.link_profile`이 이름으로 참조한다 | OPN-028, WP4 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
+| DEC-030 | 재밍 영역은 `JamZoneEvent.area`(원 또는 다각형 × 고도대)로 정의한다. `zone`(원)은 폐기 예정. 주파수대는 링크 모델에 주파수 선택이 들어갈 때 다시 검토한다 | OPN-029, WP4 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
+| DEC-031 | 재생 여부는 `SimStatus.replay`로 알린다. MCAP 재생기가 `sim/ctrl/status`를 다시 발행할 때 true로 채운다 | OPN-030, WP6 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
+| DEC-032 | 브로드캐스트는 같은 편 무전기 엔티티 전원을 수신 대상으로 보고, 닿지 않는 수신자마다 손실 사유(OUT_OF_RANGE 등)를 담은 `LinkOutcome`을 낸다. 손실률은 이 기준으로 집계하고, 거리 밖 제외는 모니터 필터로 한다 | OPN-031, WP6 질의, 사용자: "권고대로 진행" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -132,6 +137,14 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-024 | lockstep 참여자 목록의 위치 | Resolved by DEC-025 |
 | OPN-025 | 프로세스 간 버스 생성의 공통화 | Resolved by DEC-026 |
 | OPN-026 | 브라우저의 Zenoh 연동 방식 | Resolved by DEC-027 |
+| OPN-027 | 재밍 판정 기준(송수신 양단 vs 수신단) | Resolved by DEC-028 |
+| OPN-028 | 시나리오에서 링크 프로파일 재정의 | Resolved by DEC-029 |
+| OPN-029 | 재밍 영역 형상(다각형·고도대·주파수대) | Resolved by DEC-030 |
+| OPN-030 | 버스에서 재생 모드 식별 | Resolved by DEC-031 |
+| OPN-031 | 브로드캐스트에서 거리 밖 수신자의 LinkOutcome | Resolved by DEC-032 |
+| OPN-032 | UI와 Traffic Monitor의 브리지 클라이언트·프레임 코덱·proto 생성 공용 패키지(`ui/shared/`). 보류: 2차 병합 후 WP5가 정리 | Open |
+| OPN-033 | 브리지 바이너리 프레임에 구독 ID 포함(겹치는 구독의 중복 수신 해소). 보류: 브리지 프로토콜 v2에서 검토 | Open |
+| OPN-034 | 수백 대 규모의 트래픽 관측(데이터링크 주기 집계 메시지 또는 브리지 키 필터). 보류: WP10 성능 단계 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
