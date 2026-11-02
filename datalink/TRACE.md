@@ -83,6 +83,7 @@ flowchart LR
 | TC-LNK-017 | 한 프레임에 5만 건 홍수(`max_pending` 1000, 틱당 400 쌍, 전송 중 3000, 지연 5 s 프로파일): 입력 큐·전송 중 목록 상한 유지, 매 틱 FrameDone, QUEUE_OVERFLOW 기록(outcome 5000건 미만), 홍수 뒤 큐가 비고 새 메시지 전달, 틱당 100 쌍 상한이면 350건을 다음 틱으로 미룸 | `tests/test_datalink.cpp` | IMP-LNK-017 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-018 | 불완전 링크(GE·지터·대역폭) 3기 200 프레임: 같은 시드에서 송신이 틱 전/후에 도착해도, 반복해도 outcome 동일, 다른 시드는 다름, 손실·전달이 모두 있음 | `tests/test_datalink.cpp` | IMP-LNK-018, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-019 | 참여자 FrameDone 대기: 첫 틱은 즉시, 이후 틱은 `agent-0`의 이전 프레임 FrameDone 전까지 보류(FrameDone 미발행, 늦게 온 tx 보류), 도착 후 처리·FrameDone, FrameDone이 틱보다 먼저 와도 즉시 처리 | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
+| TC-LNK-020 | 틱마다 rx·link/outcome·link/state를 모두 발행한 뒤 FrameDone이 마지막, 틱당 FrameDone 1건 (같은 스레드에서 순서대로 발행) | `tests/test_datalink.cpp` | IMP-LNK-017, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
 
 ## 제약과 다음 단계
 
