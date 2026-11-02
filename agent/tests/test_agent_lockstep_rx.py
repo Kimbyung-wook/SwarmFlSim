@@ -38,10 +38,11 @@ def test_tc_agt_044_lockstep_consumes_only_due_rx():
     put_route(h, "now", 40000)     # 틱 2의 시각
     put_route(h, "later", 60000)   # 틱 3의 시각
     tick(h, 1)
-    assert routes(h) == []         # 틱 1(20 ms): 아직 닿지 않았다
     tick(h, 2)
-    assert routes(h) == ["now"]
+    assert routes(h) == []         # 틱 2의 rx는 Datalink가 내는 중일 수 있어 틱 3에서 소비한다 (QA-016)
     tick(h, 3)
+    assert routes(h) == ["now"]
+    tick(h, 4)
     assert sorted(routes(h)) == ["later", "now"]
 
 
@@ -54,15 +55,16 @@ def test_tc_agt_045_waits_for_datalink_frame_done():
     assert out == [0]              # 틱 0은 기다리지 않는다
     tick(h, 1)
     assert out == [0]              # Datalink FrameDone{0} 전: 보류
-    put_route(h, "late", 20000)    # Datalink가 틱 0의 rx를 FrameDone 전에 낸다
+    put_route(h, "late", 20000)    # Datalink가 틱 1의 rx를 내는 중
     done(h, "datalink-0", 0)
-    assert out == [0, 1]           # 보류된 틱 1을 처리했고 rx도 소비했다
-    assert routes(h) == ["late"]
+    assert out == [0, 1]           # 보류된 틱 1을 처리했다
+    assert routes(h) == []         # 틱 1의 rx는 아직 소비하지 않는다
     done(h, "datalink-0", 0)       # 같은 프레임 중복은 다음 틱을 풀지 못한다
     tick(h, 2)
     assert out == [0, 1]
     done(h, "datalink-0", 1)
     assert out == [0, 1, 2]
+    assert routes(h) == ["late"]   # FrameDone{1}이 보장하는 틱 1까지 소비
 
 
 def test_tc_agt_046_realtime_is_not_gated():
