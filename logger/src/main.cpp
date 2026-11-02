@@ -1,12 +1,13 @@
 // IMP-LOG-005: swarm_logger 실행 파일
 //
 //   swarm_logger info <file.mcap>
-//   swarm_logger record --out <file.mcap> [--key <expr>] [버스 옵션]
+//   swarm_logger record --out <file.mcap> [--key <expr>] [--stats <초>] [--max-queue-messages <n>] [--max-queue-mib <n>] [버스 옵션]
 //   swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [버스 옵션] [--dry-run]
 //
 // 버스는 공용 open_bus()로 연다 (DEC-026). 버스 옵션은 swarm/bus/open_bus.hpp의 kBusUsage.
 #include <atomic>
 #include <csignal>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -33,13 +34,17 @@ struct Args {
   swarm::bus::BusConfig bus;
   double rate = 1.0;
   bool dry_run = false;
+  double stats_s = 0.0;  // record: 이 주기(초)마다 큐 길이·드롭 수를 stderr에 낸다
+  std::size_t max_queue_messages = swarm::logger::RecorderOptions{}.max_queue_messages;
+  std::size_t max_queue_mib = swarm::logger::RecorderOptions{}.max_queue_bytes >> 20;
 };
 
 int usage() {
   std::fprintf(stderr,
                "usage:\n"
                "  swarm_logger info <file.mcap>\n"
-               "  swarm_logger record --out <file.mcap> [--key <expr>] [bus options]\n"
+               "  swarm_logger record --out <file.mcap> [--key <expr>] [--stats <s>]\n"
+               "                       [--max-queue-messages <n>] [--max-queue-mib <n>] [bus options]\n"
                "  swarm_logger replay <file.mcap> [--rate <x>] [--key <expr>] [bus options] [--dry-run]\n"
                "bus options:\n%s",
                swarm::bus::kBusUsage);
@@ -61,6 +66,9 @@ bool parse(int argc, char** argv, Args& a) {
     else if (swarm::bus::parse_bus_arg(a.bus, s, value)) continue;
     else if (s == "--rate") a.rate = std::stod(value());
     else if (s == "--dry-run") a.dry_run = true;
+    else if (s == "--stats") a.stats_s = std::stod(value());
+    else if (s == "--max-queue-messages") a.max_queue_messages = std::stoull(value());
+    else if (s == "--max-queue-mib") a.max_queue_mib = std::stoull(value());
     else if (!s.starts_with("--") && a.file.empty()) a.file = s;
     else return false;
   }
@@ -79,12 +87,34 @@ int cmd_info(const Args& a) {
 
 int cmd_record(const Args& a) {
   auto bus = swarm::bus::open_bus(a.bus);
-  swarm::logger::Recorder rec(*bus, a.file, {.keyexpr = a.key});
+  swarm::logger::Recorder rec(*bus, a.file,
+                              {.keyexpr = a.key,
+                               .max_queue_messages = a.max_queue_messages,
+                               .max_queue_bytes = a.max_queue_mib << 20});
   std::printf("recording %s -> %s (Ctrl+C to stop)\n", a.key.c_str(), a.file.c_str());
-  while (!g_interrupted) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  auto next_report = std::chrono::steady_clock::now();
+  std::uint64_t reported_drops = 0;
+  while (!g_interrupted) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    const auto now = std::chrono::steady_clock::now();
+    const bool periodic = a.stats_s > 0;
+    if (now < next_report) continue;
+    const auto st = rec.stats();
+    // 드롭이 새로 생기면 알리고, --stats면 주기마다 큐 상태도 낸다
+    if (periodic || st.dropped != reported_drops) {
+      std::fprintf(stderr, "[swarm_logger] written=%llu queue=%zu msgs/%zu B peak=%zu msgs/%zu B dropped=%llu\n",
+                   static_cast<unsigned long long>(st.written), st.queue_messages, st.queue_bytes,
+                   st.peak_queue_messages, st.peak_queue_bytes, static_cast<unsigned long long>(st.dropped));
+      reported_drops = st.dropped;
+    }
+    next_report = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                            std::chrono::duration<double>(periodic ? a.stats_s : 5.0));
+  }
   rec.close();
-  std::printf("recorded %llu messages on %zu channels\n", static_cast<unsigned long long>(rec.message_count()),
-              rec.channel_count());
+  const auto st = rec.stats();
+  std::printf("recorded %llu messages on %zu channels, dropped %llu (queue peak %zu msgs / %zu B)\n",
+              static_cast<unsigned long long>(rec.message_count()), rec.channel_count(),
+              static_cast<unsigned long long>(st.dropped), st.peak_queue_messages, st.peak_queue_bytes);
   return 0;
 }
 

@@ -1,10 +1,19 @@
-// TC-LOG-001~006: InMemoryBus로 기록 → 재생 결과 일치
+// TC-LOG-001~010: InMemoryBus로 기록 → 재생 결과 일치
 #include <mcap/reader.hpp>
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/dynamic_message.h>
 #include <google/protobuf/util/message_differencer.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
+#endif
 
 #include <atomic>
 #include <cstdio>
@@ -261,6 +270,107 @@ void test_concurrent(const std::filesystem::path& path) {
   }
   check(swarm::logger::inspect(path).messages == kThreads * kPerThread, "concurrent file count");
 }
+
+// TC-LOG-008: 쓰기 큐 상한 — 상한을 넘는 샘플은 버리고 센다. 쓴 수 + 버린 수 = 보낸 수
+void test_queue_bound(const std::filesystem::path& path) {
+  constexpr int kSent = 20000;
+  {  // 바이트 상한 0: 모두 버린다
+    swarm::InMemoryBus bus;
+    swarm::logger::Recorder rec(bus, path, {.max_queue_bytes = 0});
+    for (int i = 0; i < kSent; ++i) put(bus, "truth/state", truth_frame(static_cast<std::uint64_t>(i)));
+    rec.close();
+    check(rec.dropped_count() == kSent && rec.message_count() == 0, "queue bytes 0: all dropped");
+  }
+  {  // 메시지 상한 8: 큐 길이가 상한을 넘지 않고, 쓴 수 + 버린 수 = 보낸 수
+    swarm::InMemoryBus bus;
+    swarm::logger::Recorder rec(bus, path, {.max_queue_messages = 8});
+    for (int i = 0; i < kSent; ++i) put(bus, "truth/state", truth_frame(static_cast<std::uint64_t>(i)));
+    rec.close();
+    const auto st = rec.stats();
+    check(st.peak_queue_messages <= 8, "queue peak within bound");
+    check(st.written + st.dropped == kSent, "written + dropped == sent");
+    check(st.written > 0 && st.queue_messages == 0, "queue drained at close");
+    check(swarm::logger::inspect(path).messages == st.written, "file count == written");
+  }
+}
+
+std::size_t rss_bytes() {
+#ifdef _WIN32
+  PROCESS_MEMORY_COUNTERS pmc{};
+  GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof pmc);
+  return pmc.WorkingSetSize;
+#else
+  std::FILE* f = std::fopen("/proc/self/statm", "r");
+  long a = 0, b = 0;
+  if (f) {
+    if (std::fscanf(f, "%ld %ld", &a, &b) != 2) b = 0;
+    std::fclose(f);
+  }
+  return static_cast<std::size_t>(b) * 4096;
+#endif
+}
+
+// TC-LOG-009: 채널이 많은 장시간 기록에서도 RSS가 부하에 비례해 늘지 않는다 (QA-006).
+// 메시지 색인을 쓰면 1.5M건에 약 250 MB, 쓰지 않으면 약 50 MB 이하 (debug)
+void test_memory_bounded(const std::filesystem::path& path) {
+  constexpr int kChannels = 15000, kMsgs = 1'500'000;
+  swarm::InMemoryBus bus;
+  swarm::logger::Recorder rec(bus, path, {.max_queue_messages = 20000});
+  const std::vector<std::uint8_t> payload(180, 7);
+  const auto r0 = rss_bytes();
+  std::size_t peak = 0;
+  for (int i = 0; i < kMsgs; ++i) {
+    bus.put("link/outcome/a" + std::to_string(i % kChannels), payload, "application/octet-stream");
+    if (i % 1000 == 999)
+      while (rec.stats().queue_messages > 10000) std::this_thread::yield();  // 드롭 없이 쓰기에 맞춘다
+    if (i % 100000 == 99999) peak = (std::max)(peak, rss_bytes() > r0 ? rss_bytes() - r0 : std::size_t{0});
+  }
+  rec.close();
+  const auto st = rec.stats();
+  std::printf("memory test: written=%llu dropped=%llu rss growth peak=%.1f MB\n",
+              static_cast<unsigned long long>(st.written), static_cast<unsigned long long>(st.dropped),
+              static_cast<double>(peak) / 1048576.0);
+  check(st.written == kMsgs && st.dropped == 0, "memory test: all written");
+  check(peak < (100u << 20), "memory test: RSS growth < 100 MB");
+  check(swarm::logger::inspect(path).messages == kMsgs, "memory test: file replayable");
+}
+
+// TC-LOG-010: 색인 없는 파일도 log_time 순으로 읽는다. 시계가 거꾸로 가도 기록 시각은 줄지 않는다.
+// 색인을 켠 파일(message_index=true)도 같은 재생 결과
+void test_unindexed_order(const std::filesystem::path& path) {
+  for (const bool indexed : {false, true}) {
+    std::uint64_t t = 5'000'000'000;
+    swarm::InMemoryBus bus;
+    {
+      swarm::logger::Recorder rec(bus, path, {.clock = [&] { return t -= (t % 7 == 0 ? 3 : 0) + 1; }, .message_index = indexed});
+      for (int i = 0; i < 300; ++i) put(bus, i % 2 ? "truth/state" : "truth/other", truth_frame(static_cast<std::uint64_t>(i)));
+    }
+    mcap::McapReader r;
+    check(r.open(path.string()).ok(), "order: open");
+    std::uint64_t prev = 0;
+    std::size_t n = 0;
+    bool sorted = true;
+    for (const auto& mv : r.readMessages()) {
+      sorted = sorted && mv.message.logTime >= prev;
+      prev = mv.message.logTime;
+      ++n;
+    }
+    r.close();
+    check(sorted && n == 300, "order: file order is log_time order");
+    swarm::InMemoryBus out;
+    std::uint64_t got = 0;
+    std::vector<std::uint64_t> frames;
+    auto sub = out.subscribe("**", [&](const swarm::Sample& s) {
+      swarm::v1::TruthFrame f;
+      if (f.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size()))) frames.push_back(f.header().frame());
+      ++got;
+    });
+    const auto stats = swarm::logger::replay(out, path, {.rate = 0});
+    bool in_order = frames.size() == 300;
+    for (std::size_t i = 0; i < frames.size(); ++i) in_order = in_order && frames[i] == i;
+    check(stats.messages == 300 && got == 300 && in_order, indexed ? "order: indexed replay" : "order: unindexed replay");
+  }
+}
 }  // namespace
 
 int main() {
@@ -274,6 +384,9 @@ int main() {
   test_stop(dir / "stop.mcap");
   test_concurrent(dir / "concurrent.mcap");
   test_replay_status(dir / "status.mcap");
+  test_queue_bound(dir / "queue.mcap");
+  test_unindexed_order(dir / "order.mcap");
+  test_memory_bounded(dir / "memory.mcap");
   check(swarm::logger::protobuf_type_of("application/protobuf;swarm.v1.X") == "swarm.v1.X", "type of");
   check(swarm::logger::protobuf_type_of("text/plain").empty(), "type of non-protobuf");
   std::error_code ec;
