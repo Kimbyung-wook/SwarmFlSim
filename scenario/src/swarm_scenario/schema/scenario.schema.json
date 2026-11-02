@@ -193,6 +193,16 @@
       "then": { "required": ["script_path"], "properties": { "script_path": { "minItems": 2 } } }
     },
 
+    "RacetrackShape": {
+      "description": "레이스트랙 모양 (DEC-034). 중심·반경·방향은 담은 작업에서 가져온다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leg_length_m", "axis_heading_deg"],
+      "properties": {
+        "leg_length_m": { "type": "number", "exclusiveMinimum": 0 },
+        "axis_heading_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      }
+    },
     "RouteWaypoint": {
       "description": "항로점 (DEC-033). loiter·recon 중 하나만 두고, 없으면 통과한다",
       "type": "object",
@@ -210,7 +220,8 @@
           "properties": {
             "duration_s": { "type": "number", "minimum": 0 },
             "radius_m": { "type": "number", "exclusiveMinimum": 0 },
-            "direction": { "$ref": "#/$defs/TurnDirection" }
+            "direction": { "$ref": "#/$defs/TurnDirection" },
+            "racetrack": { "$ref": "#/$defs/RacetrackShape" }
           }
         },
         "recon": {
@@ -280,7 +291,8 @@
             "center": { "$ref": "#/$defs/Geodetic" },
             "radius_m": { "type": "number", "exclusiveMinimum": 0 },
             "duration_s": { "type": "number", "minimum": 0 },
-            "direction": { "$ref": "#/$defs/TurnDirection" }
+            "direction": { "$ref": "#/$defs/TurnDirection" },
+            "racetrack": { "$ref": "#/$defs/RacetrackShape" }
           }
         },
         "return_to_base": { "type": "object", "additionalProperties": false },

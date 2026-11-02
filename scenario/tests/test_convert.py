@@ -120,6 +120,7 @@ _SCHEMA_TO_PROTO = {
     "FormationCommand": c2_pb2.FormationCommand,
     "TaskCommand": c2_pb2.TaskCommand,
     "RouteWaypoint": c2_pb2.RouteWaypoint,
+    "RacetrackShape": c2_pb2.RacetrackShape,
     "MapSpec": sim_pb2.MapSpec,
     "RunSpec": sim_pb2.RunSpec,
     "LinkProfile": link_pb2.LinkProfile,
@@ -196,7 +197,8 @@ def test_route_and_hold_round_trip(doc):
          "route": {"waypoints": [
              {"position": {"lat_deg": 37.5, "lon_deg": 129.0, "alt_m": 500.0}, "speed_mps": 25.0},
              {"position": {"lat_deg": 37.6, "lon_deg": 129.1, "alt_m": 800.0},
-              "loiter": {"duration_s": 60.0, "radius_m": 300.0, "direction": "ccw"}},
+              "loiter": {"duration_s": 60.0, "radius_m": 300.0, "direction": "ccw",
+                         "racetrack": {"leg_length_m": 1200.0, "axis_heading_deg": 45.0}}},
              {"position": {"lat_deg": 37.7, "lon_deg": 129.0, "alt_m": 800.0}, "recon": {"radius_m": 1000.0}},
          ]}},
         {"task_id": "t-hold", "assignees": ["uav-002"],
@@ -208,6 +210,8 @@ def test_route_and_hold_round_trip(doc):
     assert [w.WhichOneof("action") for w in route.waypoints] == [None, "loiter", "recon"]
     assert route.waypoints[1].loiter.direction == vi_pb2.TURN_DIRECTION_CCW
     assert msg.mission_plan.tasks[1].hold.HasField("duration_s")
+    assert not msg.mission_plan.tasks[1].hold.HasField("racetrack")
+    assert route.waypoints[1].loiter.racetrack.leg_length_m == 1200.0
     assert to_dict(from_proto(msg))["mission_plan"]["tasks"] == tasks
     bad = dict(tasks[0], route={"waypoints": [dict(tasks[0]["route"]["waypoints"][2], loiter={"duration_s": 1.0})]})
     with pytest.raises(Exception):

@@ -38,9 +38,21 @@ message OrbitCurve {
   optional double speed_mps = 4;
 }
 
+// 레이스트랙: 두 원(중심 간 거리 leg_length_m)과 두 직선 구간 (DEC-034)
+// 원 중심 = center ± (leg_length_m/2)·축 방향. 유도 방식은 FA 매개변수로 고른다
+message RacetrackCurve {
+  Geodetic center = 1;          // 두 원 중심의 중점. alt_m은 선회 고도
+  double radius_m = 2;          // 선회 반경
+  double leg_length_m = 3;      // 직선 구간 길이 = 두 원 중심 간 거리
+  double axis_heading_deg = 4;  // 축 방향(진북 기준, 시계 방향)
+  TurnDirection direction = 5;
+  optional double speed_mps = 6;
+}
+
 message CurveCommand {
   oneof curve {
     OrbitCurve orbit = 1;
+    RacetrackCurve racetrack = 2;
   }
 }
 
