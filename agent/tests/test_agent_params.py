@@ -1,4 +1,4 @@
-"""TC-AGT-029~033: 기체별 매개변수 PARAMS·SetParams·EntityParams (IMP-AGT-021~022, DEC-035, REQ-CFG-003)"""
+"""TC-AGT-029~035, 038~039: 기체별 매개변수 PARAMS·SetParams·EntityParams (IMP-AGT-021~022, DEC-035, REQ-CFG-003)"""
 
 from swarm.v1 import sim_pb2
 from swarm_agent.testing import Harness, load_command, make_scenario, put_sim_command
@@ -197,3 +197,42 @@ def test_tc_agt_035_choices_published_and_rejected():
     set_params(h, UAV, sim_pb2.PARAM_OWNER_FA, racetrack_guidance="vector_field")
     h.run_s(0.1)
     assert not rec.last(UAV, "fa").rejected and h.rt.vehicles[UAV].fa.race_guidance == "vector_field"
+
+
+# ---- DEC-038: 비유한 값 거부와 입력 격리 (IMP-AGT-024) ----
+
+def test_tc_agt_038_non_finite_params_rejected_process_survives():
+    inf, nan = float("inf"), float("nan")
+    h, rec = start(make_scenario(2, "formation"))
+    ma_owner, fa_owner = sim_pb2.PARAM_OWNER_MA, sim_pb2.PARAM_OWNER_FA
+    set_params(h, UAV, ma_owner, k_p=inf, corr_max_mps=nan, peer_hz=-inf)
+    set_params(h, UAV, fa_owner, k_heading=nan, k_altitude=inf)
+    h.run_s(0.5)
+    ma, fa = rec.last(UAV, "ma"), rec.last(UAV, "fa")
+    assert {r.name: r.reason for r in ma.rejected} == {"k_p": "range", "corr_max_mps": "range", "peer_hz": "range"}
+    assert {r.name: r.reason for r in fa.rejected} == {"k_heading": "range", "k_altitude": "range"}
+    assert vals(ma)["k_p"] == 0.08 and vals(fa)["k_heading"] == 0.8
+    set_params(h, UAV, ma_owner, k_p=0.2)  # 거부 뒤에도 정상 변경이 된다
+    h.run_s(0.5)
+    assert vals(rec.last(UAV, "ma"))["k_p"] == 0.2 and not rec.last(UAV, "ma").rejected
+
+
+def test_tc_agt_038_non_finite_scenario_params_rejected_on_load():
+    nan = float("nan")
+    h, rec = start(make_scenario(2, "waypoint", {"acceptance_m": nan, "hold_radius_m": 500.0, "extra": float("inf")}))
+    ma = rec.last(UAV, "ma")
+    assert vals(ma)["acceptance_m"] == 80.0 and vals(ma)["hold_radius_m"] == 500.0
+    assert {r.name: r.reason for r in ma.rejected}["acceptance_m"] == "range"
+
+
+def test_tc_agt_039_bad_input_does_not_kill_runtime():
+    h, rec = start(make_scenario(1, "hold"))
+    h.rt.config.strict = False  # 실제 실행과 같은 설정
+    for key in (keys.SIM_CTRL_CMD, keys.SIM_CTRL_SCENARIO, keys.CLOCK_TICK):
+        h.bus.put(key, b"\xff\xff\xff garbage", "application/octet-stream")  # 해석할 수 없는 페이로드
+    h.run_s(0.5)
+    assert not h.rt.stopped
+    n0 = rec.count(UAV, "ma")
+    set_params(h, UAV, sim_pb2.PARAM_OWNER_MA, orbit_radius_m=150.0)
+    h.run_s(0.5)
+    assert vals(rec.last(UAV, "ma"))["orbit_radius_m"] == 150.0 and rec.count(UAV, "ma") > n0

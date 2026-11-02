@@ -83,6 +83,9 @@ class TaskTracker:
             return False
         if msg.assignees and self.ctx.entity_id not in msg.assignees:
             return True
+        if not msg.assignees:  # 대상이 없는 명령은 거부한다. 받은 기체마다 REJECTED를 보낸다 (DEC-038)
+            self.status(msg, S.COMMAND_STATE_REJECTED, reason="empty assignees")
+            return True
         if msg.cancel:
             if self.current is not None and self.current.task_id == msg.task_id:
                 self.status(self.current, S.COMMAND_STATE_CANCELLED)
@@ -151,19 +154,101 @@ class TaskTracker:
         return Goal(t.task_id, kind)
 
 
-def invalid_reason(t: c2_pb2.TaskCommand) -> str:
-    kind = t.WhichOneof("task")
-    if kind == "route" and not t.route.waypoints:
-        return "empty route"
-    if kind == "hold" and t.hold.HasField("radius_m") and t.hold.radius_m <= 0:
-        return "hold radius_m <= 0"
-    if kind == "hold" and t.hold.HasField("racetrack") and t.hold.racetrack.leg_length_m < 0:
-        return "racetrack leg_length_m < 0"
-    if kind == "route" and any(w.WhichOneof("action") == "loiter" and w.loiter.HasField("racetrack")
-                               and w.loiter.racetrack.leg_length_m < 0 for w in t.route.waypoints):
-        return "racetrack leg_length_m < 0"
-    if kind == "search_area" and t.search_area.area.WhichOneof("shape") is None:
+# 임무 값 검증 한계 (DEC-038). 지도는 한반도 전역(DEC-016)을 넉넉히 덮는다
+MAP_LAT_DEG = (30.0, 45.0)
+MAP_LON_DEG = (120.0, 135.0)
+ALT_MAX_M = 30000.0            # alt 0은 "현재 고도 유지"
+SPEED_MAX_MPS = 1000.0
+RADIUS_MAX_M = 100000.0
+DURATION_MAX_S = 86400.0 * 7
+ROUTE_MAX_POINTS = 200
+AREA_MAX_VERTICES = 100
+
+
+def _bad_geo(g, name: str) -> str:
+    for v, lo, hi, what in ((g.lat_deg, *MAP_LAT_DEG, "lat"), (g.lon_deg, *MAP_LON_DEG, "lon")):
+        if not math.isfinite(v):
+            return f"{name} {what} not finite"
+        if not lo <= v <= hi:
+            return f"{name} {what} out of map"
+    if not math.isfinite(g.alt_m) or not 0.0 <= g.alt_m <= ALT_MAX_M:
+        return f"{name} alt out of range"
+    return ""
+
+
+def _bad_num(v: float, lo: float, hi: float, name: str, lo_open: bool = False) -> str:
+    if not math.isfinite(v):
+        return f"{name} not finite"
+    if v < lo or v > hi or (lo_open and v == lo):
+        return f"{name} out of range"
+    return ""
+
+
+def _bad_racetrack(r, name: str) -> str:
+    return (_bad_num(r.leg_length_m, 0.0, RADIUS_MAX_M, f"{name} leg_length_m")
+            or _bad_num(r.axis_heading_deg, -360.0, 360.0, f"{name} axis_heading_deg"))
+
+
+def _bad_area(a) -> str:
+    shape = a.WhichOneof("shape")
+    if shape is None:
         return "search area without shape"
+    if shape == "circle":
+        return (_bad_geo(a.circle.center, "area center")
+                or _bad_num(a.circle.radius_m, 0.0, RADIUS_MAX_M, "area radius_m", lo_open=True))
+    vs = a.polygon.vertices
+    if len(vs) < 3:
+        return "area polygon needs 3+ vertices"
+    if len(vs) > AREA_MAX_VERTICES:
+        return "area polygon too many vertices"
+    for v in vs:
+        r = _bad_geo(v, "area vertex")
+        if r:
+            return r
+    return ""
+
+
+def invalid_reason(t: c2_pb2.TaskCommand) -> str:
+    """임무 값 검증. 사유를 돌려주고, 문제가 없으면 빈 문자열 (DEC-038)"""
+    if not t.task_id:
+        return "empty task_id"
+    kind = t.WhichOneof("task")
+    if kind == "move_to":
+        return (_bad_geo(t.move_to.destination, "destination")
+                or (_bad_num(t.move_to.speed_mps, 0.0, SPEED_MAX_MPS, "speed_mps")
+                    if t.move_to.HasField("speed_mps") else ""))
+    if kind == "route":
+        if not t.route.waypoints:
+            return "empty route"
+        if len(t.route.waypoints) > ROUTE_MAX_POINTS:
+            return f"route has more than {ROUTE_MAX_POINTS} waypoints"
+        for i, w in enumerate(t.route.waypoints):
+            r = _bad_geo(w.position, f"waypoint {i}")
+            action = w.WhichOneof("action")
+            if not r and action == "loiter":
+                a = w.loiter
+                r = (_bad_num(a.duration_s, 0.0, DURATION_MAX_S, "loiter duration_s")
+                     or (_bad_num(a.radius_m, 0.0, RADIUS_MAX_M, "loiter radius_m", lo_open=True)
+                         if a.HasField("radius_m") else "")
+                     or (_bad_racetrack(a.racetrack, "loiter racetrack") if a.HasField("racetrack") else ""))
+            elif not r and action == "recon":
+                r = _bad_num(w.recon.radius_m, 0.0, RADIUS_MAX_M, "recon radius_m", lo_open=True)
+            if r:
+                return r
+        return ""
+    if kind == "hold":
+        h = t.hold
+        if h.HasField("center"):
+            r = _bad_geo(h.center, "hold center")
+            if r:
+                return r
+        return ((_bad_num(h.radius_m, 0.0, RADIUS_MAX_M, "hold radius_m", lo_open=True)
+                 if h.HasField("radius_m") else "")
+                or (_bad_num(h.duration_s, 0.0, DURATION_MAX_S, "hold duration_s")
+                    if h.HasField("duration_s") else "")
+                or (_bad_racetrack(h.racetrack, "racetrack") if h.HasField("racetrack") else ""))
+    if kind == "search_area":
+        return _bad_area(t.search_area.area)
     return ""
 
 
