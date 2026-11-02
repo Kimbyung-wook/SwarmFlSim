@@ -16,7 +16,7 @@ from .plugin import (
 )
 from .ports import C2Port, MDPort, MPPort, MSPort, P2PPort, Ports, VIPort
 
-CONTRACT_VERSION = "0.7.0"
+CONTRACT_VERSION = "0.8.0"
 
 __all__ = [
     "CONTRACT_VERSION",

@@ -25,6 +25,7 @@ def check_entity_id(entity_id: str) -> str:
 CLOCK_TICK = "sim/clock/tick"
 SIM_CTRL_CMD = "sim/ctrl/cmd"
 SIM_CTRL_STATUS = "sim/ctrl/status"
+SIM_CTRL_SCENARIO = "sim/ctrl/scenario"
 
 
 def clock_done(participant: str) -> str:

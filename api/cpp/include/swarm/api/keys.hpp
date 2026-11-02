@@ -50,6 +50,7 @@ inline const std::string& check_entity_id(const std::string& id) {
 inline constexpr std::string_view kClockTick = "sim/clock/tick";
 inline constexpr std::string_view kSimCtrlCmd = "sim/ctrl/cmd";
 inline constexpr std::string_view kSimCtrlStatus = "sim/ctrl/status";
+inline constexpr std::string_view kSimCtrlScenario = "sim/ctrl/scenario";
 inline constexpr std::string_view kTxAll = "swarm/*/tx/**";
 inline constexpr std::string_view kTruthState = "truth/state";
 

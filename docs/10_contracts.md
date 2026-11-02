@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.7.0
+- 계약 버전: 0.8.0
+  - 0.8.0: 키 `sim/ctrl/scenario`(Core가 적재한 시나리오 재발행), lockstep 준비 신호 `FrameDone{frame=0}` (DEC-037)
   - 0.7.0: `ParamSpec.choices`(문자열 허용 목록), 거부 사유 `choice` (DEC-036)
   - 0.6.0: 기체별 매개변수 `ParamSpec`·`EntityParams`·`SetParams`, `EntitySpec.dynamics_params`, 키 `sim/param/<entity>/<owner>`, 플러그인 `PARAMS`·`on_params`, `DynamicsModel::param_descs` (DEC-035)
   - 0.5.0: 레이스트랙 선회 대기 `RacetrackShape`(HoldTask·LoiterAction), VI `RacetrackCurve` (DEC-034)
@@ -70,6 +71,7 @@ flowchart LR
 | `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽) |
 | `sim/ctrl/cmd` | `SimCommand` | UI | Core |
 | `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
+| `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS) |
@@ -90,6 +92,10 @@ flowchart LR
 - `onboard/**`는 같은 기체 안의 신호다. 데이터링크를 거치지 않는다. FA→MA 간 VI도 같은 기체 안이면 런타임 내부 호출로 처리하고 버스에 싣지 않아도 된다.
 - MA 플러그인은 버스에 직접 접근하지 않는다. 런타임은 `sim/ctrl/`, `truth/`, `link/` 접두어를 플러그인에 노출하지 않는다 (`MA_FORBIDDEN_PREFIXES`).
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
+- 시나리오 배포와 lockstep 시작 (DEC-037)
+  - Core는 시나리오를 적재한 직후(`LoadScenario` 또는 `--scenario`)와 적재 상태에서 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행한다. 다른 참여자는 `LoadScenario`를 받지 못했어도 이 키에서 시나리오를 얻는다.
+  - lockstep 참여자는 시나리오를 적재해 준비되면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}`을 보낸다. Core는 `RunSpec.participants` 전원의 준비 신호를 받은 뒤에 첫 틱을 낸다. 이후 늦게 붙는 참여자는 시작 후에는 허용하지 않는다.
+  - 참여자는 받은 시나리오의 `name`이 이전과 다르면 다시 적재하고 준비 신호를 다시 보낸다. 같으면 무시한다.
 - 기체별 매개변수 (DEC-035)
   - 계층: 기체(airframe)·제어·유도·행위·결정 (`ParamLayer`). 소유자: 동역학(Core)·FA·MA (`ParamOwner`). 계층은 표시용이고 소유자가 적용 주체다.
   - 값 결정 순서: 소유자 기본값 → airframe 표(동역학만) → 시나리오(`EntitySpec.dynamics_params`, `AutonomySpec.fa_params`, `ma_params`) → 실행 중 `SimCommand.set_params`
@@ -137,7 +143,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.7.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.8.0"}` | 접속 승인 |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
