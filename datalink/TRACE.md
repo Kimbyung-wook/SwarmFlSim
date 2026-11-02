@@ -84,6 +84,7 @@ flowchart LR
 | TC-LNK-018 | 불완전 링크(GE·지터·대역폭) 3기 200 프레임: 같은 시드에서 송신이 틱 전/후에 도착해도, 반복해도 outcome 동일, 다른 시드는 다름, 손실·전달이 모두 있음 | `tests/test_datalink.cpp` | IMP-LNK-018, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-019 | 참여자 FrameDone 대기: 첫 틱은 즉시, 이후 틱은 `agent-0`의 이전 프레임 FrameDone 전까지 보류(FrameDone 미발행, 늦게 온 tx 보류), 도착 후 처리·FrameDone, FrameDone이 틱보다 먼저 와도 즉시 처리 | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-020 | 틱마다 rx·link/outcome·link/state를 모두 발행한 뒤 FrameDone이 마지막, 틱당 FrameDone 1건 (같은 스레드에서 순서대로 발행) | `tests/test_datalink.cpp` | IMP-LNK-017, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
+| TC-LNK-021 | on_tick·on_done을 다른 스레드에서 동시에 호출(300프레임)해도 틱마다 FrameDone은 rx 뒤에 정확히 1건 (`run_mu_` 직렬화) | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
 
 ## 제약과 다음 단계
 
