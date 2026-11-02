@@ -90,11 +90,17 @@ def exe(build: Path, sub: str, name: str) -> str:
     return str(p)
 
 
-def export_scenario(src: Path, out: Path) -> Path:
+def export_scenario(src: Path, out: Path, lockstep: tuple[str, ...] = (), rate: float = 1.0) -> Path:
     import swarm_scenario
     import json
 
     msg = swarm_scenario.to_proto(swarm_scenario.from_dict(json.loads(src.read_text(encoding="utf-8"))))
+    if lockstep:  # 참여자는 시나리오의 run.mode로 준비 신호 여부를 정한다(DEC-037). CLI --mode만으로는 퍼지지 않는다
+        from swarm.v1 import sim_pb2
+        msg.run.mode = sim_pb2.RUN_MODE_LOCKSTEP
+        msg.run.rate = rate
+        del msg.run.participants[:]
+        msg.run.participants.extend(lockstep)
     out.write_bytes(msg.SerializeToString())
     return out
 
@@ -143,7 +149,8 @@ def run_dir(args: argparse.Namespace, tag: str) -> Path:
 def cmd_live(args: argparse.Namespace) -> int:
     build = Path(args.build_dir)
     d = run_dir(args, "live")
-    pb = export_scenario(Path(args.scenario), d / "scenario.pb")
+    pb = export_scenario(Path(args.scenario), d / "scenario.pb",
+                         ("datalink-0", "agent-0") if args.lockstep else (), args.rate)
     mesh = Mesh(args.base_port)
     py = sys.executable
     procs: list[Proc] = []
@@ -152,16 +159,26 @@ def cmd_live(args: argparse.Namespace) -> int:
             mcap = d / "p0_demo.mcap"
             procs.append(Proc("logger", [exe(build, "logger", "swarm_logger"), "record", "--out", str(mcap),
                                          *mesh.next()], d))
-        procs.append(Proc("datalink", [exe(build, "datalink", "swarm_datalink"), "--scenario", str(pb),
-                                       "--no-frame-done", *mesh.next()], d))
-        procs.append(Proc("agent", [py, "-m", "swarm_agent.cli", "--scenario", str(pb), *mesh.next()], d))
+        # lockstep: 시나리오는 Core에만 주고 Datalink·Agent는 sim/ctrl/scenario에서 받는다 (DEC-037)
+        feed = [] if args.lockstep else ["--scenario", str(pb)]
+        dl = [exe(build, "datalink", "swarm_datalink"), *feed]
+        dl += ["--participant", "datalink-0"] if args.lockstep else ["--no-frame-done"]
+        procs.append(Proc("datalink", [*dl, *mesh.next()], d))
+        agent_cmd = [py, "-m", "swarm_agent.cli", *feed]
+        if not args.late_agent_s:
+            procs.append(Proc("agent", [*agent_cmd, *mesh.next()], d))
         procs.append(Proc("bridge", [py, "-m", "swarm_bridge.cli", "--port", str(args.bridge_port),
                                      *mesh.next()], d))
         time.sleep(args.settle)  # Zenoh 연결·구독 선언이 퍼질 시간
         core = [exe(build, "core", "swarm_core"), "--scenario", str(pb), *mesh.next()]
         if not args.no_autostart:
-            core += ["--autostart", "--mode", "realtime"]
+            core += ["--autostart", "--mode", "lockstep" if args.lockstep else "realtime"]
+            if args.lockstep:
+                core += ["--rate", str(args.rate)]
         procs.append(Proc("core", core, d))
+        if args.late_agent_s:  # 늦게 켠 참여자: Core가 준비 신호를 기다려야 한다
+            time.sleep(args.late_agent_s)
+            procs.append(Proc("agent", [*agent_cmd, *mesh.next()], d))
         if not args.no_ui:
             procs.append(npm_dev("ui", ROOT / "ui", args.ui_port, d))
         if args.monitor:
@@ -574,6 +591,9 @@ def main(argv: list[str] | None = None) -> int:
     lv = sub.add_parser("live", help="전체 프로세스를 실제 버스로 띄운다")
     common(lv)
     lv.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
+    lv.add_argument("--lockstep", action="store_true", help="lockstep으로 실행. 시나리오는 Core에만 주고 나머지는 sim/ctrl/scenario로 받는다")
+    lv.add_argument("--rate", type=float, default=1.0, help="lockstep 목표 배속 (0 = 최대)")
+    lv.add_argument("--late-agent-s", type=float, default=0, help="Core 뒤 n초에 Agent를 띄운다 (lockstep 준비 신호 시험)")
     lv.add_argument("--no-record", action="store_true", help="MCAP 기록을 끈다")
     lv.add_argument("--no-autostart", action="store_true", help="Core를 LOADED로 두고 UI의 시작 버튼을 기다린다")
     lv.add_argument("--duration", type=float, default=0, help="n초 뒤 종료 (0 = Ctrl+C까지)")
