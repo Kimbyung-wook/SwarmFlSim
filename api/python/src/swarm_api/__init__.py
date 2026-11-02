@@ -10,10 +10,13 @@ from .plugin import (
     FlightAutonomy,
     MissionAutonomy,
     NavBatch,
+    ParamDef,
+    ParamLayer,
+    resolve_params,
 )
 from .ports import C2Port, MDPort, MPPort, MSPort, P2PPort, Ports, VIPort
 
-CONTRACT_VERSION = "0.5.0"
+CONTRACT_VERSION = "0.6.0"
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -28,6 +31,9 @@ __all__ = [
     "protobuf_encoding",
     "AgentContext",
     "NavBatch",
+    "ParamDef",
+    "ParamLayer",
+    "resolve_params",
     "MissionAutonomy",
     "BatchMissionAutonomy",
     "FlightAutonomy",

@@ -216,3 +216,18 @@ def test_route_and_hold_round_trip(doc):
     bad = dict(tasks[0], route={"waypoints": [dict(tasks[0]["route"]["waypoints"][2], loiter={"duration_s": 1.0})]})
     with pytest.raises(Exception):
         from_dict(dict(doc, mission_plan={"plan_id": "p", "tasks": [bad]}))
+
+
+def test_entity_params_round_trip(doc):
+    """TC-SCN-011: 기체별 매개변수(DEC-035) dynamics_params·fa_params·ma_params 왕복"""
+    ent = dict(doc["entities"][0], dynamics_params={"max_bank_deg": 40.0},
+               autonomy={"fa_params": {"k_orbit": 3.0, "racetrack_guidance": "vector_field"},
+                         "ma_params": {"group": "a", "avoid": True}})
+    sc = from_dict(dict(doc, entities=[ent, *doc["entities"][1:]]))
+    msg = sim_pb2.Scenario.FromString(to_proto(sc).SerializeToString())
+    e = msg.entities[0]
+    assert e.dynamics_params["max_bank_deg"] == 40.0
+    assert e.autonomy.fa_params["racetrack_guidance"] == "vector_field"
+    assert e.autonomy.ma_params["avoid"] is True
+    out = to_dict(from_proto(msg))["entities"][0]
+    assert out["dynamics_params"] == ent["dynamics_params"] and out["autonomy"] == ent["autonomy"]
