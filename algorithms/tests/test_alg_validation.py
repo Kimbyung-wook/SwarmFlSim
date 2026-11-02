@@ -160,3 +160,28 @@ def test_tc_agt_042_duplicate_task_id_replaces_earlier_mission():
 
 
 CANCELLED = S.COMMAND_STATE_CANCELLED
+
+
+# ---- QA-014: 모든 실수 필드의 유한성을 한 곳에서 검사 ----
+
+def test_tc_agt_043_non_finite_anywhere_rejected_in_every_ma():
+    for ma in ("waypoint", "formation", "flocking"):
+        for name, t in bad_cases():
+            if name not in ("hold_radius_nan", "route_nan"):
+                continue
+            h = Harness(make_scenario(2, ma, spacing_m=150.0, course_deg=0.0))
+            send_c2(h.bus, "gcs-01", t, [UAV])
+            h.run_s(1.0)
+            assert states(h, t.task_id) == [REJ], (ma, name)
+            assert reasons(h, t.task_id)[0], (ma, name)
+    # 경로 점 전체가 NaN, 반복·중첩 필드 경로가 사유에 나온다
+    t = route(2, "allnan")
+    p = t.route.waypoints[0].position
+    p.lat_deg = p.lon_deg = p.alt_m = NAN
+    h = run_one(t)
+    assert reasons(h, "allnan") == ["route.waypoints[0].position.lat_deg not finite"]
+    # flocking의 Route 거부 사유(DEC-039 (3))는 그대로 전달된다
+    h = Harness(make_scenario(2, "flocking", spacing_m=150.0, course_deg=0.0))
+    send_c2(h.bus, "gcs-01", route(2, "rt2"), [UAV])
+    h.run_s(1.0)
+    assert reasons(h, "rt2") == ["unsupported task route"]
