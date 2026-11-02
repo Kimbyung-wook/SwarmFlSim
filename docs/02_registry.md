@@ -112,6 +112,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-035 | 기체별 매개변수는 소유자(동역학·FA·MA)가 기본값과 함께 선언(`ParamSpec`: 계층·단위·범위·`runtime`)하고, 기본값 → airframe 표 → 시나리오 → 실행 중 `SimCommand.set_params` 순으로 덮어쓴다. 소유자는 `sim/param/<entity>/<owner>`로 선언과 적용 값을 발행한다. 행위·결정은 MA 플러그인 하나를 유지하고 매개변수의 계층 표시로만 구분한다 | REQ-CFG-003, REQ-BHV-004, DEC-014, 사용자 답변: 변경 시점 "시작 시 + 실행 중", MA 분할 "파라미터만 그룹으로 구분" | Confirmed |
 | DEC-036 | 문자열 매개변수는 허용 목록 `ParamSpec.choices`를 선언할 수 있고, 목록 밖 값은 거부 사유 `choice`로 `EntityParams.rejected`에 기록한다. 계약 0.7.0 | DEC-035, REQ-CFG-003, P0 통합 점검 결과(`racetrack_guidance`가 `foo`를 받음) | Confirmed |
 | DEC-037 | Core가 적재한 시나리오를 `sim/ctrl/scenario`로 1초마다 재발행하고, lockstep 첫 틱은 `RunSpec.participants` 전원의 `FrameDone{frame=0}` 준비 신호 뒤에 낸다. 시작 후 동적 참여는 허용하지 않는다 | DEC-025, OPN-024, P0 통합 점검 결과, 사용자 답변: "Core가 시나리오 재발행" | Confirmed |
+| DEC-038 | QA 결과 정리: (1) 입력 검증은 비유한(NaN·inf)·범위 밖 값을 적재·명령 단계에서 거부한다(시나리오는 적재 거부 후 상태 유지, 임무는 `TaskStatus` REJECTED와 사유, 매개변수는 `range`, 실행 설정은 거부). (2) 지원하지 않는 dof5/dof6 시나리오는 Core를 종료하지 않고 적재를 거부한다. (3) `assignees`가 비면 거부한다. (4) lockstep 실행 중 이탈한 참여자의 재합류는 지원하지 않는다(Reset+Start로 복구). (5) realtime에서 `SetRate`는 무시되고 UI는 배속 제어를 비활성으로 표시한다. (6) 중복 `task_id`는 같은 기체에서 이전 임무를 대체한다. (7) KILL된 엔티티는 영구히 `alive=false`다. (8) Datalink 지연·지터에 의한 TaskStatus 순서 뒤바뀜은 현실 모사로 유지한다 | docs/21_qa_report.md §6 (D-3~D-9), 사용자 답변: "현실 모사로 유지" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
