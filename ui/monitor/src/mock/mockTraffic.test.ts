@@ -79,3 +79,25 @@ describe("MockTraffic", () => {
     expect(n).toBe(comm - 1);
   });
 });
+
+// TC-MON-013: 목 브로드캐스트 수신 대상은 같은 편 무전기 엔티티 전원 (IMP-MON-025, DEC-032)
+describe("MockTraffic 브로드캐스트 (DEC-032)", () => {
+  it("PeerStatus 1건마다 송신자를 뺀 같은 편 무전기 수만큼 outcome", () => {
+    const store = new MonitorStore({ noTiming: true });
+    const g = new MockTraffic((f) => store.handleFrame(f), { wire: true, uavs: 4, seed: 3 });
+    for (let i = 0; i < 2 * g.frameHz; i++) g.stepFrame();
+    const peer = store.timeline.newest(1e6, (o) => o.msgType === "swarm.v1.PeerStatus");
+    const bySeq = new Map<string, Set<string>>();
+    for (const o of peer) {
+      const k = `${o.src}#${o.seq}`;
+      if (!bySeq.has(k)) bySeq.set(k, new Set());
+      bySeq.get(k)!.add(o.dst);
+    }
+    expect(bySeq.size).toBeGreaterThan(0);
+    // 무전기: gcs-01 + uav 4대, 모두 BLUE. 적 엔티티는 수신 대상이 아니다
+    for (const [k, dsts] of bySeq) {
+      expect(dsts.size, k).toBe(4);
+      for (const d of dsts) expect(d.startsWith("uav-") || d === "gcs-01", d).toBe(true);
+    }
+  });
+});

@@ -30,6 +30,8 @@
 | IMP-MON-021 | 메시지 echo(tx/rx 목록, LinkEnvelope·payload 해석, 타임라인 선택 연동) | `src/components/EchoPanel.tsx` | REQ-UI-005, PRP-UI-002 | TC-MON-010 |
 | IMP-MON-022 | 엔티티 상세(메시지 타입별 송수신, 손실 상대, link/state) | `src/components/EntityDetail.tsx` | REQ-UI-005, PRP-LNK-002 | TC-MON-010 |
 | IMP-MON-023 | 되감기는 시계 출처(sim/ctrl/status, truth/state)로만 판정. 늦게 온 outcome은 집계하고 링크 지연(sim 시각 − 최신 outcome tx 시각)을 머리줄에 표시 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, PRP-UI-002, DEC-005 | TC-MON-006, TC-MON-011 |
+| IMP-MON-024 | 재생 표시를 `SimStatus.replay`로 판단. `?replay=1`은 SimStatus 수신 전 대체값, 배지 수동 전환은 `replay` 값이 바뀌면 해제. 목 생성기 `replay` 옵션 | `src/model/store.ts`, `src/components/Header.tsx`, `src/App.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-UI-002, DEC-031 | TC-MON-012 |
+| IMP-MON-025 | 손실률 분모는 수신자별 outcome임을 표 툴팁에 명시하고 `거리 밖 제외`(OUT_OF_RANGE를 분자·분모에서 뺌) 선택 추가. 목 브로드캐스트 수신 대상을 같은 편 무전기 엔티티로 한정 | `src/model/aggregator.ts`, `src/components/StatsTable.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-LNK-002, DEC-032 | TC-MON-013 |
 
 ## 시험 (TC)
 
@@ -46,8 +48,10 @@
 | TC-MON-009 | 부하 측정: 바이트 프레임 → 해석 → 집계·타임라인·echo (아래 표) | `src/load/monitor.load.ts` (`npm run bench`) | IMP-MON-006, IMP-MON-009, REQ-PRF-001 | 통과(20대 × 50 Hz 실시간 12.7배) |
 | TC-MON-010 | 수동 화면 확인(목 소스, 아래 기록) | – | IMP-MON-011~022 | 확인 |
 | TC-MON-011 | 실제 브리지·데이터링크 연동(아래 기록) | – | IMP-MON-003, IMP-MON-004, IMP-MON-023 | 확인 |
+| TC-MON-012 | 재생 표시: SimStatus 수신 전 `?replay=1`, 수신 후 `replay` 필드, 실행 중 전환 시 머리줄 배지 변경, 수동 전환 해제, 목 `replay` 옵션 (3건) | `src/model/replay.test.ts` | IMP-MON-024 | 통과 |
+| TC-MON-013 | 손실률 분모: 브로드캐스트 수신자별 outcome, 거리 밖 제외 계산, 목 브로드캐스트 수신 대상 = 같은 편 무전기 (2건) | `src/model/aggregator.test.ts`, `src/mock/mockTraffic.test.ts` | IMP-MON-025 | 통과 |
 
-`npm test`: 8개 파일 46건 통과. `npm run build`: 통과(tsc -b, vite build).
+`npm test`: 9개 파일 51건 통과. `npm run build`: 통과(tsc -b, vite build).
 
 ## 부하 측정 (TC-MON-009)
 

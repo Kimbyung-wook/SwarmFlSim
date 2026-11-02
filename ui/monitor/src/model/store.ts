@@ -37,6 +37,8 @@ export interface EnvelopeRecord {
 }
 
 export type RunView = "live" | "replay";
+/** 재생 표시를 정한 근거. status: SimStatus.replay(DEC-031), query: `?replay=1` 대체, manual: 배지 전환 */
+export type ViewSource = "status" | "query" | "manual";
 
 export interface StoreOptions {
   timelineCapacity?: number;
@@ -66,7 +68,10 @@ export class MonitorStore {
   /** tx 엔벨로프 색인: `${key}#${seq}` */
   private readonly txIndex = new Map<string, EnvelopeRecord>();
   status: SimStatus | undefined;
-  view: RunView = "live";
+  /** SimStatus가 없을 때 쓰는 재생 표시(`?replay=1`) */
+  viewHint: RunView = "live";
+  /** 배지로 바꾼 표시. SimStatus.replay 값이 바뀌면 지운다 */
+  private viewManual: RunView | undefined;
   rewinds = 0;
   /** 시계 출처(sim/ctrl/status, truth/state)의 최신 시각(µs). 되감기 판정 기준 */
   clockUs = 0;
@@ -131,6 +136,7 @@ export class MonitorStore {
         return;
       }
       case "status":
+        if (this.status && this.status.replay !== ev.status.replay) this.viewManual = undefined;
         this.status = ev.status;
         this.onClock(Number(ev.status.simTimeUs));
         this.agg.advance(Number(ev.status.simTimeUs));
@@ -190,6 +196,23 @@ export class MonitorStore {
   private seen(id: string): void {
     if (!id || this.entities.has(id)) return;
     this.entities.set(id, { id, kind: EK.UNSPECIFIED, side: SD.UNSPECIFIED, alive: true, fromTruth: false });
+  }
+
+  /** 재생 표시는 SimStatus.replay로 판단한다(DEC-031). SimStatus를 받기 전에만 `?replay=1`을 쓴다 */
+  get viewSource(): ViewSource {
+    if (this.viewManual) return "manual";
+    return this.status ? "status" : "query";
+  }
+
+  get view(): RunView {
+    if (this.viewManual) return this.viewManual;
+    if (this.status) return this.status.replay ? "replay" : "live";
+    return this.viewHint;
+  }
+
+  toggleView(): void {
+    this.viewManual = this.view === "live" ? "replay" : "live";
+    this.version++;
   }
 
   /** 데이터링크가 시계보다 늦은 정도(µs). outcome이 없으면 0 */

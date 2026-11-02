@@ -95,3 +95,20 @@ describe("Aggregator", () => {
     expect(a.entities.size + a.all.total + a.nowUs).toBe(0);
   });
 });
+
+// TC-MON-013: 손실률 분모는 수신자별 outcome이다. 브로드캐스트는 닿지 않는 같은 편 수신자마다 1건 (IMP-MON-025, DEC-032)
+describe("손실률 분모 (DEC-032)", () => {
+  it("브로드캐스트 1건 → 수신자 4명: 전달 1, 거리 2, 재밍 1", () => {
+    const a = new Aggregator();
+    a.addOutcome(outcome({ src: "uav-001", dst: "uav-002" }));
+    a.addOutcome(outcome({ src: "uav-001", dst: "uav-003", reason: DropReason.OUT_OF_RANGE }));
+    a.addOutcome(outcome({ src: "uav-001", dst: "uav-004", reason: DropReason.OUT_OF_RANGE }));
+    a.addOutcome(outcome({ src: "uav-001", dst: "gcs-01", reason: DropReason.JAMMED }));
+    const tx = a.entity("uav-001").tx;
+    expect(tx.total).toBe(4);
+    expect(tx.lossRate()).toBeCloseTo(0.75);
+    // 거리 밖 제외: (3 − 2) / (4 − 2)
+    expect(tx.lossRate([DropReason.OUT_OF_RANGE])).toBeCloseTo(0.5);
+    expect(a.entity("uav-003").rx.lossRate([DropReason.OUT_OF_RANGE])).toBe(0);
+  });
+});
