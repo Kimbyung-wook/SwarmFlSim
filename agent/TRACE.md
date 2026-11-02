@@ -48,6 +48,7 @@ flowchart LR
 | IMP-AGT-010 | FA·런타임 성능 측정 스크립트 | `bench/bench_fa.py` | REQ-PRF-001, REQ-PRF-002 | 아래 측정값 |
 | IMP-AGT-019 | 기본 FA 레이스트랙(`CurveCommand.racetrack`, DEC-034): 반경 R 두 원 + 접선 직선 두 개의 폐경로. 매개변수 `racetrack_guidance` = `dubins`(기본: 원 구간 벡터장 + 직선 구간 횡오차 진입각 `ψ − χ∞·(2/π)·atan(k·e)`) 또는 `vector_field`(MATLAB `reference/racetrack_vectorfield.m`: 원 구간 수렴+접선 합성장, 직선 구간 `χ∞ = atan2(10R, L)`, `atan(k·√|e|)`). 구간은 축 방향 투영으로 나눈다. 반경 ≤ 0·길이 < 0 REJECTED | `src/swarm_agent/racetrack.py`, `src/swarm_agent/fa.py` | REQ-GNC-001, REQ-BHV-002, DEC-034 | Pass (TC-AGT-026, TC-AGT-027) |
 | IMP-AGT-021 | 기체별 매개변수 런타임(DEC-035): `ParamSet`이 기본값 → 시나리오 → 실행 중 `SetParams` 순으로 값을 정한다(`resolve_params`). `sim/ctrl/cmd`의 `set_params`는 자기 기체의 FA·MA 소유자만 받아 다음 프레임 시작에 적용하고 `on_params`로 알린다. 적용·거부(unknown/type/range/not_runtime)를 `EntityParams`로 `sim/param/<기체>/<fa|ma>`에 게시(적재 직후·변경 직후·벽시계 1 s마다). 기본 FA는 `PARAMS` 14개(기체 한계 5개 `runtime=False`, 제어 2개, 유도 7개)를 선언. `PARAMS`가 없는 플러그인은 시나리오 값을 그대로 받고 실행 중 변경은 모두 unknown | `src/swarm_agent/params.py`, `runtime.py`, `vehicle.py`, `fa.py` | REQ-CFG-003, DEC-035 | Pass (TC-AGT-029~035) |
+| IMP-AGT-023 | 시나리오 구독 적재(DEC-037): `sim/ctrl/scenario`를 구독해 `LoadScenario`를 받지 못해도 적재. 이미 적재한 시나리오와 `name`이 같으면 무시, 다르면 다시 적재. 적재 직후 lockstep이면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}` 준비 신호 | `src/swarm_agent/runtime.py` | DEC-037, DEC-025 | Pass (TC-AGT-036, TC-AGT-037) |
 
 ## TC
 
@@ -77,6 +78,8 @@ flowchart LR
 | TC-AGT-033 | MA 실행 중 변경과 `on_params` 전달, 벽시계 1 s 주기 게시, `PARAMS` 미선언 플러그인(시나리오 값 통과, 변경 unknown) | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
 | TC-AGT-034 | 4개 MA(flocking·formation·hold·waypoint) `PARAMS` 선언과 `on_params` 반응(flocking 기체별 값, formation 이득·시한, hold 재명령) | `tests/test_agent_params.py` | IMP-AGT-022 | Pass |
 | TC-AGT-035 | 열거형 매개변수(DEC-036): `racetrack_guidance`의 `ParamSpec.choices` 게시, 시나리오·실행 중 잘못된 값은 `choice`로 거부(기본값 유지, 예외 없음), 유효한 값은 적용 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-036 | `sim/ctrl/scenario`만으로 적재, 같은 name 재발행은 무시(기체 객체 유지), 다른 name은 다시 적재 | `tests/test_agent_scenario_feed.py` | IMP-AGT-023 | Pass |
+| TC-AGT-037 | lockstep 적재 직후 `FrameDone{frame=0}` 1회, 같은 name은 재전송 없음, 다시 적재하면 재전송, free-run은 보내지 않음. (TC-AGT-013은 첫 done이 준비 신호임을 반영) | `tests/test_agent_scenario_feed.py` | IMP-AGT-023 | Pass |
 
 시험 결과(2026-11-02): `uv run pytest` 194 passed (agent 39, algorithms 26, 그 밖 129)
 
