@@ -31,12 +31,19 @@ message JamTask {
   double duration_s = 2;  // 0이면 해제 명령까지
 }
 
+// 레이스트랙 선회 모양 (DEC-034). 중심·반경·방향은 이 메시지를 담은 작업에서 가져온다
+message RacetrackShape {
+  double leg_length_m = 1;      // 직선 구간 길이 = 두 원 중심 간 거리
+  double axis_heading_deg = 2;  // 축 방향(진북 기준, 시계 방향)
+}
+
 // 선회 대기 (DEC-033). 필드가 없으면 현재 위치에서 기본 반경으로 다음 명령까지 선회
 message HoldTask {
   optional Geodetic center = 1;     // 없으면 현재 위치. alt_m은 선회 고도
   optional double radius_m = 2;     // 없으면 MA 기본값
   optional double duration_s = 3;   // 없거나 0이면 다음 명령까지
   TurnDirection direction = 4;      // UNSPECIFIED면 MA가 정한다
+  optional RacetrackShape racetrack = 5;  // 있으면 원 대신 레이스트랙 (DEC-034)
 }
 
 message ReturnToBaseTask {}
@@ -46,6 +53,7 @@ message LoiterAction {
   double duration_s = 1;            // 선회 대기 시간
   optional double radius_m = 2;
   TurnDirection direction = 3;
+  optional RacetrackShape racetrack = 4;  // 있으면 항로점 중심 레이스트랙 (DEC-034)
 }
 
 message ReconAction {

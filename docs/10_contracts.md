@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.4.0
+- 계약 버전: 0.5.0
+  - 0.5.0: 레이스트랙 선회 대기 `RacetrackShape`(HoldTask·LoiterAction), VI `RacetrackCurve` (DEC-034)
   - 0.4.0: `HoldTask` 선회 매개변수, `RouteTask`·`RouteWaypoint`(항로점 행위: 선회 대기·정찰) EXT 추가 (DEC-033)
   - 0.3.0: 재밍은 수신단 기준(DEC-028), 시나리오 `link_profiles`(DEC-029), `JamZoneEvent.area`(DEC-030), `SimStatus.replay`(DEC-031), 브로드캐스트 손실 집계 기준(DEC-032)
   - 0.2.0: `to_kinematic`에 `Environment` 추가(DEC-023), `Scenario`·`RunSpec` 메시지(DEC-024, DEC-025), 공용 버스 `bus/`와 `open_bus`(DEC-026), 브라우저 연동은 WebSocket 브리지(DEC-027)
@@ -89,6 +90,7 @@ flowchart LR
 - 지도 임무 명령 (DEC-033)
   - 선회 대기: `HoldTask`(center·radius_m·duration_s·direction). 지점 타격: `StrikeTask.aim_point`(엔티티를 지정하면 `target_id`). 지점 정찰: `SearchAreaTask`(원 영역).
   - 항로: `RouteTask`. 항로점마다 고도(`position.alt_m`)·속력·행위(`LoiterAction`, `ReconAction`)를 둔다. 같은 `task_id`로 다시 보내면 항로 전체를 바꾼다.
+  - 레이스트랙 선회 대기: `HoldTask.racetrack` 또는 `LoiterAction.racetrack`(직선 길이·축 방향). 중심은 두 원 중심의 중점이다. MA는 VI `CurveCommand.racetrack`으로 FA에 넘긴다. 유도 방식은 FA 매개변수 `racetrack_guidance`(`dubins` 기본, `vector_field`)로 고른다 (DEC-034).
   - 지원하지 않는 작업을 받은 MA는 `TaskStatus` REJECTED로 답한다.
 - 데이터링크 판정
   - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
@@ -126,7 +128,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.4.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.5.0"}` | 접속 승인 |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
