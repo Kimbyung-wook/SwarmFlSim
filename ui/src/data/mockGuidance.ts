@@ -30,7 +30,17 @@ export interface GuideState extends Ned2 {
 export type Leg =
   | { kind: "goto"; to: Ned2 | (() => Ned2); alt: number; speed?: number; acceptM: number }
   /** durationS가 null이면 다음 명령까지 */
-  | { kind: "orbit"; center: Ned2 | (() => Ned2); radiusM: number; dir: 1 | -1; alt: number; durationS: number | null; speed?: number };
+  | {
+      kind: "orbit";
+      center: Ned2 | (() => Ned2);
+      radiusM: number;
+      dir: 1 | -1;
+      alt: number;
+      durationS: number | null;
+      speed?: number;
+      /** 레이스트랙 (DEC-034): center는 두 원 중심의 중점 */
+      race?: { legM: number; axisRad: number };
+    };
 
 export interface Plan {
   taskId: string;
@@ -50,6 +60,32 @@ export interface GuideEvent {
 const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const dirOf = (d: TurnDirection): 1 | -1 => (d === TurnDirection.CCW ? -1 : 1);
 const pos = (to: Ned2 | (() => Ned2)) => (typeof to === "function" ? to() : to);
+
+/**
+ * 레이스트랙 추종 방향과 경로 오차. 축 좌표(s 축방향, l 오른쪽)에서 끝 원 바깥이면 그 원을 돌고,
+ * 사이에서는 진행 방향이 축 방향이면 직선 A, 아니면 B를 따른다.
+ * 시계(dir=+1): A는 축의 왼쪽에서 +축으로, B는 오른쪽에서 −축으로. 반시계는 반대.
+ */
+function racetrackCourse(p: Ned2, mid: Ned2, r: number, dir: 1 | -1, legM: number, axis: number, k: number): { course: number; err: number } {
+  const un = Math.cos(axis), ue = Math.sin(axis);
+  const dn = p.n - mid.n, de = p.e - mid.e;
+  const s = dn * un + de * ue;
+  const l = dn * -ue + de * un; // 오른쪽 법선 성분
+  const half = legM / 2;
+  if (Math.abs(s) >= half) {
+    const end = s > 0 ? half : -half;
+    const cn = mid.n + un * end, ce = mid.e + ue * end;
+    const d = Math.hypot(p.n - cn, p.e - ce);
+    return { course: Math.atan2(p.e - ce, p.n - cn) + dir * (Math.PI / 2 + Math.atan(k * (d - r))), err: d - r };
+  }
+  // 직선: 시계면 +축 직선이 왼쪽(l = −r), −축 직선이 오른쪽(l = +r)
+  const forward = dir === 1 ? l < 0 : l > 0;
+  const lineL = (forward ? -1 : 1) * dir * r;
+  const e = l - lineL; // 직선으로부터 오른쪽으로 벗어난 양
+  const along = forward ? axis : axis + Math.PI;
+  // 축의 오른쪽(l>0)으로 벗어났을 때, 축 방향으로 가면 왼쪽으로 틀고 되돌아가는 방향이면 오른쪽으로 튼다
+  return { course: along - (forward ? 1 : -1) * Math.atan(k * e), err: e };
+}
 
 /** 기체 하나를 구간 목록대로 움직인다 */
 export class Guided {
@@ -88,12 +124,20 @@ export class Guided {
       done = Math.hypot(dn, de) < leg.acceptM;
     } else {
       const c = pos(leg.center);
-      const dn = s.n - c.n, de = s.e - c.e;
-      const d = Math.hypot(dn, de);
-      const b = Math.atan2(de, dn);
       const k = 1 / Math.max(150, 0.3 * leg.radiusM);
-      course = b + leg.dir * (Math.PI / 2 + Math.atan(k * (d - leg.radiusM)));
-      if (Math.abs(d - leg.radiusM) < Math.max(150, 0.25 * leg.radiusM)) this.onCircleS += dt;
+      const tol = Math.max(150, 0.25 * leg.radiusM);
+      let err: number;
+      if (leg.race) {
+        const r = racetrackCourse(s, c, leg.radiusM, leg.dir, leg.race.legM, leg.race.axisRad, k);
+        course = r.course;
+        err = r.err;
+      } else {
+        const dn = s.n - c.n, de = s.e - c.e;
+        const d = Math.hypot(dn, de);
+        course = Math.atan2(de, dn) + leg.dir * (Math.PI / 2 + Math.atan(k * (d - leg.radiusM)));
+        err = d - leg.radiusM;
+      }
+      if (Math.abs(err) < tol) this.onCircleS += dt;
       done = leg.durationS !== null && this.onCircleS >= leg.durationS;
     }
     // 속력·선회율·상승률 제한
@@ -142,8 +186,12 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
   const dR = 120 * k;
   const spread = (p: Ned2): Ned2 => (k === 0 ? p : { n: p.n + 150 * k * Math.cos(2.4 * k), e: p.e + 150 * k * Math.sin(2.4 * k) });
   const here: Ned2 = { n: cur.n, e: cur.e };
-  const hold = (c: Ned2 | (() => Ned2), alt: number, r = GUIDE_DEFAULT_RADIUS_M, dir: 1 | -1 = 1, durationS: number | null = null): Leg => ({
+  const hold = (
+    c: Ned2 | (() => Ned2), alt: number, r = GUIDE_DEFAULT_RADIUS_M, dir: 1 | -1 = 1, durationS: number | null = null,
+    rt?: { legLengthM: number; axisHeadingDeg: number },
+  ): Leg => ({
     kind: "orbit", center: c, radiusM: r + dR, dir, alt: alt + dAlt, durationS,
+    race: rt && rt.legLengthM > 0 ? { legM: rt.legLengthM, axisRad: (rt.axisHeadingDeg * Math.PI) / 180 } : undefined,
   });
   const goto = (to: Ned2 | (() => Ned2), alt: number, speed?: number, acceptM = ARRIVE_M): Leg => ({
     kind: "goto", to, alt: alt + dAlt, speed, acceptM,
@@ -163,8 +211,9 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
       const c = v.center ? ctx.toNed(v.center) : here;
       const alt = v.center ? v.center.altM : cur.alt - dAlt;
       const r = v.radiusM ?? GUIDE_DEFAULT_RADIUS_M;
-      if (v.durationS) return plan([hold(c, alt, r, dirOf(v.direction), v.durationS), hold(c, alt, r, dirOf(v.direction))], 0);
-      return plan([hold(c, alt, r, dirOf(v.direction))], 0);
+      const rt = v.racetrack;
+      if (v.durationS) return plan([hold(c, alt, r, dirOf(v.direction), v.durationS, rt), hold(c, alt, r, dirOf(v.direction), null, rt)], 0);
+      return plan([hold(c, alt, r, dirOf(v.direction), null, rt)], 0);
     }
     case "strike": {
       const v = t.value;
@@ -197,7 +246,7 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
         const alt = w.position.altM;
         legs.push(goto(p, alt, w.speedMps, w.acceptanceRadiusM ?? ARRIVE_M));
         const a = w.action;
-        if (a.case === "loiter") legs.push(hold(p, alt, a.value.radiusM ?? GUIDE_DEFAULT_RADIUS_M, dirOf(a.value.direction), a.value.durationS));
+        if (a.case === "loiter") legs.push(hold(p, alt, a.value.radiusM ?? GUIDE_DEFAULT_RADIUS_M, dirOf(a.value.direction), a.value.durationS, a.value.racetrack));
         if (a.case === "recon") legs.push(hold(p, alt, a.value.radiusM, 1, a.value.durationS ?? lap(a.value.radiusM, w.speedMps)));
       }
       if (!legs.length) return null;

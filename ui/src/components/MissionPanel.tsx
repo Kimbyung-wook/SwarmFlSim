@@ -1,3 +1,4 @@
+// IMP-UI-044: 레이스트랙 선회 대기(반경·직선 길이·축 방향·방향·시간), 항로점 선회의 원형/레이스트랙 선택 (DEC-034)
 // IMP-UI-039: 임무 창. 우클릭 지점의 임무 메뉴(이동·선회 대기·타격·정찰)와 Ctrl+우클릭 항로점 편집 (REQ-UI-003, REQ-UI-004, DEC-033)
 import { useEffect, useState } from "react";
 import { TurnDirection } from "../gen/swarm/v1/vi_pb";
@@ -7,7 +8,7 @@ import type { MapPoint } from "../model/mapInput";
 import { DEFAULT_LOITER_RADIUS_M } from "../model/missionOverlay";
 import type { RouteDraft } from "../model/routeDraft";
 
-export type MenuKind = "moveTo" | "hold" | "strike" | "search";
+export type MenuKind = "moveTo" | "hold" | "racetrack" | "strike" | "search";
 
 export interface MenuState {
   point: MapPoint;
@@ -18,6 +19,7 @@ export interface MenuState {
 const KINDS: [MenuKind, string][] = [
   ["moveTo", "이동"],
   ["hold", "선회 대기"],
+  ["racetrack", "레이스트랙 선회"],
   ["strike", "타격 지정"],
   ["search", "정찰"],
 ];
@@ -82,6 +84,8 @@ export function MissionMenu(p: MenuProps) {
   const [dir, setDir] = useState(TurnDirection.UNSPECIFIED);
   const [weapon, setWeapon] = useState<WeaponType>("agm_short");
   const [searchR, setSearchR] = useState(1500);
+  const [legM, setLegM] = useState(4000);
+  const [axisDeg, setAxisDeg] = useState(90);
   const pt = p.menu.point;
 
   // 새 지점을 우클릭하면 표적 유무에 맞춰 기본 임무를 바꾼다
@@ -93,8 +97,15 @@ export function MissionMenu(p: MenuProps) {
   const spec: MissionSpec =
     kind === "moveTo"
       ? { kind, destination: center, speedMps: speed || undefined }
-      : kind === "hold"
-        ? { kind, center, radiusM: radius, durationS: duration || undefined, direction: dir }
+      : kind === "hold" || kind === "racetrack"
+        ? {
+            kind: "hold",
+            center,
+            radiusM: radius,
+            durationS: duration || undefined,
+            direction: dir,
+            racetrack: kind === "racetrack" ? { legLengthM: legM, axisHeadingDeg: axisDeg } : undefined,
+          }
         : kind === "strike"
           ? p.menu.targetId
             ? { kind, weapon, targetId: p.menu.targetId }
@@ -140,13 +151,21 @@ export function MissionMenu(p: MenuProps) {
             <Num value={speed} onChange={setSpeed} unit="m/s" title="0이면 기체 기본" />
           </div>
         )}
-        {kind === "hold" && (
+        {(kind === "hold" || kind === "racetrack") && (
           <>
             <div className="row">
               <span>반경</span>
               <Num value={radius} onChange={setRadius} min={50} step={50} unit="m" title="선회 반경" />
               <DirSelect value={dir} onChange={setDir} />
             </div>
+            {kind === "racetrack" && (
+              <div className="row">
+                <span>직선</span>
+                <Num value={legM} onChange={setLegM} min={100} step={500} unit="m" title="직선 구간 길이 = 두 원 중심 간 거리" />
+                <span>축</span>
+                <Num value={axisDeg} onChange={(v) => setAxisDeg(v % 360)} step={15} unit="°" title="축 방향 (진북 기준 시계 방향)" width={56} />
+              </div>
+            )}
             <div className="row">
               <span>시간</span>
               <Num value={duration} onChange={setDuration} step={30} unit="s" title="0이면 다음 명령까지" />
@@ -250,9 +269,23 @@ export function RouteEditor(p: RouteProps) {
                   const a = w.action;
                   return (
                     <>
+                      <select
+                        value={a.racetrack ? "race" : "circle"}
+                        onChange={(e) => p.onAction(i, { ...a, racetrack: e.target.value === "race" ? { legLengthM: 4000, axisHeadingDeg: 90 } : undefined })}
+                        title="선회 모양"
+                      >
+                        <option value="circle">원형</option>
+                        <option value="race">레이스트랙</option>
+                      </select>
                       <Num value={a.durationS} onChange={(v) => p.onAction(i, { ...a, durationS: v })} step={30} unit="s" title="선회 시간" width={56} />
                       <Num value={a.radiusM ?? 0} onChange={(v) => p.onAction(i, { ...a, radiusM: v || undefined })} step={50} unit="m" title="반경. 0이면 기본" width={56} />
                       <DirSelect value={a.direction} onChange={(d) => p.onAction(i, { ...a, direction: d })} />
+                      {a.racetrack && (
+                        <>
+                          <Num value={a.racetrack.legLengthM} onChange={(v) => p.onAction(i, { ...a, racetrack: { ...a.racetrack!, legLengthM: v } })} min={100} step={500} unit="m 직선" title="직선 구간 길이" width={60} />
+                          <Num value={a.racetrack.axisHeadingDeg} onChange={(v) => p.onAction(i, { ...a, racetrack: { ...a.racetrack!, axisHeadingDeg: v % 360 } })} step={15} unit="° 축" title="축 방향 (진북 기준 시계 방향)" width={50} />
+                        </>
+                      )}
                     </>
                   );
                 })()}

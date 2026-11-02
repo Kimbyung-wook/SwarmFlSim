@@ -1,6 +1,7 @@
 // IMP-UI-025: GCS C2 명령 생성 (REQ-UI-002, REQ-UI-003, REQ-UI-004, DEC-013, DEC-014)
 // TaskCommand(MoveTo·Hold·RTB), FormationCommand, GroupAssignment를 LinkEnvelope로 싸서 swarm/<gcs>/tx/c2/<msg>로 보낸다.
 // dst는 명령을 받을 기체(assignees·members). 데이터링크(WP4)가 그 기체의 swarm/<id>/rx/c2/<msg>로 전달한다.
+// IMP-UI-043: 선회 대기·항로점 선회에 레이스트랙(RacetrackShape) 지정 (DEC-034)
 // IMP-UI-035: 지도 임무(이동·선회 대기·타격·정찰·항로)를 MissionSpec으로 받아 TaskCommand를 만든다 (DEC-033)
 import type { DescMessage, MessageInitShape, MessageShape } from "@bufbuild/protobuf";
 import { create, toBinary } from "@bufbuild/protobuf";
@@ -10,6 +11,8 @@ import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import { L1Interface } from "../gen/swarm/v1/options_pb";
 import { TurnDirection } from "../gen/swarm/v1/vi_pb";
+import type { RacetrackSpec } from "./racetrack";
+import { normalizeHeadingDeg } from "./racetrack";
 
 export const ENVELOPE_ENCODING = `application/protobuf;${LinkEnvelopeSchema.typeName}`;
 
@@ -50,7 +53,7 @@ export type WeaponType = (typeof WEAPON_TYPES)[number];
 /** 항로점 행위 (DEC-033) */
 export type WaypointAction =
   | { kind: "none" }
-  | { kind: "loiter"; durationS: number; radiusM?: number; direction: TurnDirection }
+  | { kind: "loiter"; durationS: number; radiusM?: number; direction: TurnDirection; racetrack?: RacetrackSpec }
   | { kind: "recon"; radiusM: number; durationS?: number };
 
 export interface WaypointSpec {
@@ -62,7 +65,7 @@ export interface WaypointSpec {
 /** 지도에서 내리는 임무 하나 */
 export type MissionSpec =
   | { kind: "moveTo"; destination: GeoPoint; speedMps?: number }
-  | { kind: "hold"; center?: GeoPoint; radiusM?: number; durationS?: number; direction: TurnDirection }
+  | { kind: "hold"; center?: GeoPoint; radiusM?: number; durationS?: number; direction: TurnDirection; racetrack?: RacetrackSpec }
   | { kind: "strike"; weapon: WeaponType; targetId?: string; aimPoint?: GeoPoint }
   | { kind: "search"; center: GeoPoint; radiusM: number }
   | { kind: "route"; waypoints: WaypointSpec[]; loop: boolean }
@@ -76,11 +79,17 @@ const fmtGeo = (g: GeoPoint) => `${g.latDeg.toFixed(4)}, ${g.lonDeg.toFixed(4)} 
 /** 0·음수·NaN은 "지정 안 함"(필드 없음)으로 본다 */
 const opt = (v: number | undefined) => (v !== undefined && Number.isFinite(v) && v > 0 ? v : undefined);
 
+/** 레이스트랙 → RacetrackShape. 직선 길이가 0 이하면 원과 같으므로 보내지 않는다 */
+function raceInit(r: RacetrackSpec | undefined) {
+  if (!r || !(r.legLengthM > 0)) return undefined;
+  return { legLengthM: r.legLengthM, axisHeadingDeg: normalizeHeadingDeg(r.axisHeadingDeg) };
+}
+
 function waypointInit(w: WaypointSpec): WaypointInit {
   const a = w.action;
   let action: WaypointInit["action"] = { case: undefined };
   if (a.kind === "loiter") {
-    action = { case: "loiter", value: { durationS: a.durationS, radiusM: opt(a.radiusM), direction: a.direction } };
+    action = { case: "loiter", value: { durationS: a.durationS, radiusM: opt(a.radiusM), direction: a.direction, racetrack: raceInit(a.racetrack) } };
   } else if (a.kind === "recon") {
     action = { case: "recon", value: { radiusM: a.radiusM, durationS: opt(a.durationS) } };
   }
@@ -99,8 +108,8 @@ export function missionTask(m: MissionSpec): { task: TaskInit; summary: string }
       const r = opt(m.radiusM);
       const dur = opt(m.durationS);
       return {
-        task: { case: "hold", value: { center: m.center && geo(m.center), radiusM: r, durationS: dur, direction: m.direction } },
-        summary: `선회 대기${m.center ? ` ${fmtGeo(m.center)}` : ""}${r ? ` r${r.toFixed(0)}` : ""}${dur ? ` ${dur.toFixed(0)} s` : ""}`,
+        task: { case: "hold", value: { center: m.center && geo(m.center), radiusM: r, durationS: dur, direction: m.direction, racetrack: raceInit(m.racetrack) } },
+        summary: `${raceInit(m.racetrack) ? "레이스트랙 " : ""}선회 대기${m.center ? ` ${fmtGeo(m.center)}` : ""}${r ? ` r${r.toFixed(0)}` : ""}${dur ? ` ${dur.toFixed(0)} s` : ""}`,
       };
     }
     case "strike":

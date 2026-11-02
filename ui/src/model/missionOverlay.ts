@@ -1,7 +1,10 @@
 // IMP-UI-038: 임무 지도 표시 도형 (REQ-UI-003, REQ-UI-004, DEC-033)
 // 편집 중 항로, 임무 메뉴 지점, 보낸 임무(항로·선회·정찰·타격)를 점·선·원으로 바꾼다. Cesium에 의존하지 않는다.
 import type { GeoPoint, MissionSpec } from "./commands";
+import { racetrackGeometry } from "./racetrack";
+import type { RacetrackSpec } from "./racetrack";
 import type { RouteDraft } from "./routeDraft";
+import type { TurnDirection } from "../gen/swarm/v1/vi_pb";
 
 export type OverlayStyle = "draft" | "pending" | "sent";
 
@@ -43,13 +46,23 @@ function merge(into: Overlay, o: Overlay): Overlay {
   return into;
 }
 
+/** 선회 도형: 레이스트랙이면 폐곡선 선, 아니면 원 (DEC-034) */
+function loiterShape(o: Overlay, center: GeoPoint, radiusM: number, race: RacetrackSpec | undefined, dir: TurnDirection, style: OverlayStyle): void {
+  if (race && race.legLengthM > 0) {
+    const g = racetrackGeometry(center, radiusM, race, dir);
+    o.lines.push({ positions: g.outline.map((p) => ({ ...p, altM: center.altM })), style });
+  } else {
+    o.circles.push({ center, radiusM, style });
+  }
+}
+
 /** 편집 중 항로: 번호 붙은 손잡이, 항로선(loop면 닫음), 행위 원 */
 export function draftOverlay(d: RouteDraft): Overlay {
   const o = emptyOverlay();
   const ps = d.waypoints.map((w) => w.position);
   d.waypoints.forEach((w, i) => {
     o.points.push({ pos: w.position, label: String(i + 1), style: "draft", handle: i });
-    if (w.action.kind === "loiter") o.circles.push({ center: w.position, radiusM: w.action.radiusM ?? DEFAULT_LOITER_RADIUS_M, style: "draft" });
+    if (w.action.kind === "loiter") loiterShape(o, w.position, w.action.radiusM ?? DEFAULT_LOITER_RADIUS_M, w.action.racetrack, w.action.direction, "draft");
     if (w.action.kind === "recon") o.circles.push({ center: w.position, radiusM: w.action.radiusM, style: "draft" });
   });
   if (ps.length >= 2) o.lines.push({ positions: d.loop ? [...ps, ps[0]] : ps, style: "draft" });
@@ -73,7 +86,7 @@ export function missionOverlay(m: MissionSpec, style: OverlayStyle, label = "", 
     case "hold":
       if (m.center) {
         lead(m.center);
-        o.circles.push({ center: m.center, radiusM: m.radiusM ?? DEFAULT_LOITER_RADIUS_M, style });
+        loiterShape(o, m.center, m.radiusM ?? DEFAULT_LOITER_RADIUS_M, m.racetrack, m.direction, style);
         o.points.push({ pos: m.center, label: label || "선회", style });
       }
       break;
@@ -94,7 +107,7 @@ export function missionOverlay(m: MissionSpec, style: OverlayStyle, label = "", 
       if (ps.length >= 2) o.lines.push({ positions: m.loop ? [...ps, ps[0]] : ps, style });
       m.waypoints.forEach((w, i) => {
         o.points.push({ pos: w.position, label: i === 0 && label ? `1 ${label}` : String(i + 1), style });
-        if (w.action.kind === "loiter") o.circles.push({ center: w.position, radiusM: w.action.radiusM ?? DEFAULT_LOITER_RADIUS_M, style });
+        if (w.action.kind === "loiter") loiterShape(o, w.position, w.action.radiusM ?? DEFAULT_LOITER_RADIUS_M, w.action.racetrack, w.action.direction, style);
         if (w.action.kind === "recon") o.circles.push({ center: w.position, radiusM: w.action.radiusM, style });
       });
       break;

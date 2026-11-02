@@ -48,6 +48,9 @@
 | IMP-UI-038 | 임무 도형(점·선·원)과 Cesium 전시: 편집 중 항로(노랑), 메뉴 미리보기(주황), 보낸 임무(청록 점선, 기체별 상태·진행률 라벨). 최근·미완료 임무 선택(`TaskLog.activeMissions`) | `src/model/missionOverlay.ts`, `src/cesium/missionLayer.ts`, `src/model/taskLog.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-023, TC-UI-025 |
 | IMP-UI-039 | 임무 창: 우클릭 지점 좌표·이동/선회 대기/타격 지정/정찰 선택과 입력(고도·속력·반경·시간·방향·무장), 항로 편집 목록(고도·속력·행위·위로/아래로/삭제·반복·전송/다시 전송·취소) | `src/components/MissionPanel.tsx`, `src/styles.css` | REQ-UI-003, REQ-UI-004, DEC-033 | TC-UI-025 |
 | IMP-UI-040 | 화면 연결: 임무 창·항로 편집 상태, 적 엔티티 우클릭 → target_id, Esc로 임무 창 먼저 닫기, 명령 목록의 항로 "편집" | `src/App.tsx`, `src/components/CommandPanel.tsx` | REQ-UI-003, REQ-UI-004, DEC-033 | TC-UI-025 |
+| IMP-UI-042 | 레이스트랙 도형 계산: 클릭점=두 원 중심의 중점, 중심=중점±(leg/2)·축(진북 시계 [0,360)), 접점 4개·폐곡선, 시계/반시계 | `src/model/racetrack.ts` | REQ-BHV-002, DEC-034 | TC-UI-026 |
+| IMP-UI-043 | 명령·도형 연결: HoldTask.racetrack·LoiterAction.racetrack 생성(leg 0이면 원형), 지도 미리보기와 보낸 임무 도형을 폐곡선으로 전시 | `src/model/commands.ts`, `src/model/missionOverlay.ts` | REQ-BHV-002, DEC-034 | TC-UI-026 |
+| IMP-UI-044 | 임무 창 "레이스트랙 선회" 메뉴(반경·직선 길이·축·방향·시간), 항로점 선회 행위의 원형/레이스트랙 선택, 목 소스 레이스트랙 비행. 지도 끌기로 축·길이 지정은 미구현 | `src/components/MissionPanel.tsx`, `src/data/mockGuidance.ts`, `src/styles.css` | REQ-BHV-002, DEC-034 | TC-UI-026, TC-UI-027 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -68,6 +71,8 @@
 | TC-UI-022 | 우클릭 판정: 메뉴, Ctrl/Cmd 항로점, 선택 없음, 끌기, 손잡이 집기 (5건) | `src/model/mission.test.ts` | IMP-UI-037 | 통과 |
 | TC-UI-023 | 임무 도형, 최근·미완료 임무 선택 (3건) | `src/model/mission.test.ts` | IMP-UI-038 | 통과 |
 | TC-UI-024 | 목 소스 임무 비행: 이동 도착·완료 보고, 비대상 기체 불변, 선회 반경, 항로 진행 보고, 정찰 원, 타격 접근, 거부·취소, 되감기 (9건) | `src/data/mockGuidance.test.ts` | IMP-UI-041 | 통과 |
+| TC-UI-026 | 레이스트랙: 원 중심(중점 ± leg/2·축)·접점·폐곡선 닫힘, 시계/반시계, 축 정규화, HoldTask/LoiterAction 메시지(`racetrack` 필드, leg 0이면 생략), 지도 도형 | `src/model/racetrack.test.ts` | IMP-UI-042~044 | 통과 |
+| TC-UI-027 | 목 소스 레이스트랙 비행: 시계·반시계 모두 직선 구간 따라 도형 안을 유지 | `src/model/racetrack.test.ts` | IMP-UI-044 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
 
 
