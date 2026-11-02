@@ -91,6 +91,8 @@ flowchart LR
 - C2: `TaskCommand`(MoveTo·Hold·Strike·SearchArea·Route·RTB), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
 - 응답: `swarm/<gcs>/rx/**`의 `TaskStatus`를 task_id로 명령에 붙여 기체별 상태·진행률을 명령 패널에 표시한다. 지도 전시는 `truth/state`를 쓴다.
 - task_id는 `<UI ID>-t<n>`이라 여러 UI가 동시에 명령해도 겹치지 않는다 (DEC-020).
+- 재생 중(`SimStatus.replay`)에는 도구 막대에 "재생"이 뜨고 시작·일시정지·스텝·배속 버튼이 꺼진다 (DEC-031).
+- 목 소스에서 `kp_roll`에 10 초과를 적용하면 소유자가 거부하는 경우를 볼 수 있다(거부 표시 확인용).
 - 목 소스는 TaskCommand에 `TaskStatus(ACCEPTED)`만 돌려주고 기동은 흉내 내지 않는다.
 
 ## 카메라 시점 (REQ-UI-007, 구조만)

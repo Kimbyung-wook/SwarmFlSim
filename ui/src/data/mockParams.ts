@@ -114,6 +114,7 @@ export class MockParams {
       else if (!typeOk(s, val)) rej.push({ name, reason: "type" });
       else if (typeof val === "number" && ((s.min !== undefined && val < s.min) || (s.max !== undefined && val > s.max))) rej.push({ name, reason: "range" });
       else if (!atLoad && !s.runtime) rej.push({ name, reason: "not_runtime" });
+      else if (name === "kp_roll" && typeof val === "number" && val > 10) rej.push({ name, reason: "range" }); // 목 전용: 소유자가 선언(max 20)보다 엄격하게 거부하는 경우. GUI 거부 표시 확인용
       else v[name] = val;
     }
     this.rejected.set(this.k(id, owner), rej);

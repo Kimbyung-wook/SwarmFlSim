@@ -57,6 +57,8 @@ export function Toolbar(p: Props) {
   const running = state === SimRunState.RUNNING;
   const loaded = state === SimRunState.LOADED;
   const paused = state === SimRunState.PAUSED;
+  // 재생(MCAP, DEC-031) 중에는 받는 Core가 없어 시뮬레이션 통제 버튼이 듣지 않는다
+  const replay = status?.replay === true;
   return (
     <div className="toolbar">
       <strong className="brand">Swarm GCS</strong>
@@ -70,14 +72,14 @@ export function Toolbar(p: Props) {
       </div>
       <div className="group">
         {loaded ? (
-          <button onClick={p.onStart}>시작</button>
+          <button onClick={p.onStart} disabled={replay} title={replay ? "재생 중에는 쓸 수 없다" : undefined}>시작</button>
         ) : (
-          <button onClick={running ? p.onPause : p.onResume} disabled={!running && !paused}>{running ? "일시정지" : "재개"}</button>
+          <button onClick={running ? p.onPause : p.onResume} disabled={replay || (!running && !paused)} title={replay ? "재생 중에는 쓸 수 없다" : undefined}>{running ? "일시정지" : "재개"}</button>
         )}
-        <button onClick={p.onStep} disabled={!paused} title="한 프레임 진행">스텝</button>
+        <button onClick={p.onStep} disabled={replay || !paused} title={replay ? "재생 중에는 쓸 수 없다" : "한 프레임 진행"}>스텝</button>
         <button onClick={p.onReset} disabled={!status || state === SimRunState.IDLE} title="처음 상태로">리셋</button>
         {RATES.map((r) => (
-          <button key={r} className={status?.rateTarget === r ? "on" : undefined} onClick={() => onRate(r)} disabled={!status}>
+          <button key={r} className={status?.rateTarget === r ? "on" : undefined} onClick={() => onRate(r)} disabled={!status || replay}>
             ×{r}
           </button>
         ))}
@@ -92,6 +94,7 @@ export function Toolbar(p: Props) {
         {conn && <span className={`conn conn-${conn.state}`} title={conn.detail}>{CONN_LABEL[conn.state]}</span>}
         {gcs && <span className="muted">{gcs}</span>}
         <span>{status ? STATE_LABEL[status.state] ?? "?" : "-"}</span>
+        {replay && <span className="replay-badge" title="MCAP 재생 중">재생</span>}
         <span>T {fmtTime(simTimeUs)}</span>
         <span>F {frame.toString()}</span>
         <span>엔티티 {entityCount}</span>
