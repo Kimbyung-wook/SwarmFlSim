@@ -37,6 +37,34 @@ describe("TC-UI-032 거부 사유 표시", () => {
   });
 });
 
+describe("TC-UI-035 선택지(choices) 항목", () => {
+  it("choices가 있으면 드롭다운(select)으로, 없으면 입력칸으로 그린다", () => {
+    const html = panel(new MockParams());
+    const row = html.match(/<div class="param-row[^"]*"><div class="param-name"[^>]*><b>racetrack_guidance<\/b>.*?<\/div><\/div><\/div>/)?.[0] ?? "";
+    expect(row).toContain("<select");
+    expect(row).toContain('<option value="dubins" selected');
+    expect(row).toContain('<option value="vector_field"');
+    expect(html.match(/<select/g)?.length).toBe(1);
+    expect(html).toMatch(/<b>formation<\/b>[\s\S]*?<input type="text"/);
+  });
+
+  it("choice 거부 사유 문구가 항목에 붙는다 (목 소스가 허용 목록 밖 값을 거부)", () => {
+    const mp = new MockParams();
+    expect(mp.apply("uav-001", ParamOwner.FA, { racetrack_guidance: "spiral" })).toEqual([{ name: "racetrack_guidance", reason: "choice" }]);
+    const html = panel(mp);
+    expect(html).toContain("거부: 허용 목록에 없는 값");
+    expect(html).toContain('<option value="dubins" selected');
+    expect(mp.apply("uav-001", ParamOwner.FA, { racetrack_guidance: "vector_field" })).toEqual([]);
+    expect(panel(mp)).toContain('<option value="vector_field" selected');
+  });
+
+  it("여러 기체의 값이 다르면 '혼합' 선택지가 맨 앞에 생긴다", () => {
+    const mp = new MockParams();
+    mp.apply("uav-002", ParamOwner.FA, { racetrack_guidance: "vector_field" });
+    expect(panel(mp, ["uav-001", "uav-002"])).toContain('<option value="" selected="">혼합</option>');
+  });
+});
+
 describe("TC-UI-033 재생 중 통제 버튼", () => {
   const props = (replay: boolean, state: SimRunState) => ({
     source: "bus" as const, onSource: () => {}, conn: null, gcs: "gcs-01",

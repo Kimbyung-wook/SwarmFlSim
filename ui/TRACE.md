@@ -57,6 +57,7 @@
 | IMP-UI-048 | 오른쪽 패널 겹침 수정(P0 점검): 임무·선택·매개변수·명령 구역이 각자 `overflow`로 자기 높이 안에 갇히고 머리글은 줄지 않는다. 임무 창은 넘치면 안에서 스크롤, 선택 목록은 최소 96 px | `src/styles.css` | REQ-UI-002, REQ-UI-003 | TC-UI-034 |
 | IMP-UI-049 | `SimStatus.replay`=true이면 도구 막대에 "재생" 표시, 시작·일시정지/재개·스텝·배속 비활성(받는 Core 없음) | `src/components/Toolbar.tsx`, `src/styles.css` | DEC-031, REQ-UI-002 | TC-UI-033 |
 | IMP-UI-050 | 목 소스 거부 경로: 소유자가 선언보다 엄격한 한계로 거부하는 경우(`kp_roll`>10 → range)를 흉내 내 GUI 거부 표시를 확인한다 | `src/data/mockParams.ts` | REQ-CFG-003, DEC-035 | TC-UI-032, TC-UI-034 |
+| IMP-UI-051 | 계약 0.7.0 `ParamSpec.choices`: 선택지 항목은 드롭다운, 입력 검사는 허용 목록 확인, 거부 사유 `choice` 문구, 목 소스 FA `racetrack_guidance`(dubins\|vector_field)와 choice 거부 | `src/model/params.ts`, `src/components/ParamPanel.tsx`, `src/data/mockParams.ts` | REQ-CFG-003, DEC-036 | TC-UI-035, TC-UI-029 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -86,6 +87,7 @@
 | TC-UI-032 | 매개변수 패널 서버 렌더링: 형식·범위·not_runtime 거부가 항목에 사유와 함께 붙고 값은 그대로(unknown은 선언에 없는 이름이라 TC-UI-030에서 코드 확인). 목 소스 `kp_roll`>10 range 거부 (2건) | `src/components/panels.test.tsx` | IMP-UI-047, IMP-UI-050 | 통과 |
 | TC-UI-033 | 도구 막대: replay=true이면 "재생" 표시와 시작·일시정지·스텝·배속 비활성, false이면 표시 없고 활성 (2건) | `src/components/panels.test.tsx` | IMP-UI-049 | 통과 |
 | TC-UI-034 | 수동(브라우저, 목 소스): 24기 선택+임무 창에서 창 높이 850·700·520·400 px 모두 구역 겹침 0, `전송` 버튼 중심 클릭이 버튼에 닿음. `kp_roll`=15 적용 → "거부: 허용 범위를 벗어남", 값 2.4 유지 | 브라우저 확인 | IMP-UI-048, IMP-UI-050 | 통과 |
+| TC-UI-035 | 선택지 항목: select 렌더링(선택값 표시, 입력칸과 구분), choice 거부 문구, 허용 목록 밖 입력 거절, 다기체 값이 다르면 "혼합" 선택지 (4건, `params.test.ts` 1건 포함) | `src/components/panels.test.tsx`, `src/model/params.test.ts` | IMP-UI-051 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
 
 

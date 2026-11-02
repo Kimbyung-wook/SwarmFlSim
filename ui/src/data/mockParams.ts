@@ -16,6 +16,7 @@ function spec(o: {
   unit?: string;
   min?: number;
   max?: number;
+  choices?: string[];
   description: string;
   runtime?: boolean;
 }): ParamSpec {
@@ -26,6 +27,7 @@ function spec(o: {
     unit: o.unit ?? "",
     min: o.min,
     max: o.max,
+    choices: o.choices ?? [],
     description: o.description,
     runtime: o.runtime ?? true,
   });
@@ -42,6 +44,7 @@ const DYNAMICS: ParamSpec[] = [
 const FA: ParamSpec[] = [
   spec({ name: "lookahead_s", layer: ParamLayer.GUIDANCE, def: 8, unit: "s", min: 1, max: 60, description: "경로 추종 전방 주시 시간" }),
   spec({ name: "loiter_radius_m", layer: ParamLayer.GUIDANCE, def: 600, unit: "m", min: 100, max: 5000, description: "기본 선회 반경" }),
+  spec({ name: "racetrack_guidance", layer: ParamLayer.GUIDANCE, def: "dubins", choices: ["dubins", "vector_field"], description: "레이스트랙 유도: dubins | vector_field (DEC-034)" }),
   spec({ name: "terrain_follow", layer: ParamLayer.GUIDANCE, def: false, description: "지형 추종 비행" }),
 ];
 
@@ -112,6 +115,7 @@ export class MockParams {
       const s = SPECS[owner].find((x) => x.name === name);
       if (!s) rej.push({ name, reason: "unknown" });
       else if (!typeOk(s, val)) rej.push({ name, reason: "type" });
+      else if (typeof val === "string" && s.choices.length > 0 && !s.choices.includes(val)) rej.push({ name, reason: "choice" });
       else if (typeof val === "number" && ((s.min !== undefined && val < s.min) || (s.max !== undefined && val > s.max))) rej.push({ name, reason: "range" });
       else if (!atLoad && !s.runtime) rej.push({ name, reason: "not_runtime" });
       else if (name === "kp_roll" && typeof val === "number" && val > 10) rej.push({ name, reason: "range" }); // 목 전용: 소유자가 선언(max 20)보다 엄격하게 거부하는 경우. GUI 거부 표시 확인용
