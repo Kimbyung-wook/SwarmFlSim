@@ -154,7 +154,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-032 | UI와 Traffic Monitor의 브리지 클라이언트·프레임 코덱·proto 생성 공용 패키지(`ui/shared/`). 보류: 2차 병합 후 WP5가 정리 | Open |
 | OPN-033 | 브리지 바이너리 프레임에 구독 ID 포함(겹치는 구독의 중복 수신 해소). 보류: 브리지 프로토콜 v2에서 검토 | Open |
 | OPN-034 | 수백 대 규모의 트래픽 관측(데이터링크 주기 집계 메시지 또는 브리지 키 필터). 보류: WP10 성능 단계 | Open |
-| OPN-035 | 외부 시뮬레이션 상호운용(HLA/DIS). 제안: 내부 버스는 Zenoh 유지(DEC-002), 별도 Gateway federate(`hla/`, C++20, IEEE 1516e API, 개발 RTI OpenRTI, RPR FOM 2.0)가 `truth/**`를 외부로 발행. 단계: ① 발행 전용 ② lockstep 시간관리 참여(Gateway가 `participants`에 들어가 TAG(f+1) 수신 뒤 `FrameDone{f}`, lookahead 1프레임) ③ 외부 엔티티 수신(Core 입력 채널 신설, truth로만 반영해 DEC-013 유지). 기체 간 통신은 Datalink 경유를 유지하고 HLA로 보내지 않는다. 버스를 RTI로 교체하는 안은 DEC-002·DEC-026·DEC-040 충돌로 기각 제안. 확인 필요: 연동 상대의 표준(HLA/DIS)·FOM·RTI, Gateway C++ 작성에 따른 DEC-001 예외, 외부 연동 시 lockstep 결정성의 조건(외부 입력 동일) | Open |
+| OPN-035 | 외부 시뮬레이션 상호운용(HLA/DIS). 제안: 내부 버스는 Zenoh 유지(DEC-002), 별도 Gateway federate(`hla/`, C++20, IEEE 1516e API, 개발 RTI OpenRTI, RPR FOM 2.0)가 `truth/**`를 외부로 발행. 단계: ① 발행 전용 ② lockstep 시간관리 참여(Gateway가 `participants`에 들어가 TAG(f+1) 수신 뒤 `FrameDone{f}`, lookahead 1프레임) ③ 외부 엔티티 수신(Core 입력 채널 신설, truth로만 반영해 DEC-013 유지). 기체 간 통신은 Datalink 경유를 유지하고 HLA로 보내지 않는다. 버스를 RTI로 교체하는 안은 DEC-002·DEC-026·DEC-040 충돌로 기각 제안. 확인 필요: 연동 상대의 표준(HLA/DIS)·FOM·RTI, Gateway C++ 작성에 따른 DEC-001 예외, 외부 연동 시 lockstep 결정성의 조건(외부 입력 동일). 보류: 연동 상대 미정(사용자: "연동상대 정보에 대해서는 아직 정해진 사항은 없어") | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
