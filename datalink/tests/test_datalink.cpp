@@ -1,4 +1,4 @@
-// TC-LNK-001~019: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~020: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -1108,6 +1108,29 @@ void tc019() {
   check(dones.size() == 4 && dones[3].frame() == 3, "done before tick: processed immediately");
 }
 
+// ---- TC-LNK-020: 틱 f의 rx·outcome·link/state를 모두 발행한 뒤에 FrameDone{f}를 보낸다 (DEC-040) ----
+void tc020() {
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.02;
+  Rig r({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0}}, cfg);
+  std::vector<std::string> log;
+  auto sub = r.bus.subscribe("**", [&](const Sample& s) {
+    if (s.key.rfind("swarm/", 0) == 0 && s.key.find("/rx/") != std::string::npos) log.push_back("rx");
+    else if (s.key.rfind("link/", 0) == 0) log.push_back("link");
+    else if (s.key.rfind("sim/clock/done/", 0) == 0) log.push_back("done");
+  });
+  std::size_t delivered = 0;
+  for (int f = 0; f < 20; ++f) {
+    log.clear();
+    r.tx("uav-001", {"uav-002"});
+    r.tick();
+    check(!log.empty() && log.back() == "done", "FrameDone is the last publication of the tick");
+    check(std::count(log.begin(), log.end(), "done") == 1, "exactly one FrameDone per tick");
+    delivered += static_cast<std::size_t>(std::count(log.begin(), log.end(), "rx"));
+  }
+  check(delivered > 0, "rx published before FrameDone");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1119,7 +1142,7 @@ const Case kCases[] = {
     {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
-    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019},
+    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020},
 };
 
 }  // namespace
