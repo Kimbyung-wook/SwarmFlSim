@@ -1,4 +1,4 @@
-"""MA "flocking" (IMP-AGT-015, PRP-BHV-002, PRP-BHV-003): Reynolds 분리·정렬·응집, 일괄 MA.
+"""MA "flocking" (IMP-AGT-015, IMP-AGT-018, PRP-BHV-002, PRP-BHV-003): Reynolds 분리·정렬·응집, 일괄 MA.
 
 - 기체마다 자기 P2P inbox로 받은 PeerStatus로만 이웃 표를 만든다. 다른 기체의 표나 NavBatch의
   다른 행을 이웃 정보로 쓰지 않는다 (PRP-SIM-003). NavBatch는 자기 행만 쓴다.
@@ -6,9 +6,13 @@
 - 목표 속도 = v_goal + w_align·(v̄ − v) + w_coh·r̄ + w_sep·Σ 분리, 수평만. 고도는 목표(없으면 첫 고도) 유지.
   v_goal: 목표점(MoveTo, SearchArea 중심, RTB)이 있으면 그쪽 방향 × cruise, 없으면 현재 침로 × cruise.
   목표점에 goal_radius_m 안으로 들어오면 작업을 COMPLETED로 보고하고 그 점을 계속 목표로 둔다.
+  Hold (DEC-033): 중심(없으면 작업 시작 위치) 둘레 반경(없으면 hold_radius_m) 원의 접선 벡터장
+  v_goal = normalize(t − clip((d − R)/R, ±1)·u) × cruise, u = 중심→자기 단위벡터, t = 방향(CW 기본) 접선.
+  duration_s가 있으면 원 위(|d − R| < max(0.25R, 50 m))에 처음 든 뒤 그 시간이 지나면 COMPLETED.
+  Route는 지원하지 않는다(REJECTED).
 - params: group(같은 group_id 이웃만), cruise_mps(22), neighbor_radius_m(600), separation_m(80),
   w_sep(1.5), w_align(0.5), w_coh(0.02), peer_hz(5), stale_s(2), goal_radius_m(300),
-  wander_deg(0, ctx.rng로 침로 흔들기)
+  hold_radius_m(300), wander_deg(0, ctx.rng로 침로 흔들기)
 """
 
 import math
@@ -25,7 +29,7 @@ from .common import Goal, TaskTracker, every, peer_status
 S = common_pb2
 _DEFAULTS = {"cruise_mps": 22.0, "neighbor_radius_m": 600.0, "separation_m": 80.0, "w_sep": 1.5,
              "w_align": 0.5, "w_coh": 0.02, "peer_hz": 5.0, "stale_s": 2.0, "goal_radius_m": 300.0,
-             "wander_deg": 0.0}
+             "hold_radius_m": 300.0, "wander_deg": 0.0}
 _SUPPORTED = ("move_to", "hold", "return_to_base", "search_area")
 
 
@@ -37,6 +41,7 @@ class _Agent:
         self.table: dict[str, p2p_pb2.PeerStatus] = {}
         self.alt0: float | None = None
         self.goal: Goal | None = None
+        self.hold_since: float | None = None  # hold 원 위에 처음 든 모의 시각
 
 
 class Flocking(BatchMissionAutonomy):
@@ -60,6 +65,7 @@ class Flocking(BatchMissionAutonomy):
             if a.tracker.changed:
                 a.tracker.changed = False
                 a.goal = a.tracker.goal()
+                a.hold_since = None
             stale_us = a.p["stale_s"] * 1e6
             for k in [k for k, m in a.table.items() if c.sim_time_s * 1e6 - m.header.sim_time_us > stale_us]:
                 del a.table[k]
@@ -106,7 +112,9 @@ class Flocking(BatchMissionAutonomy):
         goal_v = np.zeros((n, 2))
         for i, (c, a) in enumerate(zip(ctxs, agents)):
             g = a.goal
-            if g is not None and g.kind != "hold":
+            if g is not None and g.kind == "hold":
+                goal_v[i] = self._hold_dir(c, a, g, nav.lat_lon_alt[i, 0], nav.lat_lon_alt[i, 1])
+            elif g is not None:
                 gn, ge = ned_offset(nav.lat_lon_alt[i, 0], nav.lat_lon_alt[i, 1], g.lat, g.lon)
                 d = math.hypot(float(gn), float(ge))
                 if d < a.p["goal_radius_m"] and a.tracker.current is not None:
@@ -142,6 +150,29 @@ class Flocking(BatchMissionAutonomy):
                 c.ports.p2p.send(ps)
             if every(c, 1.0):
                 c.ports.md.record("neighbors", float(cnt[i, 0]))
+
+    @staticmethod
+    def _hold_dir(c: AgentContext, a: _Agent, g: Goal, lat: float, lon: float) -> tuple[float, float]:
+        if not g.has_center:
+            g.lat, g.lon, g.has_center = float(lat), float(lon), True
+        r = g.radius or a.p["hold_radius_m"]
+        n, e = ned_offset(g.lat, g.lon, lat, lon)
+        n, e = float(n), float(e)
+        d = math.hypot(n, e)
+        if d < 1.0:
+            return 1.0, 0.0  # 중심 위: 북쪽으로 벗어난다
+        un, ue = n / d, e / d
+        tn, te = (-ue, un) if g.direction != vi_pb2.TURN_DIRECTION_CCW else (ue, -un)
+        err = max(-1.0, min(1.0, (d - r) / r))
+        vn, ve = tn - err * un, te - err * ue
+        norm = math.hypot(vn, ve)
+        if abs(d - r) < max(0.25 * r, 50.0) and a.hold_since is None:
+            a.hold_since = c.sim_time_s
+        if (g.duration is not None and a.hold_since is not None and a.tracker.current is not None
+                and c.sim_time_s - a.hold_since >= g.duration):
+            a.tracker.finish(S.COMMAND_STATE_COMPLETED)
+            a.tracker.changed = False
+        return vn / norm, ve / norm
 
 
 __all__ = ["Flocking"]

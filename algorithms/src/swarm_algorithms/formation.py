@@ -1,10 +1,11 @@
-"""MA "formation" (IMP-AGT-014, PRP-BHV-003, REQ-BHV-003): leader-follower 편대.
+"""MA "formation" (IMP-AGT-014, IMP-AGT-016~017, PRP-BHV-003, REQ-BHV-003): leader-follower 편대.
 
 - 편대 정의: C2 FormationCommand(받는 즉시 교체) 또는 MissionPlan.formations 중 이 기체가 속한 것
   (params.group이 있으면 그 group_id). 리더는 leader, 비어 있으면 members 중 사전순 첫 기체.
 - 모든 편대원이 PeerStatus를 편대원에게 P2P로 보낸다(peer_hz). 추종기는 데이터링크로 받은
   리더의 PeerStatus만 쓴다 (PRP-SIM-003). 리더 위치는 받은 시각부터 속도로 외삽한다.
-- 리더: 작업(MoveTo/Hold/RTB)을 waypoint MA와 같이 수행한다. 속도는 leader_speed_mps.
+- 리더: 작업(MoveTo/Hold/RTB/SearchArea/Route, DEC-033)을 waypoint MA와 같이 수행한다.
+  속도는 작업에 없으면 leader_speed_mps.
 - 추종기: 슬롯 = 리더 위치 + R(리더 침로)·오프셋(FRD). 목표 속도 = 리더 속도 + k_p·(슬롯 − 자기),
   보정은 corr_max_mps로 제한한다. HSA로 매 프레임 갱신한다.
   리더 상태가 leader_timeout_s보다 오래되면 현재 침로를 유지한다.

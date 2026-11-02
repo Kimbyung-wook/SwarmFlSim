@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     subgraph V1["기체 A (리더)"]
-        TP["TaskPilot<br/>MoveTo·Hold·RTB"] --> VI1["vi.command<br/>Waypoint/Orbit"]
+        TP["TaskPilot<br/>MoveTo·Hold·RTB·SearchArea·Route"] --> VI1["vi.command<br/>Waypoint/Orbit"]
     end
     subgraph V2["기체 B (추종)"]
         SL["슬롯 = 리더 + R(ψ)·오프셋"] --> VI2["vi.command<br/>HSA (매 프레임)"]
@@ -26,6 +26,9 @@ flowchart LR
 | IMP-AGT-013 | MA `waypoint`: MissionPlan·C2의 MoveTo/Hold/RTB 수행과 상태 보고(ACCEPTED → EXECUTING → COMPLETED, 선점 CANCELLED), RoutePlan 경유점 비행 | `src/swarm_algorithms/waypoint.py` | REQ-BHV-002, REQ-BHV-004, PRP-GNC-001 | Pass (TC-AGT-015) |
 | IMP-AGT-014 | MA `formation`: leader-follower. FormationCommand(C2) 또는 MissionPlan.formations, 모양 LINE·COLUMN·WEDGE·ECHELON·CIRCLE·CUSTOM, PeerStatus P2P 교환(리더 위치 외삽), 추종 속도장 v = v_L + k_p·(슬롯 − 자기)(보정 상한), 리더는 작업 수행, 슬롯 오차 MD 기록 | `src/swarm_algorithms/formation.py` | PRP-BHV-003, REQ-BHV-003 | Pass (TC-AGT-016~018) |
 | IMP-AGT-015 | MA `flocking`: Reynolds 분리·정렬·응집 + 목표점(MoveTo·SearchArea 중심·RTB) 이동, `BatchMissionAutonomy`. 기체마다 자기 P2P inbox로 만든 이웃 표를 (N, M) 배열로 채워 NumPy로 한 번에 계산, 그룹 필터, `ctx.rng` 침로 흔들기 | `src/swarm_algorithms/flocking.py` | PRP-BHV-002, PRP-BHV-003, REQ-BHV-003, DEC-006 | Pass (TC-AGT-019, TC-AGT-010) |
+| IMP-AGT-016 | 공용 `TaskPilot`을 구간(Leg) 상태 기계로 전환, Hold 매개변수(center 없으면 시작 위치·고도, radius 없으면 `hold_radius_m`, `duration_s` 0·없음 = 다음 명령까지 / 있으면 원 위 체류 후 COMPLETED, 방향 기본 CW). 같은 task_id는 CANCELLED 없이 교체, 빈 Route·반경 ≤ 0 Hold·모양 없는 SearchArea는 REJECTED. waypoint MA·편대 리더가 사용 | `src/swarm_algorithms/common.py` | REQ-BHV-002, REQ-UI-003, DEC-033 | Pass (TC-AGT-020, TC-AGT-024, TC-AGT-025) |
+| IMP-AGT-017 | RouteTask: 항로점마다 goto(그 점의 alt_m·speed_mps·acceptance) + 행위 선회(Loiter: duration_s, Recon: 반경 원 1바퀴 이상 또는 duration_s), loop 반복, `TaskStatus.progress` = 마친 항로점 / 전체. SearchArea 원(다각형은 외접 원)은 정찰 원 1바퀴. 선회 반경은 최소 선회 반경 × 1.3 이상으로 보정. StrikeTask.aim_point는 REJECTED 유지 | `src/swarm_algorithms/common.py`, `waypoint.py`, `formation.py` | REQ-BHV-002, REQ-UI-004, DEC-033 | Pass (TC-AGT-021~025) |
+| IMP-AGT-018 | flocking Hold: 중심·반경·방향의 접선 벡터장 선회, duration_s 체류 후 COMPLETED. Route는 REJECTED | `src/swarm_algorithms/flocking.py` | REQ-BHV-002, DEC-033 | Pass (TC-AGT-025) |
 
 ## TC
 
@@ -41,5 +44,11 @@ flowchart LR
 | TC-AGT-017 | 편대 수렴: 5대 WEDGE(MissionPlan) 초기 슬롯 오차 > 200 m → 120 s 뒤 < 5 m, 고도 일치, 리더만 TaskStatus 보고, MD 슬롯 오차 기록. C2 FormationCommand COLUMN·CIRCLE 150 s 뒤 < 10 m | `tests/test_alg_swarm.py` | IMP-AGT-014, PRP-BHV-003 | Pass |
 | TC-AGT-018 | P2P를 모두 잃으면 추종기가 편대를 이루지 못한다(슬롯 오차 > 100 m). 편대는 데이터링크로 받은 정보만 쓴다 | `tests/test_alg_swarm.py` | IMP-AGT-014, PRP-SIM-003 | Pass |
 | TC-AGT-019 | flocking 20대(침로 0~380° 분산): 150 s 뒤 정렬도 < 0.5 → > 0.95, 최소 간격 > 40 m, 최대 간격 감소, 목표 쪽 이동, 이웃 수 지표. P2P 손실 시 이웃 0. SearchArea 중심 도달 COMPLETED, 그룹 필터 | `tests/test_alg_swarm.py` | IMP-AGT-015 | Pass |
+| TC-AGT-020 | Hold 매개변수: center(2 km 북)·반경 500 m ±8%·CCW·고도 1700 m·duration 90 s 뒤 COMPLETED. 매개변수 없음 → 시작 위치 둘레 `hold_radius_m` CW, 다음 명령까지 지속. 반경 ≤ 0 REJECTED | `tests/test_alg_mission.py` | IMP-AGT-016 | Pass |
+| TC-AGT-021 | Route 순서·구간별 고도/속도(18·25 m/s, 1400·1600 m) 추종, 항로점 접근 120 m 안, 상태 ACCEPTED → EXECUTING(진행 0, 1/3, 2/3) → COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-017 | Pass |
+| TC-AGT-022 | Loiter 체류 시간: 원 위에 든 뒤 80 s 이상 140 s 미만, 반경 400 m ±10%, 이후 다음 항로점 | `tests/test_alg_mission.py` | IMP-AGT-017 | Pass |
+| TC-AGT-023 | Recon 반경 600 m 원 1바퀴 이상(누적 각 ≥ 0.95 × 2π) 뒤 COMPLETED. SearchArea 원 700 m ±10% 선회 후 COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-017 | Pass |
+| TC-AGT-024 | 같은 task_id Route 교체(CANCELLED 없이 ACCEPTED 재송신, 새 항로점 도달), loop 2바퀴 이상(진행 0 → 0.5 → 1.0 → 0.5), 빈 Route REJECTED | `tests/test_alg_mission.py` | IMP-AGT-016, IMP-AGT-017 | Pass |
+| TC-AGT-025 | 편대 리더 Route 수행·추종기 이탈 800 m 미만, flocking Route REJECTED, flocking Hold 3대 반경 600 m ±25%·duration 후 COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-016~018 | Pass |
 
-시험 결과(2026-11-01): algorithms/tests 12 passed
+시험 결과(2026-11-02): algorithms/tests 23 passed (기존 12 + 신규 11)

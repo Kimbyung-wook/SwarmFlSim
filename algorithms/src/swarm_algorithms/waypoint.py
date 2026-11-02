@@ -1,4 +1,5 @@
-"""MA "waypoint" (IMP-AGT-013, REQ-BHV-002): MissionPlan·TaskCommand의 MoveTo/Hold/RTB를 수행한다.
+"""MA "waypoint" (IMP-AGT-013, IMP-AGT-016~017, REQ-BHV-002, DEC-033): MissionPlan·TaskCommand의
+MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPilot).
 
 - MissionPlan 작업(이 기체가 맡은 것)을 순서대로, C2 TaskCommand는 받는 즉시 수행한다.
 - RoutePlan이 오면 그 경유점 목록을 바로 비행한다(작업 상태 보고 없음).

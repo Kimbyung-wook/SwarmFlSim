@@ -1,7 +1,7 @@
 # WP3 Vehicle Agent 런타임 추적표 (모듈 AGT)
 
 - 패키지 `swarm-agent`, 실행 파일 `swarm-agent`. 한 프로세스가 여러 기체를 호스팅한다.
-- 기본 MA 플러그인은 `algorithms/`(IMP-AGT-011~)에 있다.
+- 기본 MA 플러그인은 `algorithms/`(IMP-AGT-011~018, TC-AGT-014~025)에 있다.
 
 ## 구성
 
@@ -67,7 +67,7 @@ flowchart LR
 | TC-AGT-012 | 명령행·버스 옵션 해석, 시나리오 파일 .pb·proto JSON·시나리오 JSON(예제 20대 flocking_basic 호스팅), `--list-plugins` | `tests/test_agent_runtime.py` | IMP-AGT-008 | Pass |
 | TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4. 25회 반복 통과 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
 
-시험 결과(2026-11-02): `uv run pytest` 120 passed (agent 21, algorithms 12, 기존 87)
+시험 결과(2026-11-02): `uv run pytest` 168 passed (agent 21, algorithms 23, 기존 124)
 
 ## FA 성능 측정 (IMP-AGT-010)
 
