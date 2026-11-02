@@ -36,6 +36,14 @@ Scenario parse_scenario_json(const std::string& json);
 
 Scenario from_proto(const v1::Scenario& msg);
 
+// IMP-CORE-017: 배속 상한. 0은 제한 없음(lockstep·free-run). NaN·inf·음수·상한 초과는 거부한다 (DEC-038)
+constexpr double kMaxRate = 1000.0;
+bool valid_rate(double rate);
+
+// IMP-CORE-017: 적재 전 입력 검증 (DEC-038). 비유한 값, 범위 밖 위경도, 빈 엔티티, frame_hz·배속 범위,
+// 없는 링크 프로파일을 std::invalid_argument로 거부한다. 중복 ID·동역학 지원 여부는 EntityStore가 본다
+void validate_scenario(const Scenario& sc);
+
 // CLI 실행 재정의. 빈 문자열은 재정의 없음. 모드가 틀리면 std::invalid_argument
 struct RunOverride {
   std::string mode, rate, hz, seed;

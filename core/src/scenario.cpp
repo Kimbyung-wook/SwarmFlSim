@@ -1,13 +1,17 @@
 // IMP-CORE-006: 최소 시나리오 파싱과 내장 시나리오
 #include "swarm/core/scenario.hpp"
+#include "swarm/lnk/profile.hpp"
 
 #include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <numbers>
+#include <set>
 #include <stdexcept>
 
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message.h>
 #include <google/protobuf/struct.pb.h>
 #include <google/protobuf/util/json_util.h>
 
@@ -31,7 +35,68 @@ double number(const pb::Value& v, const char* what) {
   return v.number_value();
 }
 
+// 설정된 모든 double·float 필드가 유한한지 본다. Struct 매개변수의 숫자도 포함한다
+void check_finite(const pb::Message& m, const std::string& path) {
+  const auto* r = m.GetReflection();
+  std::vector<const pb::FieldDescriptor*> fields;
+  r->ListFields(m, &fields);
+  for (const auto* f : fields) {
+    const std::string p = path + "." + std::string(f->name());
+    const int n = f->is_repeated() ? r->FieldSize(m, f) : 1;
+    for (int i = 0; i < n; ++i) {
+      double v = 0.0;
+      switch (f->cpp_type()) {
+        case pb::FieldDescriptor::CPPTYPE_DOUBLE:
+          v = f->is_repeated() ? r->GetRepeatedDouble(m, f, i) : r->GetDouble(m, f);
+          break;
+        case pb::FieldDescriptor::CPPTYPE_FLOAT:
+          v = f->is_repeated() ? r->GetRepeatedFloat(m, f, i) : r->GetFloat(m, f);
+          break;
+        case pb::FieldDescriptor::CPPTYPE_MESSAGE:
+          check_finite(f->is_repeated() ? r->GetRepeatedMessage(m, f, i) : r->GetMessage(m, f), p);
+          continue;
+        default:
+          continue;
+      }
+      if (!std::isfinite(v)) throw std::invalid_argument("non-finite value at " + p);
+    }
+  }
+}
+
+void check_geodetic(const v1::Geodetic& g, const std::string& path) {
+  if (g.lat_deg() < -90.0 || g.lat_deg() > 90.0)
+    throw std::invalid_argument("latitude out of range at " + path + ": " + std::to_string(g.lat_deg()));
+  if (g.lon_deg() < -180.0 || g.lon_deg() > 180.0)
+    throw std::invalid_argument("longitude out of range at " + path + ": " + std::to_string(g.lon_deg()));
+}
+
 }  // namespace
+
+bool valid_rate(double rate) { return std::isfinite(rate) && rate >= 0.0 && rate <= kMaxRate; }
+
+void validate_scenario(const Scenario& sc) {
+  if (sc.entities.empty()) throw std::invalid_argument("scenario has no entities");
+  if (sc.frame_hz < 50 || sc.frame_hz > 100)  // REQ-DYN-003
+    throw std::invalid_argument("frame_hz must be 50..100, got " + std::to_string(sc.frame_hz));
+  if (!valid_rate(sc.rate))
+    throw std::invalid_argument("rate must be finite and within 0.." + std::to_string(static_cast<int>(kMaxRate)));
+
+  if (sc.source) check_finite(*sc.source, "scenario");
+  for (const auto& e : sc.entities) {
+    check_finite(e, "entity " + e.id());
+    if (e.has_initial() && e.initial().has_position()) check_geodetic(e.initial().position(), e.id() + ".initial");
+    for (const auto& g : e.script_path()) check_geodetic(g, e.id() + ".script_path");
+  }
+
+  std::set<std::string> profiles;
+  if (sc.source)
+    for (const auto& p : sc.source->link_profiles()) profiles.insert(p.name());
+  for (const auto& e : sc.entities) {
+    const auto& name = e.link_profile();
+    if (name.empty() || profiles.count(name) || lnk::find_builtin_profile(name)) continue;
+    throw std::invalid_argument("unknown link profile for " + e.id() + ": " + name);
+  }
+}
 
 Scenario parse_scenario_json(const std::string& json) {
   pb::Struct root;

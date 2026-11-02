@@ -91,11 +91,21 @@ bool SimCore::load(const Scenario& sc) {
     return false;
   }
   EntityStore store;
-  store.build(sc.entities, provider_);  // 오류면 예외. 기존 시나리오는 그대로 둔다
-
   std::set<std::string> parts(cfg_.participants.begin(), cfg_.participants.end());
-  parts.insert(sc.participants.begin(), sc.participants.end());
-  for (const auto& p : parts) keys::check_entity_id(p);
+  try {
+    // IMP-CORE-017: 검증에 실패하면 기존 상태(시나리오·상태)를 그대로 두고 거부한다 (DEC-038)
+    validate_scenario(sc);
+    if (provider_.known_airframe)
+      for (const auto& e : sc.entities)
+        if (!e.airframe().empty() && !provider_.known_airframe(e.airframe()))
+          throw std::invalid_argument("unknown airframe for " + e.id() + ": " + e.airframe());
+    store.build(sc.entities, provider_);
+    parts.insert(sc.participants.begin(), sc.participants.end());
+    for (const auto& p : parts) keys::check_entity_id(p);
+  } catch (const std::exception& e) {
+    log(std::string("load rejected: ") + e.what());
+    return false;
+  }
 
   scenario_ = sc;
   store_ = std::move(store);
@@ -177,7 +187,13 @@ void SimCore::handle_start(const v1::Start& s, Clock::time_point now) {
     log("start rejected: frame_hz must be 50..100, got " + std::to_string(hz));
     return;
   }
-  mode_ = s.mode() == v1::RUN_MODE_UNSPECIFIED ? mode_ : s.mode();
+  const auto mode = s.mode() == v1::RUN_MODE_UNSPECIFIED ? mode_ : s.mode();
+  if (mode != v1::RUN_MODE_REALTIME && !valid_rate(s.rate())) {  // IMP-CORE-017, DEC-038
+    log("start rejected: rate must be finite and within 0.." + std::to_string(static_cast<int>(kMaxRate)) + ", got " +
+        std::to_string(s.rate()));
+    return;
+  }
+  mode_ = mode;
   frame_hz_ = hz;
   dt_us_ = 1000000u / hz;
   rate_ = mode_ == v1::RUN_MODE_REALTIME ? 1.0 : s.rate();
@@ -312,6 +328,9 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
     case C::kSetRate:
       if (mode_ == v1::RUN_MODE_REALTIME) {
         log("set_rate ignored in REALTIME");
+      } else if (!valid_rate(cmd.set_rate().rate())) {  // IMP-CORE-017, DEC-038
+        log("set_rate rejected: rate must be finite and within 0.." + std::to_string(static_cast<int>(kMaxRate)) +
+            ", got " + std::to_string(cmd.set_rate().rate()));
       } else {
         rate_ = cmd.set_rate().rate();
         anchor(now);
@@ -376,11 +395,15 @@ bool SimCore::poll(Clock::time_point now) {
         publish_scenario();
         last_params_wall_ = now;
       }
+      log_waiting(now, true);
       return false;
     }
     publish_frame();
   }
-  if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) return false;
+  if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) {
+    log_waiting(now, false);
+    return false;
+  }
 
   if (!stepping && paced()) {
     const auto deadline = next_deadline();
@@ -406,6 +429,19 @@ bool SimCore::poll(Clock::time_point now) {
   if (frame_ % frame_hz_ == 0) publish_status(now);
   if (cfg_.stop_after_frames && frame_ >= cfg_.stop_after_frames) set_state(v1::SIM_RUN_STATE_STOPPED, now);
   return true;
+}
+
+// IMP-CORE-018: 참여자를 오래 기다리면 5초마다 누구를 기다리는지 로그로 남긴다 (QA-004)
+void SimCore::log_waiting(Clock::time_point now, bool ready_phase) {
+  if (now - last_wait_log_ < std::chrono::seconds(5)) return;
+  last_wait_log_ = now;
+  std::string names;
+  for (const auto& [p, next] : done_) {
+    const bool waiting = ready_phase ? !ready_.count(p) : next < frame_ + 1;
+    if (waiting) names += (names.empty() ? "" : ", ") + p;
+  }
+  log(std::string(ready_phase ? "waiting for ready: " : "waiting for frame done: ") + names + " (frame " +
+      std::to_string(frame_) + ")");
 }
 
 void SimCore::integrate_frame() {
