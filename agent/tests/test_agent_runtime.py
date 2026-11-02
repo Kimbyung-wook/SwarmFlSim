@@ -116,6 +116,36 @@ def test_tc_agt_007_frame_done_without_vehicles_and_not_in_realtime():
     assert dones == ["sim/clock/done/agent-host-2"]
 
 
+def test_tc_agt_007_threaded_waits_for_late_nav():
+    """threaded 모드: 틱(N)이 항법 보고(N)보다 먼저 와도 그 보고를 기다려 모든 기체가 ControlOutput을 낸다"""
+    bus = FastInMemoryBus()
+    sc = make_scenario(2, "hold")
+    rt = AgentRuntime(bus, RuntimeConfig(), threaded=True)
+    rt.load(sc)
+    ctrl, done = [], []
+    bus.subscribe("onboard/*/ControlOutput", lambda s: ctrl.append(fa_pb2.ControlOutput.FromString(s.payload)))
+    bus.subscribe(keys.clock_done("agent-0"), lambda s: done.append(time.monotonic()))
+    for f in range(3):
+        tick = sim_pb2.ClockTick(frame=f, sim_time_us=f * 20000, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
+        bus.put(keys.CLOCK_TICK, tick.SerializeToString(), "")
+        for e in sc.entities[1:]:
+            nav = vi_pb2.NavigationReport()
+            nav.header.frame = f
+            nav.kinematics.CopyFrom(e.initial)
+            bus.put(keys.onboard(e.id, "NavigationReport"), nav.SerializeToString(), "")
+    t0 = time.monotonic()
+    rt.run(max_frames=3)
+    assert [c.header.frame for c in ctrl] == [0, 0, 1, 1, 2, 2]
+    # 보고가 모두 오면 기한을 기다리지 않는다
+    assert len(done) == 3 and done[-1] - t0 < 0.04
+    # 보고가 끝내 오지 않으면 기한 뒤에 처리한다
+    tick = sim_pb2.ClockTick(frame=3, sim_time_us=60000, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
+    bus.put(keys.CLOCK_TICK, tick.SerializeToString(), "")
+    t0 = time.monotonic()
+    rt.run(max_frames=4)
+    assert len(done) == 4 and done[-1] - t0 >= 0.04 and len(ctrl) == 6
+
+
 def test_tc_agt_008_no_truth_no_ctrl_exposure():
     sc = make_scenario(3, "spy", {"talk": True})
     h = Harness(sc, registry=registry())
@@ -297,7 +327,8 @@ def test_tc_agt_013_zenoh_threaded():
         cmd = load_command(sc)
         bus.put(keys.SIM_CTRL_CMD, cmd.SerializeToString(), protobuf_encoding("swarm.v1.SimCommand"))
         deadline = time.time() + 5
-        while not rt.vehicles and time.time() < deadline:
+        # 기체별 onboard·rx 구독 선언까지 끝나야 첫 항법 보고를 받는다
+        while len(rt._vehicle_subs) < 4 and time.time() < deadline:
             time.sleep(0.01)
         for f in range(5):
             for e in sc.entities[1:]:

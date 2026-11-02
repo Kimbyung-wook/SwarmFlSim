@@ -72,6 +72,10 @@ def vehicle_rng(seed: int, entity_id: str) -> np.random.Generator:
     return np.random.default_rng([seed, zlib.crc32(entity_id.encode())])
 
 
+# threaded 모드에서 틱을 받았는데 같은 프레임의 항법 보고가 덜 왔을 때 기다리는 최대 시간(벽시계)
+NAV_WAIT_S = 0.05
+
+
 class AgentRuntime:
     def __init__(self, bus: Bus, config: RuntimeConfig | None = None, registry: PluginRegistry | None = None,
                  threaded: bool = False) -> None:
@@ -81,6 +85,8 @@ class AgentRuntime:
         keys.check_entity_id(self.config.participant)
         self.registry = registry or PluginRegistry()
         self._queue: queue.Queue[Sample] | None = queue.Queue() if threaded else None
+        # 항법 보고를 기다리는 틱과 기한 (threaded 모드만)
+        self._pending_tick: tuple[sim_pb2.ClockTick, float] | None = None
         self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample)]
         self._vehicle_subs: list = []
@@ -120,11 +126,17 @@ class AgentRuntime:
         """threaded 모드 처리 루프. Shutdown, max_frames, should_stop()로 끝난다"""
         assert self._queue is not None, "run() needs threaded=True"
         while not self.stopped and not (should_stop and should_stop()):
+            timeout = 0.2
+            if self._pending_tick is not None:
+                timeout = max(0.0, self._pending_tick[1] - time.monotonic())
             try:
-                s = self._queue.get(timeout=0.2)
+                s = self._queue.get(timeout=timeout)
             except queue.Empty:
-                continue
-            self.handle(s)
+                s = None
+            if s is not None:
+                self.handle(s)
+            if self._pending_tick is not None and time.monotonic() >= self._pending_tick[1]:
+                self._release_tick()
             if max_frames and self.stats.ticks >= max_frames:
                 break
 
@@ -208,6 +220,7 @@ class AgentRuntime:
             v.ctx.rng = vehicle_rng(seed, v.entity_id)
 
     def _teardown(self) -> None:
+        self._pending_tick = None
         if self._initialized:
             for v in self._order:
                 if v.ma is not None:
@@ -232,6 +245,8 @@ class AgentRuntime:
         if name == "NavigationReport":
             v.nav = vi_pb2.NavigationReport.FromString(payload)
             v.nav_fresh = True
+            if self._pending_tick is not None and self._navs_ready(self._pending_tick[0].frame):
+                self._release_tick()
             return
         msg = decode(f"swarm.v1.{name}", payload)
         if name == "SystemStatus":
@@ -268,7 +283,29 @@ class AgentRuntime:
 
     # ---- 프레임 ----
 
+    def _navs_ready(self, frame: int) -> bool:
+        """이 프레임의 항법 보고를 받아야 할 기체(아직 보고가 없거나 직전 프레임까지 보고한 기체)가 모두 받았는가"""
+        for v in self._order:
+            if v.nav is None or v.nav.header.frame == frame - 1:
+                return False
+        return True
+
+    def _release_tick(self) -> None:
+        tick, _ = self._pending_tick
+        self._pending_tick = None
+        self._process_tick(tick)
+
     def _on_tick(self, tick: sim_pb2.ClockTick) -> None:
+        # Zenoh는 키마다 다른 스레드에서 콜백을 부르므로 NavigationReport(N)가 틱(N)보다 늦게 올 수 있다.
+        # threaded 모드에서는 그 기체들의 보고를 NAV_WAIT_S까지 기다린다
+        if self._pending_tick is not None:
+            self._release_tick()
+        if self._queue is not None and self._order and not self._navs_ready(tick.frame):
+            self._pending_tick = (tick, time.monotonic() + NAV_WAIT_S)
+            return
+        self._process_tick(tick)
+
+    def _process_tick(self, tick: sim_pb2.ClockTick) -> None:
         t_start = time.perf_counter()
         self.mode = tick.mode
         if self._order:

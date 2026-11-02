@@ -24,6 +24,7 @@ flowchart LR
 ```
 
 - 틱 N 처리: 수신 버퍼 넘김·ctx 갱신 → MA(기체 ID 순, 일괄 MA는 플러그인 이름 순) → FA(틱 N 이전에 항법 보고를 받은 기체만) → ControlOutput 발행 → lockstep이면 FrameDone(N).
+- threaded(Zenoh) 모드는 틱(N)을 받았을 때 항법 보고(N)가 덜 왔으면 최대 50 ms 기다린다. Zenoh는 키마다 다른 스레드에서 콜백을 부르므로 Core가 보고를 먼저 보내도 틱이 먼저 도착할 수 있다. 기다리는 기체는 아직 보고가 없거나 직전 프레임까지 보고한 기체다(파괴된 기체는 한 번만 기다린다).
 - 수신 버퍼는 이중 버퍼다. 프레임 사이에 도착한 메시지는 다음 프레임 시작 때 inbox로 넘어가고, 읽지 않은 것은 그다음 프레임에 버린다.
 - 런타임은 `sim/ctrl/cmd`를 읽지만 어떤 포트로도 넘기지 않는다. `truth/**`, `link/**`는 구독하지 않는다 (DEC-013, DEC-014, PRP-SIM-003).
 - 맡는 기체: `--entities`가 있으면 그 기체, 없으면 `AutonomySpec`(ma_plugin 또는 fa_plugin)이 있는 기체. MA가 비면 `hold`, FA가 비면 `default`.
@@ -40,7 +41,7 @@ flowchart LR
 | IMP-AGT-003 | L1 포트 구현 C2·VI·MS·MP·P2P·MD, 프레임 이중 버퍼, MP 자기 작업·편대 필터와 링크 갱신, MS 잔량 갱신, MS 명령 → onboard | `src/swarm_agent/ports.py` | DEC-013, PRP-BHV-001 | Pass (TC-AGT-008, TC-AGT-009) |
 | IMP-AGT-004 | Vehicle: 포트·AgentContext·FA·항법 상태 보관, 송신 header·seq | `src/swarm_agent/vehicle.py` | DEC-013 | Pass (TC-AGT-006, TC-AGT-009) |
 | IMP-AGT-005 | 플러그인 로딩: entry point `swarm.ma`/`swarm.fa` 등록명, 기본값(hold/default), 시험용 덮어쓰기 | `src/swarm_agent/plugins.py` | PRP-BHV-001, REQ-BHV-004 | Pass (TC-AGT-006) |
-| IMP-AGT-006 | AgentRuntime: LoadScenario·Start·Reset·Shutdown, 호스팅 선택, 기체별·일괄 MA 호출(NavBatch), FA step, onboard·rx 수신, LinkEnvelope 송신(C2 → controlling_gcs), lockstep FrameDone, 시드 고정 rng, 플러그인 예외 격리, 처리 시간 통계, threaded(Zenoh)·동기(InMemory) 모드 | `src/swarm_agent/runtime.py` | DEC-005, DEC-006, DEC-013, DEC-014, PRP-BHV-002, PRP-SIM-002 | Pass (TC-AGT-006~011, TC-AGT-013) |
+| IMP-AGT-006 | AgentRuntime: LoadScenario·Start·Reset·Shutdown, 호스팅 선택, 기체별·일괄 MA 호출(NavBatch), FA step, onboard·rx 수신, LinkEnvelope 송신(C2 → controlling_gcs), lockstep FrameDone, threaded 모드 항법 보고 대기(틱 보류, 50 ms 기한), 시드 고정 rng, 플러그인 예외 격리, 처리 시간 통계, threaded(Zenoh)·동기(InMemory) 모드 | `src/swarm_agent/runtime.py` | DEC-005, DEC-006, DEC-013, DEC-014, PRP-BHV-002, PRP-SIM-002 | Pass (TC-AGT-006~011, TC-AGT-013) |
 | IMP-AGT-007 | 기본 FA `default`: HSA·Waypoint·Orbit 유도(직행, 벡터장), 침로 비례 선회율(최대 뱅크 제한)·고도 비례 상승률, KinematicCmd에 heading_rate와 협조선회 bank를 함께 채움(2/3-DoF 공용), 상태 ACCEPTED·REJECTED·EXECUTING·COMPLETED·CANCELLED, 완료 후 마지막 점 선회, 같은 command_id 갱신 | `src/swarm_agent/fa.py` | PRP-GNC-001, REQ-GNC-001, REQ-DYN-001 | Pass (TC-AGT-001~005) |
 | IMP-AGT-008 | 실행 파일 `swarm-agent`: `--participant`, `--entities`, `--scenario`, `--frames`, `--list-plugins`, 공통 버스 옵션(`--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast`), 종료 시 처리 시간 출력 | `src/swarm_agent/cli.py` | DEC-026 | Pass (TC-AGT-012, 수동 시험) |
 | IMP-AGT-009 | 시험 도구: 가짜 Core(2-DoF 운동학, truth·NavigationReport·tick 발행), 가짜 Datalink(tx → rx 즉시, 손실 함수), 시나리오 생성기, Harness, 일치 판정 캐시 InMemoryBus | `src/swarm_agent/testing.py` | DEC-015 | Pass (시험 전체) |
@@ -58,15 +59,15 @@ flowchart LR
 | TC-AGT-004 | 모드 없음·빈 경유점·반경 0 REJECTED, 다른 명령으로 바꾸면 이전 것 CANCELLED, 같은 command_id 갱신은 상태 없음 | `tests/test_agent_fa.py` | IMP-AGT-007 | Pass |
 | TC-AGT-005 | 속도 제한, 최대 뱅크 제한, bank = atan(V·ψ̇/g), 3-DoF(bank) 해석으로도 같은 침로 수렴 | `tests/test_agent_fa.py` | IMP-AGT-007, REQ-DYN-001 | Pass |
 | TC-AGT-006 | AutonomySpec 있는 기체만 호스팅, `--entities` 지정, entry point로 hold/default 로딩, 일괄 MA 한 인스턴스, 모든 기체 ControlOutput(같은 프레임), NavBatch 행 = 기체 | `tests/test_agent_runtime.py` | IMP-AGT-004~006 | Pass |
-| TC-AGT-007 | lockstep 틱마다 `sim/clock/done/agent-0`에 FrameDone(같은 frame), ControlOutput이 FrameDone보다 먼저, 기체 없어도 FrameDone, REALTIME에서는 보내지 않음 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-005 | Pass |
+| TC-AGT-007 | lockstep 틱마다 `sim/clock/done/agent-0`에 FrameDone(같은 frame), ControlOutput이 FrameDone보다 먼저, 기체 없어도 FrameDone, REALTIME에서는 보내지 않음, threaded 모드에서 틱이 항법 보고보다 먼저 와도 모든 기체 출력(보고가 오면 바로, 끝내 안 오면 기한 뒤 처리) | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-005 | Pass |
 | TC-AGT-008 | 런타임 구독이 `truth/**`·`link/**`와 겹치지 않고 처리한 키에도 없음, sim/ctrl·truth 메시지가 포트로 들어오지 않음, 포트에 버스 참조 없음 | `tests/test_agent_runtime.py` | IMP-AGT-003, IMP-AGT-006, DEC-013, PRP-SIM-003 | Pass |
 | TC-AGT-009 | LinkEnvelope 송신(키, dst, iface, msg_type, header, seq, 인코딩), 수신 해제(C2·P2P inbox), 모르는 msg_type·자기 송신 버림, GCS 수신, Detection·Activity·잔량, MS 명령 키, MP 필터·RoutePlan 링크 갱신, MD 기록 | `tests/test_agent_runtime.py` | IMP-AGT-002~004, IMP-AGT-006 | Pass |
 | TC-AGT-010 | 결정론: 같은 시드 두 번 실행의 ControlOutput 바이트열 일치(flocking + ctx.rng 흔들기), 다른 시드는 다름, Start.seed 적용 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-005 | Pass |
 | TC-AGT-011 | 플러그인 예외 격리(FA는 계속 출력), Reset 후 재구성, Shutdown | `tests/test_agent_runtime.py` | IMP-AGT-006 | Pass |
 | TC-AGT-012 | 명령행·버스 옵션 해석, 시나리오 파일 .pb·proto JSON·시나리오 JSON(예제 20대 flocking_basic 호스팅), `--list-plugins` | `tests/test_agent_runtime.py` | IMP-AGT-008 | Pass |
-| TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
+| TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4. 25회 반복 통과 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
 
-시험 결과(2026-11-01): `uv run pytest` 119 passed (agent 20, algorithms 12, 기존 87)
+시험 결과(2026-11-02): `uv run pytest` 120 passed (agent 21, algorithms 12, 기존 87)
 
 ## FA 성능 측정 (IMP-AGT-010)
 
