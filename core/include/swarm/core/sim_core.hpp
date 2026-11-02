@@ -1,6 +1,7 @@
 // IMP-CORE-002: 프레임 스케줄러와 실행 모드 (DEC-005, REQ-SIM-002, REQ-DYN-003, PRP-SIM-002)
 // IMP-CORE-004: onboard/<id>/ControlOutput → 동역학 입력, onboard/<id>/NavigationReport 발행
 // IMP-CORE-009: 지면 교차 이벤트로 엔티티를 죽이고 truth/event/kill(cause=ground)을 발행한다
+// IMP-CORE-013: 동역학 매개변수. SetParams는 poll 시작(프레임 경계)에 적용하고 sim/param/<id>/dynamics를 발행한다 (DEC-035)
 // IMP-CORE-011: InjectFault. KILL, ENGINE(속도 명령 최소), NAV(NavigationReport 중단), SENSOR(기록만).
 //               LINK_CUT·GCS_LINK_CUT은 Datalink(WP4)가 처리하므로 Core는 무시한다
 //
@@ -93,6 +94,9 @@ class SimCore {
   void handle(const v1::SimCommand& cmd, Clock::time_point now);
   void handle_start(const v1::Start& s, Clock::time_point now);
   void handle_fault(const v1::InjectFault& f);
+  void handle_set_params(const v1::SetParams& p);
+  void publish_params(std::size_t i);
+  void publish_all_params();
   bool fault_active(std::size_t i, v1::FaultKind kind) const;
   void kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, std::uint64_t frame);
   void reset_run_state();
@@ -156,6 +160,7 @@ class SimCore {
 
   // 상태 보고
   Clock::time_point last_status_wall_{};
+  Clock::time_point last_params_wall_{};
   Clock::time_point rate_wall_{};
   std::uint64_t rate_sim_us_ = 0;
   double rate_actual_ = 0.0;

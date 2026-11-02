@@ -27,6 +27,7 @@ flowchart LR
 | IMP-DYN-005 | 평지, 위경도 격자 DEM 쌍선형 보간, 한반도 DEM 로더 인터페이스(`DemLoader`, 구현 없음), 지면 교차 이벤트 `make_ground_event` | `include/swarm/dyn/terrain.hpp`, `src/terrain.cpp` | REQ-SIM-003, DEC-004, DEC-005, DEC-016 |
 | IMP-DYN-006 | 모델·적분기 팩토리(이름·DynamicsKind → 인스턴스, 파라미터 재정의). dof5/dof6은 자리만(nullptr) | `include/swarm/dyn/factory.hpp`, `src/factory.cpp` | REQ-DYN-001, REQ-DYN-004 |
 | IMP-DYN-007 | 바람 반영: 위치 변화와 `to_kinematic` 속도 = 대기 속도 + `env.wind_ned_mps`, 2-DoF 뱅크·3-DoF 선회율에 `env.gravity_mps2` | `src/models.cpp` | DEC-023 |
+| IMP-DYN-008 | 2/3-DoF 매개변수 노출: `param_descs`·`get_param`·`set_param`. 시정수는 제어(CONTROL), 속도·선회·상승 한계는 기체(AIRFRAME). 범위 밖·모르는 이름은 false이고 값을 바꾸지 않는다. 질량·관성 같은 실행 중 변경 불가 항목은 질점 모델에 없어 모두 `runtime`=true. dof5/6은 자리만 | `include/swarm/dyn/models.hpp`, `src/models.cpp` | DEC-035, REQ-CFG-003, IMP-API-012 | TC-DYN-014 |
 
 ## 시험 (TC)
 
@@ -45,6 +46,7 @@ flowchart LR
 | TC-DYN-011 | to_kinematic/from_kinematic 왕복, NED 속도, 쿼터니언(방위·비행경로각·뱅크) | `tests/test_dynamics.cpp` | IMP-DYN-001, IMP-DYN-002 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-012 | 팩토리: 이름·DynamicsKind 생성, 예약 모델 nullptr, 파라미터 재정의, 모르는 파라미터 예외 | `tests/test_dynamics.cpp` | IMP-DYN-006 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-013 | 바람: 북향 50 m/s, 동풍 10 m/s 60 s 비행의 북·동 이동 거리, 대지 속도 출력, 3-DoF 선회율의 중력값 | `tests/test_dynamics.cpp` | IMP-DYN-007 | 통과 (msvc-debug, 2026-11-01) |
+| TC-DYN-014 | 매개변수 노출: 선언 기본값 = 모델 기본값, 두 계층 존재, set/get, 하한·상한·NaN·모르는 이름 거부(값 불변), 선언 이름 = 팩토리 파라미터 이름, 변경한 한계가 `derivatives`에 반영 | `tests/test_dynamics.cpp` | IMP-DYN-008 | 통과 (msvc-debug, 2026-11-02) |
 
 ## 제약과 계약 변경 요청
 

@@ -1,6 +1,7 @@
 // IMP-CORE-003: 엔티티 저장소
 #include "swarm/core/entity_store.hpp"
 
+#include <map>
 #include <stdexcept>
 
 #include "swarm/api/keys.hpp"
@@ -96,9 +97,29 @@ void EntityStore::build(const std::vector<v1::EntitySpec>& specs, const Dynamics
       if (provider.init_input) provider.init_input(*model, x(i), u(i));
     }
     model_.push_back(std::move(model));
+    rejected_.emplace_back();
+    // 시나리오 재정의는 airframe 표 위에 덮어쓴다. 거부 항목은 첫 EntityParams에 실린다
+    if (spec.has_dynamics_params() && !spec.dynamics_params().fields().empty()) {
+      if (has_params(id_.size() - 1)) apply_params(id_.size() - 1, spec.dynamics_params(), false);
+      else
+        for (const auto& [name, v] : spec.dynamics_params().fields()) {
+          (void)v;
+          v1::ParamRejection r;
+          r.set_name(name);
+          r.set_reason("unknown");
+          rejected_.back().push_back(std::move(r));
+        }
+    }
   }
   x0_ = x_;
   u0_ = u_;
+  rejected0_ = rejected_;
+  param0_.clear();
+  for (std::size_t i = 0; i < model_.size(); ++i) {
+    auto& v = param0_.emplace_back();
+    if (model_[i])
+      for (const auto& d : model_[i]->param_descs()) v.push_back(model_[i]->get_param(d.name));
+  }
 }
 
 void EntityStore::reset() {
@@ -106,6 +127,62 @@ void EntityStore::reset() {
   u_ = u0_;
   std::fill(alive_.begin(), alive_.end(), std::uint8_t{1});
   std::fill(energy_.begin(), energy_.end(), 1.0);
+  for (std::size_t i = 0; i < model_.size(); ++i) {
+    if (!model_[i]) continue;
+    const auto descs = model_[i]->param_descs();
+    for (std::size_t k = 0; k < descs.size(); ++k) model_[i]->set_param(descs[k].name, param0_[i][k]);
+  }
+  rejected_ = rejected0_;
+}
+
+const std::vector<v1::ParamRejection>& EntityStore::apply_params(std::size_t i, const google::protobuf::Struct& values,
+                                                                 bool runtime_only) {
+  auto& rej = rejected_[i];
+  rej.clear();
+  auto* m = model_[i].get();
+  const auto descs = m ? m->param_descs() : std::span<const dyn::ParamDesc>{};
+  // protobuf map의 순회 순서는 정해져 있지 않으므로 이름순으로 처리한다 (결정론)
+  std::map<std::string, const google::protobuf::Value*> sorted;
+  for (const auto& [k, v] : values.fields()) sorted.emplace(k, &v);
+  for (const auto& [name, v] : sorted) {
+    auto reject = [&](const char* why) {
+      v1::ParamRejection r;
+      r.set_name(name);
+      r.set_reason(why);
+      rej.push_back(std::move(r));
+    };
+    const dyn::ParamDesc* d = nullptr;
+    for (const auto& c : descs)
+      if (c.name == name) d = &c;
+    if (!d) reject("unknown");
+    else if (v->kind_case() != google::protobuf::Value::kNumberValue) reject("type");
+    else if (runtime_only && !d->runtime) reject("not_runtime");
+    else if (!(v->number_value() >= d->min && v->number_value() <= d->max) || !m->set_param(name, v->number_value()))
+      reject("range");
+  }
+  return rej;
+}
+
+void EntityStore::fill_params(std::size_t i, v1::EntityParams& out) const {
+  out.set_entity_id(id_[i]);
+  out.set_owner(v1::PARAM_OWNER_DYNAMICS);
+  const auto* m = model_[i].get();
+  if (!m) return;
+  out.set_plugin(std::string(m->name()));
+  auto* values = out.mutable_values()->mutable_fields();
+  for (const auto& d : m->param_descs()) {
+    auto* s = out.add_specs();
+    s->set_name(std::string(d.name));
+    s->set_layer(static_cast<v1::ParamLayer>(d.layer));
+    s->mutable_default_value()->set_number_value(d.default_value);
+    s->set_unit(std::string(d.unit));
+    s->set_min(d.min);
+    s->set_max(d.max);
+    s->set_description(std::string(d.description));
+    s->set_runtime(d.runtime);
+    (*values)[std::string(d.name)].set_number_value(m->get_param(d.name));
+  }
+  for (const auto& r : rejected_[i]) *out.add_rejected() = r;
 }
 
 std::optional<std::size_t> EntityStore::find(const std::string& id) const {

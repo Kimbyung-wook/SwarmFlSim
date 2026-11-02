@@ -1,5 +1,5 @@
 // IMP-CORE-002, IMP-CORE-004: 프레임 스케줄러, 실행 모드, onboard 입출력
-// IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입
+// IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입, IMP-CORE-013: 동역학 매개변수
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -111,6 +111,8 @@ bool SimCore::load(const Scenario& sc) {
 
   const auto now = Clock::now();
   publish_truth();
+  publish_all_params();
+  last_params_wall_ = now;
   set_state(v1::SIM_RUN_STATE_LOADED, now);
   log("loaded scenario '" + sc.name + "', " + std::to_string(store_.size()) + " entities");
   return true;
@@ -251,6 +253,31 @@ void SimCore::kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, 
   log(std::string("kill ") + store_.id(i) + " cause=" + cause);
 }
 
+void SimCore::handle_set_params(const v1::SetParams& p) {
+  // FA·MA 매개변수는 Agent 런타임이 처리한다
+  if (p.owner() != v1::PARAM_OWNER_DYNAMICS) return;
+  const auto idx = store_.find(p.entity_id());
+  if (!idx || !store_.has_params(*idx)) {
+    log("set_params: no dynamics parameters for " + p.entity_id());
+    return;
+  }
+  const auto& rej = store_.apply_params(*idx, p.values(), true);
+  for (const auto& r : rej) log("set_params " + p.entity_id() + "." + r.name() + " rejected: " + r.reason());
+  publish_params(*idx);
+}
+
+void SimCore::publish_params(std::size_t i) {
+  if (!store_.has_params(i)) return;
+  v1::EntityParams ep;
+  store_.fill_params(i, ep);
+  ep.set_sim_time_us(sim_time_us_);
+  publish(keys::sim_param(store_.id(i), "dynamics"), ep);
+}
+
+void SimCore::publish_all_params() {
+  for (std::size_t i = 0; i < store_.size(); ++i) publish_params(i);
+}
+
 void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
   using C = v1::SimCommand;
   switch (cmd.cmd_case()) {
@@ -292,6 +319,8 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
       if (state_ == v1::SIM_RUN_STATE_IDLE) break;
       reset_run_state();
       publish_truth();
+      publish_all_params();
+      last_params_wall_ = now;
       set_state(v1::SIM_RUN_STATE_LOADED, now);
       break;
     case C::kShutdown:
@@ -299,6 +328,9 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
       break;
     case C::kFault:
       handle_fault(cmd.fault());
+      break;
+    case C::kSetParams:
+      handle_set_params(cmd.set_params());
       break;
     case C::CMD_NOT_SET:
       break;
@@ -321,6 +353,10 @@ bool SimCore::poll(Clock::time_point now) {
   if (state_ != v1::SIM_RUN_STATE_RUNNING && state_ != v1::SIM_RUN_STATE_STOPPED &&
       now - last_status_wall_ >= std::chrono::seconds(1))
     publish_status(now);
+  if (state_ == v1::SIM_RUN_STATE_LOADED && now - last_params_wall_ >= std::chrono::seconds(1)) {
+    publish_all_params();
+    last_params_wall_ = now;
+  }
 
   const bool stepping = state_ == v1::SIM_RUN_STATE_PAUSED && step_budget_ > 0;
   if (state_ != v1::SIM_RUN_STATE_RUNNING && !stepping) return false;
