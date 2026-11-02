@@ -1,4 +1,5 @@
-// IMP-LNK-008~010: Datalink Emulator (PRP-LNK-001, PRP-LNK-002, REQ-LNK-001~004, DEC-009, DEC-005)
+// IMP-LNK-008~010, IMP-LNK-012~014: Datalink Emulator
+// (PRP-LNK-001, PRP-LNK-002, REQ-LNK-001~004, DEC-009, DEC-005, DEC-028~030)
 #include "swarm/lnk/emulator.hpp"
 
 #include <algorithm>
@@ -26,16 +27,37 @@ std::string encoding_of() {
 
 GeoPoint to_geo(const v1::Geodetic& g) { return {g.lat_deg(), g.lon_deg(), g.alt_m()}; }
 
+// DEC-030: area가 있으면 area, 없으면 폐기 예정 zone(고도 무관 원)
+JamArea to_jam_area(const v1::JamZoneEvent& jz) {
+  JamArea a;
+  if (!jz.has_area()) {
+    a.center = to_geo(jz.zone().center());
+    a.radius_m = jz.zone().radius_m();
+    return a;
+  }
+  const auto& ar = jz.area();
+  if (ar.has_polygon()) {
+    for (const auto& v : ar.polygon().vertices()) a.polygon.push_back(to_geo(v));
+  } else {
+    a.center = to_geo(ar.circle().center());
+    a.radius_m = ar.circle().radius_m();
+  }
+  a.min_alt_m = ar.min_alt_m();
+  a.max_alt_m = ar.max_alt_m();
+  return a;
+}
+
 }  // namespace
 
 Datalink::Datalink(Bus& bus, const dyn::Terrain* terrain, DatalinkConfig cfg)
     : bus_(bus), terrain_(terrain), cfg_(std::move(cfg)) {
   if (!cfg_.participant_id.empty()) keys::check_entity_id(cfg_.participant_id);
-  for (const auto& name : builtin_profile_names()) profiles_[name] = *find_builtin_profile(name);
+  for (const auto& name : builtin_profile_names()) base_profiles_[name] = *find_builtin_profile(name);
   for (const auto& [name, p] : cfg_.profiles) {
-    profiles_[name] = p;
-    profiles_[name].name = name;
+    base_profiles_[name] = p;
+    base_profiles_[name].name = name;
   }
+  profiles_ = base_profiles_;
   seed_ = cfg_.seed;
 
   subs_.push_back(bus_.subscribe(keys::kTxAll, [this](const Sample& s) { on_tx(s); }));
@@ -142,7 +164,7 @@ void Datalink::on_event(const Sample& s) {
   if (ev.has_jam_zone()) {
     const auto& jz = ev.jam_zone();
     if (jz.active())
-      jam_zones_[jz.owner()] = JamZone{to_geo(jz.zone().center()), jz.zone().radius_m()};
+      jam_zones_[jz.owner()] = to_jam_area(jz);
     else
       jam_zones_.erase(jz.owner());
   } else if (ev.has_kill()) {
@@ -241,6 +263,27 @@ void Datalink::on_tick(const Sample& s) {
 // ---- 상태 ----
 
 void Datalink::load_locked(const v1::Scenario& sc) {
+  // DEC-029: base(비우면 같은 이름의 내장·설정 프로파일, 없으면 default)를 복사하고 값이 있는 필드만 덮어쓴다.
+  // base는 앞서 정의한 시나리오 항목도 참조할 수 있다
+  profiles_ = base_profiles_;
+  for (const auto& lp : sc.link_profiles()) {
+    if (lp.name().empty()) {
+      log("skip link profile without name");
+      continue;
+    }
+    const LinkProfile* base = &profiles_.at("default");
+    if (!lp.base().empty()) {
+      if (auto it = profiles_.find(lp.base()); it != profiles_.end())
+        base = &it->second;
+      else
+        log("link profile '" + lp.name() + "': unknown base '" + lp.base() + "', using 'default'");
+    } else if (auto it = base_profiles_.find(lp.name()); it != base_profiles_.end()) {
+      base = &it->second;
+    }
+    profiles_[lp.name()] = apply_override(*base, lp);
+  }
+  warned_.clear();
+
   nodes_.clear();
   for (const auto& e : sc.entities()) {
     if (!keys::is_valid_entity_id(e.id())) {
@@ -308,7 +351,7 @@ bool Datalink::peers(const Node& a, const Node& b) const {
 bool Datalink::jammed_locked(const Node& n) const {
   if (!n.has_pos) return false;
   for (const auto& [owner, z] : jam_zones_)
-    if (in_jam_zone(n.pos, z.center, z.radius_m)) return true;
+    if (in_jam_area(n.pos, z)) return true;
   return false;
 }
 
@@ -346,8 +389,8 @@ PairState Datalink::pair_state_locked(const Node& a, const Node& b) const {
 v1::DropReason Datalink::static_check_locked(const Node* src, const Node* dst) const {
   if (!src || !dst || !src->alive || !dst->alive) return v1::DROP_REASON_NODE_DEAD;
   if (cut_locked(src->id, dst->id)) return v1::DROP_REASON_FAULT_INJECTED;
-  // DEC-009: 링크의 어느 한쪽이라도 재밍 영역 안에 있으면 100% 손실
-  if (jammed_locked(*src) || jammed_locked(*dst)) return v1::DROP_REASON_JAMMED;
+  // DEC-009, DEC-028: 수신단이 재밍 영역 안이면 100% 손실. 송신단 위치는 보지 않는다
+  if (jammed_locked(*dst)) return v1::DROP_REASON_JAMMED;
   if (!src->has_pos || !dst->has_pos) return v1::DROP_REASON_OUT_OF_RANGE;
   if (!in_range(profile_locked(*src), profile_locked(*dst), slant_range_m(src->pos, dst->pos)))
     return v1::DROP_REASON_OUT_OF_RANGE;

@@ -161,11 +161,8 @@ class Datalink {
   std::map<std::string, LinkProfile> profiles_;
   std::map<std::string, Node> nodes_;
   std::map<std::pair<std::string, std::string>, Channel> channels_;
-  struct JamZone {
-    GeoPoint center;
-    double radius_m;
-  };
-  std::map<std::string, JamZone> jam_zones_;  // 소유자 → 영역
+  std::map<std::string, LinkProfile> base_profiles_;  // 내장 + cfg_.profiles. 시나리오 재정의 전
+  std::map<std::string, JamArea> jam_zones_;          // 소유자 → 영역
   std::vector<Fault> faults_;
   std::vector<Pending> pending_;
   std::vector<InFlight> in_flight_;

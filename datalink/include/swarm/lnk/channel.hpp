@@ -7,6 +7,7 @@
 #include <deque>
 #include <random>
 #include <string_view>
+#include <vector>
 
 #include "swarm/api/dynamics.hpp"
 #include "swarm/lnk/profile.hpp"
@@ -38,6 +39,19 @@ bool line_of_sight(const dyn::Terrain* terrain, const GeoPoint& a, const GeoPoin
 
 // IMP-LNK-007: 재밍 영역(원, 고도 무관 기둥). 영역 안이면 true
 bool in_jam_zone(const GeoPoint& p, const GeoPoint& center, double radius_m);
+
+// IMP-LNK-013: 재밍 영역 Area = (원 | 다각형) × 고도대 (DEC-030)
+struct JamArea {
+  std::vector<GeoPoint> polygon;  // 3점 이상이면 다각형, 아니면 원
+  GeoPoint center;
+  double radius_m = 0.0;
+  double min_alt_m = -1.0e9;
+  double max_alt_m = 0.0;  // 0이면 상한 없음
+};
+// 위경도 평면에서 반직선 교차 판정. 경계 위의 점은 어느 쪽으로든 판정될 수 있다
+bool in_polygon(const GeoPoint& p, const std::vector<GeoPoint>& vertices);
+// 수평 영역 안이고 min_alt_m ≤ alt ≤ max_alt_m(0이면 상한 없음)이면 true
+bool in_jam_area(const GeoPoint& p, const JamArea& area);
 
 // 결정론 난수. 분포 변환을 직접 구현해 표준 라이브러리 구현과 무관하게 같은 값을 낸다
 class Rng {
