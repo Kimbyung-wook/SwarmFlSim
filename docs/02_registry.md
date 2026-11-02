@@ -106,6 +106,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-030 | 재밍 영역은 `JamZoneEvent.area`(원 또는 다각형 × 고도대)로 정의한다. `zone`(원)은 폐기 예정. 주파수대는 링크 모델에 주파수 선택이 들어갈 때 다시 검토한다 | OPN-029, WP4 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
 | DEC-031 | 재생 여부는 `SimStatus.replay`로 알린다. MCAP 재생기가 `sim/ctrl/status`를 다시 발행할 때 true로 채운다 | OPN-030, WP6 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
 | DEC-032 | 브로드캐스트는 같은 편 무전기 엔티티 전원을 수신 대상으로 보고, 닿지 않는 수신자마다 손실 사유(OUT_OF_RANGE 등)를 담은 `LinkOutcome`을 낸다. 손실률은 이 기준으로 집계하고, 거리 밖 제외는 모니터 필터로 한다 | OPN-031, WP6 질의, 사용자: "권고대로 진행" | Confirmed |
+| DEC-033 | 지도 임무 명령: `HoldTask`에 중심·반경·시간·방향을 두고, 항로점별 고도·속력·행위(선회 대기·정찰)를 갖는 `RouteTask`를 `TaskCommand`의 EXT 작업으로 추가한다. 지점 타격은 `StrikeTask.aim_point`, 지점 정찰은 원 `SearchAreaTask`를 쓴다 | REQ-UI-003, REQ-UI-004, REQ-BHV-002, 사용자: "비행체를 선택한 후에 맵에 우클릭하면 해당 지점에서 할 수 있는 임무들을 … 항로점 별로 할 수 있는 행위 … 같은 속성을 선택할 수 있으면 좋을 것 같아" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -163,6 +164,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | C2 | 타격 승인 | `MA_ApprovalRequest`, `MA_ApprovalRequestStatus`, `StrikeConsentRequest` | STD |
 | C2 | 운용자 역할(RBAC) | `MA_OperatorRole`, `MA_Authorization` | STD |
 | C2 | 편대 형태 지정(RTS 명령) | 대응 메시지 없음 | EXT |
+| C2 | 항로점별 행위가 있는 항로 비행(`RouteTask`) | 대응 메시지 없음 | EXT |
 | P2P | 리더 선출 | `MA_RaftVoteRequest`, `MA_RaftAppendEntriesRequest`, `MA_LeaderUpdateRequest` | STD |
 | P2P | COP 공유 | `MA_Entity`, `MA_PackagePartnerStatusReport` | STD |
 | MS | 데이터 전송(DMS) | `MA_TxDataPayloadCommand`, `MA_RxDataPayload` | STD |

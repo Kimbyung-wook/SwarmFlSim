@@ -3,7 +3,7 @@ import json
 import pytest
 from google.protobuf.descriptor import FieldDescriptor
 
-from swarm.v1 import c2_pb2, common_pb2, entity_pb2, link_pb2, mp_pb2, sim_pb2
+from swarm.v1 import c2_pb2, common_pb2, entity_pb2, link_pb2, mp_pb2, sim_pb2, vi_pb2
 from swarm_scenario import from_dict, from_proto, schema, sim_commands, to_dict, to_proto
 from swarm_scenario.enums import full_to_short
 
@@ -119,6 +119,7 @@ _SCHEMA_TO_PROTO = {
     "EngagementCriteria": mp_pb2.EngagementCriteria,
     "FormationCommand": c2_pb2.FormationCommand,
     "TaskCommand": c2_pb2.TaskCommand,
+    "RouteWaypoint": c2_pb2.RouteWaypoint,
     "MapSpec": sim_pb2.MapSpec,
     "RunSpec": sim_pb2.RunSpec,
     "LinkProfile": link_pb2.LinkProfile,
@@ -129,6 +130,7 @@ _ENUMS = {
     "DynamicsKind": entity_pb2.DynamicsKind,
     "RunMode": sim_pb2.RunMode,
     "FormationShape": c2_pb2.FormationShape,
+    "TurnDirection": vi_pb2.TurnDirection,
 }
 
 
@@ -185,3 +187,28 @@ def test_link_profiles_round_trip(doc):
     assert (p.name, p.base, p.tx_power_dbm, p.queue_len) == ("uav_long", "uav_default", 37.0, 128)
     assert p.HasField("tx_power_dbm") and not p.HasField("latency_ms") and p.HasField("ge")
     assert to_dict(from_proto(msg))["link_profiles"] == profiles
+
+
+def test_route_and_hold_round_trip(doc):
+    """TC-SCN-010: 지도 임무 명령(DEC-033) RouteTask·HoldTask 매개변수 왕복"""
+    tasks = [
+        {"task_id": "t-route", "assignees": ["uav-001"],
+         "route": {"waypoints": [
+             {"position": {"lat_deg": 37.5, "lon_deg": 129.0, "alt_m": 500.0}, "speed_mps": 25.0},
+             {"position": {"lat_deg": 37.6, "lon_deg": 129.1, "alt_m": 800.0},
+              "loiter": {"duration_s": 60.0, "radius_m": 300.0, "direction": "ccw"}},
+             {"position": {"lat_deg": 37.7, "lon_deg": 129.0, "alt_m": 800.0}, "recon": {"radius_m": 1000.0}},
+         ]}},
+        {"task_id": "t-hold", "assignees": ["uav-002"],
+         "hold": {"center": {"lat_deg": 37.5, "lon_deg": 129.2, "alt_m": 600.0}, "radius_m": 400.0, "duration_s": 120.0}},
+    ]
+    sc = from_dict(dict(doc, mission_plan={"plan_id": "p-map", "tasks": tasks}))
+    msg = sim_pb2.Scenario.FromString(to_proto(sc).SerializeToString())
+    route = msg.mission_plan.tasks[0].route
+    assert [w.WhichOneof("action") for w in route.waypoints] == [None, "loiter", "recon"]
+    assert route.waypoints[1].loiter.direction == vi_pb2.TURN_DIRECTION_CCW
+    assert msg.mission_plan.tasks[1].hold.HasField("duration_s")
+    assert to_dict(from_proto(msg))["mission_plan"]["tasks"] == tasks
+    bad = dict(tasks[0], route={"waypoints": [dict(tasks[0]["route"]["waypoints"][2], loiter={"duration_s": 1.0})]})
+    with pytest.raises(Exception):
+        from_dict(dict(doc, mission_plan={"plan_id": "p", "tasks": [bad]}))

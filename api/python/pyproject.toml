@@ -1,6 +1,6 @@
 [project]
 name = "swarm-api"
-version = "0.3.0"
+version = "0.4.0"
 description = "Swarm flight plugin API and bus contract (WP0)"
 requires-python = ">=3.12"
 dependencies = [
