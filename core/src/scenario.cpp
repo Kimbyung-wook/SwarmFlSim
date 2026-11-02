@@ -76,7 +76,22 @@ Scenario from_proto(const v1::Scenario& msg) {
   sc.seed = run.seed();
   sc.participants.assign(run.participants().begin(), run.participants().end());
   sc.entities.assign(msg.entities().begin(), msg.entities().end());
+  sc.source = msg;
   return sc;
+}
+
+v1::Scenario to_proto(const Scenario& sc) {
+  if (sc.source) return *sc.source;
+  v1::Scenario msg;
+  msg.set_name(sc.name);
+  auto* run = msg.mutable_run();
+  run->set_mode(sc.mode);
+  run->set_frame_hz(sc.frame_hz);
+  run->set_seed(sc.seed);
+  run->set_rate(sc.rate);
+  for (const auto& p : sc.participants) run->add_participants(p);
+  for (const auto& e : sc.entities) *msg.add_entities() = e;
+  return msg;
 }
 
 Scenario read_scenario_file(const std::string& path) {

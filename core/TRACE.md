@@ -50,6 +50,7 @@ flowchart LR
 | IMP-CORE-011 | InjectFault: ENGINE(속도 명령 최소, 기간·해제), NAV(NavigationReport 중단), SENSOR(상태만 기록, 탐지 모델 없음), LINK_CUT·GCS_LINK_CUT은 Datalink(WP4) 담당이므로 무시. `SimCore::fault_active` 조회, Reset 시 해제 | `include/swarm/core/sim_core.hpp`, `src/sim_core.cpp` | DEC-014, REQ-LNK-002, REQ-LNK-003 | TC-CORE-016 통과 |
 | IMP-CORE-012 | swarm_core가 WP2 동역학으로 동작. 명령행 `--integrator rk4\|rk45`, `--terrain-flat <m>`, `--terrain-dem`(자리) | `src/main.cpp` | DEC-005, DEC-016 | TC-CORE-018 확인 |
 | IMP-CORE-013 | 동역학 매개변수 (DEC-035): 값 순서 기본값 → airframe 표 → `EntitySpec.dynamics_params` → 실행 중 `SetParams{owner=DYNAMICS}`. 거부 사유 unknown\|type\|range\|not_runtime을 이름순으로 `EntityParams.rejected`에 기록(가장 최근 적재·변경 것). SetParams는 poll 시작(프레임 경계)에 적용하고 `sim/param/<id>/dynamics`를 발행(적재 직후·변경 직후·Reset 직후·LOADED 상태 1초마다). Reset은 시나리오 적용 후 값으로 되돌린다. 매개변수가 없는 엔티티(STATIC, SCRIPTED)는 발행하지 않는다. 모르는 airframe은 기본값을 쓰고 `dynamics_params`는 적용 | `include/swarm/core/entity_store.hpp`, `src/entity_store.cpp`, `src/sim_core.cpp` | DEC-035, REQ-CFG-003, DEC-014, IMP-API-012, IMP-DYN-008 | TC-CORE-019~023 통과 |
+| IMP-CORE-014 | 시나리오 재발행과 lockstep 준비 신호 (DEC-037, DEC-025): 적재 직후·Reset 직후·LOADED 상태 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행(proto로 받은 것은 원본 그대로, 아니면 필드에서 구성). lockstep은 `RunSpec.participants`(+`--participant`) 전원의 `FrameDone{frame=0}` 준비 신호를 받은 뒤에 첫 틱을 낸다. 준비 신호는 Start 전에도 받고, 첫 틱 이후의 frame=0 신호는 준비가 아니라 프레임 0 완료로 센다. 비lockstep은 기다리지 않는다 | `include/swarm/core/scenario.hpp`, `src/scenario.cpp`, `src/sim_core.cpp` | DEC-037, DEC-025, DEC-014, IMP-API-014 | TC-CORE-024, TC-CORE-025 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -79,6 +80,8 @@ flowchart LR
 | TC-CORE-021 | `runtime`=false 항목: 적재 시 적용, 실행 중 not_runtime 거부(같은 명령의 runtime 항목은 적용), 범위 거부 시 값 유지 (시험용 목 모델) | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
 | TC-CORE-022 | lockstep 재현성: 같은 시드·같은 프레임(50)의 SetParams는 truth 바이트열 동일, 프레임 51·없음과는 다름, 선회율 한계 변경이 3 s 선회각에 반영 | `tests/test_core.cpp` | IMP-CORE-013, IMP-CORE-002 | 통과 (msvc-debug, 2026-11-02) |
 | TC-CORE-023 | LOADED 상태에서 1초(벽시계)마다 재발행, 실행 중에는 재발행 없음 | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-024 | `sim/ctrl/scenario` 발행: 적재 직후 1회, LOADED 1초 주기, 실행 중 중단, Reset 직후, 인코딩, proto 원본 보존, 원본 없는 시나리오는 필드에서 구성 | `tests/test_core.cpp` | IMP-CORE-014 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-025 | lockstep 준비 신호: 전원 준비 전 틱 없음, 미등록 참여자 무시, 준비 신호는 프레임 0 완료가 아님, 시작 후 frame=0은 준비로 쓰이지 않음, Start 전 준비 인정, FREERUN은 대기 없음 | `tests/test_core.cpp` | IMP-CORE-014 | 통과 (msvc-debug, 2026-11-02) |
 
 ## 제약과 후속
 
@@ -86,6 +89,7 @@ flowchart LR
 - 지형은 평지만 쓴다. DEM 로더(`dyn::DemLoader`)가 구현되면 `Wp2DynamicsOptions::terrain`에 넣고 `--terrain-dem`을 연결한다 (DEC-016).
 - 5/6-DoF(DYNAMICS_KIND_DOF5/6)는 WP2 팩토리가 nullptr를 주므로 불러오기에서 거부된다.
 - 스크립트 이동은 대지 기준이며 바람을 더하지 않는다.
+- 준비 신호는 `load()`에서만 비운다. Reset 뒤에는 참여자가 다시 보내지 않아도 이전 준비 상태를 유지한다. 시작 후 새 참여자는 받지 않는다(DEC-037).
 - SetParams의 적용 시각은 Core가 명령을 poll로 받은 프레임 경계다. 명령에 프레임 번호가 없으므로 버스 도착 시점에 따라 어느 프레임인지가 정해진다. 재현이 필요한 시험은 `LoadScenario`나 `dynamics_params`로 시작 값을 정한다.
 - 2/3-DoF의 모든 매개변수가 `runtime`=true다(질량·관성 항목은 질점 모델에 없다). 5/6-DoF가 들어오면 해당 항목을 false로 둔다.
 - SENSOR 고장은 상태만 둔다. Core가 탐지(Detection)를 만들게 되면 그 상태로 막는다.

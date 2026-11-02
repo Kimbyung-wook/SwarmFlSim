@@ -121,6 +121,14 @@ core::Scenario one_uav() {
   return sc;
 }
 
+// lockstep 준비 신호: 첫 틱 전의 FrameDone{frame=0} (DEC-037)
+void ready(Bus& bus, const char* participant) {
+  v1::FrameDone d;
+  d.set_participant(participant);
+  d.set_frame(0);
+  put(bus, keys::clock_done(participant), d);
+}
+
 core::CoreConfig quiet(std::vector<std::string> participants = {}) {
   core::CoreConfig cfg;
   cfg.participants = std::move(participants);
@@ -180,6 +188,8 @@ void test_lockstep_barrier() {
   InMemoryBus bus;
   core::SimCore sim(bus, core::mock::provider(), quiet({"agent-host-1", "agent-host-2"}));
   sim.load(one_uav());
+  ready(bus, "agent-host-1");
+  ready(bus, "agent-host-2");
   sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0));
   const auto t = Clock::now();
   auto done = [&](const char* p, std::uint64_t f) {
@@ -231,6 +241,7 @@ void test_lockstep_determinism() {
       put(bus, keys::clock_done("agent-host-1"), d);
     });
     sim.load(one_uav());
+    ready(bus, "agent-host-1");
     sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50, 42));
     const auto t = Clock::now();
     // 완료 신호는 다음 poll에서 반영되므로 진행하지 않는 poll이 섞인다
@@ -381,6 +392,7 @@ void test_scenario_status_reset() {
   CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED);
 
   // Start.frame_hz가 0이면 시나리오 값(60 Hz)을 쓴다. 장벽 참여자는 시나리오에서 온다
+  ready(bus, "agent-host-1");
   sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 0));
   sim.poll(t);
   CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING && sim.frame_hz() == 60 && sim.dt_us() == 16666);
@@ -538,6 +550,7 @@ void test_wp2_lockstep_determinism() {
       put(bus, keys::clock_done("agent-host-1"), d);
     });
     CHECK(sim.load(scenario()));
+    ready(bus, "agent-host-1");
     model_names.clear();
     for (std::size_t i = 0; i < sim.entities().size(); ++i)
       model_names += sim.entities().model(i) ? std::string(sim.entities().model(i)->name()) + "," : "-,";
@@ -986,6 +999,7 @@ void test_params_lockstep() {
       put(bus, keys::clock_done("agent-host-1"), d);
     });
     CHECK(sim.load(one_uav()));
+    ready(bus, "agent-host-1");
     sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50, 42));
     const auto t = Clock::now();
     bool sent = false;
@@ -1036,6 +1050,122 @@ void test_params_periodic() {
   CHECK(count_params(rec, "uav-001") == 3);
 }
 
+// TC-CORE-024: 적재 직후와 LOADED 상태 1초마다 sim/ctrl/scenario에 Scenario 전체를 발행한다 (DEC-037)
+void test_scenario_publish() {
+  InMemoryBus bus;
+  std::vector<v1::Scenario> got;
+  bool encoding_ok = true;
+  auto sub = bus.subscribe(keys::kSimCtrlScenario, [&](const Sample& s) {
+    encoding_ok = encoding_ok && s.encoding == protobuf_encoding("swarm.v1.Scenario");
+    got.push_back(decode<v1::Scenario>(s));
+  });
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+
+  // proto로 받은 시나리오는 지도·임무 계획까지 원본 그대로 나간다
+  v1::Scenario msg;
+  msg.set_name("pub-demo");
+  msg.set_description("원본 보존");
+  msg.mutable_run()->set_mode(v1::RUN_MODE_FREERUN);
+  msg.mutable_run()->set_frame_hz(60);
+  msg.mutable_run()->set_seed(9);
+  *msg.add_entities() = core::builtin_scenario(1).entities.at(1);
+  v1::SimCommand load;
+  *load.mutable_load()->mutable_scenario() = msg;
+  sim.submit(load);
+  const auto t0 = Clock::now();
+  sim.poll(t0);
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && got.size() == 1 && encoding_ok);
+  CHECK(got[0].SerializeAsString() == msg.SerializeAsString());
+
+  sim.poll(t0 + 300ms);
+  CHECK(got.size() == 1);
+  sim.poll(t0 + 1200ms);
+  CHECK(got.size() == 2);
+  sim.poll(t0 + 2300ms);
+  CHECK(got.size() == 3 && got[2].SerializeAsString() == msg.SerializeAsString());
+
+  // Reset 직후에도 낸다. 실행 중에는 내지 않는다
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 3);
+  sim.poll(t0 + 10s);
+  CHECK(got.size() == 3);
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(t0 + 10s);
+  CHECK(got.size() == 4);
+
+  // 최소 JSON·내장 시나리오(원본 없음)는 Scenario 필드에서 만든다
+  core::Scenario sc = core::builtin_scenario(2);
+  sc.name = "builtin-pub";
+  sc.mode = v1::RUN_MODE_LOCKSTEP;
+  sc.seed = 5;
+  sc.participants = {"agent-host-1"};
+  CHECK(sim.load(sc));
+  const auto& last = got.back();
+  CHECK(got.size() == 5 && last.name() == "builtin-pub" && last.run().mode() == v1::RUN_MODE_LOCKSTEP);
+  CHECK(last.run().seed() == 5 && last.run().frame_hz() == sc.frame_hz && last.run().participants_size() == 1);
+  CHECK(last.entities_size() == 3);
+}
+
+// TC-CORE-025: lockstep은 RunSpec.participants 전원의 준비 신호(FrameDone{frame=0}) 뒤에 첫 틱을 낸다 (DEC-037)
+void test_lockstep_ready() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  core::Scenario sc = one_uav();
+  sc.mode = v1::RUN_MODE_LOCKSTEP;
+  sc.participants = {"agent-host-1", "link-host"};  // 시나리오 쪽 참여자
+  CHECK(sim.load(sc));
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  const auto t = Clock::now();
+
+  CHECK(!sim.poll(t));
+  CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING && rec.ticks.empty());  // 준비 전에는 틱이 없다
+  ready(bus, "agent-host-1");
+  ready(bus, "agent-uuu-9");  // 등록되지 않은 참여자는 준비로 치지 않는다
+  CHECK(!sim.poll(t));
+  CHECK(rec.ticks.empty());
+  ready(bus, "link-host");
+  CHECK(!sim.poll(t));  // 첫 틱을 내지만 프레임 0의 완료 응답을 기다린다
+  CHECK(rec.ticks.size() == 1 && rec.ticks[0].frame() == 0 && sim.frame() == 0);
+
+  // 준비 신호는 프레임 0의 완료로 세지 않는다
+  CHECK(!sim.poll(t));
+  CHECK(sim.frame() == 0);
+  auto done = [&](const char* p, std::uint64_t f) {
+    v1::FrameDone d;
+    d.set_participant(p);
+    d.set_frame(f);
+    put(bus, keys::clock_done(p), d);
+  };
+  done("agent-host-1", 0);
+  CHECK(!sim.poll(t));
+  done("link-host", 0);
+  CHECK(sim.poll(t) && sim.frame() == 1);
+
+  // 시작 후에는 frame=0 신호가 준비로 쓰이지 않는다
+  ready(bus, "agent-host-1");
+  CHECK(!sim.poll(t));
+  CHECK(sim.frame() == 1);
+
+  // Start 전에 보낸 준비 신호도 인정한다. 비lockstep 모드는 준비 신호를 기다리지 않는다
+  InMemoryBus bus2;
+  Recorder rec2(bus2);
+  core::SimCore sim2(bus2, core::mock::provider(), quiet({"agent-host-1"}));
+  sim2.load(one_uav());
+  ready(bus2, "agent-host-1");
+  sim2.poll(t);
+  sim2.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  sim2.poll(t);
+  CHECK(rec2.ticks.size() == 1);
+
+  InMemoryBus bus3;
+  Recorder rec3(bus3);
+  core::SimCore sim3(bus3, core::mock::provider(), quiet({"agent-host-1"}));
+  sim3.load(one_uav());
+  sim3.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  CHECK(sim3.poll(t) && sim3.frame() == 1 && !rec3.ticks.empty());
+}
+
 }  // namespace
 
 int main() {
@@ -1059,6 +1189,8 @@ int main() {
   test_params_not_runtime();
   test_params_lockstep();
   test_params_periodic();
+  test_scenario_publish();
+  test_lockstep_ready();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
