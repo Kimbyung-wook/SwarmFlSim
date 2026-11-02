@@ -176,3 +176,24 @@ def test_tc_agt_034_ma_plugins_declare_params_and_react():
     set_params(h, UAV, sim_pb2.PARAM_OWNER_MA, orbit_radius_m=500.0)
     h.run_s(0.2)
     assert ho.orbit_radius_m == 500.0 and ho.sent  # 새 값으로 다시 명령했다
+
+
+def test_tc_agt_035_choices_published_and_rejected():
+    """문자열 열거형 racetrack_guidance: ParamSpec.choices 게시, 시나리오·실행 중 잘못된 값은 choice 거부 (DEC-036)"""
+    sc = make_scenario(1, "hold")
+    sc.entities[1].autonomy.fa_params.update({"racetrack_guidance": "foo"})
+    h, rec = start(sc)
+    fa = rec.last(UAV, "fa")
+    spec = {s.name: s for s in fa.specs}
+    assert list(spec["racetrack_guidance"].choices) == ["dubins", "vector_field"]
+    assert not spec["k_heading"].choices
+    assert {r.name: r.reason for r in fa.rejected} == {"racetrack_guidance": "choice"}
+    assert vals(fa)["racetrack_guidance"] == "dubins"  # 거부되면 기본값, on_init 예외 없음
+    set_params(h, UAV, sim_pb2.PARAM_OWNER_FA, racetrack_guidance="bar")
+    h.run_s(0.1)
+    fa = rec.last(UAV, "fa")
+    assert {r.name: r.reason for r in fa.rejected} == {"racetrack_guidance": "choice"}
+    assert h.rt.vehicles[UAV].fa.race_guidance == "dubins"
+    set_params(h, UAV, sim_pb2.PARAM_OWNER_FA, racetrack_guidance="vector_field")
+    h.run_s(0.1)
+    assert not rec.last(UAV, "fa").rejected and h.rt.vehicles[UAV].fa.race_guidance == "vector_field"
