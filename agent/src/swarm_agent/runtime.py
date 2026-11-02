@@ -27,6 +27,7 @@ from swarm_api import BatchMissionAutonomy, Bus, NavBatch, Sample, keys
 from swarm_api.keys import Iface
 
 from .messages import decode, encoding, full_name, short_name
+from .params import OWNER_KEY, ParamSet, param_defs
 from .plugins import PluginRegistry
 from .ports import C2_INBOUND
 from .vehicle import Vehicle
@@ -72,6 +73,9 @@ def vehicle_rng(seed: int, entity_id: str) -> np.random.Generator:
     return np.random.default_rng([seed, zlib.crc32(entity_id.encode())])
 
 
+# 적재 상태에서 EntityParams를 다시 발행하는 주기 (벽시계, DEC-035)
+PARAM_PUBLISH_S = 1.0
+
 # threaded 모드에서 틱을 받았는데 같은 프레임의 항법 보고가 덜 왔을 때 기다리는 최대 시간(벽시계)
 NAV_WAIT_S = 0.05
 
@@ -102,6 +106,9 @@ class AgentRuntime:
         self.stats = RuntimeStats()
         self._tx_seq: dict[str, int] = {}
         self._warned: set[str] = set()
+        self._pending_params: list[tuple[str, int, dict]] = []  # (entity, owner, 바꿀 값). 다음 프레임 시작에 적용
+        self._param_due = 0.0
+        self._sim_time_us = 0
 
     # ---- 버스 입력 ----
 
@@ -137,6 +144,7 @@ class AgentRuntime:
                 self.handle(s)
             if self._pending_tick is not None and time.monotonic() >= self._pending_tick[1]:
                 self._release_tick()
+            self._publish_params_due()
             if max_frames and self.stats.ticks >= max_frames:
                 break
 
@@ -162,6 +170,10 @@ class AgentRuntime:
         elif which == "reset":
             if self.scenario is not None:
                 self.load(self.scenario)
+        elif which == "set_params":
+            sp = cmd.set_params
+            if sp.entity_id in self.vehicles and sp.owner in OWNER_KEY:
+                self._pending_params.append((sp.entity_id, sp.owner, _struct_dict(sp.values)))
         elif which == "shutdown":
             self.stopped = True
 
@@ -183,6 +195,7 @@ class AgentRuntime:
             self._vehicle_subs.append(self.bus.subscribe(f"onboard/{v.entity_id}/*", self._on_sample))
             self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
         log.info("loaded '%s': hosting %d vehicles", scenario.name, len(self._order))
+        self._publish_params()
 
     def _hosts(self, spec: entity_pb2.EntitySpec) -> bool:
         if self.config.entities is not None:
@@ -198,12 +211,17 @@ class AgentRuntime:
         if fa_cls is None:
             self.warn(f"{spec.id}: no FA plugin available; not hosted")
             return None
-        fa_params = {"dynamics": entity_pb2.DynamicsKind.Name(spec.dynamics), "airframe": spec.airframe,
-                     **_struct_dict(spec.autonomy.fa_params)}
+        fa_context = {"dynamics": entity_pb2.DynamicsKind.Name(spec.dynamics), "airframe": spec.airframe}
+        fa_set = ParamSet.load("fa", spec.autonomy.fa_plugin or "default", param_defs(fa_cls),
+                               _struct_dict(spec.autonomy.fa_params))
         ma_name = spec.autonomy.ma_plugin or "hold"
-        v = Vehicle(self, spec, fa_cls(), fa_params, ma_name, _struct_dict(spec.autonomy.ma_params),
-                    vehicle_rng(self.seed, spec.id), plan, criteria)
         ma_cls = self.registry.ma_class(ma_name)
+        ma_set = ParamSet.load("ma", ma_name, param_defs(ma_cls), _struct_dict(spec.autonomy.ma_params))
+        for ps in (fa_set, ma_set):
+            for name, reason in ps.rejected.items():
+                self.warn(f"{spec.id}: {ps.owner} param '{name}' rejected ({reason})")
+        v = Vehicle(self, spec, fa_cls(), fa_set, fa_context, ma_name, ma_set,
+                    vehicle_rng(self.seed, spec.id), plan, criteria)
         if ma_cls is None:
             self.warn(f"{spec.id}: MA plugin '{ma_name}' not found; FA holds")
         elif issubclass(ma_cls, BatchMissionAutonomy):
@@ -221,6 +239,7 @@ class AgentRuntime:
 
     def _teardown(self) -> None:
         self._pending_tick = None
+        self._pending_params = []
         if self._initialized:
             for v in self._order:
                 if v.ma is not None:
@@ -308,6 +327,9 @@ class AgentRuntime:
     def _process_tick(self, tick: sim_pb2.ClockTick) -> None:
         t_start = time.perf_counter()
         self.mode = tick.mode
+        self._sim_time_us = tick.sim_time_us
+        self._apply_params()
+        self._publish_params_due()
         if self._order:
             self._step(tick)
         if tick.mode == sim_pb2.RUN_MODE_LOCKSTEP:
@@ -350,6 +372,43 @@ class AgentRuntime:
         t2 = time.perf_counter()
         self.stats.ma_s += t1 - t0
         self.stats.fa_s += t2 - t1
+
+    # ---- 매개변수 (DEC-035) ----
+
+    def _apply_params(self) -> None:
+        """대기 중인 SetParams를 프레임 시작에 적용하고 알린다. 적용·거부 결과는 바로 발행한다"""
+        pending, self._pending_params = self._pending_params, []
+        for eid, owner, values in pending:
+            v = self.vehicles.get(eid)
+            if v is None:
+                continue
+            ps = v.fa_set if OWNER_KEY[owner] == "fa" else v.ma_set
+            changed = ps.change(values)
+            for name, reason in ps.rejected.items():
+                self.warn(f"{eid}: {ps.owner} param '{name}' rejected ({reason})")
+            if changed:
+                if ps is v.fa_set:
+                    self._guard(eid, v.fa.on_params, ps.values, changed)
+                else:
+                    v.ctx.params = ps.values
+                    if self._initialized:  # on_init 전이면 on_init이 새 값을 읽는다
+                        if v.ma is not None:
+                            self._guard(eid, v.ma.on_params, v.ctx, changed)
+                        elif v.ma_name in self._batches:
+                            self._guard(eid, self._batches[v.ma_name][0].on_params, v.ctx, changed)
+            self._publish_params(v, ps)
+
+    def _publish_params(self, only: Vehicle | None = None, ps: ParamSet | None = None) -> None:
+        targets = [only] if only is not None else self._order
+        for v in targets:
+            for s in ([ps] if ps is not None else [v.fa_set, v.ma_set]):
+                msg = s.to_message(v.entity_id, self._sim_time_us)
+                self.bus.put(keys.sim_param(v.entity_id, s.owner), msg.SerializeToString(), encoding(msg))
+        self._param_due = time.monotonic() + PARAM_PUBLISH_S
+
+    def _publish_params_due(self) -> None:
+        if self._order and time.monotonic() >= self._param_due:
+            self._publish_params()
 
     def _guard(self, who: str, fn, *args):
         try:
