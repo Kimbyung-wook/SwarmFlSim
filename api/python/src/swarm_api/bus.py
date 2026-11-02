@@ -78,6 +78,10 @@ class _ZenohSubscription:
             self._sub = None
 
 
+# DEC-043: lockstep 장벽과 데이터링크 경로
+LOCKSTEP_PATH_PREFIXES = ("sim/clock/", "swarm/")
+
+
 class ZenohBus:
     """Zenoh 백엔드. 구독 콜백은 Zenoh 내부 스레드에서 호출된다."""
 
@@ -94,11 +98,25 @@ class ZenohBus:
         if not config.multicast_scouting:
             conf.insert_json5("scouting/multicast/enabled", "false")
         self._session = zenoh.open(conf)
+        self._zenoh = zenoh
 
     def put(self, key: str, payload: bytes, encoding: str) -> None:
         if "*" in key:
             raise ValueError(f"wildcard in put key: {key!r}")
-        self._session.put(key, payload, encoding=encoding or None)
+        # DEC-043: lockstep 경로 키는 같은 우선순위·BLOCK으로 보내 혼잡 시 버리지 않고 링크 큐 하나의 순서를 지킨다
+        congestion = (
+            self._zenoh.CongestionControl.BLOCK
+            if key.startswith(LOCKSTEP_PATH_PREFIXES)
+            else self._zenoh.CongestionControl.DROP
+        )
+        self._session.put(
+            key,
+            payload,
+            encoding=encoding or None,
+            priority=self._zenoh.Priority.DATA,
+            congestion_control=congestion,
+            express=False,
+        )
 
     def subscribe(self, keyexpr: str, callback: Callable[[Sample], None]) -> Subscription:
         def on_sample(z: Any) -> None:

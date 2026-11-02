@@ -77,6 +77,8 @@
 | IMP-API-012 | 계약 0.6.0: `ParamLayer`·`ParamSpec`·`EntitySpec.dynamics_params`, `ParamOwner`·`SetParams`·`EntityParams`, 키 `sim/param/<entity>/<owner>`, 플러그인 `ParamDef`·`PARAMS`·`on_params`·`resolve_params`, `DynamicsModel::param_descs` | `proto/swarm/v1/{entity,sim}.proto`, `api/*/keys.*`, `api/python/src/swarm_api/plugin.py`, `api/cpp/include/swarm/api/dynamics.hpp`, `docs/10_contracts.md` §3.3·§5 | DEC-035 |
 | IMP-API-013 | 계약 0.7.0: `ParamSpec.choices`, 거부 사유 `choice`, `ParamDef.choices` | `proto/swarm/v1/{entity,sim}.proto`, `api/python/src/swarm_api/plugin.py`, `docs/10_contracts.md` | DEC-036 |
 | IMP-API-014 | 계약 0.8.0: 키 `sim/ctrl/scenario`, lockstep 준비 신호 `FrameDone{frame=0}` | `api/*/keys.*`, `docs/10_contracts.md` §3.2~3.3 | DEC-037 |
+| IMP-API-015 | 계약 0.9.0: `SimStatus.waiting_participants`, 참여자 응답 없음·재생 한계 규칙 | `proto/swarm/v1/sim.proto`, `docs/10_contracts.md` §3.2 | DEC-041, DEC-042 |
+| IMP-API-016 | 버스 QoS: lockstep 경로 키 BLOCK, 전 키 우선순위 DATA·비express (C++·Python) | `bus/src/zenoh_bus.cpp`, `api/python/src/swarm_api/bus.py` | DEC-043 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |

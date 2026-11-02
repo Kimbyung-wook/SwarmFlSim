@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.8.0
+- 계약 버전: 0.9.0
+  - 0.9.0: `SimStatus.waiting_participants`(lockstep 참여자 응답 없음 표시) (DEC-041)
   - 0.8.0: 키 `sim/ctrl/scenario`(Core가 적재한 시나리오 재발행), lockstep 준비 신호 `FrameDone{frame=0}` (DEC-037)
   - 0.7.0: `ParamSpec.choices`(문자열 허용 목록), 거부 사유 `choice` (DEC-036)
   - 0.6.0: 기체별 매개변수 `ParamSpec`·`EntityParams`·`SetParams`, `EntitySpec.dynamics_params`, 키 `sim/param/<entity>/<owner>`, 플러그인 `PARAMS`·`on_params`, `DynamicsModel::param_descs` (DEC-035)
@@ -96,6 +97,9 @@ flowchart LR
   - Core는 시나리오를 적재한 직후(`LoadScenario` 또는 `--scenario`)와 적재 상태와 lockstep 준비 대기 중(첫 틱 전)에 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행한다. CLI의 실행 모드·배속 재정의(`--mode`, `--rate`)는 발행하는 `Scenario.run`에 반영한다. 그래서 준비 대기 중에 늦게 켠 참여자도 시나리오와 실행 모드를 받는다. 다른 참여자는 `LoadScenario`를 받지 못했어도 이 키에서 시나리오를 얻는다.
   - lockstep 참여자는 시나리오를 적재해 준비되면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}`을 보낸다. Core는 `RunSpec.participants` 전원의 준비 신호를 받은 뒤에 첫 틱을 낸다. 이후 늦게 붙는 참여자는 시작 후에는 허용하지 않는다. 실행 중 이탈한 참여자의 재합류도 지원하지 않는다(Reset+Start로 복구, DEC-038).
   - lockstep 수신 결정성(DEC-040): Datalink는 틱 f의 rx를 모두 발행한 뒤 `FrameDone{f}`를 보낸다. Agent는 틱 f+1 처리 전에 Datalink의 `FrameDone{f}`를 받아야 하며(Datalink가 `participants`에 있을 때), 틱 t에서는 `rx_time_us <= t`인 rx만 소비한다. realtime과 free-run에는 적용하지 않는다.
+  - 참여자 응답 없음(DEC-041): lockstep에서 Core는 이탈한 참여자를 계속 기다린다. 벽시계 5 s 넘게 `FrameDone`이 없는 참여자를 `SimStatus.waiting_participants`에 싣고, 기다리는 동안에도 `sim/ctrl/status`를 계속 발행한다. UI·Monitor는 이를 경고로 표시한다. 복구는 Reset+Start다.
+  - 재생 한계(DEC-042): MCAP 재생기는 속도 조절이나 배압 없이 배속대로 발행한다. 고배속에서 수신자가 놓치는 프레임은 허용하고, UI·Monitor는 `truth/state` 프레임 번호의 공백으로 누락 수를 표시한다.
+  - 버스 QoS(DEC-043): `open_bus`의 Zenoh 백엔드는 모든 키를 우선순위 DATA·비express로 보내고, `sim/clock/**`와 `swarm/**`는 혼잡 제어 BLOCK, 그 밖은 DROP으로 보낸다. 참여자는 이 키들을 `open_bus`가 아닌 별도 세션이나 다른 QoS로 발행하지 않는다.
   - 입력 검증(DEC-038): 시나리오·`SimCommand`·임무·매개변수의 비유한 값과 범위 밖 값은 거부한다. 지원하지 않는 DoF 시나리오는 적재를 거부하고 Core는 종료하지 않는다. `assignees`가 비면 임무를 거부한다.
   - 참여자는 받은 시나리오의 `name`이 이전과 다르면 다시 적재하고 준비 신호를 다시 보낸다. 같으면 무시한다.
 - 기체별 매개변수 (DEC-035)
@@ -145,7 +149,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.8.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.9.0"}` | 접속 승인 |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
@@ -183,7 +187,7 @@ flowchart LR
 | `mp.proto` | MissionPlan, RoutePlan, EngagementCriteria | STD |
 | `fa.proto` | ControlOutput (Kinematic/Attitude/Actuator) | SIM |
 | `link.proto` | LinkEnvelope, LinkOutcome, LinkState, LinkProfile | SIM |
-| `sim.proto` | SimCommand(`set_params`), SimStatus(`replay`), ClockTick, FrameDone, Scenario(MapSpec, RunSpec, link_profiles), ParamOwner, EntityParams | SIM |
+| `sim.proto` | SimCommand(`set_params`), SimStatus(`replay`, `waiting_participants`), ClockTick, FrameDone, Scenario(MapSpec, RunSpec, link_profiles), ParamOwner, EntityParams | SIM |
 | `truth.proto` | TruthFrame, TruthEvent(JamZoneEvent.area) | SIM |
 
 - 시나리오: `LoadScenario.scenario`(`Scenario`)로 보낸다. `scenario_json`은 폐기 예정이다 (DEC-024). `Scenario`의 필드 구성은 `scenario/` JSON Schema와 같고, 변환은 `swarm_scenario.to_proto` / `from_proto`가 한다. `swarm_core --scenario`에 줄 파일은 `swarm-scenario export`로 만든다.
