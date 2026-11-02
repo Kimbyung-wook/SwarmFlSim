@@ -57,3 +57,25 @@ button.on { background: var(--accent); color: #04121f; border-color: var(--accen
 .sel-detail { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 0 24px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sel-camera { display: flex; gap: 4px; margin: 4px 0 0 24px; }
 .sel-camera button { padding: 1px 7px; font-size: 12px; }
+
+/* IMP-UI-030~031: 선택·명령 패널, 연결 상태 */
+.panel { overflow: hidden; }
+.sel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.cmd { display: flex; flex-direction: column; max-height: 50%; min-height: 0; border-top: 1px solid var(--line); }
+.cmd-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 6px 10px; }
+.cmd-row input[type="number"] { width: 64px; }
+select, input { background: #1b2740; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font: inherit; }
+.task-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--line); }
+.task-list li { padding: 5px 10px; border-bottom: 1px solid var(--line); }
+.task-list li.task-err { background: #3a1a1a; }
+.task-head { display: flex; gap: 8px; align-items: baseline; }
+.task-head .muted { white-space: nowrap; }
+.task-id { margin-left: auto; font-size: 11px; }
+.task-reports { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rx-log { padding: 4px 10px; font-size: 12px; border-top: 1px solid var(--line); }
+.rx-log ul { list-style: none; margin: 4px 0 0; padding: 0; max-height: 120px; overflow-y: auto; }
+.conn { padding: 0 6px; border-radius: 3px; }
+.conn-open { background: #14532d; }
+.conn-connecting { background: #713f12; }
+.conn-closed { background: #4c1d1d; }
+.notice { padding: 4px 10px; background: #1e3a5f; color: #dbeafe; }
