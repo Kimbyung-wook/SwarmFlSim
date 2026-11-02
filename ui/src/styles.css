@@ -121,3 +121,5 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 4
 .param-err { color: #fca5a5; }
 .param-ok { color: #86efac; }
 .replay-badge { padding: 0 6px; border-radius: 3px; background: #7c3aed; color: #fff; font-weight: 600; }
+.task-bad { color: #fca5a5; }
+.rate-note { font-size: 12px; align-self: center; }

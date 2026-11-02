@@ -34,12 +34,14 @@ export interface MockSourceOptions {
   frameHz: number;
   rate: number;
   autoStart: boolean;
+  /** 실행 모드. realtime은 배속이 고정이다(DEC-005). 목 소스는 배속 시연을 위해 기본 lockstep */
+  mode: RunMode;
   /** 한 번의 타이머 호출에서 따라잡을 최대 프레임 수 (탭 비활성 후 폭주 방지) */
   maxCatchUp: number;
   scenario?: MockScenarioOptions;
 }
 
-const DEFAULTS: MockSourceOptions = { frameHz: 50, rate: 1, autoStart: true, maxCatchUp: 25 };
+const DEFAULTS: MockSourceOptions = { frameHz: 50, rate: 1, autoStart: true, mode: RunMode.LOCKSTEP, maxCatchUp: 25 };
 
 export class MockSource implements DataSource {
   readonly name = "mock";
@@ -51,6 +53,7 @@ export class MockSource implements DataSource {
   private frame = 0n;
   private state = SimRunState.IDLE;
   private rate: number;
+  private mode: RunMode;
   private timer: unknown = null;
   private lastMs = 0;
   private carry = 0; // 다음 호출로 넘기는 프레임 소수부
@@ -59,6 +62,7 @@ export class MockSource implements DataSource {
   constructor(opts: Partial<MockSourceOptions> = {}, private readonly clock: MockClock = browserClock) {
     this.opts = { ...DEFAULTS, ...opts };
     this.rate = this.opts.rate;
+    this.mode = this.opts.mode;
     this.scenario = new MockScenario(this.opts.scenario);
   }
 
@@ -87,7 +91,8 @@ export class MockSource implements DataSource {
     const c = cmd.cmd;
     switch (c.case) {
       case "start":
-        if (c.value.rate > 0) this.rate = c.value.rate;
+        if (c.value.mode !== RunMode.UNSPECIFIED) this.mode = c.value.mode;
+        this.mode === RunMode.REALTIME ? (this.rate = 1) : c.value.rate > 0 && (this.rate = c.value.rate);
         this.run();
         break;
       case "pause":
@@ -106,7 +111,7 @@ export class MockSource implements DataSource {
         }
         break;
       case "setRate":
-        if (c.value.rate > 0) this.rate = c.value.rate;
+        if (this.mode !== RunMode.REALTIME && c.value.rate > 0) this.rate = c.value.rate;
         break;
       case "reset":
         this.halt();
@@ -165,7 +170,7 @@ export class MockSource implements DataSource {
   status(): SimStatus {
     return create(SimStatusSchema, {
       state: this.state,
-      mode: RunMode.REALTIME,
+      mode: this.mode,
       simTimeUs: this.simTimeUs(),
       frame: this.frame,
       frameHz: this.opts.frameHz,
