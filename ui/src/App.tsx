@@ -143,11 +143,12 @@ export function App() {
         flash(errText(e));
         return;
       }
+      // 응답이 곧바로 올 수 있으므로(목 소스) 기록을 먼저 남긴다
+      const entry = tasks.sent(out);
       try {
         source.sendC2(out);
-        tasks.sent(out);
       } catch (e) {
-        tasks.sent(out, errText(e));
+        entry.error = errText(e);
         flash(`명령 전송 실패: ${errText(e)}`);
       }
       refresh();
