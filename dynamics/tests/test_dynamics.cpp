@@ -1,4 +1,4 @@
-// TC-DYN-001~012: 동역학 모델·적분기·지형 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
+// TC-DYN-001~014: 동역학 모델·적분기·지형 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -405,6 +405,59 @@ void tc013() {
   }
 }
 
+// TC-DYN-014: 매개변수 노출 (DEC-035). 선언 표 ↔ 기본값, get/set, 범위·이름 거부, 모델 동작 반영, 팩토리 이름과 일치
+void tc014() {
+  for (const char* name : {"dof2", "dof3"}) {
+    auto m = make_model(name);
+    const auto descs = m->param_descs();
+    check(descs.size() >= 7, "tc014 descs not empty");
+    bool control = false, airframe = false;
+    for (const auto& d : descs) {
+      check_near(m->get_param(d.name), d.default_value, 0.0, "tc014 default equals desc");
+      check(d.min <= d.default_value && d.default_value <= d.max && d.runtime, "tc014 desc range/runtime");
+      control |= d.layer == ParamLayer::kControl;
+      airframe |= d.layer == ParamLayer::kAirframe;
+    }
+    check(control && airframe, "tc014 control and airframe layers");
+
+    check(m->set_param("tau_speed_s", 2.5) && m->get_param("tau_speed_s") == 2.5, "tc014 set ok");
+    check(!m->set_param("tau_speed_s", 0.0) && m->get_param("tau_speed_s") == 2.5, "tc014 below min rejected, unchanged");
+    check(!m->set_param("tau_speed_s", 1e9) && m->get_param("tau_speed_s") == 2.5, "tc014 above max rejected");
+    check(!m->set_param("tau_speed_s", std::nan("")) && m->get_param("tau_speed_s") == 2.5, "tc014 nan rejected");
+    check(!m->set_param("no_such_param", 1.0) && m->get_param("no_such_param") == 0.0, "tc014 unknown name");
+  }
+
+  // 선언 이름은 팩토리 파라미터 이름과 같다
+  for (const auto& d : make_model("dof3")->param_descs()) {
+    Params p{{std::string(d.name), d.max}};
+    auto m = make_model("dof3", p);
+    check_near(m->get_param(d.name), d.max, 0.0, "tc014 factory name matches desc");
+  }
+
+  // 동작 반영: 최대 선회율을 줄이면 선회율 명령이 잘리고, 속도 시정수를 키우면 가속이 느려진다
+  auto turn_accel = [](double limit) {
+    Dof2Model m;
+    check(m.set_param("max_heading_rate_rps", limit), "tc014 set limit");
+    Environment env;
+    std::vector<double> x(Dof2Model::kStateSize, 0.0), u = {30.0, 0.5, 0.0}, k(x.size());
+    x[Dof2Model::kSpeed] = 30.0;
+    m.derivatives(0.0, x, u, env, k);
+    return k[Dof2Model::kHeadingRate] * m.params().tau_heading_rate_s;  // = 잘린 명령
+  };
+  check_near(turn_accel(1.0), 0.5, 1e-12, "tc014 rate within limit");
+  check_near(turn_accel(0.2), 0.2, 1e-12, "tc014 rate clamped by changed limit");
+
+  Dof3Model slow, fast;
+  check(slow.set_param("tau_speed_s", 10.0), "tc014 set tau");
+  std::vector<double> x(Dof3Model::kStateSize, 0.0), u = {30.0, 0.0, 0.0}, a(x.size()), b(x.size());
+  x[Dof3Model::kSpeed] = 20.0;
+  Environment env;
+  slow.derivatives(0.0, x, u, env, a);
+  fast.derivatives(0.0, x, u, env, b);
+  check_near(a[Dof3Model::kSpeed], 1.0, 1e-12, "tc014 slow tau accel");
+  check_near(b[Dof3Model::kSpeed], 10.0, 1e-12, "tc014 default tau accel");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -414,6 +467,7 @@ const Case kCases[] = {
     {"TC-DYN-001", tc001}, {"TC-DYN-002", tc002}, {"TC-DYN-003", tc003}, {"TC-DYN-004", tc004},
     {"TC-DYN-005", tc005}, {"TC-DYN-006", tc006}, {"TC-DYN-007", tc007}, {"TC-DYN-008", tc008},
     {"TC-DYN-009", tc009}, {"TC-DYN-010", tc010}, {"TC-DYN-011", tc011}, {"TC-DYN-012", tc012}, {"TC-DYN-013", tc013},
+    {"TC-DYN-014", tc014},
 };
 
 }  // namespace

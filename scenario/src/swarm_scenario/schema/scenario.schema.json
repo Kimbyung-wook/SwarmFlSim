@@ -37,6 +37,7 @@
     "DynamicsKind": { "enum": ["dof2", "dof3", "dof5", "dof6", "scripted", "static"] },
     "RunMode": { "enum": ["realtime", "lockstep", "freerun"] },
     "FormationShape": { "enum": ["line", "column", "wedge", "echelon", "circle", "custom"] },
+    "TurnDirection": { "enum": ["cw", "ccw"] },
 
     "Geodetic": {
       "type": "object",
@@ -186,10 +187,54 @@
         "autonomy": { "$ref": "#/$defs/AutonomySpec" },
         "link_profile": { "type": "string" },
         "controlling_gcs": { "$ref": "#/$defs/EntityId" },
-        "script_path": { "type": "array", "items": { "$ref": "#/$defs/Geodetic" } }
+        "script_path": { "type": "array", "items": { "$ref": "#/$defs/Geodetic" } },
+        "dynamics_params": { "type": "object", "description": "DEC-035 동역학·제어 매개변수 재정의" }
       },
       "if": { "properties": { "dynamics": { "const": "scripted" } } },
       "then": { "required": ["script_path"], "properties": { "script_path": { "minItems": 2 } } }
+    },
+
+    "RacetrackShape": {
+      "description": "레이스트랙 모양 (DEC-034). 중심·반경·방향은 담은 작업에서 가져온다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leg_length_m", "axis_heading_deg"],
+      "properties": {
+        "leg_length_m": { "type": "number", "exclusiveMinimum": 0 },
+        "axis_heading_deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      }
+    },
+    "RouteWaypoint": {
+      "description": "항로점 (DEC-033). loiter·recon 중 하나만 두고, 없으면 통과한다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position"],
+      "not": { "required": ["loiter", "recon"] },
+      "properties": {
+        "position": { "$ref": "#/$defs/Geodetic" },
+        "speed_mps": { "type": "number", "exclusiveMinimum": 0 },
+        "acceptance_radius_m": { "type": "number", "exclusiveMinimum": 0 },
+        "loiter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration_s"],
+          "properties": {
+            "duration_s": { "type": "number", "minimum": 0 },
+            "radius_m": { "type": "number", "exclusiveMinimum": 0 },
+            "direction": { "$ref": "#/$defs/TurnDirection" },
+            "racetrack": { "$ref": "#/$defs/RacetrackShape" }
+          }
+        },
+        "recon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["radius_m"],
+          "properties": {
+            "radius_m": { "type": "number", "exclusiveMinimum": 0 },
+            "duration_s": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
     },
 
     "TaskCommand": {
@@ -239,9 +284,30 @@
             "duration_s": { "type": "number", "minimum": 0 }
           }
         },
-        "hold": { "type": "object", "additionalProperties": false },
+        "hold": {
+          "description": "선회 대기 (DEC-033). 비우면 현재 위치에서 다음 명령까지",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "center": { "$ref": "#/$defs/Geodetic" },
+            "radius_m": { "type": "number", "exclusiveMinimum": 0 },
+            "duration_s": { "type": "number", "minimum": 0 },
+            "direction": { "$ref": "#/$defs/TurnDirection" },
+            "racetrack": { "$ref": "#/$defs/RacetrackShape" }
+          }
+        },
         "return_to_base": { "type": "object", "additionalProperties": false },
-        "cancel": { "type": "boolean" }
+        "cancel": { "type": "boolean" },
+        "route": {
+          "description": "항로 비행 EXT (DEC-033)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["waypoints"],
+          "properties": {
+            "waypoints": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/RouteWaypoint" } },
+            "loop": { "type": "boolean" }
+          }
+        }
       },
       "oneOf": [
         { "required": ["move_to"] },
@@ -250,7 +316,8 @@
         { "required": ["strike"] },
         { "required": ["jam"] },
         { "required": ["hold"] },
-        { "required": ["return_to_base"] }
+        { "required": ["return_to_base"] },
+        { "required": ["route"] }
       ]
     },
     "FormationCommand": {

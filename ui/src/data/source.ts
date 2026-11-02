@@ -4,7 +4,7 @@
 // IMP-UI-028: C2 명령 송신(swarm/<gcs>/tx/c2/**)과 swarm/<gcs>/rx/** 수신을 더한다 (REQ-UI-003, REQ-UI-004)
 import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
 import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
-import type { SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
+import type { EntityParams, SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
 import type { OutgoingC2 } from "../model/commands";
 
 export interface DataHandlers {
@@ -14,6 +14,8 @@ export interface DataHandlers {
   status?: (s: SimStatus) => void;
   /** swarm/<gcs>/rx/** (데이터링크가 전달한 LinkEnvelope) */
   rx?: (key: string, env: LinkEnvelope) => void;
+  /** sim/param/<entity>/<owner> (DEC-035) */
+  params?: (p: EntityParams) => void;
 }
 
 export interface DataSource {
@@ -48,5 +50,9 @@ export class HandlerSet {
 
   rx(key: string, env: LinkEnvelope): void {
     for (const h of this.set) h.rx?.(key, env);
+  }
+
+  params(p: EntityParams): void {
+    for (const h of this.set) h.params?.(p);
   }
 }

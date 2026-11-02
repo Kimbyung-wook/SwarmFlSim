@@ -63,7 +63,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 - 툴바에서 `2D` → `전체`를 누른다. 기체 20대와 GCS 1개가 보인다.
 - 왼쪽 드래그로 기체를 고르고 지도를 우클릭하면 그 지점으로 이동 명령(MoveTo)이 나간다. 오른쪽 패널에 기체별 상태(수행 → 완료 100%)가 표시된다.
 - 로그·기록: `out/p0_demo/live-<시각>/` (프로세스별 `.log`, `scenario.pb`, `p0_demo.mcap`)
-- 종료: Ctrl+C 또는 실행 디렉터리에 `STOP` 파일을 만든다. 실행기는 역순으로 Ctrl+Break를 보낸다. Logger·Core·Datalink는 SIGBREAK를 받아 정상 종료하고(IMP-LOG-009, IMP-CORE-013, IMP-LNK-015) Logger가 MCAP을 닫는다.
+- 종료: Ctrl+C 또는 실행 디렉터리에 `STOP` 파일을 만든다. 실행기는 역순으로 Ctrl+Break를 보낸다. Logger·Core·Datalink는 SIGBREAK를 받아 정상 종료하고(IMP-LOG-009, IMP-CORE-014, IMP-LNK-015) Logger가 MCAP을 닫는다.
 
 | 옵션 | 뜻 |
 |---|---|

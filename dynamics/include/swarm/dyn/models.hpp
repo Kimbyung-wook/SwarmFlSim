@@ -1,4 +1,5 @@
 // IMP-DYN-001, IMP-DYN-002: 2-DoF 유니사이클, 3-DoF 질점 협조선회 (REQ-DYN-001, REQ-DYN-002, PRP-DYN-001)
+// IMP-DYN-008: Params 필드를 ParamDesc로 노출한다(param_descs, get_param, set_param). 계층: 기체(한계값), 제어(시정수) (DEC-035)
 //
 // 공통
 // - 위치 상태는 위도·경도(rad), 고도(m, MSL). to_kinematic이 deg로 바꾼다.
@@ -41,6 +42,9 @@ class Dof2Model final : public DynamicsModel, public ErrorScaleProvider {
   bool map_control(const swarm::v1::ControlOutput& cmd, std::span<double> u) const override;
   void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const override;
   void from_kinematic(const KinematicSample& in, std::span<double> x) const override;
+  std::span<const ParamDesc> param_descs() const override;
+  double get_param(std::string_view name) const override;
+  bool set_param(std::string_view name, double value) override;
   void error_scale(std::span<double> abs_scale, std::span<double> rel_scale) const override;
   const Params& params() const { return p_; }
 
@@ -77,6 +81,9 @@ class Dof3Model final : public DynamicsModel, public ErrorScaleProvider {
   bool map_control(const swarm::v1::ControlOutput& cmd, std::span<double> u) const override;
   void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const override;
   void from_kinematic(const KinematicSample& in, std::span<double> x) const override;
+  std::span<const ParamDesc> param_descs() const override;
+  double get_param(std::string_view name) const override;
+  bool set_param(std::string_view name, double value) override;
   void error_scale(std::span<double> abs_scale, std::span<double> rel_scale) const override;
   const Params& params() const { return p_; }
 

@@ -49,7 +49,8 @@ flowchart LR
 | IMP-CORE-010 | DYNAMICS_KIND_SCRIPTED: 초기 위치 → `script_path`를 초기 속도 크기로 따라가는 경로 모델(상태 = 경로 거리), 끝점 정지, 제어 입력 없음. 경로가 없으면 초기 위치 고정 | `include/swarm/core/scripted.hpp`, `src/scripted.cpp`, `src/entity_store.cpp` | DEC-017 | TC-CORE-015 통과 |
 | IMP-CORE-011 | InjectFault: ENGINE(속도 명령 최소, 기간·해제), NAV(NavigationReport 중단), SENSOR(상태만 기록, 탐지 모델 없음), LINK_CUT·GCS_LINK_CUT은 Datalink(WP4) 담당이므로 무시. `SimCore::fault_active` 조회, Reset 시 해제 | `include/swarm/core/sim_core.hpp`, `src/sim_core.cpp` | DEC-014, REQ-LNK-002, REQ-LNK-003 | TC-CORE-016 통과 |
 | IMP-CORE-012 | swarm_core가 WP2 동역학으로 동작. 명령행 `--integrator rk4\|rk45`, `--terrain-flat <m>`, `--terrain-dem`(자리) | `src/main.cpp` | DEC-005, DEC-016 | TC-CORE-018 확인 |
-| IMP-CORE-013 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
+| IMP-CORE-013 | 동역학 매개변수 (DEC-035): 값 순서 기본값 → airframe 표 → `EntitySpec.dynamics_params` → 실행 중 `SetParams{owner=DYNAMICS}`. 거부 사유 unknown\|type\|range\|not_runtime을 이름순으로 `EntityParams.rejected`에 기록(가장 최근 적재·변경 것). SetParams는 poll 시작(프레임 경계)에 적용하고 `sim/param/<id>/dynamics`를 발행(적재 직후·변경 직후·Reset 직후·LOADED 상태 1초마다). Reset은 시나리오 적용 후 값으로 되돌린다. 매개변수가 없는 엔티티(STATIC, SCRIPTED)는 발행하지 않는다. 모르는 airframe은 기본값을 쓰고 `dynamics_params`는 적용 | `include/swarm/core/entity_store.hpp`, `src/entity_store.cpp`, `src/sim_core.cpp` | DEC-035, REQ-CFG-003, DEC-014, IMP-API-012, IMP-DYN-008 | TC-CORE-019~023 통과 |
+| IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
 
@@ -73,6 +74,11 @@ flowchart LR
 | TC-CORE-016 | 고장: ENGINE 3 s(25 → 12.65 m/s, 기간 후 25 m/s 복귀), NAV 중단·해제, SENSOR 기록, LINK_CUT·GCS_LINK_CUT 무시, 모델 없는 엔티티·목 공급자 ENGINE 미처리, Reset 해제 | `tests/test_core.cpp` | IMP-CORE-011 | 통과 (msvc-debug, 2026-11-01) |
 | TC-CORE-017 | WP2 공급자: 모르는 적분기 거부, airframe 표, 10 s 등속 해석해(250 m)와 rk4/rk45 차 < 1 mm, 동풍 5 m/s 반영(대지 속도, DEC-023) | `tests/test_core.cpp` | IMP-CORE-008 | 통과 (msvc-debug, 2026-11-01) |
 | TC-CORE-018 | 별도 프로세스 확인: `swarm_core --integrator rk45 --terrain-flat 0 --connect tcp/127.0.0.1:17501 --no-multicast --autostart --frames 150`을 listen 중인 Python Zenoh 세션(swarm_api.open_bus)이 구독 | 수동 | IMP-CORE-012 | 2026-11-01: tick 151, truth 152, NavigationReport 3020, status 6, 인코딩 `application/protobuf;swarm.v1.TruthFrame`, uav-001 3 s 뒤 북동 25 m/s 등속 위치 일치 |
+| TC-CORE-019 | 적재: skywalker_x8 airframe(min 12) 위에 `dynamics_params`(max 30) 덮어쓰기, 범위·타입·미선언·타 모델 이름 거부 사유와 이름순, 모르는 airframe(기본값) + 재정의, ParamSpec 내용(계층·단위·범위·runtime·기본값), GCS 미발행, 인코딩·키 | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-020 | 실행 중 SetParams: 적용, 거부 사유, 발행 시각 = 적용 프레임 시작, FA 소유자·모르는 엔티티·매개변수 없는 엔티티 무시, 거부 목록 교체, Reset 복원(첫 적재 거부 포함) | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-021 | `runtime`=false 항목: 적재 시 적용, 실행 중 not_runtime 거부(같은 명령의 runtime 항목은 적용), 범위 거부 시 값 유지 (시험용 목 모델) | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-022 | lockstep 재현성: 같은 시드·같은 프레임(50)의 SetParams는 truth 바이트열 동일, 프레임 51·없음과는 다름, 선회율 한계 변경이 3 s 선회각에 반영 | `tests/test_core.cpp` | IMP-CORE-013, IMP-CORE-002 | 통과 (msvc-debug, 2026-11-02) |
+| TC-CORE-023 | LOADED 상태에서 1초(벽시계)마다 재발행, 실행 중에는 재발행 없음 | `tests/test_core.cpp` | IMP-CORE-013 | 통과 (msvc-debug, 2026-11-02) |
 
 ## 제약과 후속
 
@@ -80,5 +86,7 @@ flowchart LR
 - 지형은 평지만 쓴다. DEM 로더(`dyn::DemLoader`)가 구현되면 `Wp2DynamicsOptions::terrain`에 넣고 `--terrain-dem`을 연결한다 (DEC-016).
 - 5/6-DoF(DYNAMICS_KIND_DOF5/6)는 WP2 팩토리가 nullptr를 주므로 불러오기에서 거부된다.
 - 스크립트 이동은 대지 기준이며 바람을 더하지 않는다.
+- SetParams의 적용 시각은 Core가 명령을 poll로 받은 프레임 경계다. 명령에 프레임 번호가 없으므로 버스 도착 시점에 따라 어느 프레임인지가 정해진다. 재현이 필요한 시험은 `LoadScenario`나 `dynamics_params`로 시작 값을 정한다.
+- 2/3-DoF의 모든 매개변수가 `runtime`=true다(질량·관성 항목은 질점 모델에 없다). 5/6-DoF가 들어오면 해당 항목을 false로 둔다.
 - SENSOR 고장은 상태만 둔다. Core가 탐지(Detection)를 만들게 되면 그 상태로 막는다.
 - lockstep 참여자는 시나리오 `participants`와 `--participant`로 정적으로 정한다.

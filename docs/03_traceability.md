@@ -19,8 +19,8 @@
 |---|---|---|---|---|---|---|
 | REQ-UI-001 | PRP-UI-001 | DEC-003, DEC-004 | WP5 | IMP-UI-003~005, 008~010, 012, 014~016, 018~019, IMP-INT-001 | TC-UI-001~003, 005~006, 008~009, TC-INT-001 | 구현중 |
 | REQ-UI-002 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-006, 016~017, 019, 025~026, 031, 034, IMP-INT-001 | TC-UI-004, 009, 018~019, TC-INT-003 | 구현중 |
-| REQ-UI-003 | PRP-UI-001 | DEC-014 | WP5 | IMP-UI-025, 027~032, 034 | TC-UI-008, 018~019 | 구현중 |
-| REQ-UI-004 | PRP-UI-001, PRP-BHV-001 | DEC-008 | WP5, WP3 | IMP-UI-025, 027, 031, 034 | TC-UI-018~019 | 구현중 |
+| REQ-UI-003 | PRP-UI-001 | DEC-014, DEC-033 | WP5 | IMP-API-010, IMP-UI-025, 027~032, 034 | TC-UI-008, 018~019 | 구현중 |
+| REQ-UI-004 | PRP-UI-001, PRP-BHV-001 | DEC-008, DEC-033 | WP5, WP3 | IMP-UI-025, 027, 031, 034 | TC-UI-018~019 | 구현중 |
 | REQ-UI-005 | PRP-UI-002, PRP-LNK-002 | DEC-011, DEC-031, DEC-032 | WP6, WP4 | IMP-MON-001~025, IMP-LNK-008~009 | TC-MON-001~013, TC-LNK-001, 004~006, 008~011 | 구현중 |
 | REQ-UI-006 | PRP-UI-001, PRP-NET-002 | DEC-020 | WP5 | IMP-UI-021~022, 024, 034, IMP-MON-003 | TC-UI-011~017, 019, TC-MON-002 | 구현중 |
 | REQ-UI-007 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-003, 007, 014, 017 | TC-UI-001, 007, 009 | 구현중 |
@@ -29,20 +29,21 @@
 | REQ-DYN-003 | PRP-DYN-002, PRP-SIM-002 | DEC-005 | WP1, WP2 | IMP-API-006, IMP-CORE-002, IMP-DYN-004 | TC-CORE-001~006, 009~010, TC-DYN-001, 005~008 | 검증완료 |
 | REQ-DYN-004 | PRP-DYN-002 | DEC-005 | WP2 | IMP-API-006, IMP-CORE-008, IMP-DYN-003~004, 006 | TC-CORE-013, 017, TC-DYN-001, 004~008, 012 | 검증완료 |
 | REQ-DYN-005 | PRP-DYN-003 | DEC-012 | WP2, WP8 | | | - |
-| REQ-GNC-001 | PRP-GNC-001, PRP-BHV-001 | DEC-013 | WP3 | IMP-AGT-004, 006~007 | TC-AGT-001~005 | 구현중 |
+| REQ-GNC-001 | PRP-GNC-001, PRP-BHV-001 | DEC-013, DEC-034 | WP3 | IMP-API-011, IMP-AGT-004, 006~007 | TC-AGT-001~005 | 구현중 |
 | REQ-BHV-001 | PRP-BHV-001, PRP-SIM-003 | DEC-008, DEC-013 | WP3 | IMP-AGT-002~006, 008~009, 011, 013, IMP-INT-003 | TC-AGT-006~013, 015, TC-INT-002~003 | 구현중 |
-| REQ-BHV-002 | PRP-BHV-001, PRP-BHV-003 | DEC-013 | WP3 | IMP-AGT-011, 013 | TC-AGT-015 | 구현중 |
+| REQ-BHV-002 | PRP-BHV-001, PRP-BHV-003 | DEC-013, DEC-033, DEC-034 | WP3 | IMP-API-010~011, IMP-AGT-011, 013 | TC-AGT-015 | 구현중 |
 | REQ-BHV-003 | PRP-BHV-001, PRP-BHV-003 | DEC-008 | WP3 | IMP-AGT-014~015 | TC-AGT-016~019 | 구현중 |
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001 | WP3 | IMP-API-005, IMP-AGT-005, 012 | TC-AGT-006, 014 | 구현중 |
-| REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-CORE-013, IMP-LNK-015 | TC-API-001~005, TC-CORE-012, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
+| REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-CORE-014, IMP-LNK-015 | TC-API-001~005, TC-CORE-012, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
 | REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006 | WP10, WP3 | IMP-AGT-010 | | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032 | WP4 | IMP-LNK-001~006, 008, 011, 014 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009 | WP4 | IMP-CORE-011, IMP-LNK-010 | TC-CORE-016, TC-LNK-007 | 구현중 |
 | REQ-LNK-004 | PRP-LNK-001, PRP-LNK-002 | DEC-008 | WP4 | IMP-LNK-001, 008 | TC-LNK-001, 004~006, 008~009, 011 | 구현중 |
-| REQ-CFG-001 | PRP-CFG-001 | DEC-029 | WP5, WP7 | IMP-API-008~009, IMP-CORE-006~007, IMP-SCN-001, 003, 006~007 | TC-CORE-009, 011~012, TC-SCN-001~002, 004~009 | 구현중 |
+| REQ-CFG-001 | PRP-CFG-001 | DEC-029 | WP5, WP7 | IMP-API-008~010, IMP-CORE-006~007, IMP-SCN-001, 003, 006~008 | TC-CORE-009, 011~012, TC-SCN-001~002, 004~010 | 구현중 |
 | REQ-CFG-002 | PRP-CFG-001 |  | WP7 | IMP-SCN-001~004 | TC-SCN-001~007 | 구현중 |
+| REQ-CFG-003 | PRP-CFG-001 | DEC-035 | WP1, WP3, WP5, WP7 | IMP-API-012, IMP-SCN-009 | TC-API-006, TC-SCN-011 | 구현중 |
 | REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | | WP8 | | | - |
 | REQ-PAY-002 | PRP-PAY-001 | DEC-018 | WP8 | | | - |
 | REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009 | WP8, WP4 | | | - |
@@ -71,11 +72,15 @@
 | IMP-API-007 | 공용 버스 라이브러리 `swarm_bus`(InMemory, Zenoh, `open_bus`, 공통 명령행 옵션)와 Python `open_bus` | `bus/`, `api/python/src/swarm_api/bus.py` | PRP-NET-001, DEC-026 |
 | IMP-API-008 | 계약 0.2.0: `Scenario`·`MapSpec`·`RunSpec` 메시지, `LoadScenario.scenario` | `proto/swarm/v1/sim.proto` | DEC-024, DEC-025 |
 | IMP-API-009 | 계약 0.3.0: `LinkProfile`·`Scenario.link_profiles`, `JamZoneEvent.area`, `SimStatus.replay`, 데이터링크 판정 규칙 | `proto/swarm/v1/{link,sim,truth}.proto`, `docs/10_contracts.md` §3.3 | DEC-028~032 |
+| IMP-API-010 | 계약 0.4.0: `HoldTask` 매개변수, `RouteTask`·`RouteWaypoint`·`LoiterAction`·`ReconAction`, 지도 임무 명령 규칙 | `proto/swarm/v1/c2.proto`, `docs/10_contracts.md` §3.3 | DEC-033 |
+| IMP-API-011 | 계약 0.5.0: `RacetrackShape`(HoldTask·LoiterAction), VI `RacetrackCurve`, 유도 방식 매개변수 규칙 | `proto/swarm/v1/{c2,vi}.proto`, `docs/10_contracts.md` §3.3 | DEC-034 |
+| IMP-API-012 | 계약 0.6.0: `ParamLayer`·`ParamSpec`·`EntitySpec.dynamics_params`, `ParamOwner`·`SetParams`·`EntityParams`, 키 `sim/param/<entity>/<owner>`, 플러그인 `ParamDef`·`PARAMS`·`on_params`·`resolve_params`, `DynamicsModel::param_descs` | `proto/swarm/v1/{entity,sim}.proto`, `api/*/keys.*`, `api/python/src/swarm_api/plugin.py`, `api/cpp/include/swarm/api/dynamics.hpp`, `docs/10_contracts.md` §3.3·§5 | DEC-035 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |
 | TC-API-004 | C++ `open_bus` 백엔드 선택·명령행 옵션, Zenoh 두 세션 간 송수신·인코딩 보존 | `bus/tests/test_bus.cpp` | IMP-API-007 |
 | TC-API-005 | Python `open_bus` 백엔드 선택, Zenoh 두 세션 간 송수신 | `api/python/tests/test_open_bus.py` | IMP-API-007 |
+| TC-API-006 | 매개변수 해석: 기본값·재정의, 거부 사유(unknown·type·range·not_runtime)와 거부 시 기존 값 유지 | `api/python/tests/test_plugin.py` | IMP-API-012 |
 
 | ID | 내용 | 위치 | 근거 |
 |---|---|---|---|
@@ -100,6 +105,7 @@
 | TC-INT-002 | 통과 | 2026-11-02 | 위와 같음 |
 | TC-INT-003 | 통과 | 2026-11-02 | 위와 같음 |
 | TC-INT-004 | 통과 | 2026-11-02 | 위와 같음, 3배속 재생 |
+| TC-API-006 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 
 ## 프로세스 결정
 

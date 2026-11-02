@@ -5,6 +5,7 @@ package swarm.v1;
 
 import "swarm/v1/common.proto";
 import "swarm/v1/options.proto";
+import "swarm/v1/vi.proto";
 
 message MoveToTask {
   Geodetic destination = 1;
@@ -30,9 +31,51 @@ message JamTask {
   double duration_s = 2;  // 0이면 해제 명령까지
 }
 
-message HoldTask {}
+// 레이스트랙 선회 모양 (DEC-034). 중심·반경·방향은 이 메시지를 담은 작업에서 가져온다
+message RacetrackShape {
+  double leg_length_m = 1;      // 직선 구간 길이 = 두 원 중심 간 거리
+  double axis_heading_deg = 2;  // 축 방향(진북 기준, 시계 방향)
+}
+
+// 선회 대기 (DEC-033). 필드가 없으면 현재 위치에서 기본 반경으로 다음 명령까지 선회
+message HoldTask {
+  optional Geodetic center = 1;     // 없으면 현재 위치. alt_m은 선회 고도
+  optional double radius_m = 2;     // 없으면 MA 기본값
+  optional double duration_s = 3;   // 없거나 0이면 다음 명령까지
+  TurnDirection direction = 4;      // UNSPECIFIED면 MA가 정한다
+  optional RacetrackShape racetrack = 5;  // 있으면 원 대신 레이스트랙 (DEC-034)
+}
 
 message ReturnToBaseTask {}
+
+// 항로점 행위 (DEC-033). 항로점에 도착한 뒤 수행하고 다음 항로점으로 간다
+message LoiterAction {
+  double duration_s = 1;            // 선회 대기 시간
+  optional double radius_m = 2;
+  TurnDirection direction = 3;
+  optional RacetrackShape racetrack = 4;  // 있으면 항로점 중심 레이스트랙 (DEC-034)
+}
+
+message ReconAction {
+  double radius_m = 1;              // 항로점 중심 원 영역을 정찰한다
+  optional double duration_s = 2;   // 없으면 MA가 영역 탐색을 마칠 때까지
+}
+
+message RouteWaypoint {
+  Geodetic position = 1;            // alt_m은 이 구간의 목표 고도
+  optional double speed_mps = 2;    // 이 항로점으로 가는 구간 속력
+  optional double acceptance_radius_m = 3;
+  oneof action {                    // 없으면 통과
+    LoiterAction loiter = 4;
+    ReconAction recon = 5;
+  }
+}
+
+// 순서 있는 항로 비행 (EXT, DEC-033). Gateway는 외부로 내보내지 않는다
+message RouteTask {
+  repeated RouteWaypoint waypoints = 1;
+  bool loop = 2;
+}
 
 message TaskCommand {
   option (uci_name) = "MA_TaskCommand";
@@ -50,6 +93,7 @@ message TaskCommand {
     JamTask jam = 8;
     HoldTask hold = 9;
     ReturnToBaseTask return_to_base = 10;
+    RouteTask route = 12;  // EXT (DEC-033)
   }
   bool cancel = 11;  // true면 task_id 작업 취소
 }

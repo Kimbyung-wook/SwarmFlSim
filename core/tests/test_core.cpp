@@ -1,5 +1,6 @@
 // TC-CORE-002~012: SimCore 단위 시험 (InMemoryBus, 목 동역학)
 // TC-CORE-013~017: WP2 동역학 통합, 지면 충돌, 스크립트 경로, 고장 주입
+// TC-CORE-019~023: 동역학 매개변수 (DEC-035)
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -55,6 +56,7 @@ struct Recorder {
   std::vector<v1::SimStatus> statuses;
   std::vector<v1::NavigationReport> navs;
   std::vector<v1::TruthEvent> events;
+  std::vector<v1::EntityParams> params;
   std::vector<std::string> truth_bytes;
   std::vector<std::unique_ptr<Subscription>> subs;
 
@@ -70,6 +72,11 @@ struct Recorder {
     subs.push_back(
         bus.subscribe("onboard/*/NavigationReport", [this](const Sample& s) { navs.push_back(decode<v1::NavigationReport>(s)); }));
     subs.push_back(bus.subscribe("truth/event/**", [this](const Sample& s) { events.push_back(decode<v1::TruthEvent>(s)); }));
+    subs.push_back(bus.subscribe("sim/param/**", [this](const Sample& s) {
+      params.push_back(decode<v1::EntityParams>(s));
+      CHECK(s.encoding == "application/protobuf;swarm.v1.EntityParams");
+      CHECK(s.key == "sim/param/" + params.back().entity_id() + "/dynamics");
+    }));
   }
 };
 
@@ -748,6 +755,287 @@ void test_wp2_provider() {
   CHECK(std::abs(e - 50.0) < 0.05 && std::abs(w.velocity_ned_mps().y() - 5.0) < 1e-9);
 }
 
+// ---------------------------------------------------------------- 동역학 매개변수 (TC-CORE-019~023, DEC-035)
+
+void set_number(google::protobuf::Struct* st, const char* name, double v) {
+  (*st->mutable_fields())[name].set_number_value(v);
+}
+
+v1::SimCommand set_params_cmd(const char* id, v1::ParamOwner owner, std::function<void(google::protobuf::Struct*)> f) {
+  v1::SimCommand c;
+  c.set_issuer("ui-test");
+  c.mutable_set_params()->set_entity_id(id);
+  c.mutable_set_params()->set_owner(owner);
+  f(c.mutable_set_params()->mutable_values());
+  return c;
+}
+
+const v1::EntityParams* latest_params(const Recorder& rec, const std::string& id) {
+  for (auto it = rec.params.rbegin(); it != rec.params.rend(); ++it)
+    if (it->entity_id() == id) return &*it;
+  return nullptr;
+}
+
+std::size_t count_params(const Recorder& rec, const std::string& id) {
+  std::size_t n = 0;
+  for (const auto& p : rec.params) n += p.entity_id() == id;
+  return n;
+}
+
+double value_of(const v1::EntityParams& ep, const char* name) {
+  const auto it = ep.values().fields().find(name);
+  return it == ep.values().fields().end() ? -1e300 : it->second.number_value();
+}
+
+std::string rejected_str(const v1::EntityParams& ep) {
+  std::string s;
+  for (const auto& r : ep.rejected()) s += r.name() + ":" + r.reason() + " ";
+  return s;
+}
+
+// TC-CORE-019: 값 순서 기본값 → airframe 표 → dynamics_params. 적재 직후 EntityParams 내용(선언, 값, 거부 사유)
+void test_params_load() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  auto sc = one_uav();
+  sc.entities[0].set_airframe("skywalker_x8");  // min 12, max 28
+  auto* dp = sc.entities[0].mutable_dynamics_params();
+  set_number(dp, "max_speed_mps", 30.0);  // airframe 위에 덮어쓴다
+  set_number(dp, "tau_speed_s", 1e6);     // 범위 밖
+  set_number(dp, "bogus", 1.0);           // 선언하지 않은 이름
+  set_number(dp, "tau_bank_s", 0.4);      // 2-DoF에는 없는 이름
+  (*dp->mutable_fields())["min_speed_mps"].set_string_value("x");  // 타입 위반
+  v1::EntitySpec b = sc.entities[0];      // 모르는 airframe은 기본값, dynamics_params는 적용
+  b.set_id("uav-002");
+  b.set_dynamics(v1::DYNAMICS_KIND_DOF3);
+  b.set_airframe("mystery");
+  b.clear_dynamics_params();
+  set_number(b.mutable_dynamics_params(), "min_speed_mps", 5.0);
+  sc.entities.push_back(b);
+  CHECK(sim.load(sc));
+
+  CHECK(count_params(rec, "uav-001") == 1 && count_params(rec, "uav-002") == 1);
+  CHECK(count_params(rec, "gcs-01") == 0);  // 매개변수가 없는 엔티티는 발행하지 않는다
+  const auto* a = latest_params(rec, "uav-001");
+  CHECK(a && a->owner() == v1::PARAM_OWNER_DYNAMICS && a->plugin() == "dof2" && a->specs_size() == 7);
+  if (a) {
+    CHECK(value_of(*a, "min_speed_mps") == 12.0);   // airframe 표
+    CHECK(value_of(*a, "max_speed_mps") == 30.0);   // 시나리오
+    CHECK(value_of(*a, "tau_speed_s") == 1.0);      // 범위 위반이라 기본값 유지
+    CHECK(a->values().fields_size() == 7 && a->sim_time_us() == 0);
+    CHECK(rejected_str(*a) == "bogus:unknown min_speed_mps:type tau_bank_s:unknown tau_speed_s:range ");
+    const v1::ParamSpec* spec = nullptr;
+    for (const auto& sp : a->specs())
+      if (sp.name() == "tau_speed_s") spec = &sp;
+    CHECK(spec && spec->layer() == v1::PARAM_LAYER_CONTROL && spec->unit() == "s" && spec->runtime());
+    CHECK(spec && spec->has_min() && spec->min() == 0.05 && spec->max() == 30.0);
+    CHECK(spec && spec->default_value().number_value() == 1.0 && !spec->description().empty());
+    bool airframe_layer = false;
+    for (const auto& sp : a->specs()) airframe_layer |= sp.layer() == v1::PARAM_LAYER_AIRFRAME;
+    CHECK(airframe_layer);
+  }
+  const auto* c = latest_params(rec, "uav-002");
+  CHECK(c && c->plugin() == "dof3" && c->specs_size() == 8 && c->rejected_size() == 0);
+  if (c) {
+    CHECK(value_of(*c, "min_speed_mps") == 5.0);
+    CHECK(std::abs(value_of(*c, "max_bank_rad") - 1.0471975511965976) < 1e-12);
+  }
+  // 적용한 값은 모델에 반영돼 있다
+  CHECK(sim.entities().model(0)->get_param("max_speed_mps") == 30.0);
+}
+
+// TC-CORE-020: 실행 중 SetParams. 적용·거부 사유·발행 내용, 다른 소유자·모르는 엔티티 무시, Reset 복원
+void test_params_runtime() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  auto sc = one_uav();
+  set_number(sc.entities[0].mutable_dynamics_params(), "tau_bank_s", 0.4);  // 거부 → 첫 발행에 실린다
+  CHECK(sim.load(sc));
+  CHECK(latest_params(rec, "uav-001")->rejected_size() == 1);
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 10);
+  CHECK(count_params(rec, "uav-001") == 1);
+
+  sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_DYNAMICS, [](auto* st) {
+    set_number(st, "max_heading_rate_rps", 0.2);
+    set_number(st, "bogus", 1.0);
+    set_number(st, "tau_speed_s", 0.0);
+    (*st->mutable_fields())["min_speed_mps"].set_bool_value(true);
+  }));
+  run_frames(sim, 1);
+  CHECK(count_params(rec, "uav-001") == 2);
+  const auto* p = latest_params(rec, "uav-001");
+  CHECK(p && value_of(*p, "max_heading_rate_rps") == 0.2 && value_of(*p, "tau_speed_s") == 1.0);
+  CHECK(p && value_of(*p, "min_speed_mps") == 0.0);
+  CHECK(p && rejected_str(*p) == "bogus:unknown min_speed_mps:type tau_speed_s:range ");  // 직전 변경의 거부만
+  CHECK(p && p->sim_time_us() == 10 * 20000);  // 프레임 10 시작에 적용
+  CHECK(sim.entities().model(0)->get_param("max_heading_rate_rps") == 0.2);
+
+  // FA·MA 소유자, 모르는 엔티티, 매개변수 없는 엔티티는 Core가 처리하지 않는다
+  sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_FA, [](auto* st) { set_number(st, "max_heading_rate_rps", 0.9); }));
+  sim.submit(set_params_cmd("uav-099", v1::PARAM_OWNER_DYNAMICS, [](auto* st) { set_number(st, "x", 1.0); }));
+  sim.submit(set_params_cmd("gcs-01", v1::PARAM_OWNER_DYNAMICS, [](auto* st) { set_number(st, "x", 1.0); }));
+  run_frames(sim, 1);
+  CHECK(count_params(rec, "uav-001") == 2 && count_params(rec, "gcs-01") == 0);
+  CHECK(sim.entities().model(0)->get_param("max_heading_rate_rps") == 0.2);
+
+  // 거부 목록은 마지막 변경 것으로 바뀐다
+  sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_DYNAMICS, [](auto* st) { set_number(st, "max_heading_rate_rps", 0.4); }));
+  run_frames(sim, 1);
+  CHECK(count_params(rec, "uav-001") == 3 && latest_params(rec, "uav-001")->rejected_size() == 0);
+  CHECK(value_of(*latest_params(rec, "uav-001"), "max_heading_rate_rps") == 0.4);
+
+  // Reset은 시나리오 값으로 되돌리고 다시 발행한다(첫 발행의 거부 포함)
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(Clock::now());
+  CHECK(count_params(rec, "uav-001") == 4);
+  const auto* r = latest_params(rec, "uav-001");
+  CHECK(r && value_of(*r, "max_heading_rate_rps") == 1.0 && rejected_str(*r) == "tau_bank_s:unknown ");
+  CHECK(sim.entities().model(0)->get_param("max_heading_rate_rps") == 1.0);
+}
+
+// 시험용: 목 모델에 매개변수를 붙인다. mass_kg는 실행 중 변경 불가
+class GuardedMock final : public dyn::DynamicsModel {
+ public:
+  std::string_view name() const override { return "guarded_mock"; }
+  int dof() const override { return 2; }
+  std::size_t state_size() const override { return inner_.state_size(); }
+  std::size_t input_size() const override { return inner_.input_size(); }
+  void derivatives(double t, std::span<const double> x, std::span<const double> u, const dyn::Environment& env,
+                   std::span<double> dxdt) const override {
+    inner_.derivatives(t, x, u, env, dxdt);
+  }
+  bool map_control(const v1::ControlOutput& c, std::span<double> u) const override { return inner_.map_control(c, u); }
+  void to_kinematic(std::span<const double> x, const dyn::Environment& env, dyn::KinematicSample& o) const override {
+    inner_.to_kinematic(x, env, o);
+  }
+  void from_kinematic(const dyn::KinematicSample& in, std::span<double> x) const override { inner_.from_kinematic(in, x); }
+
+  std::span<const dyn::ParamDesc> param_descs() const override { return kDescs; }
+  double get_param(std::string_view n) const override { return n == "mass_kg" ? mass_ : n == "gain" ? gain_ : 0.0; }
+  bool set_param(std::string_view n, double v) override {
+    for (const auto& d : kDescs)
+      if (d.name == n) {
+        if (!(v >= d.min && v <= d.max)) return false;
+        (n == "mass_kg" ? mass_ : gain_) = v;
+        return true;
+      }
+    return false;
+  }
+
+ private:
+  static constexpr dyn::ParamDesc kDescs[] = {
+      {"mass_kg", dyn::ParamLayer::kAirframe, 10.0, "kg", 1.0, 100.0, false, "질량"},
+      {"gain", dyn::ParamLayer::kControl, 1.0, "", 0.0, 5.0, true, "이득"},
+  };
+  core::mock::ConstantVelocity2Dof inner_;
+  double mass_ = 10.0, gain_ = 1.0;
+};
+
+// TC-CORE-021: runtime=false 항목은 시나리오 적재에서는 적용되고 실행 중 SetParams에서는 not_runtime으로 거부된다
+void test_params_not_runtime() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  auto provider = core::mock::provider();
+  provider.make_model = [](const v1::EntitySpec&) { return std::make_unique<GuardedMock>(); };
+  core::SimCore sim(bus, std::move(provider), quiet());
+  auto sc = one_uav();
+  set_number(sc.entities[0].mutable_dynamics_params(), "mass_kg", 20.0);
+  CHECK(sim.load(sc));
+  CHECK(value_of(*latest_params(rec, "uav-001"), "mass_kg") == 20.0 && latest_params(rec, "uav-001")->rejected_size() == 0);
+  CHECK(latest_params(rec, "uav-001")->plugin() == "guarded_mock");
+
+  sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_DYNAMICS, [](auto* st) {
+    set_number(st, "mass_kg", 30.0);
+    set_number(st, "gain", 2.0);
+  }));
+  sim.poll(Clock::now());
+  const auto* p = latest_params(rec, "uav-001");
+  CHECK(p && value_of(*p, "mass_kg") == 20.0 && value_of(*p, "gain") == 2.0);
+  CHECK(p && rejected_str(*p) == "mass_kg:not_runtime ");
+  bool spec_not_runtime = false;
+  for (const auto& sp : p->specs()) spec_not_runtime |= sp.name() == "mass_kg" && !sp.runtime();
+  CHECK(spec_not_runtime);
+
+  sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_DYNAMICS, [](auto* st) { set_number(st, "gain", 9.0); }));
+  sim.poll(Clock::now());
+  CHECK(rejected_str(*latest_params(rec, "uav-001")) == "gain:range " && value_of(*latest_params(rec, "uav-001"), "gain") == 2.0);
+}
+
+// TC-CORE-022: lockstep 재현성. 같은 시드·같은 프레임의 SetParams면 truth가 같고, 프레임이 다르거나 없으면 다르다
+void test_params_lockstep() {
+  struct Result {
+    std::string bytes;
+    double heading;
+  };
+  auto run_once = [](int set_frame) {
+    InMemoryBus bus;
+    Recorder rec(bus);
+    core::SimCore sim(bus, core::wp2_provider(), quiet({"agent-host-1"}));
+    auto sub = bus.subscribe(keys::kClockTick, [&](const Sample& s) {
+      const auto tick = decode<v1::ClockTick>(s);
+      v1::ControlOutput c;
+      c.mutable_kinematic()->set_speed_mps(25.0);
+      c.mutable_kinematic()->set_heading_rate_rps(0.5);
+      put(bus, keys::onboard("uav-001", "ControlOutput"), c);
+      v1::FrameDone d;
+      d.set_participant("agent-host-1");
+      d.set_frame(tick.frame());
+      put(bus, keys::clock_done("agent-host-1"), d);
+    });
+    CHECK(sim.load(one_uav()));
+    sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50, 42));
+    const auto t = Clock::now();
+    bool sent = false;
+    for (int i = 0; i < 2000 && sim.frame() < 200; ++i) {
+      if (!sent && set_frame >= 0 && sim.frame() == static_cast<std::uint64_t>(set_frame)) {
+        sim.submit(set_params_cmd("uav-001", v1::PARAM_OWNER_DYNAMICS,
+                                  [](auto* st) { set_number(st, "max_heading_rate_rps", 0.2); }));
+        sent = true;
+      }
+      sim.poll(t);
+    }
+    CHECK(sim.frame() == 200);
+    if (set_frame >= 0) {
+      // 프레임 경계에서 적용된다: 발행된 EntityParams의 시각은 set_frame의 시작이다
+      const auto* p = latest_params(rec, "uav-001");
+      CHECK(p && p->sim_time_us() == static_cast<std::uint64_t>(set_frame) * 20000);
+    }
+    const auto& v = entity(rec.truths.back(), "uav-001").kinematics().velocity_ned_mps();
+    return Result{rec.truth_bytes.back(), std::atan2(v.y(), v.x())};
+  };
+  const auto a = run_once(50), b = run_once(50), c = run_once(51), d = run_once(-1);
+  CHECK(a.bytes == b.bytes && !a.bytes.empty());
+  CHECK(a.bytes != c.bytes);
+  CHECK(a.bytes != d.bytes);
+  // 제한을 0.2 rad/s로 낮추면 4 s(프레임 50~200 = 3 s) 동안 덜 돈다
+  CHECK(a.heading < d.heading - 0.5);
+}
+
+// TC-CORE-023: 적재 상태에서 1초(벽시계)마다 EntityParams를 다시 발행한다. 실행 중에는 발행하지 않는다
+void test_params_periodic() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  CHECK(sim.load(one_uav()));
+  CHECK(count_params(rec, "uav-001") == 1);
+  const auto t0 = Clock::now();
+  sim.poll(t0 + 300ms);
+  CHECK(count_params(rec, "uav-001") == 1);
+  sim.poll(t0 + 1200ms);
+  CHECK(count_params(rec, "uav-001") == 2);
+  sim.poll(t0 + 1500ms);
+  CHECK(count_params(rec, "uav-001") == 2);
+  sim.poll(t0 + 2300ms);
+  CHECK(count_params(rec, "uav-001") == 3);
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 5);
+  sim.poll(t0 + 10s);
+  CHECK(count_params(rec, "uav-001") == 3);
+}
+
 }  // namespace
 
 int main() {
@@ -766,6 +1054,11 @@ int main() {
   test_scripted_path();
   test_faults();
   test_wp2_provider();
+  test_params_load();
+  test_params_runtime();
+  test_params_not_runtime();
+  test_params_lockstep();
+  test_params_periodic();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

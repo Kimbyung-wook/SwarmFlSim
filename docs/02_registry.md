@@ -32,6 +32,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | REQ-LNK-004 | 무인기 간 링크와 지상통제소-무인기 간 링크를 모두 모의한다 | 사용자 요구 | Draft |
 | REQ-CFG-001 | 무인기 초기 상태를 GUI에서 설정한다 | 사용자 요구 | Draft |
 | REQ-CFG-002 | 무인기 초기 상태를 JSON 파일로 설정하며, GUI와 파일이 같은 형식을 쓴다 | 사용자 요구 | Draft |
+| REQ-CFG-003 | 비행체별 제어·유도·행위·결정 매개변수는 기본값을 가지며, 시작 시와 실행 중에 기체별로 설정할 수 있다 | 사용자 요구: "비행체 별로 제어/유도/행위/결정 파라미터는 기본 값이 있되, 설정할 수 있어야해." | Draft |
 | REQ-PAY-001 | 무인기마다 다른 특성을 부여한다 | 사용자 요구 | Draft |
 | REQ-PAY-002 | 센서(카메라) 성능 차이(FOV, 최대 탐지 거리)를 모의한다 | 사용자 요구, DEC-018 | Draft |
 | REQ-PAY-003 | 특정 범위에 대한 전자전 재밍을 수행한다 | 사용자 요구 | Draft |
@@ -106,6 +107,9 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-030 | 재밍 영역은 `JamZoneEvent.area`(원 또는 다각형 × 고도대)로 정의한다. `zone`(원)은 폐기 예정. 주파수대는 링크 모델에 주파수 선택이 들어갈 때 다시 검토한다 | OPN-029, WP4 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
 | DEC-031 | 재생 여부는 `SimStatus.replay`로 알린다. MCAP 재생기가 `sim/ctrl/status`를 다시 발행할 때 true로 채운다 | OPN-030, WP6 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
 | DEC-032 | 브로드캐스트는 같은 편 무전기 엔티티 전원을 수신 대상으로 보고, 닿지 않는 수신자마다 손실 사유(OUT_OF_RANGE 등)를 담은 `LinkOutcome`을 낸다. 손실률은 이 기준으로 집계하고, 거리 밖 제외는 모니터 필터로 한다 | OPN-031, WP6 질의, 사용자: "권고대로 진행" | Confirmed |
+| DEC-033 | 지도 임무 명령: `HoldTask`에 중심·반경·시간·방향을 두고, 항로점별 고도·속력·행위(선회 대기·정찰)를 갖는 `RouteTask`를 `TaskCommand`의 EXT 작업으로 추가한다. 지점 타격은 `StrikeTask.aim_point`, 지점 정찰은 원 `SearchAreaTask`를 쓴다 | REQ-UI-003, REQ-UI-004, REQ-BHV-002, 사용자: "비행체를 선택한 후에 맵에 우클릭하면 해당 지점에서 할 수 있는 임무들을 … 항로점 별로 할 수 있는 행위 … 같은 속성을 선택할 수 있으면 좋을 것 같아" | Confirmed |
+| DEC-034 | 선회 대기에 레이스트랙 모양을 추가한다. 모양은 중점·반경·직선 길이·축 방향·방향으로 정의하고(두 원 중심 = 중점 ± 직선 길이/2), VI에는 `CurveCommand.racetrack`으로 넘긴다. 유도는 Dubins 경로(원호+접선) 추종을 기본으로 하고, 벡터장(`reference/racetrack_vectorfield.m`)은 FA 매개변수로 추가한다 | REQ-BHV-002, REQ-GNC-001, DEC-033, 사용자: "Race track 모양의 선회 대기도 있으면 좋을 것 같아. 지금은 Dubin's circle 으로 만들고, 추후에는 vector field 으로 만들어보면 좋을 것 같아" | Confirmed |
+| DEC-035 | 기체별 매개변수는 소유자(동역학·FA·MA)가 기본값과 함께 선언(`ParamSpec`: 계층·단위·범위·`runtime`)하고, 기본값 → airframe 표 → 시나리오 → 실행 중 `SimCommand.set_params` 순으로 덮어쓴다. 소유자는 `sim/param/<entity>/<owner>`로 선언과 적용 값을 발행한다. 행위·결정은 MA 플러그인 하나를 유지하고 매개변수의 계층 표시로만 구분한다 | REQ-CFG-003, REQ-BHV-004, DEC-014, 사용자 답변: 변경 시점 "시작 시 + 실행 중", MA 분할 "파라미터만 그룹으로 구분" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -163,6 +167,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | C2 | 타격 승인 | `MA_ApprovalRequest`, `MA_ApprovalRequestStatus`, `StrikeConsentRequest` | STD |
 | C2 | 운용자 역할(RBAC) | `MA_OperatorRole`, `MA_Authorization` | STD |
 | C2 | 편대 형태 지정(RTS 명령) | 대응 메시지 없음 | EXT |
+| C2 | 항로점별 행위가 있는 항로 비행(`RouteTask`) | 대응 메시지 없음 | EXT |
 | P2P | 리더 선출 | `MA_RaftVoteRequest`, `MA_RaftAppendEntriesRequest`, `MA_LeaderUpdateRequest` | STD |
 | P2P | COP 공유 | `MA_Entity`, `MA_PackagePartnerStatusReport` | STD |
 | MS | 데이터 전송(DMS) | `MA_TxDataPayloadCommand`, `MA_RxDataPayload` | STD |
