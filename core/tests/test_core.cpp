@@ -1166,6 +1166,81 @@ void test_lockstep_ready() {
   CHECK(sim3.poll(t) && sim3.frame() == 1 && !rec3.ticks.empty());
 }
 
+// TC-CORE-026: lockstep 준비 대기 중에도 시나리오를 1초마다 재발행하고, 첫 틱 이후에는 멈춘다 (DEC-037)
+void test_scenario_late_joiner() {
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::mock::provider(), quiet({"agent-host-1"}));
+  core::Scenario sc = one_uav();
+  sc.name = "late";
+  sc.mode = v1::RUN_MODE_LOCKSTEP;
+  CHECK(sim.load(sc));
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  const auto t0 = Clock::now();
+  sim.poll(t0);
+  CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING);
+
+  // 적재 뒤에 구독한 참여자가 대기 중 재발행을 받는다
+  std::vector<v1::Scenario> got;
+  auto sub = bus.subscribe(keys::kSimCtrlScenario, [&](const Sample& s) { got.push_back(decode<v1::Scenario>(s)); });
+  sim.poll(t0 + 300ms);
+  CHECK(got.empty());
+  sim.poll(t0 + 1200ms);
+  CHECK(got.size() == 1 && got[0].name() == "late" && got[0].run().mode() == v1::RUN_MODE_LOCKSTEP);
+  sim.poll(t0 + 1500ms);
+  CHECK(got.size() == 1);
+  sim.poll(t0 + 2300ms);
+  CHECK(got.size() == 2);
+
+  ready(bus, "agent-host-1");
+  sim.poll(t0 + 2400ms);  // 첫 틱
+  CHECK(sim.frame() == 0);
+  sim.poll(t0 + 10s);
+  sim.poll(t0 + 20s);
+  CHECK(got.size() == 2);
+}
+
+// TC-CORE-027: CLI의 --mode/--rate/--hz/--seed 재정의가 적재 필드와 발행하는 Scenario.run에 반영된다 (DEC-037)
+void test_cli_override() {
+  core::Scenario proto_sc = core::from_proto([] {
+    v1::Scenario m;
+    m.set_name("demo");
+    m.mutable_run()->set_mode(v1::RUN_MODE_REALTIME);
+    m.mutable_run()->set_frame_hz(50);
+    m.mutable_run()->add_participants("agent-host-1");
+    return m;
+  }());
+  core::apply_run_override(proto_sc, {"lockstep", "2.5", "60", "7"});
+  CHECK(proto_sc.mode == v1::RUN_MODE_LOCKSTEP && proto_sc.rate == 2.5 && proto_sc.frame_hz == 60 && proto_sc.seed == 7);
+  const auto out = core::to_proto(proto_sc);
+  CHECK(out.run().mode() == v1::RUN_MODE_LOCKSTEP && out.run().rate() == 2.5 && out.run().frame_hz() == 60);
+  CHECK(out.run().seed() == 7 && out.run().participants_size() == 1 && out.name() == "demo");
+
+  // 재정의가 없으면 원본 그대로
+  core::Scenario same = core::from_proto(out);
+  core::apply_run_override(same, {});
+  CHECK(core::to_proto(same).SerializeAsString() == out.SerializeAsString());
+
+  // 원본 없는 시나리오
+  core::Scenario b = core::builtin_scenario(1);
+  core::apply_run_override(b, {"freerun", "", "", ""});
+  CHECK(core::to_proto(b).run().mode() == v1::RUN_MODE_FREERUN && b.rate == 1.0);
+  bool threw = false;
+  try {
+    core::apply_run_override(b, {"turbo", "", "", ""});
+  } catch (const std::invalid_argument&) {
+    threw = true;
+  }
+  CHECK(threw);
+
+  // 실제로 Core가 재정의한 모드로 발행한다
+  InMemoryBus bus;
+  std::vector<v1::Scenario> got;
+  auto sub = bus.subscribe(keys::kSimCtrlScenario, [&](const Sample& s) { got.push_back(decode<v1::Scenario>(s)); });
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  CHECK(sim.load(proto_sc));
+  CHECK(got.size() == 1 && got[0].run().mode() == v1::RUN_MODE_LOCKSTEP && got[0].run().seed() == 7);
+}
+
 }  // namespace
 
 int main() {
@@ -1191,6 +1266,8 @@ int main() {
   test_params_periodic();
   test_scenario_publish();
   test_lockstep_ready();
+  test_scenario_late_joiner();
+  test_cli_override();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
