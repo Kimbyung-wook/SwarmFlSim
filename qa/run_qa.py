@@ -525,14 +525,18 @@ def t014(c: Case):
     lat, lon = base[0], base[1]
     t = ob.m[3]
 
-    def run(name: str, fn, targets=("uav-003",), expect=None):
+    def run(name: str, fn, targets=("uav-003",), expect=None, tries=1):
+        # uav-003 링크가 BURST_LOSS라 명령이 유실될 수 있어 재전송 허용(같은 task_id는 교체됨, DEC-038)
         tid = f"qa-bad-{name}"
-        try:
-            fn(list(targets), tid)
-        except Exception as e:  # noqa: BLE001
-            c.note(f"{name}: 송신 예외 {e}")
-            return
-        time.sleep(2.5)
+        for k in range(tries):
+            try:
+                fn(list(targets), tid)
+            except Exception as e:  # noqa: BLE001
+                c.note(f"{name}: 송신 예외 {e}")
+                return
+            if k + 1 < tries:
+                time.sleep(2.0)
+        time.sleep(6.0)
         c.note(f"{name}: dead={st.dead()}, 응답 uav-003={status_of(ob, 'uav-003', tid)} "
                f"(전체 응답 기체 {sum(1 for u in ob.taskstatus if status_of(ob, u, tid))})")
 
@@ -551,10 +555,10 @@ def t014(c: Case):
     run("emptyRoute", lambda tg, i: ob.route(tg, [], i))
     run("route1", lambda tg, i: ob.route(tg, [(*off(lat, lon, 500, 0), 1250.0)], i))
     run("route500", lambda tg, i: ob.route(tg, [(*off(lat, lon, 20 * k, 20 * k), 1250.0) for k in range(500)], i))
-    run("routeNaN", lambda tg, i: ob.route(tg, [(NAN, NAN, NAN), (*off(lat, lon, 500, 0), 1250.0)], i))
+    run("routeNaN", lambda tg, i: ob.route(tg, [(NAN, NAN, NAN), (*off(lat, lon, 500, 0), 1250.0)], i), tries=4)
     run("holdR0", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, 0.0, i))
     run("holdRneg", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, -300.0, i))
-    run("holdRNaN", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, NAN, i))
+    run("holdRNaN", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, NAN, i), tries=4)
     run("holdR1e9", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, 1e9, i))
     run("raceLeg0", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, 300.0, i, racetrack=(0.0, 90.0)))
     run("raceLegNeg", lambda tg, i: ob.hold(tg, *off(lat, lon, 500, 0), 1250.0, 300.0, i, racetrack=(-500.0, 90.0)))
@@ -1039,6 +1043,41 @@ def t025(c: Case):
     c.check(res.get("agent", {}).get("rss_end_mb", 0) > 20, f"agent 표본이 python 자식을 포함하지 않음: {res.get('agent')}")
     c.data["resources"] = res
     teardown(c, st, ob, None)
+
+
+@tc("028", "lockstep 중 Datalink 이탈·재기동: 장벽 대기, 대기 로그, Reset+Start 복구")
+def t028(c: Case):
+    st = mk(c, "qa_s2_swarm20", lockstep=True, rate=2.0).up()
+    ob = Observer([st.endpoint("logger")])
+    ok0 = ob.wait(lambda: (ob.last_frame or 0) > 200, 90)
+    c.check(ok0, "초기 진행 실패")
+    st.kill("datalink")
+    time.sleep(3)
+    f1 = ob.last_frame
+    time.sleep(6)
+    c.note(f"lockstep 중 Datalink 이탈 뒤 진행: {f1}→{ob.last_frame}")
+    c.check((ob.last_frame or 0) - (f1 or 0) <= 2, f"Datalink 이탈 뒤에도 진행 {f1}→{ob.last_frame}")
+    import re as _re
+    core = st.log_text().get("core", "")
+    waits = _re.findall(r"waiting for frame done: [^\n]*", core)
+    c.note(f"Core 대기 로그 {len(waits)}건: {waits[-1] if waits else None}")
+    c.check(any("datalink-0" in w for w in waits), "Core가 대기 참여자(datalink-0)를 로그로 알리지 않음")
+    c.check(not [d for d in st.dead() if not d.startswith("datalink")], f"다른 프로세스 종료: {st.dead()}")
+    st.start_one("datalink")
+    time.sleep(10)
+    resumed = (ob.last_frame or 0) > (f1 or 0) + 100
+    c.note(f"Datalink 재기동 뒤 진행 {resumed}, frame {ob.last_frame}")
+    ob.reset()
+    ob.wait(lambda: ob.status.state == ob.m[0].SIM_RUN_STATE_LOADED, 20)
+    time.sleep(2)
+    ob.start("lockstep", 2.0)
+    ok2 = ob.wait(lambda: (ob.last_frame or 0) > 100 and ob.status.state == ob.m[0].SIM_RUN_STATE_RUNNING, 60)
+    c.note(f"Reset+Start 복구: {ok2} (frame {ob.last_frame})")
+    c.check(ok2, "Datalink 이탈 뒤 Reset+Start 복구 실패")
+    with ob.lock:
+        n_uav = len([k for k in ob.pos if k.startswith("uav")])
+    c.note(f"복구 뒤 기체 {n_uav}")
+    teardown(c, st, ob, allow=("time_regress", "tick_regress"))
 
 
 # ---------------------------------------------------------------- 실행
