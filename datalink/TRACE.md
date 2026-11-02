@@ -55,6 +55,9 @@ flowchart LR
 | IMP-LNK-014 | 시나리오 `link_profiles` 적용: base 선택, optional 필드 덮어쓰기(`apply_override`), `ge` 전체 대체, 재적재 시 초기화 | `include/swarm/lnk/profile.hpp`, `src/profile.cpp`, `src/emulator.cpp` | DEC-029, REQ-LNK-004 |
 | IMP-LNK-015 | `sim/ctrl/scenario` 구독(`on_scenario`): `LoadScenario` 없이 링크 프로파일·엔티티·시드 적재. `name`이 마지막 적재와 같으면 무시, 다르면 재적재 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-037, DEC-025 |
 | IMP-LNK-016 | lockstep 준비 신호 `send_ready`: 적재(`LoadScenario`·`sim/ctrl/scenario`·`load()`) 직후 `run.mode`가 LOCKSTEP이고 `participant_id`가 비어 있지 않으면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}` | `src/emulator.cpp` | DEC-037, DEC-005 |
+| IMP-LNK-017 | 입력 폭주 보호: 입력 큐 `max_pending`, 틱당 처리 (메시지, 수신자) 쌍 `max_routes_per_tick`(남은 것은 다음 틱), 전송 중 `max_in_flight`. 초과분은 payload를 버리고 `DROPPED(QUEUE_OVERFLOW)` LinkOutcome(틱당 `max_overflow_outcomes`건, 나머지는 건수만 로그)으로 기록. 어떤 부하에서도 `FrameDone`을 막지 않는다 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-039, DEC-005, QA-012 |
+| IMP-LNK-018 | 송신 시각을 도착 시각 대신 `header.sim_time_us`로 찍고 `tx_time < 틱 시각`인 메시지만 그 틱에서 처리(정렬 키 tx_time, src, key, seq). 메시지가 틱보다 먼저/나중에 도착해도 같은 프레임에서 처리 | `src/emulator.cpp` | DEC-039, DEC-005, QA-013 |
+| IMP-LNK-019 | lockstep 참여자 대기: `sim/clock/done/*` 구독(`on_done`), 시나리오 `run.participants`(자신 제외)가 프레임 f-1의 FrameDone을 모두 보낸 뒤에 틱 f를 처리(`run_tick`). 콜백은 막지 않고 보류 틱을 보관, 시각이 되돌아가면 초기화 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-039, DEC-005, QA-013 |
 | IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
@@ -77,9 +80,14 @@ flowchart LR
 | TC-LNK-014 | `apply_override`(설정 필드·명시 0 덮어쓰기, 미설정 유지, `ge` 네 값 대체). 버스(LoadScenario): base 지정 max_range 5 km(송·수신 모두), base 비움 같은 이름 재정의 지연 40 ms, 앞 항목 base 연쇄(지연 100 ms + max_range 상속), 모르는 base 기록, 재적재 시 재정의 제거 | `tests/test_datalink.cpp` | IMP-LNK-014 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-015 | 브로드캐스트 1건: 같은 편 수신자마다 outcome 하나(전달·OUT_OF_RANGE·NODE_DEAD·JAMMED), 다른 편 없음, rx는 닿은 수신자만 | `tests/test_datalink.cpp` | IMP-LNK-008, DEC-032 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-016 | `sim/ctrl/scenario`만으로 적재(시드·엔티티), lockstep 준비 신호 1건(`datalink-0`, frame 0), 같은 name 재발행(내용이 달라도) 무시, 다른 name 재적재·재신호, `LoadScenario` 후 같은 name 무시, 실시간은 신호 없음, 빈 participant는 신호 없음, 시나리오 프로파일 지연 100 ms 반영 | `tests/test_datalink.cpp` | IMP-LNK-015, IMP-LNK-016 | 통과 (msvc-debug, 2026-11-02) |
+| TC-LNK-017 | 한 프레임에 5만 건 홍수(`max_pending` 1000, 틱당 400 쌍, 전송 중 3000, 지연 5 s 프로파일): 입력 큐·전송 중 목록 상한 유지, 매 틱 FrameDone, QUEUE_OVERFLOW 기록(outcome 5000건 미만), 홍수 뒤 큐가 비고 새 메시지 전달, 틱당 100 쌍 상한이면 350건을 다음 틱으로 미룸 | `tests/test_datalink.cpp` | IMP-LNK-017 | 통과 (msvc-debug, 2026-11-02) |
+| TC-LNK-018 | 불완전 링크(GE·지터·대역폭) 3기 200 프레임: 같은 시드에서 송신이 틱 전/후에 도착해도, 반복해도 outcome 동일, 다른 시드는 다름, 손실·전달이 모두 있음 | `tests/test_datalink.cpp` | IMP-LNK-018, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
+| TC-LNK-019 | 참여자 FrameDone 대기: 첫 틱은 즉시, 이후 틱은 `agent-0`의 이전 프레임 FrameDone 전까지 보류(FrameDone 미발행, 늦게 온 tx 보류), 도착 후 처리·FrameDone, FrameDone이 틱보다 먼저 와도 즉시 처리 | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 
 ## 제약과 다음 단계
 
 - 재밍 주파수대는 계약에 없어 반영하지 않는다. 다각형은 위경도 평면 판정이라 날짜변경선·극 부근 영역은 지원하지 않는다.
 - 피어 중계(멀티홉)는 하지 않는다. 링크가 직접 닿는 수신자에게만 전달한다.
 - DEM 로더가 생기면 `main.cpp`의 `FlatTerrain`을 `GridTerrain`으로 바꾼다.
+- 폭주 폐기 outcome은 틱당 `max_overflow_outcomes`건까지이고 나머지는 건수만 로그에 남는다. 브로드캐스트 폭주 폐기는 dst=src 한 건으로 기록한다.
+- 계약·타 WP 발견(QA-013): Datalink는 같은 입력(tx 내용·프레임)에 같은 결과를 낸다(TC-LNK-018, 019). 그러나 Datalink가 틱 f를 처리하며 낸 rx가 에이전트에 틱 f+1 전/후 어느 쪽에 도착하느냐는 Core의 다음 틱 발행과 경합한다. `--only 024`는 이 상태에서 같은 시드 2회 결과가 여전히 다르다(시드 7 최대 1.63 m, 20261104 최대 3.46 m, 프레임 수·누락도 다름). Datalink→에이전트 rx를 프레임 번호로 확정하려면 에이전트가 틱 f 처리 시 `rx_time_us <= 틱 시각`인 rx만 소비하거나 Core가 Datalink의 FrameDone 뒤에 rx 소비를 보장하는 규칙이 필요하다(WP3·WP1, 계약 변경 요청).

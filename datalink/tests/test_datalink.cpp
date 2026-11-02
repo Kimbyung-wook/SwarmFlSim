@@ -1,4 +1,4 @@
-// TC-LNK-001~016: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~019: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -924,6 +924,190 @@ void tc016_delay() {
   check(rx == 1, "scenario profile latency 100 ms: delivered by 150 ms");
 }
 
+// ---- TC-LNK-017: 입력 폭주 보호 (DEC-039, QA-012) ----
+void tc017() {
+  DatalinkConfig cfg;
+  cfg.max_pending = 1000;
+  cfg.max_routes_per_tick = 400;
+  cfg.max_in_flight = 3000;
+  cfg.max_overflow_outcomes = 200;
+  LinkProfile slow = clean_profile();
+  slow.latency_ms = 5000.0;  // 전송 중 목록이 쌓이게 한다
+  cfg.profiles["slow"] = slow;
+  Rig r({{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 0.0, 1000.0, "slow"},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0, 1000.0, "slow"}},
+        cfg);
+  r.tick();
+  r.dones.clear();
+  r.outcomes.clear();
+
+  // 한 프레임에 5만 건. 입력 큐는 상한에서 멈춘다
+  for (int i = 0; i < 50000; ++i) r.tx("uav-001", {"uav-002"});
+  check(r.dl->pending() <= cfg.max_pending, "pending bounded during flood");
+
+  std::size_t max_pending_seen = 0, max_flight_seen = 0, ticks = 0;
+  for (int k = 0; k < 40; ++k) {
+    r.tick();
+    ++ticks;
+    max_pending_seen = std::max(max_pending_seen, r.dl->pending());
+    max_flight_seen = std::max(max_flight_seen, r.dl->in_flight());
+  }
+  check(max_pending_seen <= cfg.max_pending, "pending bounded after ticks");
+  check(max_flight_seen <= cfg.max_in_flight, "in-flight bounded");
+  check(r.dones.size() == ticks, "frame done every tick during and after flood");
+  check(r.count(v1::DROP_REASON_QUEUE_OVERFLOW) > 0, "overflow recorded as QUEUE_OVERFLOW");
+  check(r.outcomes.size() < 5000, "outcomes bounded (no per-message storm)");
+  check(r.dl->pending() == 0, "queue drained after flood");
+
+  // 홍수가 끝나면 정상 메시지가 다시 전달된다
+  r.rx.clear();
+  r.tx("uav-001", {"uav-002"});
+  for (int k = 0; k < 300; ++k) r.tick();
+  check(!r.rx.empty(), "message delivered after flood");
+
+  // 틱당 처리량 상한: 400쌍/틱이므로 1000건은 3틱 이상에 걸쳐 처리된다
+  Rig q({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0}}, [] {
+    DatalinkConfig c;
+    c.max_routes_per_tick = 100;
+    return c;
+  }());
+  q.tick();
+  q.outcomes.clear();
+  for (int i = 0; i < 350; ++i) q.tx("uav-001", {"uav-002"});
+  q.tick();
+  check(q.outcomes.size() <= 120, "per-tick route budget respected");
+  for (int k = 0; k < 6; ++k) q.tick();
+  check(q.outcomes.size() == 350, "deferred messages processed in later ticks");
+  check(q.count(v1::DROP_REASON_NONE) == 350, "deferred messages delivered");
+}
+
+// ---- TC-LNK-018: 불완전 링크 결정론 (DEC-039, QA-013) ----
+struct Trace {
+  std::vector<std::string> lines;
+};
+
+Trace run_lossy(bool send_before_tick, std::uint64_t seed) {
+  DatalinkConfig cfg;
+  LinkProfile lossy = clean_profile();
+  lossy.ge = {0.05, 0.25, 0.01, 0.6};
+  lossy.latency_ms = 40.0;
+  lossy.jitter_ms = 15.0;
+  lossy.bandwidth_bps = 20000.0;
+  lossy.bucket_bytes = 2000;
+  lossy.queue_len = 8;
+  cfg.profiles["lossy"] = lossy;
+  Rig r({{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 0.0, 1000.0, "lossy"},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1500.0, 1000.0, "lossy"},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 3000.0, 1000.0, "lossy"}},
+        cfg, nullptr, seed);
+  auto send = [&](std::uint64_t frame) {
+    for (const char* src : {"uav-001", "uav-002", "uav-003"}) {
+      for (int i = 0; i < 3; ++i) {
+        v1::LinkEnvelope env;
+        auto* h = env.mutable_header();
+        h->set_source(src);
+        h->set_frame(frame);
+        h->set_sim_time_us(frame * r.dt_us);
+        const std::string key = keys::tx(src, keys::Iface::P2P, "PeerStatus");
+        h->set_seq(r.seq[key]++);
+        env.set_iface(v1::L1_INTERFACE_P2P);
+        env.set_msg_type("swarm.v1.PeerStatus");
+        env.set_payload(std::string(200, 'x'));
+        put(r.bus, key, env);
+      }
+    }
+  };
+  for (std::uint64_t k = 0; k < 200; ++k) {
+    // 프레임 k(시각 k*dt)의 송신이 tick k 앞에 도착하느냐 뒤에 도착하느냐만 다르다
+    if (send_before_tick) send(k);
+    r.tick();
+    if (!send_before_tick) send(k);
+  }
+  Trace t;
+  for (const auto& o : r.outcomes)
+    t.lines.push_back(o.src() + ">" + o.dst() + "#" + std::to_string(o.seq()) + ":" + std::to_string(o.reason()) +
+                      "@" + std::to_string(o.rx_time_us()));
+  std::sort(t.lines.begin(), t.lines.end());
+  return t;
+}
+
+void tc018() {
+  const Trace a = run_lossy(true, 20261104), b = run_lossy(false, 20261104), c = run_lossy(true, 20261104),
+              d = run_lossy(true, 7);
+  check(a.lines.size() > 1000, "lossy run produced outcomes");
+  check(a.lines == c.lines, "same seed, same arrival order: identical outcomes");
+  check(a.lines == b.lines, "same seed, different arrival order vs tick: identical outcomes");
+  check(a.lines != d.lines, "different seed: different outcomes");
+  std::size_t lost = 0;
+  for (const auto& l : a.lines)
+    if (l.find(":0@") == std::string::npos) ++lost;
+  check(lost > 0 && lost < a.lines.size(), "run has both losses and deliveries");
+}
+
+// ---- TC-LNK-019: lockstep에서 다른 참여자의 FrameDone을 받은 뒤에 틱을 처리한다 (DEC-039) ----
+void tc019() {
+  InMemoryBus bus;
+  std::vector<v1::FrameDone> dones;
+  auto sub = bus.subscribe("sim/clock/done/*", [&](const Sample& s) {
+    auto d = parse<v1::FrameDone>(s);
+    if (d.participant() == "datalink-0") dones.push_back(d);
+  });
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.0;
+  Datalink dl(bus, nullptr, cfg);
+  v1::Scenario sc = scenario_msg("s19", v1::RUN_MODE_LOCKSTEP, 40.0, 1000.0);
+  sc.mutable_run()->add_participants("datalink-0");
+  sc.mutable_run()->add_participants("agent-0");
+  dl.load(sc);
+  dones.clear();  // 준비 신호는 제외
+
+  auto tick = [&](std::uint64_t frame) {
+    v1::ClockTick t;
+    t.set_frame(frame);
+    t.set_sim_time_us(frame * 20000);
+    t.set_dt_us(20000);
+    t.set_mode(v1::RUN_MODE_LOCKSTEP);
+    put(bus, std::string(keys::kClockTick), t);
+  };
+  auto agent_done = [&](std::uint64_t frame) {
+    v1::FrameDone d;
+    d.set_participant("agent-0");
+    d.set_frame(frame);
+    put(bus, keys::clock_done("agent-0"), d);
+  };
+  auto tx = [&](std::uint32_t seq, std::uint64_t t_us) {
+    v1::LinkEnvelope env;
+    auto* h = env.mutable_header();
+    h->set_source("uav-001");
+    h->set_sim_time_us(t_us);
+    h->set_seq(seq);
+    env.add_dst("uav-002");
+    env.set_iface(v1::L1_INTERFACE_P2P);
+    env.set_msg_type("swarm.v1.PeerStatus");
+    env.set_payload("x");
+    put(bus, keys::tx("uav-001", keys::Iface::P2P, "PeerStatus"), env);
+  };
+
+  tick(0);  // 첫 틱은 기다리지 않는다
+  check(dones.size() == 1 && dones[0].frame() == 0, "first tick processed without waiting");
+  tick(1);  // agent-0의 frame 0 FrameDone이 없다
+  check(dones.size() == 1, "tick 1 deferred until participant done");
+  tx(0, 20000 - 1000);  // 틱 1을 받은 뒤에 도착한 이전 프레임 송신
+  check(dl.pending() == 1, "late tx held while waiting");
+  agent_done(0);
+  check(dones.size() == 2 && dones[1].frame() == 1, "tick 1 processed after participant done");
+  check(dl.pending() == 0, "tx from before the tick processed in that tick");
+  check(dl.sim_time_us() == 20000, "clock advanced");
+  tick(2);
+  check(dones.size() == 2, "tick 2 deferred again");
+  agent_done(1);
+  check(dones.size() == 3 && dones[2].frame() == 2, "tick 2 processed after next done");
+  // 순서가 뒤바뀌어도(FrameDone이 틱보다 먼저) 같은 결과
+  agent_done(2);
+  tick(3);
+  check(dones.size() == 4 && dones[3].frame() == 3, "done before tick: processed immediately");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -935,6 +1119,7 @@ const Case kCases[] = {
     {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
+    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019},
 };
 
 }  // namespace
