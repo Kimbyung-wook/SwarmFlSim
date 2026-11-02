@@ -7,6 +7,7 @@ uv run swarm-bridge [--host 127.0.0.1] [--port 8765] [버스 옵션]
 import argparse
 import asyncio
 import logging
+import sys
 from collections.abc import Sequence
 
 from swarm_api import BusConfig, open_bus
@@ -47,7 +48,17 @@ async def _run(a: argparse.Namespace) -> None:
         bus.close()
 
 
+def _safe_streams() -> None:
+    """콘솔 인코딩(cp949 등)이 표현하지 못하는 문자가 있어도 도움말·로그 출력으로 종료하지 않는다 (QA-010)"""
+    for st in (sys.stdout, sys.stderr):
+        try:
+            st.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _safe_streams()
     p = argparse.ArgumentParser(prog="swarm-bridge", description="브라우저 ⇄ 버스 WebSocket 브리지 (프로토콜 v1, DEC-027)")
     p.add_argument("--host", default="127.0.0.1", help="대기 주소 (다른 PC의 UI를 받으려면 0.0.0.0)")
     p.add_argument("--port", type=int, default=DEFAULT_PORT)

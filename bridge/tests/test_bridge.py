@@ -383,6 +383,19 @@ def test_cli_bus_config():
         main(["--help"])
 
 
+# TC-UI-038: 콘솔 인코딩(cp949)이 표현 못 하는 문자("⇄")가 도움말에 있어도 종료하지 않는다 (QA-010)
+def test_cli_help_survives_narrow_console_encoding():
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "PYTHONIOENCODING": "cp949"}
+    r = subprocess.run([sys.executable, "-m", "swarm_bridge.cli", "--help"], capture_output=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr.decode("cp949", "replace")
+    out = r.stdout.decode("cp949")
+    assert "swarm-bridge" in out and "--port" in out
+
+
 # TC-UI-016: Zenoh 백엔드(다른 스레드 콜백) 경유 ----------------------------
 @pytest.mark.skipif(not __import__("swarm_api").zenoh_available(), reason="eclipse-zenoh 없음")
 def test_zenoh_roundtrip():

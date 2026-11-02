@@ -5,6 +5,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MockParams } from "../data/mockParams";
 import { RunMode, SimRunState, SimStatusSchema, ParamOwner } from "../gen/swarm/v1/sim_pb";
+import { toBinary } from "@bufbuild/protobuf";
+import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
+import { TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
+import { CommandState } from "../gen/swarm/v1/common_pb";
+import { C2Commander } from "../model/commands";
+import { TaskLog } from "../model/taskLog";
+import { CommandPanel } from "./CommandPanel";
 import { ParamStore } from "../model/params";
 import { ParamPanel } from "./ParamPanel";
 import { Toolbar } from "./Toolbar";
@@ -65,10 +72,65 @@ describe("TC-UI-035 선택지(choices) 항목", () => {
   });
 });
 
+describe("TC-UI-036 realtime 배속 고정 (QA-009)", () => {
+  const tb = (mode: RunMode) =>
+    renderToStaticMarkup(
+      <Toolbar
+        source="bus" onSource={() => {}} conn={null} gcs="gcs-01"
+        status={create(SimStatusSchema, { state: SimRunState.RUNNING, mode, rateTarget: 1 })}
+        simTimeUs={0n} frame={0n} entityCount={0} mapStatus={null} viewMode="3d" onViewMode={() => {}}
+        onStart={() => {}} onPause={() => {}} onResume={() => {}} onStep={() => {}} onReset={() => {}} onRate={() => {}} onFit={() => {}}
+      />,
+    );
+  const rate = (html: string, l: string) => html.match(new RegExp(`<button[^>]*>${l}</button>`))?.[0] ?? "";
+  it("realtime: 배속 버튼 비활성과 안내", () => {
+    const h = tb(RunMode.REALTIME);
+    for (const l of ["×1", "×2", "×5", "×10"]) expect(rate(h, l)).toContain("disabled");
+    expect(h).toContain("실시간에서는 배속 고정");
+  });
+  it("lockstep·freerun: 배속 버튼 활성, 안내 없음", () => {
+    for (const m of [RunMode.LOCKSTEP, RunMode.FREERUN]) {
+      const h = tb(m);
+      expect(rate(h, "×5")).not.toContain("disabled");
+      expect(h).not.toContain("실시간에서는 배속 고정");
+    }
+  });
+});
+
+describe("TC-UI-037 임무 응답 표시: 거부·실패 사유", () => {
+  it("TaskStatus REJECTED·FAILED는 응답 칸에 사유가 보이고 정상 응답은 그대로", () => {
+    const log = new TaskLog();
+    const out = new C2Commander("gcs-01", "ui-q", () => ({ simTimeUs: 0n, frame: 0n })).task("hold", ["uav-001", "uav-002", "uav-003"]);
+    log.sent(out);
+    const rx = (src: string, state: CommandState, reason: string) =>
+      log.received(
+        "swarm/gcs-01/rx/c2/TaskStatus",
+        create(LinkEnvelopeSchema, {
+          header: { source: src },
+          msgType: "swarm.v1.TaskStatus",
+          payload: toBinary(TaskStatusSchema, create(TaskStatusSchema, { header: { source: src }, taskId: out.taskId!, state, reason })),
+        }),
+      );
+    rx("uav-001", CommandState.REJECTED, "연료 부족");
+    rx("uav-002", CommandState.FAILED, "엔진 고장");
+    rx("uav-003", CommandState.EXECUTING, "");
+    const html = renderToStaticMarkup(
+      <CommandPanel targets={[]} disabledReason={null} groups={[]} tasks={log.list()} rx={[]} onHold={() => {}} onRtb={() => {}} onFormation={() => {}} onAssignGroup={() => {}} onRecallGroup={() => {}} onEditRoute={() => {}} />,
+    );
+    expect(html).toContain("uav-001 거부 (연료 부족)");
+    expect(html).toContain("uav-002 실패 (엔진 고장)");
+    expect(html).not.toContain("uav-003 실행 (");
+    expect(html.match(/task-bad/g)?.length).toBe(2);
+    // 전송 실패는 오류로 표시
+    log.sent(new C2Commander("gcs-01", "ui-q", () => ({ simTimeUs: 0n, frame: 0n })).task("hold", ["uav-001"]), "브리지에 연결되어 있지 않다");
+    expect(renderToStaticMarkup(<CommandPanel targets={[]} disabledReason={null} groups={[]} tasks={log.list()} rx={[]} onHold={() => {}} onRtb={() => {}} onFormation={() => {}} onAssignGroup={() => {}} onRecallGroup={() => {}} onEditRoute={() => {}} />)).toContain("전송 실패: 브리지에 연결되어 있지 않다");
+  });
+});
+
 describe("TC-UI-033 재생 중 통제 버튼", () => {
-  const props = (replay: boolean, state: SimRunState) => ({
+  const props = (replay: boolean, state: SimRunState, mode: RunMode = RunMode.LOCKSTEP) => ({
     source: "bus" as const, onSource: () => {}, conn: null, gcs: "gcs-01",
-    status: create(SimStatusSchema, { state, mode: RunMode.REALTIME, rateTarget: 1, replay }),
+    status: create(SimStatusSchema, { state, mode, rateTarget: 1, replay }),
     simTimeUs: 0n, frame: 0n, entityCount: 0, mapStatus: null, viewMode: "3d" as const, onViewMode: () => {},
     onStart: () => {}, onPause: () => {}, onResume: () => {}, onStep: () => {}, onReset: () => {}, onRate: () => {}, onFit: () => {},
   });

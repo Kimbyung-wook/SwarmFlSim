@@ -2,10 +2,14 @@
 // 지도 임무는 우클릭 임무 창(IMP-UI-039). 보낸 항로는 여기서 다시 편집한다(IMP-UI-040). 명령 상태는 swarm/<gcs>/rx/**의 TaskStatus로 표시한다.
 import { useState } from "react";
 import { FormationShape } from "../gen/swarm/v1/c2_pb";
+import { CommandState } from "../gen/swarm/v1/common_pb";
 import type { GroupSlot } from "../model/groups";
 import type { TaskEntry } from "../model/taskLog";
 import { commandStateLabel } from "../model/taskLog";
 import type { RxView } from "../model/taskLog";
+
+/** 거부·실패는 사유를 툴팁이 아니라 본문에 보인다 */
+const isBad = (s: CommandState) => s === CommandState.REJECTED || s === CommandState.FAILED;
 
 interface Props {
   /** 명령 대상(선택 중 아군 기체) */
@@ -113,9 +117,10 @@ export function CommandPanel(p: Props) {
                   <span className="muted">응답 없음</span>
                 ) : (
                   [...t.reports].map(([src, r]) => (
-                    <span key={src} title={`${r.reason} @${fmtSim(r.simTimeUs)}`}>
+                    <span key={src} className={isBad(r.state) ? "task-bad" : undefined} title={`${r.reason} @${fmtSim(r.simTimeUs)}`}>
                       {src} {commandStateLabel(r.state)}
                       {r.progress > 0 ? ` ${(r.progress * 100).toFixed(0)}%` : ""}
+                      {isBad(r.state) && r.reason ? ` (${r.reason})` : ""}
                     </span>
                   ))
                 )}

@@ -1,7 +1,7 @@
 // IMP-UI-018: 상단 도구 막대. 2D/3D 전환(REQ-UI-001), 시뮬레이션 상태와 일시정지·배속(sim/ctrl/cmd, DEC-014)
 // IMP-UI-030: 시작·스텝·리셋, 데이터 소스 선택(목/버스), 브리지 연결 상태
 import type { SimStatus } from "../gen/swarm/v1/sim_pb";
-import { SimRunState } from "../gen/swarm/v1/sim_pb";
+import { RunMode, SimRunState } from "../gen/swarm/v1/sim_pb";
 import type { MapDataStatus } from "../cesium/viewer";
 import type { BridgeState } from "../data/bridgeTransport";
 import type { SourceKind } from "../data/sourceConfig";
@@ -59,6 +59,8 @@ export function Toolbar(p: Props) {
   const paused = state === SimRunState.PAUSED;
   // 재생(MCAP, DEC-031) 중에는 받는 Core가 없어 시뮬레이션 통제 버튼이 듣지 않는다
   const replay = status?.replay === true;
+  // realtime은 벽시계에 묶여 배속이 고정이다(DEC-005). 눌러도 Core가 따르지 않으므로 끄고 안내한다 (QA-009)
+  const fixedRate = status?.mode === RunMode.REALTIME;
   return (
     <div className="toolbar">
       <strong className="brand">Swarm GCS</strong>
@@ -78,8 +80,9 @@ export function Toolbar(p: Props) {
         )}
         <button onClick={p.onStep} disabled={replay || !paused} title={replay ? "재생 중에는 쓸 수 없다" : "한 프레임 진행"}>스텝</button>
         <button onClick={p.onReset} disabled={!status || state === SimRunState.IDLE} title="처음 상태로">리셋</button>
+        {fixedRate && !replay && <span className="muted rate-note">실시간에서는 배속 고정</span>}
         {RATES.map((r) => (
-          <button key={r} className={status?.rateTarget === r ? "on" : undefined} onClick={() => onRate(r)} disabled={!status || replay}>
+          <button key={r} className={status?.rateTarget === r ? "on" : undefined} onClick={() => onRate(r)} disabled={!status || replay || fixedRate} title={fixedRate ? "실시간에서는 배속 고정" : undefined}>
             ×{r}
           </button>
         ))}
