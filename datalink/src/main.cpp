@@ -99,6 +99,10 @@ int main(int argc, char** argv) {
     g_link = &link;
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
+#ifdef SIGBREAK
+    // Windows: 별도 프로세스 그룹으로 띄운 경우 Ctrl+Break로 멈춘다 (IMP-LNK-015)
+    std::signal(SIGBREAK, on_signal);
+#endif
     std::fprintf(stderr, "[swarm_datalink] bus=%s, participant=%s, waiting for sim/clock/tick\n", bus_kind.c_str(),
                  cfg.participant_id.empty() ? "(none)" : cfg.participant_id.c_str());
     link.wait_shutdown();

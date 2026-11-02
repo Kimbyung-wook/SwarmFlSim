@@ -119,6 +119,11 @@ int main(int argc, char** argv) {
   try {
     if (!parse(argc, argv, a)) return usage();
     std::signal(SIGINT, on_signal);
+    std::signal(SIGTERM, on_signal);
+#ifdef SIGBREAK
+    // Windows: 별도 프로세스 그룹으로 띄운 경우 Ctrl+Break로 멈춘다 (IMP-LOG-009)
+    std::signal(SIGBREAK, on_signal);
+#endif
     if (a.cmd == "info") return cmd_info(a);
     if (a.cmd == "record") return cmd_record(a);
     if (a.cmd == "replay") return cmd_replay(a);

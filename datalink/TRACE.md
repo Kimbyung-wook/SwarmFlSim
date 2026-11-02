@@ -52,6 +52,7 @@ flowchart LR
 | IMP-LNK-012 | 재밍 판정을 수신단 기준으로 변경(`static_check_locked`), `link/state`는 양쪽 기준 유지 | `src/emulator.cpp` | DEC-028, REQ-LNK-002 |
 | IMP-LNK-013 | `JamZoneEvent.area` 판정: 원·다각형(`in_polygon`) × 고도대(`in_jam_area`), `area` 없을 때 `zone` 대체 | `include/swarm/lnk/channel.hpp`, `src/channel.cpp`, `src/emulator.cpp` | DEC-030, DEC-009 |
 | IMP-LNK-014 | 시나리오 `link_profiles` 적용: base 선택, optional 필드 덮어쓰기(`apply_override`), `ge` 전체 대체, 재적재 시 초기화 | `include/swarm/lnk/profile.hpp`, `src/profile.cpp`, `src/emulator.cpp` | DEC-029, REQ-LNK-004 |
+| IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
 
