@@ -1,6 +1,7 @@
 // IMP-MON-006: 엔티티별 송수신 집계 (빈도·크기·지연·손실률, 손실 사유별) (REQ-UI-005, PRP-UI-002, PRP-LNK-002)
 // LinkOutcome 한 건당 O(1). 빈도는 시뮬레이션 시각 기준 이동 창으로 계산해 재생 배속과 무관하다.
 import type { LinkOutcome } from "../gen/swarm/v1/link_pb";
+import type { DropReason } from "../gen/swarm/v1/link_pb";
 import { LinkOutcomeKind } from "../gen/swarm/v1/link_pb";
 import type { L1Interface } from "../gen/swarm/v1/options_pb";
 import { REASON_SLOTS, reasonSlot } from "./labels";
@@ -89,9 +90,16 @@ export class DirStats {
     this.window.add(txUs, o.sizeBytes, dropped);
   }
 
-  lossRate(): number {
-    const n = this.delivered + this.dropped;
-    return n === 0 ? 0 : this.dropped / n;
+  /**
+   * 손실률 = 손실 outcome / (전달 + 손실 outcome). 분모는 수신자별 outcome이다.
+   * 브로드캐스트는 닿지 않는 같은 편 수신자마다 1건씩 손실로 들어온다(DEC-032).
+   * except에 준 사유(예: OUT_OF_RANGE)는 분자·분모에서 뺀다.
+   */
+  lossRate(except: readonly DropReason[] = []): number {
+    let ex = 0;
+    for (const r of except) ex += this.drops[reasonSlot(r)];
+    const n = this.delivered + this.dropped - ex;
+    return n <= 0 ? 0 : (this.dropped - ex) / n;
   }
 
   latMeanUs(): number {

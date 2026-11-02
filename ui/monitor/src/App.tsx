@@ -54,7 +54,7 @@ export function App() {
   const cfg = useMemo(() => readConfig(window.location.search), []);
   const store = useMemo(() => {
     const s = new MonitorStore();
-    s.view = cfg.view;
+    s.viewHint = cfg.view;
     return s;
   }, [cfg]);
   const sourceRef = useRef<FrameSource | null>(null);
@@ -70,7 +70,7 @@ export function App() {
     const src: FrameSource =
       cfg.source === "bridge"
         ? new BridgeSource({ url: cfg.url, client: clientId() })
-        : new MockSource({ uavs: cfg.uavs, peerHz: cfg.peerHz, rate: cfg.rate });
+        : new MockSource({ uavs: cfg.uavs, peerHz: cfg.peerHz, rate: cfg.rate, replay: cfg.view === "replay" });
     sourceRef.current = src;
     src.onFrame((f) => store.handleFrame(f));
     src.onStatus(setStatus);
@@ -93,7 +93,7 @@ export function App() {
   }, [store]);
 
   const toggleView = () => {
-    store.view = store.view === "live" ? "replay" : "live";
+    store.toggleView();
     setTick((n) => n + 1);
   };
 

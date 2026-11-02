@@ -29,6 +29,9 @@
 | IMP-MON-020 | 시퀀스 타임라인 캔버스(창 0.5–10 s, 상한 시 구간 축소, 클릭 선택) | `src/components/Timeline.tsx` | REQ-UI-005, PRP-UI-002 | TC-MON-010 |
 | IMP-MON-021 | 메시지 echo(tx/rx 목록, LinkEnvelope·payload 해석, 타임라인 선택 연동) | `src/components/EchoPanel.tsx` | REQ-UI-005, PRP-UI-002 | TC-MON-010 |
 | IMP-MON-022 | 엔티티 상세(메시지 타입별 송수신, 손실 상대, link/state) | `src/components/EntityDetail.tsx` | REQ-UI-005, PRP-LNK-002 | TC-MON-010 |
+| IMP-MON-023 | 되감기는 시계 출처(sim/ctrl/status, truth/state)로만 판정. 늦게 온 outcome은 집계하고 링크 지연(sim 시각 − 최신 outcome tx 시각)을 머리줄에 표시 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, PRP-UI-002, DEC-005 | TC-MON-006, TC-MON-011 |
+| IMP-MON-024 | 재생 표시를 `SimStatus.replay`로 판단. `?replay=1`은 SimStatus 수신 전 대체값, 배지 수동 전환은 `replay` 값이 바뀌면 해제. 목 생성기 `replay` 옵션 | `src/model/store.ts`, `src/components/Header.tsx`, `src/App.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-UI-002, DEC-031 | TC-MON-012 |
+| IMP-MON-025 | 손실률 분모는 수신자별 outcome임을 표 툴팁에 명시하고 `거리 밖 제외`(OUT_OF_RANGE를 분자·분모에서 뺌) 선택 추가. 목 브로드캐스트 수신 대상을 같은 편 무전기 엔티티로 한정 | `src/model/aggregator.ts`, `src/components/StatsTable.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-LNK-002, DEC-032 | TC-MON-013 |
 
 ## 시험 (TC)
 
@@ -39,13 +42,16 @@
 | TC-MON-003 | 키별 해석, 인코딩 불일치·깨진 페이로드·형식 밖 키 무시, 빈 인코딩, swarm 키, payload echo JSON·오류 (6건) | `src/model/decode.test.ts` | IMP-MON-001, IMP-MON-004 | 통과 |
 | TC-MON-004 | 송신/수신 분리, 7개 사유+기타, 지연 평균·p50·p95·최대, 5 s 창 빈도, 늦은 버킷, 타입별·엔벨로프 수·초기화 (6건) | `src/model/aggregator.test.ts` | IMP-MON-006 | 통과 |
 | TC-MON-005 | outcome 필터(빈 필터, any/src/dst, 인터페이스·타입·결과, AND), 엔벨로프 필터(브로드캐스트, 유니캐스트, rx, 결과), toggle (8건) | `src/model/filter.test.ts` | IMP-MON-007 | 통과 |
-| TC-MON-006 | 원형 버퍼, outcome → tx 엔벨로프 색인·축출, truth/kill 엔티티 갱신·트리, 링크 상태·SimStatus·무시 계수, 되감기 초기화 (5건) | `src/model/store.test.ts` | IMP-MON-008~010 | 통과 |
+| TC-MON-006 | 원형 버퍼, outcome → tx 엔벨로프 색인·축출, truth/kill 엔티티 갱신·트리, 링크 상태·SimStatus·무시 계수, 시계 되감기 초기화, 늦은 outcome·링크 지연 (6건) | `src/model/store.test.ts` | IMP-MON-008~010, IMP-MON-023 | 통과 |
 | TC-MON-007 | 목 프레임 전부 계약 키로 해석, 시드 결정론, 95 s 동안 7개 사유 모두 발생·전달 수 = rx 수, rx_time, 브로드캐스트 수신자당 outcome (5건) | `src/mock/mockTraffic.test.ts` | IMP-MON-011 | 통과 |
 | TC-MON-008 | 타임라인 창·필터·상한, 정지 사본, 레인 순서, 배치·클릭 판정 (4건) | `src/model/timeline.test.ts` | IMP-MON-014 | 통과 |
 | TC-MON-009 | 부하 측정: 바이트 프레임 → 해석 → 집계·타임라인·echo (아래 표) | `src/load/monitor.load.ts` (`npm run bench`) | IMP-MON-006, IMP-MON-009, REQ-PRF-001 | 통과(20대 × 50 Hz 실시간 12.7배) |
 | TC-MON-010 | 수동 화면 확인(목 소스, 아래 기록) | – | IMP-MON-011~022 | 확인 |
+| TC-MON-011 | 실제 브리지·데이터링크 연동(아래 기록) | – | IMP-MON-003, IMP-MON-004, IMP-MON-023 | 확인 |
+| TC-MON-012 | 재생 표시: SimStatus 수신 전 `?replay=1`, 수신 후 `replay` 필드, 실행 중 전환 시 머리줄 배지 변경, 수동 전환 해제, 목 `replay` 옵션 (3건) | `src/model/replay.test.ts` | IMP-MON-024 | 통과 |
+| TC-MON-013 | 손실률 분모: 브로드캐스트 수신자별 outcome, 거리 밖 제외 계산, 목 브로드캐스트 수신 대상 = 같은 편 무전기 (2건) | `src/model/aggregator.test.ts`, `src/mock/mockTraffic.test.ts` | IMP-MON-025 | 통과 |
 
-`npm test`: 8개 파일 45건 통과. `npm run build`: 통과(tsc -b, vite build).
+`npm test`: 9개 파일 51건 통과. `npm run build`: 통과(tsc -b, vite build).
 
 ## 부하 측정 (TC-MON-009)
 
@@ -68,4 +74,9 @@
 - 화면 정지 후 타임라인 손실 화살표 클릭 → `uav-019 → gcs-01 #90 PeerStatus 손실: 가시선`, LinkEnvelope와 PeerStatus payload JSON 해석 표시.
 - `?replay=1` → 머리줄 `▶ 재생 (MCAP)` 배지와 주황 테두리. `목 되감기` → `되감기 1회`, 통계 초기화.
 - `?source=bridge`(브리지 없음) → `브리지 · 끊김`(code 1006), 2 s마다 재접속 시도.
-- 실제 브리지(WP5)·데이터링크(WP4)와의 연동은 해당 WP가 없어 확인하지 못했다.
+
+## 연동 확인 기록 (TC-MON-011)
+
+- 대상: 통합 커밋 d7538ef(WP1-2·WP4·WP5·WP6 병합). `swarm_core --autostart --mode realtime --hz 50 --uavs 20`, `swarm_datalink --no-frame-done`(둘 다 msvc-debug), `swarm-bridge --port 8765`, Zenoh. Agent(WP3)가 없어 시험용 생성기가 `truth/state` 시각에 맞춰 UAV마다 PeerStatus p2p 브로드캐스트와 TaskStatus(→gcs-01, 1 Hz)를 tx로 냈다.
+- 10 Hz: 연결·계약 0.2.0·SimStatus 표시, 엔티티 21(truth), 엔티티당 송신 11 msg/s·outcome 201/s(수신자 20), 전체 4,020 outcome/s, 지연 평균 20 ms·p95 33 ms, 손실은 버스트만 2.0%. 타임라인 화살표, rx echo의 LinkEnvelope(rxTimeUs)·PeerStatus 해석 확인. 처리 시간 비율 4%.
+- 50 Hz: 데이터링크(debug 빌드)가 실시간을 따라가지 못해 outcome tx 시각이 sim 시각보다 수십 초 늦었고 대부분 QUEUE_OVERFLOW였다. 수정 전 모니터는 이를 되감기로 보고 통계를 계속 지웠다(되감기 2,000회 이상). IMP-MON-023 후 되감기 0회, 머리줄에 `링크 지연 29.9 s`, 누적 손실 통계 유지.

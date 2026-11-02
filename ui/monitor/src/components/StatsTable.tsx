@@ -1,13 +1,19 @@
-// IMP-MON-019: 엔티티별 송수신 통계 표 (빈도·크기·지연·손실률·손실 사유별) (REQ-UI-005, PRP-UI-002)
+// IMP-MON-019, IMP-MON-025: 엔티티별 송수신 통계 표 (빈도·크기·지연·손실률·손실 사유별, 거리 밖 제외) (REQ-UI-005, PRP-UI-002, DEC-032)
 import { useState } from "react";
 import type { DirStats, EntityStats } from "../model/aggregator";
 import type { Filter } from "../model/filter";
 import { fmtBytes, fmtMs, fmtPct, fmtRate } from "../model/format";
+import { DropReason } from "../gen/swarm/v1/link_pb";
 import { DROP_COLOR, DROP_LABEL, DROP_REASONS, KIND_LABEL } from "../model/labels";
 import type { MonitorStore } from "../model/store";
 
 type Dir = "tx" | "rx";
 type SortKey = "id" | "rate" | "loss" | "lat";
+
+const NO_EXCEPT: readonly DropReason[] = [];
+const EXCEPT_RANGE: readonly DropReason[] = [DropReason.OUT_OF_RANGE];
+const LOSS_TITLE =
+  "손실 outcome / (전달 + 손실 outcome). 분모는 수신자별 LinkOutcome이다. 브로드캐스트는 닿지 않는 같은 편 수신자마다 1건이 손실로 들어간다(DEC-032)";
 
 interface Row {
   id: string;
@@ -39,6 +45,8 @@ export function StatsTable(props: { store: MonitorStore; filter: Filter; selecte
   const { store, filter } = props;
   const [dir, setDir] = useState<Dir>("tx");
   const [sort, setSort] = useState<SortKey>("id");
+  const [noRange, setNoRange] = useState(false);
+  const ex = noRange ? EXCEPT_RANGE : NO_EXCEPT;
   let rows = [...store.agg.entities.values()]
     .filter((e) => filter.entities.size === 0 || filter.entities.has(e.id))
     .filter((e) => e[dir].total > 0 || (dir === "tx" ? e.envTx : e.envRx) > 0)
@@ -46,7 +54,7 @@ export function StatsTable(props: { store: MonitorStore; filter: Filter; selecte
   const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
     id: (a, b) => a.id.localeCompare(b.id),
     rate: (a, b) => b.perS - a.perS,
-    loss: (a, b) => b.d.lossRate() - a.d.lossRate(),
+    loss: (a, b) => b.d.lossRate(ex) - a.d.lossRate(ex),
     lat: (a, b) => b.d.latMeanUs() - a.d.latMeanUs(),
   };
   rows = rows.sort(cmp[sort]);
@@ -63,7 +71,7 @@ export function StatsTable(props: { store: MonitorStore; filter: Filter; selecte
       <td>{fmtBytes(bytesPerS)}/s</td>
       <td>{fmtMs(d.latMeanUs())}</td>
       <td>{fmtMs(d.latQuantileUs(0.95))}</td>
-      <td className={d.lossRate() > 0.2 ? "bad" : d.lossRate() > 0.05 ? "warn" : ""}>{fmtPct(d.lossRate())}</td>
+      <td className={d.lossRate(ex) > 0.2 ? "bad" : d.lossRate(ex) > 0.05 ? "warn" : ""}>{fmtPct(d.lossRate(ex))}</td>
       {DROP_REASONS.map((r) => (
         <td key={r} className={d.drops[r] ? "reason" : "zero"} style={d.drops[r] ? { color: DROP_COLOR[r] } : undefined}>
           {d.drops[r] || "·"}
@@ -83,6 +91,9 @@ export function StatsTable(props: { store: MonitorStore; filter: Filter; selecte
             수신 기준
           </button>
         </span>
+        <label className="small" title="손실률의 분자·분모에서 OUT_OF_RANGE outcome을 뺀다(DEC-032). 사유별 건수는 그대로 둔다">
+          <input type="checkbox" checked={noRange} onChange={(e) => setNoRange(e.target.checked)} /> 거리 밖 제외
+        </label>
         <span className="muted small">빈도·크기: 최근 5 s(sim) · 지연·손실: 누적 · 손실 사유: 누적 건수</span>
       </div>
       <div className="scroll">
@@ -96,7 +107,7 @@ export function StatsTable(props: { store: MonitorStore; filter: Filter; selecte
               <th>크기</th>
               {th("lat", "지연 평균 ms")}
               <th>p95 ms</th>
-              {th("loss", "손실률")}
+              {th("loss", noRange ? "손실률(거리 제외)" : "손실률", LOSS_TITLE)}
               {DROP_REASONS.map((r) => (
                 <th key={r} style={{ color: DROP_COLOR[r] }}>
                   {DROP_LABEL[r]}

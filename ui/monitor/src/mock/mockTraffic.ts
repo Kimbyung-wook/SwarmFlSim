@@ -33,6 +33,8 @@ export interface MockOptions {
   seed?: number;
   /** 프레임을 Uint8Array로 직렬화했다가 다시 푼다(실제 브리지와 같은 경로) */
   wire?: boolean;
+  /** MCAP 재생기처럼 SimStatus.replay=true로 낸다 (DEC-031) */
+  replay?: boolean;
 }
 
 const ORIGIN = { lat: 37.5, lon: 127.0 };
@@ -121,6 +123,7 @@ export class MockTraffic {
   private readonly ge = new Map<string, GE>();
   private readonly byId = new Map<string, Node>();
   private readonly wire: boolean;
+  private readonly replay: boolean;
   private deadAnnounced = false;
   private readonly deadId: string;
 
@@ -131,6 +134,7 @@ export class MockTraffic {
     this.frameHz = opts.frameHz ?? 50;
     this.peerHz = opts.peerHz ?? 10;
     this.wire = opts.wire ?? false;
+    this.replay = opts.replay ?? false;
     this.rnd = mulberry32(opts.seed ?? 1);
     const uavs = opts.uavs ?? 20;
     const add = (id: string, kind: EntityKind, side: Side, e: number, n: number, alt: number, comm: boolean) => {
@@ -296,7 +300,8 @@ export class MockTraffic {
     const queued = src.tokens < payload.length;
     if (!queued) src.tokens -= payload.length;
 
-    const targets = dsts.length ? dsts.map((d) => this.byId.get(d)!).filter(Boolean) : this.nodes.filter((n) => n.comm && n !== src);
+    // 브로드캐스트 수신 대상은 같은 편 무전기 엔티티 전원이다 (DEC-032)
+    const targets = dsts.length ? dsts.map((d) => this.byId.get(d)!).filter(Boolean) : this.nodes.filter((n) => n.comm && n.side === src.side && n !== src);
     for (const dst of targets) {
       const { reason, latUs } = this.judge(src, dst, tS, queued);
       const delivered = reason === DropReason.NONE;
@@ -378,6 +383,7 @@ export class MockTraffic {
       rateActual: 1,
       entityCount: this.nodes.length,
       scenarioName: "mock-traffic",
+      replay: this.replay,
     });
   }
 
