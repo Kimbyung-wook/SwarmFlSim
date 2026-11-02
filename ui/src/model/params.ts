@@ -90,6 +90,11 @@ export class ParamStore {
   }
 }
 
+/** MA 플러그인이 flocking(P2P 군집)인 기체. Route를 지원하지 않는다 (DEC-039) */
+export function flockingEntities(store: ParamStore, ids: readonly string[]): string[] {
+  return ids.filter((id) => /flock/i.test(store.get(id, ParamOwner.MA)?.plugin ?? ""));
+}
+
 export interface ParamTarget {
   entityId: string;
   /** 적용 중인 값. 아직 받지 못했으면 undefined */
