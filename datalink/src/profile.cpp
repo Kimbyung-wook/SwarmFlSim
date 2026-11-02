@@ -1,4 +1,5 @@
 // IMP-LNK-001: 내장 링크 프로파일 (PRP-LNK-001)
+// IMP-LNK-014: 시나리오 재정의 (DEC-029)
 #include "swarm/lnk/profile.hpp"
 
 #include <array>
@@ -86,6 +87,25 @@ std::string_view default_profile_name(v1::EntityKind kind) {
     case v1::ENTITY_KIND_FPV: return "fpv_default";
     default: return "default";
   }
+}
+
+LinkProfile apply_override(const LinkProfile& base, const v1::LinkProfile& spec) {
+  LinkProfile p = base;
+  p.name = spec.name();
+  if (spec.has_freq_mhz()) p.freq_mhz = spec.freq_mhz();
+  if (spec.has_tx_power_dbm()) p.tx_power_dbm = spec.tx_power_dbm();
+  if (spec.has_antenna_gain_dbi()) p.antenna_gain_dbi = spec.antenna_gain_dbi();
+  if (spec.has_noise_floor_dbm()) p.noise_floor_dbm = spec.noise_floor_dbm();
+  if (spec.has_snr_min_db()) p.snr_min_db = spec.snr_min_db();
+  if (spec.has_max_range_m()) p.max_range_m = spec.max_range_m();
+  if (spec.has_unlimited_range()) p.unlimited_range = spec.unlimited_range();
+  if (spec.has_latency_ms()) p.latency_ms = spec.latency_ms();
+  if (spec.has_jitter_ms()) p.jitter_ms = spec.jitter_ms();
+  if (spec.has_bandwidth_bps()) p.bandwidth_bps = spec.bandwidth_bps();
+  if (spec.has_bucket_bytes()) p.bucket_bytes = spec.bucket_bytes();
+  if (spec.has_queue_len()) p.queue_len = spec.queue_len();
+  if (spec.has_ge()) p.ge = {spec.ge().p_gb(), spec.ge().p_bg(), spec.ge().loss_good(), spec.ge().loss_bad()};
+  return p;
 }
 
 }  // namespace swarm::lnk

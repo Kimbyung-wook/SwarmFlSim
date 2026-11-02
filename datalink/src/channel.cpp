@@ -1,4 +1,4 @@
-// IMP-LNK-002~007: 링크 모델 요소 (PRP-LNK-001, REQ-LNK-001, DEC-009)
+// IMP-LNK-002~007, IMP-LNK-013: 링크 모델 요소 (PRP-LNK-001, REQ-LNK-001, DEC-009, DEC-030)
 #include "swarm/lnk/channel.hpp"
 
 #include <algorithm>
@@ -76,6 +76,23 @@ bool line_of_sight(const dyn::Terrain* terrain, const GeoPoint& a, const GeoPoin
 
 bool in_jam_zone(const GeoPoint& p, const GeoPoint& center, double radius_m) {
   return ground_range_m(p, center) <= radius_m;
+}
+
+bool in_polygon(const GeoPoint& p, const std::vector<GeoPoint>& v) {
+  bool inside = false;
+  for (std::size_t i = 0, j = v.size() - 1; i < v.size(); j = i++) {
+    const double yi = v[i].lat_deg, yj = v[j].lat_deg, xi = v[i].lon_deg, xj = v[j].lon_deg;
+    if ((yi > p.lat_deg) != (yj > p.lat_deg) && p.lon_deg < (xj - xi) * (p.lat_deg - yi) / (yj - yi) + xi)
+      inside = !inside;
+  }
+  return inside;
+}
+
+bool in_jam_area(const GeoPoint& p, const JamArea& a) {
+  if (p.alt_m < a.min_alt_m) return false;
+  if (a.max_alt_m != 0.0 && p.alt_m > a.max_alt_m) return false;
+  if (a.polygon.size() >= 3) return in_polygon(p, a.polygon);
+  return in_jam_zone(p, a.center, a.radius_m);
 }
 
 double Rng::uniform() { return static_cast<double>(eng_() >> 11) * 0x1.0p-53; }

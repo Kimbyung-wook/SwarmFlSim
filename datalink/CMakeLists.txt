@@ -19,7 +19,8 @@ if(SWARM_BUILD_TESTS)
   # 시험 케이스마다 CTest 항목 하나 (TC-LNK-NNN)
   foreach(tc
       TC-LNK-001 TC-LNK-002 TC-LNK-003 TC-LNK-004 TC-LNK-005 TC-LNK-006
-      TC-LNK-007 TC-LNK-008 TC-LNK-009 TC-LNK-010 TC-LNK-011)
+      TC-LNK-007 TC-LNK-008 TC-LNK-009 TC-LNK-010 TC-LNK-011 TC-LNK-012
+      TC-LNK-013 TC-LNK-014 TC-LNK-015)
     add_test(NAME lnk.${tc} COMMAND swarm_datalink_tests ${tc})
   endforeach()
 endif()

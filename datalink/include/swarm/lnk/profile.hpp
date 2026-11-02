@@ -1,6 +1,6 @@
 // IMP-LNK-001: 링크 프로파일 (PRP-LNK-001, REQ-LNK-001, REQ-LNK-004)
+// IMP-LNK-014: 시나리오 link_profiles 재정의 (DEC-029)
 // EntitySpec.link_profile 이름 → 파라미터. 값은 공개 일반값 수준의 대표값이다.
-// 시나리오 JSON 재정의는 다음 단계(DatalinkConfig::profiles로 코드에서 추가·덮어쓰기만 된다).
 #pragma once
 
 #include <cstddef>
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "swarm/v1/entity.pb.h"
+#include "swarm/v1/link.pb.h"
 
 namespace swarm::lnk {
 
@@ -45,5 +46,9 @@ std::vector<std::string> builtin_profile_names();
 
 // link_profile이 비었을 때 엔티티 종류별 기본 프로파일 이름
 std::string_view default_profile_name(v1::EntityKind kind);
+
+// base 위에 spec의 값이 있는 optional 필드만 덮어쓴다. ge가 있으면 네 값을 모두 대체한다.
+// 결과의 name은 spec.name()이다. base 선택(DEC-029)은 호출자가 한다
+LinkProfile apply_override(const LinkProfile& base, const v1::LinkProfile& spec);
 
 }  // namespace swarm::lnk

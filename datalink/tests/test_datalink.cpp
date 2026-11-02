@@ -1,4 +1,4 @@
-// TC-LNK-001~011: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~015: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -50,7 +50,7 @@ void put(Bus& bus, const std::string& key, const M& m) {
 template <class M>
 M parse(const Sample& s) {
   M m;
-  m.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size()));
+  check(m.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size())), "payload parses");
   return m;
 }
 
@@ -91,7 +91,7 @@ struct Rig {
   std::map<std::string, std::uint32_t> seq;
 
   explicit Rig(std::vector<Ent> e, DatalinkConfig cfg = {}, const dyn::Terrain* terrain = nullptr, std::uint64_t seed = 7,
-               bool via_cmd = false)
+               bool via_cmd = false, const std::vector<v1::LinkProfile>& link_profiles = {})
       : ents(std::move(e)) {
     subs.push_back(bus.subscribe("link/outcome/**", [this](const Sample& s) {
       outcomes.push_back(parse<v1::LinkOutcome>(s));
@@ -114,6 +114,7 @@ struct Rig {
     v1::Scenario sc;
     sc.set_name("test");
     sc.mutable_run()->set_seed(seed);
+    for (const auto& lp : link_profiles) *sc.add_link_profiles() = lp;
     for (const auto& x : ents) {
       auto* s = sc.add_entities();
       s->set_id(x.id);
@@ -208,6 +209,24 @@ struct Rig {
     put(bus, keys::truth_event("jam_zone"), ev);
   }
 
+  // DEC-030: area 재밍 영역(다각형). 꼭짓점은 (북쪽 m, 동쪽 m)
+  void jam_area(const std::string& owner, const std::vector<std::pair<double, double>>& ne, double min_alt_m,
+                double max_alt_m) {
+    v1::TruthEvent ev;
+    auto* j = ev.mutable_jam_zone();
+    j->set_owner(owner);
+    j->set_active(true);
+    auto* a = j->mutable_area();
+    for (const auto& [n, e] : ne) {
+      auto* v = a->mutable_polygon()->add_vertices();
+      v->set_lat_deg(kLat0 + n / kMPerDegLat);
+      v->set_lon_deg(kLon0 + e / (kMPerDegLat * std::cos(kLat0 * 3.14159265358979 / 180.0)));
+    }
+    a->set_min_alt_m(min_alt_m);
+    a->set_max_alt_m(max_alt_m);
+    put(bus, keys::truth_event("jam_zone"), ev);
+  }
+
   // 한 쌍(src→dst) 메시지를 보내고 다음 tick 뒤의 결과
   v1::DropReason send_one(const std::string& src, const std::string& dst) {
     outcomes.clear();
@@ -280,18 +299,15 @@ void tc002() {
   check(line_of_sight(&flat, {37.0, kLon0, 1000}, {37.0 + 30000.0 / kMPerDegLat, kLon0, 1000}), "curvature ok 1000 m");
 }
 
-// ---- TC-LNK-003: 재밍 영역 100% 손실 (DEC-009) ----
+// ---- TC-LNK-003: 재밍 영역 100% 손실 (DEC-009, DEC-028 수신단) ----
 void tc003() {
   Rig r({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5000.0}, {"uav-003", v1::ENTITY_KIND_UAV,
                                                                                    v1::SIDE_BLUE, -5000.0}});
   r.tick();
   r.jam("jam-01", 5000.0, 2000.0, true);
   int jammed = 0;
-  for (int i = 0; i < 50; ++i) {
-    jammed += r.send_one("uav-001", "uav-002") == v1::DROP_REASON_JAMMED;
-    jammed += r.send_one("uav-002", "uav-001") == v1::DROP_REASON_JAMMED;
-  }
-  check(jammed == 100, "all messages to/from jammed node dropped JAMMED");
+  for (int i = 0; i < 100; ++i) jammed += r.send_one("uav-001", "uav-002") == v1::DROP_REASON_JAMMED;
+  check(jammed == 100, "all messages to jammed receiver dropped JAMMED");
   check(r.send_one("uav-001", "uav-003") == v1::DROP_REASON_NONE, "link outside zone unaffected");
   check(r.dl->pair_state("uav-001", "uav-002").jammed, "pair_state jammed");
   r.jam("jam-01", 5000.0, 2000.0, false);
@@ -615,6 +631,192 @@ void tc011() {
   check(r.dl->in_flight() == 0, "Reset clears in-flight");
 }
 
+// ---- TC-LNK-012: 송신단만 재밍 영역 안이면 전달 (DEC-028) ----
+void tc012() {
+  Rig r({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5000.0}});
+  r.tick();
+  r.jam("jam-01", 5000.0, 2000.0, true);  // uav-002만 영역 안
+  int delivered = 0, jammed = 0;
+  for (int i = 0; i < 20; ++i) {
+    delivered += r.send_one("uav-002", "uav-001") == v1::DROP_REASON_NONE;
+    jammed += r.send_one("uav-001", "uav-002") == v1::DROP_REASON_JAMMED;
+  }
+  check(delivered == 20, "sender inside zone: delivered");
+  check(jammed == 20, "receiver inside zone: JAMMED");
+  check(r.dl->pair_state("uav-001", "uav-002").jammed, "link/state jammed if either end inside");
+  check(r.dl->pair_state("uav-002", "uav-001").jammed, "link/state jammed symmetric");
+}
+
+// ---- TC-LNK-013: Area 재밍 판정 — 다각형, 고도대, zone 대체 (DEC-030) ----
+void tc013() {
+  // 오목 다각형(북쪽이 열린 U자, 홈은 lat 1~4 × lon 1~3). 좌표는 (lat, lon)
+  const std::vector<GeoPoint> u = {{0, 0, 0}, {0, 4, 0}, {4, 4, 0}, {4, 3, 0},
+                                   {1, 3, 0}, {1, 1, 0}, {4, 1, 0}, {4, 0, 0}};
+  check(in_polygon({0.5, 0.5, 0}, u), "polygon: corner inside");
+  check(in_polygon({3.5, 0.5, 0}, u), "polygon: arm inside");
+  check(!in_polygon({2.0, 2.0, 0}, u), "polygon: notch outside");
+  check(!in_polygon({2.0, 5.0, 0}, u), "polygon: far outside");
+  check(!in_polygon({2.0, -0.1, 0}, u), "polygon: just west outside");
+
+  JamArea a;
+  a.polygon = {{0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}};
+  a.min_alt_m = 500.0;
+  a.max_alt_m = 2000.0;
+  check(in_jam_area({0.5, 0.5, 500.0}, a), "alt band: min inclusive");
+  check(in_jam_area({0.5, 0.5, 2000.0}, a), "alt band: max inclusive");
+  check(!in_jam_area({0.5, 0.5, 499.9}, a), "alt band: below min");
+  check(!in_jam_area({0.5, 0.5, 2000.1}, a), "alt band: above max");
+  check(!in_jam_area({1.5, 0.5, 1000.0}, a), "alt band ok but outside polygon");
+  a.max_alt_m = 0.0;
+  check(in_jam_area({0.5, 0.5, 1.0e5}, a), "max_alt 0: no upper bound");
+  JamArea c;
+  c.center = {37.0, 127.0, 0.0};
+  c.radius_m = 1000.0;
+  check(in_jam_area({37.0 + 900.0 / kMPerDegLat, 127.0, -50.0}, c), "legacy circle: altitude ignored");
+  check(!in_jam_area({37.0 + 1100.0 / kMPerDegLat, 127.0, 0.0}, c), "legacy circle: outside radius");
+
+  // 버스: 북쪽 4~6 km, 동서 ±1 km 사각형, 고도 500~1500 m
+  Rig r({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5000.0, 1000.0},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5000.0, 3000.0}});
+  r.tick();
+  r.jam_area("jam-01", {{4000, -1000}, {6000, -1000}, {6000, 1000}, {4000, 1000}}, 500.0, 1500.0);
+  check(r.send_one("uav-001", "uav-002") == v1::DROP_REASON_JAMMED, "bus: inside polygon and band JAMMED");
+  check(r.send_one("uav-001", "uav-003") == v1::DROP_REASON_NONE, "bus: above band delivered");
+  r.ent("uav-002").alt_m = 400.0;
+  r.tick();
+  check(r.send_one("uav-001", "uav-002") == v1::DROP_REASON_NONE, "bus: below band delivered");
+
+  // area가 있으면 폐기 예정 zone은 읽지 않는다
+  v1::TruthEvent ev;
+  auto* j = ev.mutable_jam_zone();
+  j->set_owner("jam-01");
+  j->set_active(true);
+  j->mutable_zone()->mutable_center()->set_lat_deg(kLat0 + 5000.0 / kMPerDegLat);
+  j->mutable_zone()->mutable_center()->set_lon_deg(kLon0);
+  j->mutable_zone()->set_radius_m(5000.0);
+  auto* circ = j->mutable_area()->mutable_circle();
+  circ->mutable_center()->set_lat_deg(kLat0 + 20000.0 / kMPerDegLat);
+  circ->mutable_center()->set_lon_deg(kLon0);
+  circ->set_radius_m(100.0);
+  put(r.bus, keys::truth_event("jam_zone"), ev);
+  check(r.send_one("uav-001", "uav-003") == v1::DROP_REASON_NONE, "area takes precedence over zone");
+  j->clear_area();
+  put(r.bus, keys::truth_event("jam_zone"), ev);
+  check(r.send_one("uav-001", "uav-003") == v1::DROP_REASON_JAMMED, "zone used when area absent");
+}
+
+// ---- TC-LNK-014: 시나리오 link_profiles 적용 (DEC-029) ----
+void tc014() {
+  // 단위: 값이 있는 필드만 덮어쓰고 ge는 네 값 모두 대체
+  v1::LinkProfile spec;
+  spec.set_name("x");
+  spec.set_latency_ms(77.0);
+  spec.set_queue_len(0);
+  spec.mutable_ge()->set_p_gb(0.2);
+  const LinkProfile& u = *find_builtin_profile("uav_default");
+  const LinkProfile o = apply_override(u, spec);
+  check(o.name == "x", "override name");
+  check(o.latency_ms == 77.0 && o.queue_len == 0, "set fields overridden (explicit 0 too)");
+  check(o.tx_power_dbm == u.tx_power_dbm && o.jitter_ms == u.jitter_ms && o.bandwidth_bps == u.bandwidth_bps,
+        "unset fields kept");
+  check(o.ge.p_gb == 0.2 && o.ge.p_bg == 0.0 && o.ge.loss_good == 0.0 && o.ge.loss_bad == 0.0,
+        "ge replaces all four values");
+
+  std::vector<std::string> logs;
+  DatalinkConfig cfg;
+  cfg.log = [&](const std::string& m) { logs.push_back(m); };
+  std::vector<v1::LinkProfile> lps(4);
+  // short: clean(설정 프로파일) 기반, 최대 5 km
+  lps[0].set_name("short");
+  lps[0].set_base("clean");
+  lps[0].set_max_range_m(5000.0);
+  // short_slow: 앞 항목 short 기반, 지연 100 ms
+  lps[1].set_name("short_slow");
+  lps[1].set_base("short");
+  lps[1].set_latency_ms(100.0);
+  // clean: base 비움 → 같은 이름 프로파일 위에 지연 40 ms
+  lps[2].set_name("clean");
+  lps[2].set_latency_ms(40.0);
+  // orphan: 없는 base → default + 로그
+  lps[3].set_name("orphan");
+  lps[3].set_base("nope");
+  Rig r({{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 0.0, 1000.0, "short"},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 10000.0, 1000.0, "clean"},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0, 1000.0, "short_slow"},
+         {"uav-004", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 2000.0, 1000.0, "orphan"}},
+        cfg, nullptr, 7, /*via_cmd=*/true, lps);
+  r.tick();
+  check(r.send_one("uav-001", "uav-002") == v1::DROP_REASON_OUT_OF_RANGE, "short: 10 km beyond max_range 5 km");
+  check(r.send_one("uav-002", "uav-001") == v1::DROP_REASON_OUT_OF_RANGE, "short as receiver: max_range applies");
+
+  // clean 재정의: 손실·지터 없음은 유지, 지연만 40 ms. 수신은 orphan(default, 거리 상한 없음)
+  r.rx.clear();
+  const std::uint64_t t_clean = (r.frame - 1) * r.dt_us;
+  r.tx("uav-002", {"uav-004"});
+  for (int i = 0; i < 4; ++i) r.tick();
+  check(r.rx.size() == 1 && r.rx[0].second.rx_time_us() == t_clean + 40000, "same-name base kept, latency 40 ms");
+
+  // short_slow: short의 max_range 상속 + 지연 100 ms
+  r.rx.clear();
+  const std::uint64_t t_slow = (r.frame - 1) * r.dt_us;
+  r.tx("uav-003", {"uav-001"});
+  for (int i = 0; i < 7; ++i) r.tick();
+  check(r.rx.size() == 1 && r.rx[0].second.rx_time_us() == t_slow + 100000, "chained base, latency 100 ms");
+  r.ent("uav-003").north_m = 6000.0;  // uav-001과 6 km
+  r.tick();
+  check(r.send_one("uav-003", "uav-001") == v1::DROP_REASON_OUT_OF_RANGE, "chained base inherits max_range");
+
+  check(std::any_of(logs.begin(), logs.end(), [](const std::string& m) { return m.find("'nope'") != std::string::npos; }),
+        "unknown base logged");
+  check(std::none_of(logs.begin(), logs.end(),
+                     [](const std::string& m) { return m.find("unknown link profile") != std::string::npos; }),
+        "scenario profiles resolved by name");
+
+  // 다시 불러오면 이전 시나리오의 재정의는 사라진다
+  v1::Scenario sc;
+  for (const char* id : {"uav-001", "uav-002"}) {
+    auto* e = sc.add_entities();
+    e->set_id(id);
+    e->set_kind(v1::ENTITY_KIND_UAV);
+    e->set_link_profile("short");
+  }
+  r.dl->load(sc);
+  r.tick();
+  r.send_one("uav-001", "uav-002");
+  check(std::any_of(logs.begin(), logs.end(),
+                    [](const std::string& m) { return m.find("unknown link profile 'short'") != std::string::npos; }),
+        "reload drops previous scenario profiles");
+}
+
+// ---- TC-LNK-015: 브로드캐스트에서 닿지 않는 수신자마다 outcome (DEC-032) ----
+void tc015() {
+  Rig r({{"uav-001"},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 40000.0},
+         {"uav-004", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 2000.0},
+         {"uav-005", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, -5000.0},
+         {"uav-006", v1::ENTITY_KIND_UAV, v1::SIDE_RED, 1000.0}});
+  r.ent("uav-004").alive = false;
+  r.tick();
+  r.jam("jam-01", -5000.0, 1000.0, true);
+  r.outcomes.clear();
+  r.rx.clear();
+  r.tx("uav-001", {});
+  r.tick();
+  std::map<std::string, std::vector<v1::DropReason>> by;
+  for (const auto& o : r.outcomes) by[o.dst()].push_back(o.reason());
+  using V = std::vector<v1::DropReason>;
+  check(by.size() == 4, "one outcome per same-side recipient");
+  check(by["uav-002"] == V{v1::DROP_REASON_NONE}, "uav-002 delivered");
+  check(by["uav-003"] == V{v1::DROP_REASON_OUT_OF_RANGE}, "uav-003 OUT_OF_RANGE outcome");
+  check(by["uav-004"] == V{v1::DROP_REASON_NODE_DEAD}, "uav-004 NODE_DEAD outcome");
+  check(by["uav-005"] == V{v1::DROP_REASON_JAMMED}, "uav-005 JAMMED outcome");
+  check(!by.count("uav-006"), "other side: no outcome");
+  for (const auto& o : r.outcomes)
+    if (o.reason() != v1::DROP_REASON_NONE) check(o.outcome() == v1::LINK_OUTCOME_KIND_DROPPED, "dropped kind");
+  check(r.rx.size() == 1 && r.rx[0].first == "swarm/uav-002/rx/p2p/PeerStatus", "only reachable recipient gets rx");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -623,7 +825,8 @@ struct Case {
 const Case kCases[] = {
     {"TC-LNK-001", tc001}, {"TC-LNK-002", tc002}, {"TC-LNK-003", tc003}, {"TC-LNK-004", tc004},
     {"TC-LNK-005", tc005}, {"TC-LNK-006", tc006}, {"TC-LNK-007", tc007}, {"TC-LNK-008", tc008},
-    {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011},
+    {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
+    {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
 };
 
 }  // namespace
