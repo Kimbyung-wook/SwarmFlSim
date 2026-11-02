@@ -49,6 +49,7 @@ class ParamDef:
     max: float | None = None
     description: str = ""
     runtime: bool = True  # 실행 중 변경 가능
+    choices: tuple[str, ...] = ()  # 문자열 값의 허용 목록. 비면 제한 없음 (DEC-036)
 
 
 def resolve_params(
@@ -60,7 +61,7 @@ def resolve_params(
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """base(현재 값, 비어 있으면 기본값)에 changes를 덮어쓴다.
 
-    반환: (적용 값 전체, 거부 {이름: unknown | type | range | not_runtime}).
+    반환: (적용 값 전체, 거부 {이름: unknown | type | range | choice | not_runtime}).
     거부한 항목은 적용하지 않는다. 정수는 float로 받는다.
     """
     by_name = {d.name: d for d in defs}
@@ -83,6 +84,9 @@ def resolve_params(
             v = float(v) if ok else v
         if not ok:
             rejected[name] = "type"
+            continue
+        if isinstance(v, str) and d.choices and v not in d.choices:
+            rejected[name] = "choice"
             continue
         if isinstance(v, float) and ((d.min is not None and v < d.min) or (d.max is not None and v > d.max)):
             rejected[name] = "range"

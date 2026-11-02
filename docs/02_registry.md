@@ -110,6 +110,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-033 | 지도 임무 명령: `HoldTask`에 중심·반경·시간·방향을 두고, 항로점별 고도·속력·행위(선회 대기·정찰)를 갖는 `RouteTask`를 `TaskCommand`의 EXT 작업으로 추가한다. 지점 타격은 `StrikeTask.aim_point`, 지점 정찰은 원 `SearchAreaTask`를 쓴다 | REQ-UI-003, REQ-UI-004, REQ-BHV-002, 사용자: "비행체를 선택한 후에 맵에 우클릭하면 해당 지점에서 할 수 있는 임무들을 … 항로점 별로 할 수 있는 행위 … 같은 속성을 선택할 수 있으면 좋을 것 같아" | Confirmed |
 | DEC-034 | 선회 대기에 레이스트랙 모양을 추가한다. 모양은 중점·반경·직선 길이·축 방향·방향으로 정의하고(두 원 중심 = 중점 ± 직선 길이/2), VI에는 `CurveCommand.racetrack`으로 넘긴다. 유도는 Dubins 경로(원호+접선) 추종을 기본으로 하고, 벡터장(`reference/racetrack_vectorfield.m`)은 FA 매개변수로 추가한다 | REQ-BHV-002, REQ-GNC-001, DEC-033, 사용자: "Race track 모양의 선회 대기도 있으면 좋을 것 같아. 지금은 Dubin's circle 으로 만들고, 추후에는 vector field 으로 만들어보면 좋을 것 같아" | Confirmed |
 | DEC-035 | 기체별 매개변수는 소유자(동역학·FA·MA)가 기본값과 함께 선언(`ParamSpec`: 계층·단위·범위·`runtime`)하고, 기본값 → airframe 표 → 시나리오 → 실행 중 `SimCommand.set_params` 순으로 덮어쓴다. 소유자는 `sim/param/<entity>/<owner>`로 선언과 적용 값을 발행한다. 행위·결정은 MA 플러그인 하나를 유지하고 매개변수의 계층 표시로만 구분한다 | REQ-CFG-003, REQ-BHV-004, DEC-014, 사용자 답변: 변경 시점 "시작 시 + 실행 중", MA 분할 "파라미터만 그룹으로 구분" | Confirmed |
+| DEC-036 | 문자열 매개변수는 허용 목록 `ParamSpec.choices`를 선언할 수 있고, 목록 밖 값은 거부 사유 `choice`로 `EntityParams.rejected`에 기록한다. 계약 0.7.0 | DEC-035, REQ-CFG-003, P0 통합 점검 결과(`racetrack_guidance`가 `foo`를 받음) | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 

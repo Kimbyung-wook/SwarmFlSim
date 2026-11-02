@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.6.0
+- 계약 버전: 0.7.0
+  - 0.7.0: `ParamSpec.choices`(문자열 허용 목록), 거부 사유 `choice` (DEC-036)
   - 0.6.0: 기체별 매개변수 `ParamSpec`·`EntityParams`·`SetParams`, `EntitySpec.dynamics_params`, 키 `sim/param/<entity>/<owner>`, 플러그인 `PARAMS`·`on_params`, `DynamicsModel::param_descs` (DEC-035)
   - 0.5.0: 레이스트랙 선회 대기 `RacetrackShape`(HoldTask·LoiterAction), VI `RacetrackCurve` (DEC-034)
   - 0.4.0: `HoldTask` 선회 매개변수, `RouteTask`·`RouteWaypoint`(항로점 행위: 선회 대기·정찰) EXT 추가 (DEC-033)
@@ -92,7 +93,7 @@ flowchart LR
 - 기체별 매개변수 (DEC-035)
   - 계층: 기체(airframe)·제어·유도·행위·결정 (`ParamLayer`). 소유자: 동역학(Core)·FA·MA (`ParamOwner`). 계층은 표시용이고 소유자가 적용 주체다.
   - 값 결정 순서: 소유자 기본값 → airframe 표(동역학만) → 시나리오(`EntitySpec.dynamics_params`, `AutonomySpec.fa_params`, `ma_params`) → 실행 중 `SimCommand.set_params`
-  - 선언하지 않은 이름, 타입·범위 위반, 실행 중 `runtime`=false 항목은 적용하지 않고 `EntityParams.rejected`에 사유를 적는다. 조용히 무시하지 않는다.
+  - 선언하지 않은 이름, 타입·범위·허용 목록(`choices`) 위반, 실행 중 `runtime`=false 항목은 적용하지 않고 `EntityParams.rejected`에 사유를 적는다. 조용히 무시하지 않는다.
   - 소유자는 적재 직후, 변경 직후, 그리고 적재 상태에서 1초(벽시계)마다 `sim/param/<entity>/<owner>`에 `EntityParams`를 발행한다.
   - `set_params`는 다음 프레임 시작에 적용한다. Agent 런타임은 `sim/ctrl/cmd`를 구독해 자기 기체·소유자 것만 처리한다. 플러그인에는 `on_params`로만 알리고 `sim/ctrl/`은 노출하지 않는다 (DEC-014).
 - 지도 임무 명령 (DEC-033)
@@ -136,7 +137,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.6.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.7.0"}` | 접속 승인 |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |

@@ -4,7 +4,7 @@ from swarm_api import ParamDef, ParamLayer, resolve_params
 
 DEFS = (
     ParamDef("k_orbit", 2.0, ParamLayer.GUIDANCE, min=0.0, max=10.0),
-    ParamDef("racetrack_guidance", "dubins", ParamLayer.GUIDANCE),
+    ParamDef("racetrack_guidance", "dubins", ParamLayer.GUIDANCE, choices=("dubins", "vector_field")),
     ParamDef("max_bank_deg", 35.0, ParamLayer.AIRFRAME, unit="deg", runtime=False),
     ParamDef("avoid", True, ParamLayer.BEHAVIOR),
 )
@@ -31,3 +31,10 @@ def test_rejections_keep_previous_value():
 def test_not_runtime_allowed_at_load():
     values, rejected = resolve_params(DEFS, {}, {"max_bank_deg": 40.0})
     assert values["max_bank_deg"] == 40.0 and not rejected
+
+
+def test_choice_rejected():
+    values, rejected = resolve_params(DEFS, {}, {"racetrack_guidance": "foo"})
+    assert rejected == {"racetrack_guidance": "choice"} and values["racetrack_guidance"] == "dubins"
+    values, rejected = resolve_params(DEFS, {}, {"racetrack_guidance": "vector_field"})
+    assert values["racetrack_guidance"] == "vector_field" and not rejected
