@@ -243,6 +243,8 @@ flowchart TB
 - CMake는 의존성을 `find_package`로만 찾는다. 새 의존성을 추가하는 WP는 `vcpkg.json`과 아래 패키지 목록을 함께 갱신한다.
 - `vcpkg.json`의 `builtin-baseline`은 vcpkg 저장소 커밋으로 라이브러리 버전을 고정한다. 모든 개발자·세션이 같은 버전을 쓰도록 WP0만 바꾼다.
 - `vcvars64.bat`는 `VCPKG_ROOT`를 Visual Studio에 포함된 vcpkg로 덮어쓴다. baseline이 있으므로 어느 vcpkg를 써도 같은 버전을 받는다.
+- `msvc-*` 프리셋은 오버레이 트리플렛 `triplets/x64-windows-cxx20.cmake`(`/std:c++20`)로 vcpkg 의존성을 C++20으로 빌드한다 (QA-007). protobuf의 ABI가 언어 모드에 따라 달라, 기본 트리플렛(`x64-windows`)의 DLL은 C++20 릴리스 링크에서 `GlobalEmptyString` 미해결 심볼 오류를 낸다. 기존 `build/msvc-*`가 있으면 지우고 다시 구성한다.
+- vcpkg는 `build/msvc-*/vcpkg_installed` 아래에서 빌드한다. 저장소 경로가 길면 abseil 컴파일이 C1083으로 실패하므로, 그때는 구성 명령에 `-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=C:/b/bt`를 추가해 빌드 트리를 짧은 경로에 둔다.
 
 ### 7.2 환경별 설치
 
