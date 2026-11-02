@@ -107,6 +107,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-031 | 재생 여부는 `SimStatus.replay`로 알린다. MCAP 재생기가 `sim/ctrl/status`를 다시 발행할 때 true로 채운다 | OPN-030, WP6 계약 변경 요청, 사용자: "권고대로 진행" | Confirmed |
 | DEC-032 | 브로드캐스트는 같은 편 무전기 엔티티 전원을 수신 대상으로 보고, 닿지 않는 수신자마다 손실 사유(OUT_OF_RANGE 등)를 담은 `LinkOutcome`을 낸다. 손실률은 이 기준으로 집계하고, 거리 밖 제외는 모니터 필터로 한다 | OPN-031, WP6 질의, 사용자: "권고대로 진행" | Confirmed |
 | DEC-033 | 지도 임무 명령: `HoldTask`에 중심·반경·시간·방향을 두고, 항로점별 고도·속력·행위(선회 대기·정찰)를 갖는 `RouteTask`를 `TaskCommand`의 EXT 작업으로 추가한다. 지점 타격은 `StrikeTask.aim_point`, 지점 정찰은 원 `SearchAreaTask`를 쓴다 | REQ-UI-003, REQ-UI-004, REQ-BHV-002, 사용자: "비행체를 선택한 후에 맵에 우클릭하면 해당 지점에서 할 수 있는 임무들을 … 항로점 별로 할 수 있는 행위 … 같은 속성을 선택할 수 있으면 좋을 것 같아" | Confirmed |
+| DEC-034 | 선회 대기에 레이스트랙 모양을 추가한다. 모양은 중점·반경·직선 길이·축 방향·방향으로 정의하고(두 원 중심 = 중점 ± 직선 길이/2), VI에는 `CurveCommand.racetrack`으로 넘긴다. 유도는 Dubins 경로(원호+접선) 추종을 기본으로 하고, 벡터장(`reference/racetrack_vectorfield.m`)은 FA 매개변수로 추가한다 | REQ-BHV-002, REQ-GNC-001, DEC-033, 사용자: "Race track 모양의 선회 대기도 있으면 좋을 것 같아. 지금은 Dubin's circle 으로 만들고, 추후에는 vector field 으로 만들어보면 좋을 것 같아" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
