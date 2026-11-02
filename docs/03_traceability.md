@@ -87,10 +87,14 @@
 | IMP-INT-001 | P0 데모 실행기 `live`·`replay`: Logger·Datalink·Agent·브리지·Core·UI(·Monitor)를 실제 Zenoh 버스(완전 연결 tcp, 멀티캐스트 끔)로 띄우고 시나리오 .pb 내보내기, 프로세스별 로그, Ctrl+C·STOP 파일 정상 종료 | `scripts/run_p0_demo.py` | DEC-015, DEC-026, DEC-027, DEC-031, REQ-NET-001 |
 | IMP-INT-002 | 통합 시나리오: 2-DoF 고정익 20대(4×5 격자, 1200 m, 20 m/s, MA `waypoint`) + GCS 1, realtime 50 Hz, 전원 hold 임무 | `scenario/examples/p0_demo_20.json` | REQ-DYN-001, REQ-PRF-001, DEC-007, DEC-029 |
 | IMP-INT-003 | 실행기 `probe`: GCS로 버스에 붙어 UI와 같은 LinkEnvelope(TaskCommand move_to)를 보내고 truth/state 도달·TaskStatus 수신을 판정 | `scripts/run_p0_demo.py` | DEC-013, DEC-014, REQ-BHV-001 |
+| IMP-INT-004 | 실행기 `probe --kind hold\|racetrack\|route\|params`: 임무 명령(UI와 같은 TaskCommand) 실제 비행 궤적 판정, `SimCommand.set_params`로 FA·MA·동역학 변경·거부·복원과 `sim/param/<entity>/<owner>` 발행 판정 | `scripts/run_p0_demo.py` | DEC-013, DEC-033, DEC-034, DEC-035, REQ-BHV-001, REQ-CFG-003 |
 | TC-INT-001 | live: UI(source=bus) 2D 지도에 20대 + GCS 표시, 연결·실행 상태 | `docs/20_p0_demo.md` §5, `docs/img/p0_demo/01_*.jpg` | IMP-INT-001~002 |
 | TC-INT-002 | probe: MoveTo → C2 → Datalink → Agent → 기체 300 m 안 도달, TaskStatus ACCEPTED·EXECUTING·COMPLETED가 GCS에 도착 | `scripts/run_p0_demo.py probe` | IMP-INT-001, IMP-INT-003 |
 | TC-INT-003 | UI 드래그 선택 + 우클릭 MoveTo → 선택 5대 도달, UI에 완료 100% | `docs/img/p0_demo/02~05_*.jpg` | IMP-INT-001 |
 | TC-INT-004 | live 기록 MCAP 재생 → `SimStatus.replay`=true, Monitor `재생 (MCAP)` 배지, UI에 기동 재현 | `scripts/run_p0_demo.py replay`, `docs/img/p0_demo/06~08_*.jpg` | IMP-INT-001, IMP-LOG-008~009 |
+| TC-INT-005 | probe hold·racetrack·route: 임무 명령이 C2 → Datalink → Agent → Core로 실제 선회·레이스트랙·항로 비행, TaskStatus 수신 | `scripts/run_p0_demo.py probe --kind …` | IMP-INT-004 |
+| TC-INT-006 | probe params(fa·ma·dynamics): runtime 항목 변경 반영, unknown·range·not_runtime 거부 사유와 기존 값 유지 | `scripts/run_p0_demo.py probe --kind params` | IMP-INT-004 |
+| TC-INT-007 | UI: 12대 선택 → 레이스트랙 선회 임무 전송 → 수행 표시·비행, 매개변수 패널 적용·범위 검증·기본값 복원 | `docs/img/p0_demo/09~10_*.jpg` | IMP-INT-001, IMP-INT-004 |
 
 ## 시험 결과
 
@@ -105,6 +109,9 @@
 | TC-INT-002 | 통과 | 2026-11-02 | 위와 같음 |
 | TC-INT-003 | 통과 | 2026-11-02 | 위와 같음 |
 | TC-INT-004 | 통과 | 2026-11-02 | 위와 같음, 3배속 재생 |
+| TC-INT-005 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
+| TC-INT-006 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
+| TC-INT-007 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
 | TC-API-006 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 
 ## 프로세스 결정

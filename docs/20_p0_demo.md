@@ -1,7 +1,7 @@
 # P0 데모 통합
 
 로드맵 P0 완료 조건: "2-DoF 20대가 2D 지도에 표시되고, 드래그 선택으로 이동 명령 가능" ([00_proposal.md](00_proposal.md) §13).
-실행기는 `scripts/run_p0_demo.py`(IMP-INT-001, probe는 IMP-INT-003), 시나리오는 `scenario/examples/p0_demo_20.json`(IMP-INT-002)이다.
+실행기는 `scripts/run_p0_demo.py`(IMP-INT-001, probe는 IMP-INT-003~004), 시나리오는 `scenario/examples/p0_demo_20.json`(IMP-INT-002)이다.
 
 ## 1. 구성
 
@@ -84,6 +84,21 @@ uv run python scripts/run_p0_demo.py probe --targets uav-001,uav-002,uav-003
 - live가 떠 있는 버스에 GCS(gcs-01)로 붙어 UI와 같은 형식의 TaskCommand(move_to, 북동 1.5 km)를 보낸다.
 - 대상 기체가 300 m 안에 들어오고 그 task_id의 TaskStatus가 GCS에 돌아오면 `PASS`.
 
+임무 명령과 매개변수는 `--kind`로 고른다 (IMP-INT-004).
+
+| `--kind` | 보내는 것 | 판정 |
+|---|---|---|
+| `move` (기본) | MoveTo | 300 m 안 도달 + TaskStatus |
+| `hold` | 중심 북쪽 1 km, 반경 300 m 선회 | 늦은 표본의 80%가 반경 0.6~1.5배 안 |
+| `racetrack` | 같은 중심, 직선 1200 m, 축 90° | 축·횡 방향 최대 편차가 기대 범위 안 |
+| `route` | 항로점 3개(북 1 km → 북동 → 동 1 km, 수락 150 m) | 3개 모두 200 m 안 통과 |
+| `params` | `SimCommand.set_params` (fa·ma·dynamics 순) | 변경 반영, unknown·range·not_runtime 거부, 기존 값 유지, 원복 |
+
+```bash
+uv run python scripts/run_p0_demo.py probe --kind racetrack --targets uav-001,uav-002 --settle-s 50
+uv run python scripts/run_p0_demo.py probe --kind params --targets uav-010
+```
+
 ## 4. 재생
 
 ```bash
@@ -104,6 +119,9 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 | TC-INT-002 | probe: uav-001~003에 MoveTo → 45~81 s에 300 m 안 도달, TaskStatus ACCEPTED → EXECUTING → COMPLETED (기존 `p0-hold` CANCELLED) | 통과 |
 | TC-INT-003 | UI 드래그로 uav-016~020 선택 → 우클릭 MoveTo(약 3.7 km) → 5대 모두 `수행` → 3~3.5분 뒤 `완료 100%`. MCAP에 `swarm/gcs-01/tx/c2/TaskCommand` 2건, `swarm/uav-016/rx/c2/TaskCommand`, `swarm/gcs-01/rx/c2/TaskStatus` 72건 기록 | 통과 |
 | TC-INT-004 | MCAP 기록(530 s, 1,223,259건, 311채널)을 3배속 재생 → `sim/ctrl/status` 24건 모두 `replay=true`, Monitor `재생 (MCAP)` 배지와 TaskStatus 트래픽, UI 지도에 기록된 기동 재현 | 통과 |
+| TC-INT-005 | 계약 0.6.0 병합 후 probe hold·racetrack·route: 임무 명령이 UI와 같은 TaskCommand로 C2 → Datalink → Agent → Core를 거쳐 실제 선회·레이스트랙·항로 비행, TaskStatus 수신 | 통과 |
+| TC-INT-006 | probe params: fa·ma·dynamics 모두 runtime 항목 변경이 `sim/param/<entity>/<owner>`에 반영, 잘못된 변경은 unknown·range·not_runtime으로 거부되고 기존 값 유지 | 통과 |
+| TC-INT-007 | UI: 12대 선택 → 레이스트랙 선회 임무 전송 → 임무 카드에 12대 `수행`, 기체가 레이스트랙으로 비행. 매개변수 패널: 적용·기본값 복원, 범위 밖 값은 `10000 이하여야 한다`로 막힘, runtime 불가 항목은 `실행 중에는 바꿀 수 없다`로 표시 | 통과 (아래 결함 있음) |
 
 | 화면 | 파일 |
 |---|---|
@@ -115,9 +133,15 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 | 재생: UI | ![](img/p0_demo/06_replay_ui.jpg) |
 | 재생: Monitor 트래픽 | ![](img/p0_demo/07_replay_monitor.jpg) |
 | 재생: Monitor 배지 | ![](img/p0_demo/08_replay_monitor_badge.jpg) |
+| 매개변수 패널(12대 공통) | ![](img/p0_demo/09_params_panel.jpg) |
+| 레이스트랙 임무 비행 | ![](img/p0_demo/10_racetrack_flying.jpg) |
 
 ## 6. 남은 문제
 
 - UI(WP5)는 `SimStatus.replay`를 표시하지 않는다. 재생 중에도 `실행`으로 보이고 일시정지·배속 버튼이 활성이다(받는 Core가 없다).
 - Monitor(WP6) 상단 `링크 지연`이 3배속 재생 중 39.5 s로 표시된다. 벽시계와 sim 시각을 비교하는 값으로 보이며, 재생 배속을 반영하지 않는다.
 - Core가 `--scenario`로 시작하면 `LoadScenario`를 발행하지 않아 각 프로세스에 시나리오를 따로 줘야 한다. lockstep에서는 늦게 붙은 참여자가 틱을 놓친다. 계약(`sim/ctrl/**` 늦은 참여자 동기화) 변경이 필요하다.
+- FA 매개변수 `racetrack_guidance`는 설명이 `dubins | vector_field`인데 Core가 `foo`를 거부하지 않고 받는다 (`현재 foo`, `적용됨`). 열거형 값 검증이 없다. 담당: FA 매개변수를 선언·검증하는 WP(WP1 Core `set_params` 처리 또는 FA 플러그인). 확인 후 기본값으로 되돌렸다.
+- UI(WP5): 기체 12대를 선택하면 임무 패널의 `전송` 버튼이 아래 `매개변수` 머리글과 겹쳐(1400×850) 마우스 클릭이 머리글로 간다. 키보드·프로그램 클릭은 동작한다.
+- UI(WP5): Core가 거부한 사유(unknown·range·not_runtime)를 UI에서 확인하지 못했다. UI가 범위를 먼저 막고 runtime 불가 항목은 입력을 막아서 UI로는 거부 응답을 만들 수 없다. 거부 사유는 probe로 `sim/param` 발행값을 직접 확인했다.
+- Datalink(WP4)로 보이는 현상: 일부 TaskStatus가 순서가 뒤바뀌어 도착한다 (uav-008이 ACCEPTED보다 EXECUTING을 먼저 받음). 지연·지터 모델 때문으로 보이며 판정에는 영향이 없다.
