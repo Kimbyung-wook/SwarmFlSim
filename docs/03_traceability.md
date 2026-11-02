@@ -91,6 +91,7 @@
 | IMP-INT-002 | 통합 시나리오: 2-DoF 고정익 20대(4×5 격자, 1200 m, 20 m/s, MA `waypoint`) + GCS 1, realtime 50 Hz, 전원 hold 임무 | `scenario/examples/p0_demo_20.json` | REQ-DYN-001, REQ-PRF-001, DEC-007, DEC-029 |
 | IMP-INT-003 | 실행기 `probe`: GCS로 버스에 붙어 UI와 같은 LinkEnvelope(TaskCommand move_to)를 보내고 truth/state 도달·TaskStatus 수신을 판정 | `scripts/run_p0_demo.py` | DEC-013, DEC-014, REQ-BHV-001 |
 | IMP-INT-004 | 실행기 `probe --kind hold\|racetrack\|route\|params`: 임무 명령(UI와 같은 TaskCommand) 실제 비행 궤적 판정, `SimCommand.set_params`로 FA·MA·동역학 변경·거부·복원과 `sim/param/<entity>/<owner>` 발행 판정 | `scripts/run_p0_demo.py` | DEC-013, DEC-033, DEC-034, DEC-035, REQ-BHV-001, REQ-CFG-003 |
+| IMP-INT-005 | 실행기 `live --lockstep --rate --late-agent-s`: lockstep에서 Core만 `--scenario`를 받고 Datalink·Agent는 `sim/ctrl/scenario`로 수신(DEC-037). 참여자는 시나리오의 `run.mode`로 준비 신호를 정하므로 내보내는 시나리오에 `run.mode=lockstep`·`rate`·`participants`를 넣는다. `probe --kind params`에 `racetrack_guidance=foo` → `choice` 거부 판정 추가 | `scripts/run_p0_demo.py` | DEC-036, DEC-037, DEC-005 |
 | TC-INT-001 | live: UI(source=bus) 2D 지도에 20대 + GCS 표시, 연결·실행 상태 | `docs/20_p0_demo.md` §5, `docs/img/p0_demo/01_*.jpg` | IMP-INT-001~002 |
 | TC-INT-002 | probe: MoveTo → C2 → Datalink → Agent → 기체 300 m 안 도달, TaskStatus ACCEPTED·EXECUTING·COMPLETED가 GCS에 도착 | `scripts/run_p0_demo.py probe` | IMP-INT-001, IMP-INT-003 |
 | TC-INT-003 | UI 드래그 선택 + 우클릭 MoveTo → 선택 5대 도달, UI에 완료 100% | `docs/img/p0_demo/02~05_*.jpg` | IMP-INT-001 |
@@ -98,6 +99,10 @@
 | TC-INT-005 | probe hold·racetrack·route: 임무 명령이 C2 → Datalink → Agent → Core로 실제 선회·레이스트랙·항로 비행, TaskStatus 수신 | `scripts/run_p0_demo.py probe --kind …` | IMP-INT-004 |
 | TC-INT-006 | probe params(fa·ma·dynamics): runtime 항목 변경 반영, unknown·range·not_runtime 거부 사유와 기존 값 유지 | `scripts/run_p0_demo.py probe --kind params` | IMP-INT-004 |
 | TC-INT-007 | UI: 12대 선택 → 레이스트랙 선회 임무 전송 → 수행 표시·비행, 매개변수 패널 적용·범위 검증·기본값 복원 | `docs/img/p0_demo/09~10_*.jpg` | IMP-INT-001, IMP-INT-004 |
+| TC-INT-008 | lockstep: Core만 `--scenario`로 시작, Datalink·Agent에는 시나리오를 주지 않아도 `sim/ctrl/scenario`로 받아 준비 신호 후 첫 틱이 나가고 probe move 통과 | `scripts/run_p0_demo.py live --lockstep` | IMP-INT-005 |
+| TC-INT-009 | lockstep 지각 참여자: Core 뒤 6 s에 Agent를 켜도 준비 신호 후 첫 틱이 나간다 | `scripts/run_p0_demo.py live --lockstep --late-agent-s 6` | IMP-INT-005 |
+| TC-INT-010 | probe params: `racetrack_guidance=foo`가 `choice`로 거부되고 기존 값 유지 | `scripts/run_p0_demo.py probe --kind params` | IMP-INT-005 |
+| TC-INT-011 | UI·Monitor 재확인: 12대 선택 시 `전송` 버튼 비가림, 재생 표시·버튼 비활성, 3배속 재생 Monitor 링크 지연 정상 | `docs/img/p0_demo/11~14_*.jpg` | IMP-INT-001 |
 
 ## 시험 결과
 
@@ -115,6 +120,10 @@
 | TC-INT-005 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
 | TC-INT-006 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
 | TC-INT-007 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
+| TC-INT-008 | 통과 | 2026-11-02 | 계약 0.8.0(wp0-contracts fde329c까지). 시나리오의 run.mode=lockstep일 때만. CLI `--mode lockstep`만으로는 준비 신호가 없어 교착 |
+| TC-INT-009 | 불합격 | 2026-11-02 | 지각 Agent가 시나리오를 받지 못해 틱이 나가지 않는다. 담당 WP1(Core). `docs/20_p0_demo.md` §6 |
+| TC-INT-010 | 통과 | 2026-11-02 | `{'racetrack_guidance': 'choice'}` 거부, 기존 값 유지 |
+| TC-INT-011 | 통과 | 2026-11-02 | 12대 선택 `전송 (12대)` 최상단, 재생 배지·버튼 비활성, 3배속 지연 평균 약 21 ms |
 | TC-API-006 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 | TC-API-007 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 
