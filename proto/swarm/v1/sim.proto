@@ -172,6 +172,7 @@ message SimStatus {
   uint64 frame_overruns = 9;
   string scenario_name = 10;
   bool replay = 11;  // MCAP 재생 중이면 true. 재생기가 다시 발행할 때 채운다 (DEC-031)
+  repeated string waiting_participants = 12;  // lockstep에서 5 s 넘게 FrameDone이 없는 참여자. 비면 정상 (DEC-041)
 }
 
 // 프레임 시작 신호 (AMS-GRA Time Distribution 개념)
