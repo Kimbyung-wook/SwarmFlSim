@@ -1,0 +1,11 @@
+# proto/swarm/v1 → src/gen (protobuf-es). scripts/gen-proto.mjs가 실행한다.
+version: v2
+inputs:
+  - directory: ../../proto
+plugins:
+  - local: protoc-gen-es
+    out: src/gen
+    opt:
+      - target=ts
+      - import_extension=none
+clean: true

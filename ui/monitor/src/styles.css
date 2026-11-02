@@ -1,0 +1,385 @@
+/* IMP-MON-015: Traffic Monitor 화면 배치. 재생 모드는 테두리·머리줄 색으로 구분한다 */
+:root {
+  --bg: #12151a;
+  --panel: #181c22;
+  --line: #2a2f37;
+  --fg: #d7dde4;
+  --muted: #8a93a0;
+  --accent: #4f8cff;
+  --ok: #4caf50;
+  --warn: #f6c026;
+  --bad: #e8453c;
+  --replay: #ff9800;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px/1.4 system-ui, "Malgun Gothic", sans-serif;
+}
+button,
+select {
+  font: inherit;
+  color: var(--fg);
+  background: #232831;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: #4a525e;
+}
+button.on {
+  background: #2c3d5c;
+  border-color: var(--accent);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  padding: 2px 6px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #20252c;
+}
+th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 500;
+}
+td.id,
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+tbody tr {
+  cursor: pointer;
+}
+tbody tr:hover {
+  background: #1f252d;
+}
+tr.sel {
+  background: #23324a !important;
+}
+tr.dead td,
+.tree-item.dead .id {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+tfoot td {
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.mono,
+pre,
+td {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 11px;
+}
+.pad {
+  padding: 8px;
+}
+.bad {
+  color: var(--bad);
+}
+.warn {
+  color: var(--warn);
+}
+.ok {
+  color: var(--ok);
+}
+td.zero {
+  color: #444b55;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+  border: 2px solid transparent;
+}
+.app.replay {
+  border-color: var(--replay);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: #0d1014;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.app.replay .header {
+  background: #2a1c07;
+}
+.title {
+  font-weight: 700;
+  font-size: 14px;
+}
+.badge {
+  font-weight: 700;
+  border-radius: 10px;
+}
+.badge-live {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.badge-replay {
+  color: #111;
+  background: var(--replay);
+  border-color: var(--replay);
+}
+.conn-open {
+  color: var(--ok);
+}
+.conn-connecting {
+  color: var(--warn);
+}
+.conn-closed,
+.conn-error {
+  color: var(--bad);
+}
+.sep {
+  flex: 1;
+}
+.kv b {
+  font-family: ui-monospace, monospace;
+}
+
+.filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: center;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.filterbar .group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.filterbar label {
+  color: var(--muted);
+  margin-right: 2px;
+}
+.chip {
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.chip .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 250px 1fr 430px;
+  min-height: 0;
+}
+.left,
+.right,
+.center {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-weight: 600;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.panel-title .tabs {
+  display: inline-flex;
+  gap: 2px;
+  font-weight: 400;
+}
+.panel-title .right-btn {
+  margin-left: auto;
+}
+
+.tree {
+  overflow: auto;
+  flex: 1;
+}
+.tree-head {
+  padding: 6px 8px 2px;
+  font-weight: 700;
+}
+.tree-sub {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 8px 2px 14px;
+  color: var(--muted);
+}
+.tree-sub.side-1 {
+  color: #6fa8ff;
+}
+.tree-sub.side-2 {
+  color: #ff7a70;
+}
+.tree-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 1px 8px 1px 24px;
+  cursor: pointer;
+}
+.tree-item:hover {
+  background: #1f252d;
+}
+.tree-item.sel {
+  background: #23324a;
+}
+.tree-item .id {
+  font-family: ui-monospace, monospace;
+}
+.tree-item .kind {
+  color: var(--muted);
+  font-size: 11px;
+}
+.tree-item .mini {
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+  font-size: 11px;
+}
+.tree-item .mini em {
+  font-style: normal;
+  color: var(--warn);
+}
+.tree-item .mini em.bad {
+  color: var(--bad);
+}
+
+.stats {
+  flex: 0 0 42%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--line);
+}
+.scroll {
+  overflow: auto;
+  flex: 1;
+}
+th.sortable {
+  cursor: pointer;
+}
+th.sorted {
+  color: var(--fg);
+  text-decoration: underline;
+}
+td.reason {
+  font-weight: 600;
+}
+
+.timeline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.detail {
+  flex: 0 1 45%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--line);
+}
+.detail-body {
+  overflow: auto;
+}
+.echo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.echo-list {
+  flex: 0 0 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+.echo-list td.tx {
+  color: #6fa8ff;
+}
+.echo-list td.rx {
+  color: var(--ok);
+}
+.echo-detail {
+  flex: 1;
+  overflow: auto;
+}
+.echo-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--muted);
+  font-weight: 600;
+  border-top: 1px solid #20252c;
+}
+pre {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.outcome-box {
+  padding: 6px 8px;
+  font-family: ui-monospace, monospace;
+}
+.link-1 {
+  color: var(--ok);
+}
+.link-2 {
+  color: var(--warn);
+}
+.link-3 {
+  color: var(--bad);
+}
