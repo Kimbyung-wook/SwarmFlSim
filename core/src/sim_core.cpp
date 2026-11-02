@@ -1,7 +1,10 @@
 // IMP-CORE-002, IMP-CORE-004: 프레임 스케줄러, 실행 모드, onboard 입출력
+// IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <cstdio>
 #include <set>
 #include <stdexcept>
@@ -116,8 +119,14 @@ bool SimCore::load(const Scenario& sc) {
 void SimCore::reset_run_state() {
   store_.reset();
   integrators_.clear();
-  for (std::size_t i = 0; i < store_.size(); ++i)
-    integrators_.push_back(store_.model(i) && provider_.make_integrator ? provider_.make_integrator() : nullptr);
+  ground_events_.clear();
+  for (std::size_t i = 0; i < store_.size(); ++i) {
+    const auto* model = store_.model(i);
+    integrators_.push_back(model && provider_.make_integrator ? provider_.make_integrator() : nullptr);
+    ground_events_.push_back(model && provider_.make_ground_event ? provider_.make_ground_event(*model)
+                                                                  : dyn::EventFn{});
+  }
+  faults_.clear();
   nav_seq_.assign(store_.size(), 0);
   frame_ = 0;
   sim_time_us_ = 0;
@@ -180,27 +189,66 @@ void SimCore::handle_start(const v1::Start& s, Clock::time_point now) {
 }
 
 void SimCore::handle_fault(const v1::InjectFault& f) {
+  const auto kind = f.fault();
+  // 링크 차단은 Datalink(WP4)가 sim/ctrl/cmd를 직접 구독해 처리한다
+  if (kind == v1::FAULT_KIND_LINK_CUT || kind == v1::FAULT_KIND_GCS_LINK_CUT) return;
   const auto idx = store_.find(f.entity_id());
   if (!idx) {
     log("fault: unknown entity " + f.entity_id());
     return;
   }
-  if (f.fault() != v1::FAULT_KIND_KILL) {
-    // 링크 차단은 Datalink(WP4), 엔진·센서·항법 고장은 해당 WP가 처리한다
-    log("fault " + v1::FaultKind_Name(f.fault()) + " not handled by core");
+  const std::string name = v1::FaultKind_Name(kind);
+  switch (kind) {
+    case v1::FAULT_KIND_KILL:
+      if (!f.clear() && store_.alive(*idx)) kill(*idx, "fault", sim_time_us_, frame_);
+      return;
+    case v1::FAULT_KIND_ENGINE:
+    case v1::FAULT_KIND_NAV:
+    case v1::FAULT_KIND_SENSOR:
+      break;
+    default:
+      log("fault " + name + " ignored");
+      return;
+  }
+  if (kind == v1::FAULT_KIND_ENGINE && (!store_.model(*idx) || !provider_.engine_out)) {
+    log("fault ENGINE not supported for " + f.entity_id());
     return;
   }
-  if (f.clear() || !store_.alive(*idx)) return;
-  store_.set_alive(*idx, false);
+  const auto key = std::make_pair(*idx, kind);
+  if (f.clear()) {
+    faults_.erase(key);
+    log("fault " + name + " cleared on " + f.entity_id());
+    return;
+  }
+  faults_[key] = f.duration_s() > 0.0
+                     ? sim_time_us_ + static_cast<std::uint64_t>(std::llround(f.duration_s() * 1e6))
+                     : std::numeric_limits<std::uint64_t>::max();
+  // SENSOR는 기록만 한다. 탐지(Detection)를 Core가 만들게 되면 이 상태로 막는다
+  log("fault " + name + " on " + f.entity_id());
+}
+
+bool SimCore::fault_active(std::size_t i, v1::FaultKind kind) const {
+  const auto it = faults_.find({i, kind});
+  return it != faults_.end() && sim_time_us_ < it->second;
+}
+
+bool SimCore::fault_active(const std::string& entity_id, v1::FaultKind kind) const {
+  const auto idx = store_.find(entity_id);
+  return idx && fault_active(*idx, kind);
+}
+
+void SimCore::kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, std::uint64_t frame) {
+  store_.set_alive(i, false);
   v1::TruthEvent ev;
   auto* h = ev.mutable_header();
-  h->set_sim_time_us(sim_time_us_);
-  h->set_frame(frame_);
+  h->set_sim_time_us(sim_time_us);
+  h->set_frame(frame);
   h->set_source(cfg_.participant_id);
   h->set_seq(seq_event_++);
-  ev.mutable_kill()->set_entity_id(f.entity_id());
-  ev.mutable_kill()->set_cause("fault");
+  ev.mutable_kill()->set_entity_id(store_.id(i));
+  ev.mutable_kill()->set_cause(cause);
   publish(keys::truth_event("kill"), ev);
+  log(std::string("kill ") + store_.id(i) + " cause=" + cause);
 }
 
 void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
@@ -322,7 +370,19 @@ void SimCore::integrate_frame() {
   for (std::size_t i = 0; i < store_.size(); ++i) {
     const auto* model = store_.model(i);
     if (!model || !store_.alive(i)) continue;
-    integrators_[i]->step(*model, t0, dt, store_.x(i), store_.u(i), provider_.env, nullptr);
+    std::span<const double> u = store_.u(i);
+    if (fault_active(i, v1::FAULT_KIND_ENGINE)) {
+      // 명령은 그대로 두고 적분 입력만 바꾼다. 고장이 풀리면 마지막 명령으로 돌아간다
+      u_scratch_.assign(u.begin(), u.end());
+      provider_.engine_out(*model, u_scratch_);
+      u = u_scratch_;
+    }
+    // 프레임 시작에 지면 위에 있을 때만 이벤트를 건다(지상 엔티티, 지면 아래 시작은 제외)
+    const auto& ground = ground_events_[i];
+    const dyn::EventFn* event = ground && ground(t0, store_.x(i)) > 0.0 ? &ground : nullptr;
+    const auto r = integrators_[i]->step(*model, t0, dt, store_.x(i), u, provider_.env, event);
+    // 교차 시점 상태에서 멈춘다. 이벤트 프레임은 엔티티가 죽은 채 처음 발행되는 프레임(N+1)이다
+    if (r.event) kill(i, "ground", static_cast<std::uint64_t>(std::llround(r.t_end * 1e6)), frame_ + 1);
   }
 }
 
@@ -341,7 +401,7 @@ void SimCore::publish_frame() {
   publish_truth();
 
   for (std::size_t i = 0; i < store_.size(); ++i) {
-    if (!store_.has_onboard(i) || !store_.alive(i)) continue;
+    if (!store_.has_onboard(i) || !store_.alive(i) || fault_active(i, v1::FAULT_KIND_NAV)) continue;
     v1::NavigationReport nav;
     auto* h = nav.mutable_header();
     h->set_sim_time_us(sim_time_us_);

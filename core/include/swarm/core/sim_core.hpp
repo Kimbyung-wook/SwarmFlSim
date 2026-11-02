@@ -1,5 +1,8 @@
 // IMP-CORE-002: 프레임 스케줄러와 실행 모드 (DEC-005, REQ-SIM-002, REQ-DYN-003, PRP-SIM-002)
 // IMP-CORE-004: onboard/<id>/ControlOutput → 동역학 입력, onboard/<id>/NavigationReport 발행
+// IMP-CORE-009: 지면 교차 이벤트로 엔티티를 죽이고 truth/event/kill(cause=ground)을 발행한다
+// IMP-CORE-011: InjectFault. KILL, ENGINE(속도 명령 최소), NAV(NavigationReport 중단), SENSOR(기록만).
+//               LINK_CUT·GCS_LINK_CUT은 Datalink(WP4)가 처리하므로 Core는 무시한다
 //
 // 프레임 N의 순서
 //   1. truth/state, onboard/<id>/NavigationReport, sim/clock/tick(N)을 발행한다 (시각 t_N의 상태)
@@ -75,6 +78,8 @@ class SimCore {
   std::uint64_t seed() const { return seed_; }
   std::uint64_t frame_overruns() const { return overruns_; }
   std::uint64_t control_mismatches() const { return control_mismatches_; }
+  // 현재 시각에 고장이 걸려 있는가 (ENGINE, NAV, SENSOR)
+  bool fault_active(const std::string& entity_id, v1::FaultKind kind) const;
   const EntityStore& entities() const { return store_; }
   v1::SimStatus status() const;
 
@@ -88,6 +93,8 @@ class SimCore {
   void handle(const v1::SimCommand& cmd, Clock::time_point now);
   void handle_start(const v1::Start& s, Clock::time_point now);
   void handle_fault(const v1::InjectFault& f);
+  bool fault_active(std::size_t i, v1::FaultKind kind) const;
+  void kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, std::uint64_t frame);
   void reset_run_state();
   bool barrier_ok() const;
   bool paced() const;
@@ -119,6 +126,8 @@ class SimCore {
   Scenario scenario_;
   EntityStore store_;
   std::vector<std::unique_ptr<dyn::Integrator>> integrators_;
+  std::vector<dyn::EventFn> ground_events_;  // 비어 있으면 이벤트 없음
+  std::vector<double> u_scratch_;
   std::vector<std::string> nav_keys_;
   std::vector<std::uint32_t> nav_seq_;
   std::vector<std::string> participants_;
@@ -138,6 +147,8 @@ class SimCore {
   std::map<std::string, std::uint64_t> done_;  // 참여자별 마지막 완료 프레임 + 1 (0 = 없음)
   std::uint64_t overruns_ = 0;
   std::uint64_t control_mismatches_ = 0;
+  // (엔티티, 고장 종류) → 해제 시각 µs. 해제 명령까지면 UINT64_MAX
+  std::map<std::pair<std::size_t, v1::FaultKind>, std::uint64_t> faults_;
 
   // 배속 기한: anchor_wall_ + (frame - anchor_frame_ + 1) × dt / rate
   Clock::time_point anchor_wall_{};

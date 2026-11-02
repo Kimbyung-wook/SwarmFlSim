@@ -1,4 +1,5 @@
 // TC-CORE-002~012: SimCore 단위 시험 (InMemoryBus, 목 동역학)
+// TC-CORE-013~017: WP2 동역학 통합, 지면 충돌, 스크립트 경로, 고장 주입
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -14,6 +15,7 @@
 #include "swarm/core/mock_dynamics.hpp"
 #include "swarm/core/scenario.hpp"
 #include "swarm/core/sim_core.hpp"
+#include "swarm/core/wp2_dynamics.hpp"
 #include "swarm/v1/truth.pb.h"
 
 namespace {
@@ -446,6 +448,306 @@ void test_proto_scenario() {
   CHECK(rec.statuses.back().scenario_name() == "proto-demo");
 }
 
+// ---------------------------------------------------------------- WP2 동역학 통합 (TC-CORE-013~017)
+
+core::Wp2DynamicsOptions flat(double elevation_m, std::string integrator = "rk45") {
+  core::Wp2DynamicsOptions o;
+  o.integrator = std::move(integrator);
+  o.terrain_flat_m = elevation_m;
+  return o;
+}
+
+// FREERUN 최대 속도로 n 프레임 진행한다
+void run_frames(core::SimCore& sim, std::uint64_t n) {
+  const auto t = Clock::now();
+  const auto target = sim.frame() + n;
+  while (sim.frame() < target) CHECK(sim.poll(t));
+}
+
+v1::SimCommand fault_cmd(const char* id, v1::FaultKind kind, double duration_s = 0.0, bool clear = false) {
+  v1::SimCommand c;
+  c.set_issuer("ui-test");
+  c.mutable_fault()->set_entity_id(id);
+  c.mutable_fault()->set_fault(kind);
+  c.mutable_fault()->set_duration_s(duration_s);
+  c.mutable_fault()->set_clear(clear);
+  return c;
+}
+
+double ground_speed(const v1::EntityState& e) {
+  return std::hypot(e.kinematics().velocity_ned_mps().x(), e.kinematics().velocity_ned_mps().y());
+}
+
+const v1::EntityState& entity(const v1::TruthFrame& tf, const std::string& id) {
+  for (const auto& e : tf.entities())
+    if (e.id() == id) return e;
+  throw std::runtime_error("no entity " + id);
+}
+
+// 국소 평면 근사 북·동 거리(m). WGS84 곡률 반경
+void north_east_m(double lat0, double lon0, double lat, double lon, double& n, double& e) {
+  const double r = std::numbers::pi / 180.0, a = 6378137.0, e2 = 6.69437999014e-3;
+  const double s = std::sin(lat0 * r), w = 1.0 - e2 * s * s;
+  n = (lat - lat0) * r * a * (1.0 - e2) / (w * std::sqrt(w));
+  e = (lon - lon0) * r * a / std::sqrt(w) * std::cos(lat0 * r);
+}
+
+// TC-CORE-013: WP2 2/3-DoF 모델(rk45)로 20대 lockstep 결정론. DynamicsKind → WP2 모델
+void test_wp2_lockstep_determinism() {
+  auto scenario = [] {
+    auto sc = core::builtin_scenario(20);
+    for (std::size_t i = 1; i < sc.entities.size(); i += 2) {
+      sc.entities[i].set_dynamics(v1::DYNAMICS_KIND_DOF3);
+      sc.entities[i].set_airframe("skywalker_x8");
+    }
+    return sc;
+  };
+  auto run_once = [&](std::string& model_names) {
+    InMemoryBus bus;
+    Recorder rec(bus);
+    core::CoreConfig cfg = quiet({"agent-host-1"});
+    cfg.nav_noise = [](const std::string&, v1::NavigationReport& nav, std::mt19937_64& rng) {
+      std::normal_distribution<double> n(0.0, 2.0);
+      nav.mutable_kinematics()->mutable_position()->set_alt_m(nav.kinematics().position().alt_m() + n(rng));
+    };
+    core::SimCore sim(bus, core::wp2_provider(), cfg);
+    // 참여자: 기체마다 다른 선회 명령(2-DoF는 heading_rate, 3-DoF는 bank)을 보내고 완료를 알린다
+    auto sub = bus.subscribe(keys::kClockTick, [&](const Sample& s) {
+      const auto tick = decode<v1::ClockTick>(s);
+      for (int i = 1; i <= 20; ++i) {
+        char id[16];
+        std::snprintf(id, sizeof id, "uav-%03d", i);
+        v1::ControlOutput c;
+        auto* k = c.mutable_kinematic();
+        k->set_speed_mps(22.0 + 0.2 * i);
+        k->set_heading_rate_rps(0.01 * i * std::sin(0.01 * static_cast<double>(tick.frame())));
+        k->set_bank_rad(0.02 * i);
+        k->set_climb_rate_mps(i % 3 - 1.0);
+        put(bus, keys::onboard(id, "ControlOutput"), c);
+      }
+      v1::FrameDone d;
+      d.set_participant("agent-host-1");
+      d.set_frame(tick.frame());
+      put(bus, keys::clock_done("agent-host-1"), d);
+    });
+    CHECK(sim.load(scenario()));
+    model_names.clear();
+    for (std::size_t i = 0; i < sim.entities().size(); ++i)
+      model_names += sim.entities().model(i) ? std::string(sim.entities().model(i)->name()) + "," : "-,";
+    sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50, 42));
+    const auto t = Clock::now();
+    for (int i = 0; i < 1000 && sim.frame() < 250; ++i) sim.poll(t);
+    CHECK(sim.frame() == 250);
+    CHECK(sim.control_mismatches() == 0);
+    // 5 s 동안 명령 속도 쪽으로 움직였다
+    const auto& last = rec.truths.back();
+    CHECK(std::abs(ground_speed(entity(last, "uav-020")) - 26.0) < 1.0);
+    std::string out = rec.truth_bytes.back();
+    for (const auto& n : rec.navs) out += n.SerializeAsString();
+    return out;
+  };
+  std::string names_a, names_b;
+  const auto a = run_once(names_a), b = run_once(names_b);
+  CHECK(!a.empty() && a == b);
+  CHECK(names_a.rfind("-,dof3,dof2,dof3,", 0) == 0);  // GCS는 모델 없음
+}
+
+// TC-CORE-014: 지면 교차 → kill(cause=ground). 교차 시점에서 멈추고, 지면 위에서 시작하지 않은 엔티티는 제외
+void test_ground_kill() {
+  for (const char* integ : {"rk45", "rk4"}) {
+    InMemoryBus bus;
+    Recorder rec(bus);
+    core::SimCore sim(bus, core::wp2_provider(flat(50.0, integ)), quiet());
+    core::Scenario sc;
+    sc.name = "ground";
+    v1::EntitySpec u;  // 고도 100.5 m에서 10 m/s로 하강 → 5.05 s에 평지 50 m에 닿는다
+    u.set_id("uav-001");
+    u.set_kind(v1::ENTITY_KIND_UAV);
+    u.set_dynamics(v1::DYNAMICS_KIND_DOF2);
+    u.mutable_initial()->mutable_position()->set_lat_deg(37.0);
+    u.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+    u.mutable_initial()->mutable_position()->set_alt_m(100.5);
+    u.mutable_initial()->mutable_velocity_ned_mps()->set_x(20.0);
+    u.mutable_initial()->mutable_velocity_ned_mps()->set_z(10.0);
+    sc.entities.push_back(u);
+    v1::EntitySpec g = u;  // 지면 높이(고도 = 지형)에서 수평으로 달리는 지상 표적(DOF2)
+    g.set_id("tgt-001");
+    g.set_kind(v1::ENTITY_KIND_GROUND_TARGET);
+    g.mutable_initial()->mutable_position()->set_alt_m(50.0);
+    g.mutable_initial()->mutable_velocity_ned_mps()->set_z(0.0);
+    sc.entities.push_back(g);
+    CHECK(sim.load(sc));
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+    run_frames(sim, 300);  // 6 s
+
+    CHECK(!sim.entities().alive(0) && sim.entities().alive(1));
+    CHECK(rec.events.size() == 1);
+    if (!rec.events.empty()) {
+      const auto& ev = rec.events[0];
+      CHECK(ev.kill().entity_id() == "uav-001" && ev.kill().cause() == "ground");
+      CHECK(std::abs(static_cast<double>(ev.header().sim_time_us()) - 5.05e6) < 10.0);
+      CHECK(ev.header().frame() == 253);  // 교차 구간 [5.04, 5.06] s(프레임 252) → 처음 죽은 채 발행되는 프레임 253
+    }
+    const auto& dead = entity(rec.truths.back(), "uav-001");
+    CHECK(!dead.alive() && std::abs(dead.kinematics().position().alt_m() - 50.0) < 0.01);
+    // 죽은 뒤에는 NavigationReport를 내지 않는다
+    std::size_t navs_uav = 0;
+    for (const auto& n : rec.navs) navs_uav += n.header().source() == "uav-001";
+    CHECK(navs_uav == 253);  // 프레임 0..252
+  }
+}
+
+// TC-CORE-015: DYNAMICS_KIND_SCRIPTED. 초기 위치 → script_path를 초기 속도 크기로 따라가고 끝점에 멈춘다
+void test_scripted_path() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  constexpr double lat0 = 37.0, lon0 = 127.0;
+  double n1, e1, n2, e2;
+  core::Scenario sc;
+  sc.name = "scripted";
+  v1::EntitySpec t;
+  t.set_id("tgt-001");
+  t.set_kind(v1::ENTITY_KIND_GROUND_TARGET);
+  t.set_side(v1::SIDE_RED);
+  t.set_dynamics(v1::DYNAMICS_KIND_SCRIPTED);
+  t.mutable_initial()->mutable_position()->set_lat_deg(lat0);
+  t.mutable_initial()->mutable_position()->set_lon_deg(lon0);
+  t.mutable_initial()->mutable_velocity_ned_mps()->set_y(10.0);  // 크기만 쓴다
+  auto* p1 = t.add_script_path();  // 북쪽 약 1 km
+  p1->set_lat_deg(lat0 + 0.009);
+  p1->set_lon_deg(lon0);
+  auto* p2 = t.add_script_path();  // 다시 동쪽 약 1 km
+  p2->set_lat_deg(lat0 + 0.009);
+  p2->set_lon_deg(lon0 + 0.0112);
+  north_east_m(lat0, lon0, p1->lat_deg(), p1->lon_deg(), n1, e1);
+  north_east_m(p1->lat_deg(), lon0, p2->lat_deg(), p2->lon_deg(), n2, e2);
+  sc.entities.push_back(t);
+  v1::EntitySpec fixed = t;  // 경로가 없으면 초기 위치 고정
+  fixed.set_id("tgt-002");
+  fixed.clear_script_path();
+  sc.entities.push_back(fixed);
+  CHECK(sim.load(sc));
+  CHECK(sim.entities().model(0) && sim.entities().model(0)->name() == "scripted" && !sim.entities().model(1));
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+
+  auto at = [&](double& n, double& e, double& vn, double& ve) {
+    const auto& k = entity(rec.truths.back(), "tgt-001").kinematics();
+    north_east_m(lat0, lon0, k.position().lat_deg(), k.position().lon_deg(), n, e);
+    vn = k.velocity_ned_mps().x();
+    ve = k.velocity_ned_mps().y();
+  };
+  double n, e, vn, ve;
+  run_frames(sim, 2500);  // 50 s: 첫 구간 500 m
+  at(n, e, vn, ve);
+  CHECK(std::abs(n - 500.0) < 1.0 && std::abs(e) < 0.1);
+  CHECK(std::abs(vn - 10.0) < 1e-9 && std::abs(ve) < 1e-9);
+  const double t_corner = n1 / 10.0;
+  run_frames(sim, static_cast<std::uint64_t>((t_corner + 50.0) * 50) - 2500);  // 모퉁이 + 50 s
+  at(n, e, vn, ve);
+  CHECK(std::abs(n - n1) < 1.0 && std::abs(e - 500.0) < 1.0);
+  CHECK(std::abs(ve - 10.0) < 1e-9 && std::abs(vn) < 1e-9);
+  run_frames(sim, 100 * 50);  // 끝점 지나 정지
+  at(n, e, vn, ve);
+  CHECK(std::abs(n - n1) < 1.0 && std::abs(e - e2) < 1.0 && vn == 0.0 && ve == 0.0);
+  const auto& f = entity(rec.truths.back(), "tgt-002").kinematics().position();
+  CHECK(f.lat_deg() == lat0 && f.lon_deg() == lon0);
+  // 고도 0 m = 평지에서 시작했으므로 지면 이벤트가 걸리지 않는다
+  CHECK(sim.entities().alive(0) && rec.events.empty());
+}
+
+// TC-CORE-016: InjectFault ENGINE(속도 명령 최소, 기간 후 복귀), NAV(NavigationReport 중단·해제), SENSOR(기록),
+//              LINK_CUT·GCS_LINK_CUT 무시, Reset 시 해제
+void test_faults() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  auto sc = one_uav();
+  sc.entities[0].set_airframe("skywalker_x8");  // 최소 속도 12 m/s
+  CHECK(sim.load(sc));
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 50);
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 25.0) < 1e-6);
+
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_ENGINE, 3.0));
+  run_frames(sim, 150);  // 3 s: 25 → 12 + 13·e^-3 ≈ 12.65
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 12.65) < 0.1);
+  CHECK(!sim.fault_active("uav-001", v1::FAULT_KIND_ENGINE));  // 기간이 지나 풀렸다
+  run_frames(sim, 500);  // 마지막 명령(25 m/s)으로 돌아간다
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 25.0) < 0.01);
+
+  auto navs = [&] {
+    std::size_t c = 0;
+    for (const auto& n : rec.navs) c += n.header().source() == "uav-001";
+    return c;
+  };
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_NAV));
+  sim.poll(Clock::now());
+  CHECK(sim.fault_active("uav-001", v1::FAULT_KIND_NAV));
+  const auto before = navs();
+  run_frames(sim, 20);
+  CHECK(navs() == before);
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_NAV, 0.0, true));
+  run_frames(sim, 20);
+  CHECK(navs() == before + 20 && !sim.fault_active("uav-001", v1::FAULT_KIND_NAV));
+
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_SENSOR));
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_LINK_CUT));
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_GCS_LINK_CUT));
+  sim.submit(fault_cmd("gcs-01", v1::FAULT_KIND_ENGINE));  // 모델 없는 엔티티
+  run_frames(sim, 1);
+  CHECK(sim.fault_active("uav-001", v1::FAULT_KIND_SENSOR));
+  CHECK(!sim.fault_active("uav-001", v1::FAULT_KIND_LINK_CUT) && !sim.fault_active("gcs-01", v1::FAULT_KIND_ENGINE));
+  CHECK(sim.entities().alive(0) && rec.events.empty());
+
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(Clock::now());
+  CHECK(!sim.fault_active("uav-001", v1::FAULT_KIND_SENSOR));
+
+  // 목 공급자에는 engine_out이 없으므로 ENGINE을 처리하지 않는다
+  InMemoryBus bus2;
+  core::SimCore mock(bus2, core::mock::provider(), quiet());
+  mock.load(one_uav());
+  mock.submit(fault_cmd("uav-001", v1::FAULT_KIND_ENGINE));
+  mock.poll(Clock::now());
+  CHECK(!mock.fault_active("uav-001", v1::FAULT_KIND_ENGINE));
+}
+
+// TC-CORE-017: WP2 공급자 설정. 적분기 이름 검사, airframe 파라미터, rk4/rk45 결과 일치, 바람 반영(DEC-023)
+void test_wp2_provider() {
+  bool threw = false;
+  try {
+    core::wp2_provider(flat(0.0, "euler"));
+  } catch (const std::invalid_argument&) {
+    threw = true;
+  }
+  CHECK(threw);
+  CHECK(core::airframe_params(v1::DYNAMICS_KIND_DOF2, "skywalker_x8").at("min_speed_mps") == 12.0);
+  CHECK(core::airframe_params(v1::DYNAMICS_KIND_DOF3, "aerosonde").count("max_bank_rad") == 1);
+  CHECK(core::airframe_params(v1::DYNAMICS_KIND_DOF2, "aerosonde").count("max_bank_rad") == 0);
+  CHECK(core::airframe_params(v1::DYNAMICS_KIND_DOF2, "generic").empty());
+
+  auto final_state = [](const char* integ, double wind_e) {
+    InMemoryBus bus;
+    Recorder rec(bus);
+    auto p = core::wp2_provider(flat(0.0, integ));
+    p.env.wind_ned_mps[1] = wind_e;
+    core::SimCore sim(bus, std::move(p), quiet());
+    sim.load(one_uav());
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+    run_frames(sim, 500);  // 10 s
+    return entity(rec.truths.back(), "uav-001").kinematics();
+  };
+  const auto a = final_state("rk45", 0.0), b = final_state("rk4", 0.0), w = final_state("rk45", 5.0);
+  double n, e;
+  north_east_m(37.0, 127.0, a.position().lat_deg(), a.position().lon_deg(), n, e);
+  CHECK(std::abs(n - 250.0) < 0.05 && std::abs(e) < 1e-6);  // 고도 500 m의 곡률 반경 차 0.02 m
+  north_east_m(a.position().lat_deg(), a.position().lon_deg(), b.position().lat_deg(), b.position().lon_deg(), n, e);
+  CHECK(std::abs(n) < 1e-3 && std::abs(e) < 1e-3);
+  north_east_m(37.0, 127.0, w.position().lat_deg(), w.position().lon_deg(), n, e);
+  CHECK(std::abs(e - 50.0) < 0.05 && std::abs(w.velocity_ned_mps().y() - 5.0) < 1e-9);
+}
+
 }  // namespace
 
 int main() {
@@ -459,6 +761,11 @@ int main() {
   test_scenario_status_reset();
   test_run_loop();
   test_proto_scenario();
+  test_wp2_lockstep_determinism();
+  test_ground_kill();
+  test_scripted_path();
+  test_faults();
+  test_wp2_provider();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
