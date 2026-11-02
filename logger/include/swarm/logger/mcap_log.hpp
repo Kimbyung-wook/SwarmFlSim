@@ -41,9 +41,24 @@ void ensure_swarm_descriptors();
 struct RecorderOptions {
   std::string keyexpr = "**";
   ClockNs clock = system_clock_ns;
+  // IMP-LOG-010: 쓰기 큐 상한. 둘 중 하나라도 넘으면 새 샘플을 버리고 dropped_count()에 센다
+  std::size_t max_queue_messages = 100'000;
+  std::size_t max_queue_bytes = 64u << 20;
+  // IMP-LOG-011: MCAP 메시지 색인 기록 여부. 켜면 채널이 많을 때 writer가 색인을 쥐고 RSS가 부하에 비례해 는다
+  bool message_index = false;
+};
+
+struct RecorderStats {
+  std::uint64_t written = 0;        // MCAP에 쓴 메시지
+  std::uint64_t dropped = 0;        // 큐 상한 초과로 버린 메시지
+  std::size_t queue_messages = 0;   // 지금 큐 길이
+  std::size_t queue_bytes = 0;
+  std::size_t peak_queue_messages = 0;
+  std::size_t peak_queue_bytes = 0;
 };
 
 // IMP-LOG-001: 버스 구독 → MCAP 기록. 콜백은 여러 스레드에서 와도 된다
+// IMP-LOG-010: 콜백은 유한 큐에 넣기만 하고 쓰기 스레드가 MCAP에 쓴다 (배압 = 드롭 + 카운트)
 class Recorder {
  public:
   Recorder(Bus& bus, const std::filesystem::path& path, RecorderOptions opts = {});
@@ -52,7 +67,9 @@ class Recorder {
   Recorder& operator=(const Recorder&) = delete;
 
   void close();  // 구독 해제 후 파일을 닫는다. 여러 번 불러도 된다
-  std::uint64_t message_count() const;
+  std::uint64_t message_count() const;  // MCAP에 쓴 메시지 수
+  std::uint64_t dropped_count() const;
+  RecorderStats stats() const;
   std::size_t channel_count() const;
 
  private:

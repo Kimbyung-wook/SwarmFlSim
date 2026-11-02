@@ -8,13 +8,17 @@
 #include <google/protobuf/descriptor.pb.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <map>
 #include <mutex>
 #include <set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "swarm/v1/c2.pb.h"
 #include "swarm/v1/common.pb.h"
@@ -86,15 +90,34 @@ void ensure_swarm_descriptors() {
 // ---------------------------------------------------------------- Recorder
 
 struct Recorder::Impl {
+  struct Item {
+    std::uint64_t t;
+    std::string key;
+    std::string encoding;
+    std::vector<std::uint8_t> payload;
+    std::size_t bytes() const { return payload.size() + key.size() + encoding.size(); }
+  };
+
   RecorderOptions opts;
-  mutable std::mutex mu;
+  mutable std::mutex mu;  // writer, 맵, count, open
   mcap::McapWriter writer;
   bool open = false;
   std::map<std::string, mcap::SchemaId> schemas;                          // 타입 이름 → id
   std::map<std::pair<std::string, std::string>, mcap::ChannelId> channels;  // (키, 인코딩) → id
   std::map<mcap::ChannelId, std::uint32_t> seq;
   std::uint64_t count = 0;
+  std::uint64_t last_t = 0;
   std::unique_ptr<Subscription> sub;
+
+  // IMP-LOG-010: 쓰기 큐
+  mutable std::mutex qmu;
+  std::condition_variable qcv;
+  std::deque<Item> queue;
+  std::size_t queue_bytes = 0;
+  std::size_t peak_messages = 0, peak_bytes = 0;
+  std::uint64_t dropped = 0;
+  bool stopping = false;
+  std::thread worker;
 
   mcap::SchemaId schema_for(std::string_view type_name) {
     if (type_name.empty()) return 0;
@@ -110,7 +133,7 @@ struct Recorder::Impl {
     return id;
   }
 
-  mcap::ChannelId channel_for(const Sample& s) {
+  mcap::ChannelId channel_for(const Item& s) {
     auto key = std::make_pair(s.key, s.encoding);
     if (auto it = channels.find(key); it != channels.end()) return it->second;
     const auto type_name = protobuf_type_of(s.encoding);
@@ -122,19 +145,60 @@ struct Recorder::Impl {
     return ch.id;
   }
 
-  void on_sample(const Sample& s) {
-    const auto t = opts.clock();
+  void write_item(const Item& s) {
     std::lock_guard lock(mu);
     if (!open) return;
     mcap::Message m;
     m.channelId = channel_for(s);
     m.sequence = seq[m.channelId]++;
-    m.logTime = t;
-    m.publishTime = t;
+    // 색인 없이도 파일 순서 = log_time 순이도록 시각이 거꾸로 가지 않게 한다 (IMP-LOG-011)
+    last_t = std::max(last_t, s.t);
+    m.logTime = last_t;
+    m.publishTime = last_t;
     m.data = reinterpret_cast<const std::byte*>(s.payload.data());
     m.dataSize = s.payload.size();
-    if (const auto st = writer.write(m); !st.ok()) throw std::runtime_error("mcap write: " + st.message);
+    if (const auto st = writer.write(m); !st.ok()) {
+      std::fprintf(stderr, "swarm_logger: mcap write: %s\n", st.message.c_str());
+      return;
+    }
     ++count;
+  }
+
+  // 구독 콜백(여러 스레드): 복사해 큐에 넣는다. 상한을 넘으면 버리고 센다
+  void on_sample(const Sample& s) {
+    Item it{opts.clock(), s.key, s.encoding, {s.payload.begin(), s.payload.end()}};
+    const auto bytes = it.bytes();
+    {
+      std::lock_guard lock(qmu);
+      if (stopping) return;
+      if (queue.size() >= opts.max_queue_messages || queue_bytes + bytes > opts.max_queue_bytes) {
+        ++dropped;
+        return;
+      }
+      queue_bytes += bytes;
+      queue.push_back(std::move(it));
+      peak_messages = std::max(peak_messages, queue.size());
+      peak_bytes = std::max(peak_bytes, queue_bytes);
+    }
+    qcv.notify_one();
+  }
+
+  void run() {
+    std::deque<Item> batch;
+    for (;;) {
+      {
+        std::unique_lock lock(qmu);
+        qcv.wait(lock, [&] { return stopping || !queue.empty(); });
+        if (queue.empty()) return;  // stopping이고 다 비웠다
+        batch.swap(queue);
+      }
+      for (const auto& it : batch) write_item(it);
+      {
+        std::lock_guard lock(qmu);
+        for (const auto& it : batch) queue_bytes -= it.bytes();
+      }
+      batch.clear();
+    }
   }
 };
 
@@ -145,9 +209,12 @@ Recorder::Recorder(Bus& bus, const std::filesystem::path& path, RecorderOptions 
   mcap::McapWriterOptions wopts("");
   wopts.library = "swarm-logger";
   wopts.compression = mcap::Compression::None;
+  // IMP-LOG-011: 메시지 색인은 청크마다 채널 수만큼 writer 메모리에 쌓여 부하에 비례해 RSS가 늘어난다 (QA-006)
+  wopts.noMessageIndex = !impl_->opts.message_index;
   if (const auto st = impl_->writer.open(path.string(), wopts); !st.ok())
     throw std::runtime_error("mcap open " + path.string() + ": " + st.message);
   impl_->open = true;
+  impl_->worker = std::thread([impl = impl_.get()] { impl->run(); });
   impl_->sub = bus.subscribe(impl_->opts.keyexpr, [impl = impl_.get()](const Sample& s) { impl->on_sample(s); });
 }
 
@@ -155,6 +222,12 @@ Recorder::~Recorder() { close(); }
 
 void Recorder::close() {
   impl_->sub.reset();
+  {
+    std::lock_guard lock(impl_->qmu);
+    impl_->stopping = true;
+  }
+  impl_->qcv.notify_all();
+  if (impl_->worker.joinable()) impl_->worker.join();  // 큐에 남은 것을 모두 쓴 뒤 끝난다
   std::lock_guard lock(impl_->mu);
   if (!impl_->open) return;
   impl_->writer.close();
@@ -164,6 +237,26 @@ void Recorder::close() {
 std::uint64_t Recorder::message_count() const {
   std::lock_guard lock(impl_->mu);
   return impl_->count;
+}
+
+std::uint64_t Recorder::dropped_count() const {
+  std::lock_guard lock(impl_->qmu);
+  return impl_->dropped;
+}
+
+RecorderStats Recorder::stats() const {
+  RecorderStats r;
+  {
+    std::lock_guard lock(impl_->mu);
+    r.written = impl_->count;
+  }
+  std::lock_guard lock(impl_->qmu);
+  r.dropped = impl_->dropped;
+  r.queue_messages = impl_->queue.size();
+  r.queue_bytes = impl_->queue_bytes;
+  r.peak_queue_messages = impl_->peak_messages;
+  r.peak_queue_bytes = impl_->peak_bytes;
+  return r;
 }
 
 std::size_t Recorder::channel_count() const {
@@ -191,7 +284,9 @@ class Reader {
   template <typename F>
   void for_each(F&& f) {
     mcap::ReadMessageOptions o;
-    o.readOrder = mcap::ReadMessageOptions::ReadOrder::LogTimeOrder;
+    // 메시지 색인이 있으면 log_time 순, 없으면(기록기 기본) 파일 순서 = log_time 순 (IMP-LOG-011)
+    o.readOrder = indexed() ? mcap::ReadMessageOptions::ReadOrder::LogTimeOrder
+                            : mcap::ReadMessageOptions::ReadOrder::FileOrder;
     std::string problem;
     auto view = reader_.readMessages([&](const mcap::Status& st) { problem = st.message; }, o);
     for (const auto& mv : view)
@@ -200,6 +295,13 @@ class Reader {
   }
 
  private:
+  bool indexed() {
+    if (!reader_.readSummary(mcap::ReadSummaryMethod::AllowFallbackScan, [](const mcap::Status&) {}).ok()) return false;
+    const auto& chunks = reader_.chunkIndexes();
+    if (chunks.empty()) return false;
+    return std::all_of(chunks.begin(), chunks.end(), [](const mcap::ChunkIndex& c) { return !c.messageIndexOffsets.empty(); });
+  }
+
   mcap::McapReader reader_;
 };
 }  // namespace
