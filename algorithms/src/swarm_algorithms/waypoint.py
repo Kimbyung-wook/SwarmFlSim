@@ -7,18 +7,29 @@ params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없�
 """
 
 from swarm.v1 import vi_pb2
-from swarm_api import AgentContext, MissionAutonomy
+from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
 from .common import TaskPilot
 
 
 class WaypointFollower(MissionAutonomy):
+    PARAMS = (
+        ParamDef("acceptance_m", 80.0, ParamLayer.DECISION, "m", 1.0, 100000.0, "경유점 도달 판정 반경"),
+        ParamDef("hold_radius_m", 300.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "Hold 작업의 기본 선회 반경"),
+        ParamDef("speed_mps", 0.0, ParamLayer.BEHAVIOR, "m/s", 0.0, 500.0, "작업에 속도가 없을 때의 속도, 0 = 현재 속도"),
+    )
+
     def on_init(self, ctx: AgentContext) -> None:
         p = ctx.params
-        speed = p.get("speed_mps")
         self.pilot = TaskPilot(ctx, float(p.get("acceptance_m", 80.0)), float(p.get("hold_radius_m", 300.0)),
-                               float(speed) if speed is not None else None)
+                               float(p.get("speed_mps", 0.0)) or None)
         self.routes_seen: set[str] = set()
+
+    def on_params(self, ctx: AgentContext, changed: dict) -> None:
+        p = self.pilot
+        p.acceptance_m = float(ctx.params["acceptance_m"])
+        p.hold_radius_m = float(ctx.params["hold_radius_m"])
+        p.speed_mps = float(ctx.params["speed_mps"]) or None
 
     def on_step(self, ctx: AgentContext) -> None:
         self.pilot.step()

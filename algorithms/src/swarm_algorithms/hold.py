@@ -7,13 +7,23 @@ params
 import math
 
 from swarm.v1 import vi_pb2
-from swarm_api import AgentContext, MissionAutonomy
+from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
 
 class Hold(MissionAutonomy):
+    PARAMS = (
+        ParamDef("orbit_radius_m", 0.0, ParamLayer.BEHAVIOR, "m", 0.0, 100000.0,
+                 "0보다 크면 그 자리에서 이 반경으로 선회, 0이면 침로·속도·고도 유지"),
+    )
+
     def on_init(self, ctx: AgentContext) -> None:
         self.sent = False
         self.orbit_radius_m = float(ctx.params.get("orbit_radius_m", 0.0))
+
+    def on_params(self, ctx: AgentContext, changed: dict) -> None:
+        if "orbit_radius_m" in changed:
+            self.orbit_radius_m = float(changed["orbit_radius_m"])
+            self.sent = False  # 다음 프레임에 새 값으로 다시 명령한다
 
     def on_step(self, ctx: AgentContext) -> None:
         ctx.ports.c2.inbox()

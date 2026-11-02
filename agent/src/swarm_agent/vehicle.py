@@ -11,6 +11,7 @@ from swarm.v1 import entity_pb2, mp_pb2, vi_pb2
 from swarm_api import AgentContext, FlightAutonomy, MissionAutonomy
 
 from .messages import fill_header, full_name
+from .params import ParamSet
 from .ports import PortsImpl
 
 if TYPE_CHECKING:
@@ -19,14 +20,17 @@ if TYPE_CHECKING:
 
 class Vehicle:
     def __init__(self, runtime: "AgentRuntime", spec: entity_pb2.EntitySpec, fa: FlightAutonomy,
-                 fa_params: Mapping[str, Any], ma_name: str, ma_params: Mapping[str, Any],
+                 fa_set: ParamSet, fa_context: Mapping[str, Any], ma_name: str, ma_set: ParamSet,
                  rng: np.random.Generator, plan: mp_pb2.MissionPlan | None,
                  criteria: mp_pb2.EngagementCriteria | None) -> None:
         self._rt = runtime
         self.spec = spec
         self.entity_id = spec.id
         self.fa = fa
-        self.capability: vi_pb2.FlightCapability = fa.on_init(spec.id, fa_params)
+        self.fa_set = fa_set  # DEC-035: FA·MA 매개변수 선언·적용 값·거부 목록
+        self.ma_set = ma_set
+        # fa_context(dynamics, airframe)는 런타임이 주는 정보이고 매개변수가 아니다
+        self.capability: vi_pb2.FlightCapability = fa.on_init(spec.id, {**fa_context, **fa_set.values})
         self.ma_name = ma_name
         self.ma: MissionAutonomy | None = None  # 기체별 MA. 일괄 MA면 None
         self.nav: vi_pb2.NavigationReport | None = None
@@ -37,7 +41,7 @@ class Vehicle:
         self._seq: dict[str, int] = defaultdict(int)
         self.ports = PortsImpl(self, plan, criteria)
         self.ctx = AgentContext(entity_id=spec.id, frame=0, sim_time_s=0.0, dt_s=0.0,
-                                ports=self.ports, params=ma_params, rng=rng)
+                                ports=self.ports, params=ma_set.values, rng=rng)
 
     def begin_frame(self, frame: int, sim_time_us: int, dt_s: float) -> None:
         self.frame = frame

@@ -30,6 +30,7 @@ flowchart LR
 | IMP-AGT-017 | RouteTask: 항로점마다 goto(그 점의 alt_m·speed_mps·acceptance) + 행위 선회(Loiter: duration_s, Recon: 반경 원 1바퀴 이상 또는 duration_s), loop 반복, `TaskStatus.progress` = 마친 항로점 / 전체. SearchArea 원(다각형은 외접 원)은 정찰 원 1바퀴. 선회 반경은 최소 선회 반경 × 1.3 이상으로 보정. StrikeTask.aim_point는 REJECTED 유지 | `src/swarm_algorithms/common.py`, `waypoint.py`, `formation.py` | REQ-BHV-002, REQ-UI-004, DEC-033 | Pass (TC-AGT-021~025) |
 | IMP-AGT-018 | flocking Hold: 중심·반경·방향의 접선 벡터장 선회, duration_s 체류 후 COMPLETED. Route는 REJECTED | `src/swarm_algorithms/flocking.py` | REQ-BHV-002, DEC-033 | Pass (TC-AGT-025) |
 | IMP-AGT-020 | 레이스트랙 선회 대기(DEC-034): `HoldTask.racetrack`·`LoiterAction.racetrack`이 있으면 `TaskPilot`이 `CurveCommand.racetrack`을 FA에 보낸다(중심·반경·방향은 작업에서, duration 처리는 원형과 같고 체류 판정은 경로 오차). `leg_length_m < 0`은 REJECTED. flocking Hold는 vector_field 침로로 레이스트랙을 따른다 | `src/swarm_algorithms/common.py`, `flocking.py` | REQ-BHV-002, DEC-034 | Pass (TC-AGT-028) |
+| IMP-AGT-022 | MA 플러그인 `PARAMS` 선언·`on_params`(DEC-035): hold(orbit_radius_m, 변경 시 재명령), waypoint(acceptance_m·hold_radius_m·speed_mps), formation(peer_hz·leader_speed_mps·k_p·corr_max_mps·leader_timeout_s·acceptance_m·hold_radius_m·group), flocking(기존 `_DEFAULTS` 11개 + group, 기체별 값). 계층은 행위·결정, `group`은 `runtime=False`. flocking `_DEFAULTS`는 `PARAMS`에서 만든다 | `src/swarm_algorithms/hold.py`, `waypoint.py`, `formation.py`, `flocking.py` | REQ-CFG-003, DEC-035 | Pass (TC-AGT-034, agent/tests/test_agent_params.py) |
 
 ## TC
 

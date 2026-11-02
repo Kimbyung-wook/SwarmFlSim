@@ -47,6 +47,7 @@ flowchart LR
 | IMP-AGT-009 | 시험 도구: 가짜 Core(2-DoF 운동학, truth·NavigationReport·tick 발행), 가짜 Datalink(tx → rx 즉시, 손실 함수), 시나리오 생성기, Harness, 일치 판정 캐시 InMemoryBus | `src/swarm_agent/testing.py` | DEC-015 | Pass (시험 전체) |
 | IMP-AGT-010 | FA·런타임 성능 측정 스크립트 | `bench/bench_fa.py` | REQ-PRF-001, REQ-PRF-002 | 아래 측정값 |
 | IMP-AGT-019 | 기본 FA 레이스트랙(`CurveCommand.racetrack`, DEC-034): 반경 R 두 원 + 접선 직선 두 개의 폐경로. 매개변수 `racetrack_guidance` = `dubins`(기본: 원 구간 벡터장 + 직선 구간 횡오차 진입각 `ψ − χ∞·(2/π)·atan(k·e)`) 또는 `vector_field`(MATLAB `reference/racetrack_vectorfield.m`: 원 구간 수렴+접선 합성장, 직선 구간 `χ∞ = atan2(10R, L)`, `atan(k·√|e|)`). 구간은 축 방향 투영으로 나눈다. 반경 ≤ 0·길이 < 0 REJECTED | `src/swarm_agent/racetrack.py`, `src/swarm_agent/fa.py` | REQ-GNC-001, REQ-BHV-002, DEC-034 | Pass (TC-AGT-026, TC-AGT-027) |
+| IMP-AGT-021 | 기체별 매개변수 런타임(DEC-035): `ParamSet`이 기본값 → 시나리오 → 실행 중 `SetParams` 순으로 값을 정한다(`resolve_params`). `sim/ctrl/cmd`의 `set_params`는 자기 기체의 FA·MA 소유자만 받아 다음 프레임 시작에 적용하고 `on_params`로 알린다. 적용·거부(unknown/type/range/not_runtime)를 `EntityParams`로 `sim/param/<기체>/<fa|ma>`에 게시(적재 직후·변경 직후·벽시계 1 s마다). 기본 FA는 `PARAMS` 14개(기체 한계 5개 `runtime=False`, 제어 2개, 유도 7개)를 선언. `PARAMS`가 없는 플러그인은 시나리오 값을 그대로 받고 실행 중 변경은 모두 unknown | `src/swarm_agent/params.py`, `runtime.py`, `vehicle.py`, `fa.py` | REQ-CFG-003, DEC-035 | Pass (TC-AGT-029~034) |
 
 ## TC
 
@@ -69,8 +70,14 @@ flowchart LR
 | TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4. 25회 반복 통과 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
 | TC-AGT-026 | 레이스트랙 기하: 경로 오차(원 위·직선 위 0, 중심 R), 경로 위 점에서 침로가 접선(CW·CCW, dubins·vector_field), 안쪽 점은 바깥쪽·바깥쪽 점은 안쪽으로 | `tests/test_agent_racetrack.py` | IMP-AGT-019 | Pass |
 | TC-AGT-027 | 레이스트랙 수렴: 서로 다른 초기점·침로·축·방향 4가지 × dubins·vector_field. 400 s 뒤 100 s 동안 경로 오차 < 40 m, 침로와 경로 접선 차 < 30°, 고도 수렴 | `tests/test_agent_racetrack.py` | IMP-AGT-019 | Pass |
+| TC-AGT-029 | 기본값·게시: 시나리오 매개변수 없이 FA·MA 기본값 적용, `EntityParams` 소유자·플러그인·계층·runtime·최소/최대/기본값, 기체마다 fa·ma 키로 게시 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-030 | 시나리오 재정의와 거부: 값 덮어쓰기, 미선언 이름 unknown, 범위 밖 range, 타입 불일치 type은 기본값 유지 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-031 | 실행 중 변경(FA): k_heading·racetrack_guidance 즉시 반영, 다른 기체 불변, 변경 직후 재게시 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-032 | 거부 사유 4종(not_runtime·range·type·unknown) + 같은 명령의 유효 항목은 적용, 다음 변경에서 거부 목록 갱신, 다른 기체·Dynamics 소유자 명령 무시 | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-033 | MA 실행 중 변경과 `on_params` 전달, 벽시계 1 s 주기 게시, `PARAMS` 미선언 플러그인(시나리오 값 통과, 변경 unknown) | `tests/test_agent_params.py` | IMP-AGT-021 | Pass |
+| TC-AGT-034 | 4개 MA(flocking·formation·hold·waypoint) `PARAMS` 선언과 `on_params` 반응(flocking 기체별 값, formation 이득·시한, hold 재명령) | `tests/test_agent_params.py` | IMP-AGT-022 | Pass |
 
-시험 결과(2026-11-02): `uv run pytest` 183 passed (agent 32, algorithms 26, 기존 125)
+시험 결과(2026-11-02): `uv run pytest` 194 passed (agent 39, algorithms 26, 그 밖 129)
 
 ## FA 성능 측정 (IMP-AGT-010)
 

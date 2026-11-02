@@ -19,7 +19,7 @@ import math
 from collections.abc import Sequence
 
 from swarm.v1 import c2_pb2, p2p_pb2, vi_pb2
-from swarm_api import AgentContext, MissionAutonomy
+from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset, offset_geo
 
 from .common import TaskPilot, every, peer_status
@@ -63,6 +63,17 @@ def pick_leader(cmd: c2_pb2.FormationCommand) -> str:
 
 
 class Formation(MissionAutonomy):
+    PARAMS = (
+        ParamDef("peer_hz", 5.0, ParamLayer.BEHAVIOR, "Hz", 0.1, 100.0, "PeerStatus 송신 주기"),
+        ParamDef("leader_speed_mps", 20.0, ParamLayer.BEHAVIOR, "m/s", 1.0, 500.0, "작업에 속도가 없을 때 리더 속도"),
+        ParamDef("k_p", 0.08, ParamLayer.BEHAVIOR, "1/s", 0.0, 10.0, "슬롯 오차 비례 이득"),
+        ParamDef("corr_max_mps", 12.0, ParamLayer.BEHAVIOR, "m/s", 0.0, 200.0, "슬롯 보정 속도 상한"),
+        ParamDef("leader_timeout_s", 3.0, ParamLayer.DECISION, "s", 0.1, 600.0, "리더 상태 유효 시간"),
+        ParamDef("acceptance_m", 80.0, ParamLayer.DECISION, "m", 1.0, 100000.0, "리더 경유점 도달 판정 반경"),
+        ParamDef("hold_radius_m", 400.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "리더 Hold 기본 선회 반경"),
+        ParamDef("group", "", ParamLayer.DECISION, "", description="따를 편대 group_id, 빈 값 = 소속 첫 편대", runtime=False),
+    )
+
     def on_init(self, ctx: AgentContext) -> None:
         p = ctx.params
         self._id = ctx.entity_id
@@ -86,6 +97,17 @@ class Formation(MissionAutonomy):
                 if ctx.entity_id in f.members and (not group or f.group_id == group):
                     self._set(f)
                     break
+
+    def on_params(self, ctx: AgentContext, changed: dict) -> None:
+        p = ctx.params
+        self.peer_hz = float(p["peer_hz"])
+        self.leader_speed = float(p["leader_speed_mps"])
+        self.k_p = float(p["k_p"])
+        self.corr_max = float(p["corr_max_mps"])
+        self.timeout_s = float(p["leader_timeout_s"])
+        self.pilot.acceptance_m = float(p["acceptance_m"])
+        self.pilot.hold_radius_m = float(p["hold_radius_m"])
+        self.pilot.speed_mps = self.leader_speed
 
     def _set(self, cmd: c2_pb2.FormationCommand) -> None:
         self.cmd = cmd

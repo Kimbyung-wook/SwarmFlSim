@@ -22,22 +22,35 @@ from collections.abc import Sequence
 import numpy as np
 
 from swarm.v1 import common_pb2, p2p_pb2, vi_pb2
-from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch
+from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset
 from swarm_agent.racetrack import path_error, vector_field_course
 
 from .common import Goal, TaskTracker, every, peer_status
 
 S = common_pb2
-_DEFAULTS = {"cruise_mps": 22.0, "neighbor_radius_m": 600.0, "separation_m": 80.0, "w_sep": 1.5,
-             "w_align": 0.5, "w_coh": 0.02, "peer_hz": 5.0, "stale_s": 2.0, "goal_radius_m": 300.0,
-             "hold_radius_m": 300.0, "wander_deg": 0.0}
+_B, _D = ParamLayer.BEHAVIOR, ParamLayer.DECISION
+PARAMS = (
+    ParamDef("cruise_mps", 22.0, _B, "m/s", 1.0, 500.0, "순항 속력(목표 방향 가중)"),
+    ParamDef("neighbor_radius_m", 600.0, _B, "m", 1.0, 1e6, "이웃 인식 반경"),
+    ParamDef("separation_m", 80.0, _B, "m", 1.0, 1e5, "분리 거리"),
+    ParamDef("w_sep", 1.5, _B, "", 0.0, 100.0, "분리 가중"),
+    ParamDef("w_align", 0.5, _B, "", 0.0, 100.0, "정렬 가중"),
+    ParamDef("w_coh", 0.02, _B, "", 0.0, 100.0, "응집 가중"),
+    ParamDef("peer_hz", 5.0, _B, "Hz", 0.1, 100.0, "PeerStatus 송신 주기"),
+    ParamDef("stale_s", 2.0, _D, "s", 0.1, 600.0, "이웃 정보 유효 시간"),
+    ParamDef("goal_radius_m", 300.0, _D, "m", 1.0, 1e5, "목표점 도달 판정 반경"),
+    ParamDef("hold_radius_m", 300.0, _B, "m", 1.0, 1e5, "Hold 기본 선회 반경"),
+    ParamDef("wander_deg", 0.0, _B, "deg", 0.0, 180.0, "침로 흔들기 표준편차"),
+    ParamDef("group", "", _D, "", description="같은 group_id 이웃만 사용, 빈 값 = 전체", runtime=False),
+)
+_DEFAULTS = {d.name: d.default for d in PARAMS if isinstance(d.default, float)}
 _SUPPORTED = ("move_to", "hold", "return_to_base", "search_area")
 
 
 class _Agent:
     def __init__(self, ctx: AgentContext) -> None:
-        self.p = {**_DEFAULTS, **{k: float(v) for k, v in ctx.params.items() if k in _DEFAULTS}}
+        self.p = {k: float(ctx.params.get(k, v)) for k, v in _DEFAULTS.items()}
         self.group = str(ctx.params.get("group", ""))
         self.tracker = TaskTracker(ctx, _SUPPORTED)
         self.table: dict[str, p2p_pb2.PeerStatus] = {}
@@ -47,8 +60,16 @@ class _Agent:
 
 
 class Flocking(BatchMissionAutonomy):
+    PARAMS = PARAMS
+
     def on_init(self, ctxs: Sequence[AgentContext]) -> None:
         self.agents = {c.entity_id: _Agent(c) for c in ctxs}
+
+    def on_params(self, ctx: AgentContext, changed: dict) -> None:
+        a = self.agents[ctx.entity_id]
+        for k in _DEFAULTS:
+            if k in changed:
+                a.p[k] = float(changed[k])
 
     def on_step_batch(self, ctxs: Sequence[AgentContext], nav: NavBatch) -> None:
         n = len(ctxs)
