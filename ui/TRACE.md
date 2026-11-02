@@ -63,6 +63,7 @@
 | IMP-UI-054 | QA-010: 브리지 CLI가 stdout·stderr를 `errors="replace"`로 다시 설정해 콘솔 인코딩(cp949 등)에서 도움말·로그로 종료하지 않는다 | `bridge/src/swarm_bridge/cli.py` | DEC-027, DEC-038 | TC-UI-038 |
 | IMP-UI-055 | QA-015: truth·status를 3초 넘게 받지 못하면 도구 막대에 "시뮬레이션 응답 없음" 표시. status가 계속 오는 일시정지와 구분, 다시 받으면 해제 | `src/model/liveState.ts`, `src/components/Toolbar.tsx`, `src/App.tsx` | DEC-039 | TC-UI-039 |
 | IMP-UI-056 | D-10: 선택 기체의 MA 플러그인이 flocking이면 Route 편집기에 미지원 안내(툴팁). 전송은 막지 않고 거부 사유는 명령 패널에 표시 | `src/model/params.ts`, `src/components/MissionPanel.tsx`, `src/App.tsx` | DEC-039 | TC-UI-040 |
+| IMP-UI-057 | QA-017: 브리지가 버스 스레드 샘플을 클라이언트별 대기열로 묶어 이벤트 루프에 넘기고(`DRAIN_BATCH`), 송신 큐가 넘치면 경고 로그(5 s 주기)를 남긴다. 100기 flocking에서 클라이언트 전달률 22%→약 95% | `bridge/src/swarm_bridge/server.py` | DEC-027, DEC-039 | TC-UI-041 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -98,6 +99,7 @@
 | TC-UI-038 | 브리지: `PYTHONIOENCODING=cp949`에서 `swarm-bridge --help`가 정상 종료(수정 전 실패 확인) (1건) | `bridge/tests/test_bridge.py` | IMP-UI-054 | 통과 |
 | TC-UI-039 | isStalled 경계, 일시정지(status만 수신) 비정지, 무수신 정지·재수신 해제, truth 갱신, 배지 표시 (4건) | `src/components/panels.test.tsx` | IMP-UI-055 | 통과 |
 | TC-UI-040 | `unsupported task route` 거부 사유 표시, flocking 안내 표시·전송 비차단 (2건) | `src/components/panels.test.tsx` | IMP-UI-056 | 통과 |
+| TC-UI-041 | 버스 스레드에서 `3×DRAIN_BATCH+7`건을 두 키로 쏟아도 순서대로 빠짐없이 전달, 드롭 0 (1건) | `bridge/tests/test_bridge.py` | IMP-UI-057 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
 
 

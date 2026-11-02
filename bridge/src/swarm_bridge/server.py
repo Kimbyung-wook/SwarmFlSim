@@ -10,6 +10,7 @@
 import asyncio
 import json
 import logging
+import threading
 from collections import deque
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -29,6 +30,8 @@ PROTOCOL_VERSION = 1
 DEFAULT_PORT = 8765
 WS_PATH = "/bus"
 ROLES = ("control", "observer")
+DRAIN_BATCH = 512  # 이벤트 루프를 한 번에 잡고 처리하는 샘플 수 상한
+DROP_LOG_PERIOD_S = 5.0
 
 
 class ProtocolError(Exception):
@@ -77,13 +80,8 @@ class _Subscription:
         self.closed = False
 
     def open(self, bus: Bus) -> None:
-        loop = self.client.loop
-
         def on_bus(sample: Sample) -> None:  # 버스 스레드
-            try:
-                loop.call_soon_threadsafe(self.on_sample, sample)
-            except RuntimeError:  # 루프 종료 중
-                pass
+            self.client.post(self, sample)
 
         self._bus_sub = bus.subscribe(self.keyexpr, on_bus)
 
@@ -136,6 +134,36 @@ class _Client:
         self._wake = asyncio.Event()
         self.dropped = 0
         self.closed = False
+        # 버스 스레드 → 이벤트 루프 인수 대기열. 샘플마다 call_soon_threadsafe를 부르지 않고 묶어서 넘긴다 (IMP-UI-057)
+        self._inbox: deque[tuple[_Subscription, Sample]] = deque()
+        self._inbox_lock = threading.Lock()
+        self._inbox_armed = False
+        self._last_drop_log = 0.0
+
+    # 버스 스레드에서 호출 ----------------------------------------------
+    def post(self, sub: "_Subscription", sample: Sample) -> None:
+        self._inbox.append((sub, sample))
+        with self._inbox_lock:
+            if self._inbox_armed:
+                return
+            self._inbox_armed = True
+        try:
+            self.loop.call_soon_threadsafe(self._drain)
+        except RuntimeError:  # 루프 종료 중
+            pass
+
+    def _drain(self) -> None:
+        for _ in range(DRAIN_BATCH):
+            try:
+                sub, sample = self._inbox.popleft()
+            except IndexError:
+                break
+            sub.on_sample(sample)
+        with self._inbox_lock:
+            more = bool(self._inbox)
+            self._inbox_armed = more
+        if more:  # 송신 태스크가 돌 틈을 준다
+            self.loop.call_soon(self._drain)
 
     # 송신 ------------------------------------------------------------
     def _enqueue(self, msg: str | bytes) -> None:
@@ -144,8 +172,15 @@ class _Client:
         if len(self._queue) >= self.server.options.queue_limit:
             self._queue.popleft()
             self.dropped += 1
+            self._log_drop()
         self._queue.append(msg)
         self._wake.set()
+
+    def _log_drop(self) -> None:
+        now = self.loop.time()
+        if now - self._last_drop_log >= DROP_LOG_PERIOD_S:
+            self._last_drop_log = now
+            log.warning("client %s: send queue full, dropped %d so far (slow consumer or overload)", self.name, self.dropped)
 
     def send_sample(self, sample: Sample) -> None:
         self._enqueue(encode_frame(sample.key, sample.encoding, sample.payload))
@@ -256,6 +291,7 @@ class _Client:
             s.close()
         self.subs.clear()
         self._queue.clear()
+        self._inbox.clear()
 
 
 class BridgeServer:
