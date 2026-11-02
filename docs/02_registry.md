@@ -113,6 +113,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-036 | 문자열 매개변수는 허용 목록 `ParamSpec.choices`를 선언할 수 있고, 목록 밖 값은 거부 사유 `choice`로 `EntityParams.rejected`에 기록한다. 계약 0.7.0 | DEC-035, REQ-CFG-003, P0 통합 점검 결과(`racetrack_guidance`가 `foo`를 받음) | Confirmed |
 | DEC-037 | Core가 적재한 시나리오를 `sim/ctrl/scenario`로 1초마다 재발행하고, lockstep 첫 틱은 `RunSpec.participants` 전원의 `FrameDone{frame=0}` 준비 신호 뒤에 낸다. 시작 후 동적 참여는 허용하지 않는다 | DEC-025, OPN-024, P0 통합 점검 결과, 사용자 답변: "Core가 시나리오 재발행" | Confirmed |
 | DEC-038 | QA 결과 정리: (1) 입력 검증은 비유한(NaN·inf)·범위 밖 값을 적재·명령 단계에서 거부한다(시나리오는 적재 거부 후 상태 유지, 임무는 `TaskStatus` REJECTED와 사유, 매개변수는 `range`, 실행 설정은 거부). (2) 지원하지 않는 dof5/dof6 시나리오는 Core를 종료하지 않고 적재를 거부한다. (3) `assignees`가 비면 거부한다. (4) lockstep 실행 중 이탈한 참여자의 재합류는 지원하지 않는다(Reset+Start로 복구). (5) realtime에서 `SetRate`는 무시되고 UI는 배속 제어를 비활성으로 표시한다. (6) 중복 `task_id`는 같은 기체에서 이전 임무를 대체한다. (7) KILL된 엔티티는 영구히 `alive=false`다. (8) Datalink 지연·지터에 의한 TaskStatus 순서 뒤바뀜은 현실 모사로 유지한다 | docs/21_qa_report.md §6 (D-3~D-9), 사용자 답변: "현실 모사로 유지" | Confirmed |
+| DEC-039 | (1) lockstep 결정성은 불완전 링크(손실·지터)를 포함해 같은 시드에서 같은 결과를 요구한다. 링크 난수는 시드와 프레임 번호로만 정해지고 실행 순서·벽시계에 의존하지 않는다. (2) 입력 폭주에도 Datalink는 `frame_done`을 막지 않는다. 입력 큐는 상한을 두고 초과분은 버리며 DROPPED로 기록한다. (3) flocking MA는 Route를 지원하지 않고 `unsupported task route`로 거부하는 것이 의도이며, UI는 거부 사유를 보여 준다 | docs/21_qa_report.md §9 (QA-012, QA-013, D-10, D-11), DEC-005 | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
