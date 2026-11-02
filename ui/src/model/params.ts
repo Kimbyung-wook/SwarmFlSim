@@ -45,6 +45,7 @@ export const REJECT_LABEL: Record<string, string> = {
   type: "형식이 맞지 않음",
   range: "허용 범위를 벗어남",
   not_runtime: "실행 중에는 바꿀 수 없음",
+  choice: "허용 목록에 없는 값",
 };
 
 export function rejectLabel(reason: string): string {
@@ -174,7 +175,10 @@ export function parseInput(spec: ParamSpec, input: string | boolean): ParseResul
     return { ok: false, error: "참/거짓이어야 한다" };
   }
   if (typeof input === "boolean") return { ok: false, error: "형식이 맞지 않음" };
-  if (type === "string") return { ok: true, value: input };
+  if (type === "string") {
+    if (spec.choices.length > 0 && !spec.choices.includes(input)) return { ok: false, error: `허용 목록(${spec.choices.join(" | ")})에 없다` };
+    return { ok: true, value: input };
+  }
   const t = input.trim();
   const n = Number(t);
   if (t === "" || !Number.isFinite(n)) return { ok: false, error: "숫자를 입력한다" };

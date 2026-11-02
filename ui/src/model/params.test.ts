@@ -62,6 +62,15 @@ describe("TC-UI-029 매개변수 항목 구성·검사·메시지", () => {
     expect(parseInput(tf, "maybe")).toMatchObject({ ok: false });
   });
 
+  it("입력 검사: choices가 있으면 허용 목록 밖 문자열은 거절한다", () => {
+    const sp = row(storeWith(["uav-001"]), ["uav-001"], `${ParamOwner.FA}:racetrack_guidance`).spec;
+    expect(sp.choices).toEqual(["dubins", "vector_field"]);
+    expect(parseInput(sp, "vector_field")).toEqual({ ok: true, value: "vector_field" });
+    expect(parseInput(sp, "spiral")).toMatchObject({ ok: false });
+    expect(parseInput(sp, "")).toMatchObject({ ok: false });
+    expect(rejectLabel("choice")).toBe("허용 목록에 없는 값");
+  });
+
   it("set_params 메시지: 기체마다 하나, 소유자와 바꿀 이름만 담고 직렬화 왕복이 같다", () => {
     const cmds = setParamsCommands("ui-x", ["uav-001", "uav-002"], ParamOwner.FA, { lookahead_s: 12, terrain_follow: true });
     expect(cmds).toHaveLength(2);

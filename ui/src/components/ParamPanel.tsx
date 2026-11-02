@@ -110,6 +110,19 @@ export function ParamPanel({ store, version, ids, disabledReason, onSet }: Props
                           disabled={blocked}
                           onChange={(e) => setDrafts((d) => ({ ...d, [row.key]: e.target.checked }))}
                         />
+                      ) : row.spec.choices.length > 0 ? (
+                        <select
+                          value={String(text)}
+                          disabled={blocked}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [row.key]: e.target.value }))}
+                        >
+                          {(text === "" || !row.spec.choices.includes(String(text))) && <option value="">{row.mixed ? "혼합" : "—"}</option>}
+                          {row.spec.choices.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
                         <input
                           type="text"
