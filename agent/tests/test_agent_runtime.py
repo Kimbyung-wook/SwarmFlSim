@@ -244,6 +244,7 @@ def test_tc_agt_009_onboard_ms_and_mp_ports():
     env = link_pb2.LinkEnvelope(msg_type="swarm.v1.RoutePlan", payload=rp.SerializeToString())
     env.header.source = "gcs-01"
     h.bus.put(keys.rx("uav-001", keys.Iface.MP, "RoutePlan"), env.SerializeToString(), "")
+    h.core.step(1)  # lockstep의 rx는 다음 틱에서 소비한다 (DEC-040)
     assert [r.route_id for r in v.ports.mp.route_plans()] == ["r1"]
     v.ports.md.record("x", 1.0)
     assert v.ports.md.records[-1][1:] == ("x", 1.0)

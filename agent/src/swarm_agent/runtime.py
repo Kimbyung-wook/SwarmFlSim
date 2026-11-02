@@ -94,6 +94,7 @@ PARAM_PUBLISH_S = 1.0
 
 # threaded 모드에서 틱을 받았는데 같은 프레임의 항법 보고가 덜 왔을 때 기다리는 최대 시간(벽시계)
 NAV_WAIT_S = 0.05
+DATALINK_PREFIX = "datalink"  # run.participants 중 이 접두어로 시작하는 것이 Datalink (DEC-040)
 
 
 class AgentRuntime:
@@ -107,6 +108,14 @@ class AgentRuntime:
         self._queue: queue.Queue[Sample] | None = queue.Queue() if threaded else None
         # 항법 보고를 기다리는 틱과 기한 (threaded 모드만)
         self._pending_tick: tuple[sim_pb2.ClockTick, float] | None = None
+        self._nav_timeout = False
+        # lockstep 수신 결정성 (DEC-040): Datalink의 FrameDone(f)을 받은 뒤에 틱 f+1을 처리하고,
+        # rx는 rx_time_us <= 틱 시각일 때만 소비한다
+        self._lockstep = False
+        self._dl_names: tuple[str, ...] = ()
+        self._dl_done: dict[str, int] = {}          # 참여자 → 처리해도 되는 다음 틱 번호
+        self._ticks_seen = 0
+        self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
         self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_sample)]
@@ -152,6 +161,8 @@ class AgentRuntime:
             self._on_command(sim_pb2.SimCommand.FromString(s.payload))
         elif key == keys.SIM_CTRL_SCENARIO:
             self._on_scenario(sim_pb2.Scenario.FromString(s.payload))
+        elif key.startswith("sim/clock/done/"):
+            self._on_done(sim_pb2.FrameDone.FromString(s.payload))
         elif key.startswith("onboard/"):
             self._on_onboard(key, s.payload)
         elif key.startswith("swarm/"):
@@ -162,7 +173,7 @@ class AgentRuntime:
         assert self._queue is not None, "run() needs threaded=True"
         while not self.stopped and not (should_stop and should_stop()):
             timeout = 0.2
-            if self._pending_tick is not None:
+            if self._pending_tick is not None and not self._nav_timeout:
                 timeout = max(0.0, self._pending_tick[1] - time.monotonic())
             try:
                 s = self._queue.get(timeout=timeout)
@@ -171,7 +182,8 @@ class AgentRuntime:
             if s is not None:
                 self.handle(s)
             if self._pending_tick is not None and time.monotonic() >= self._pending_tick[1]:
-                self._release_tick()
+                self._nav_timeout = True
+                self._try_release()
             self._publish_params_due()
             if max_frames and self.stats.ticks >= max_frames:
                 break
@@ -228,6 +240,11 @@ class AgentRuntime:
         for v in self._order:
             self._vehicle_subs.append(self.bus.subscribe(f"onboard/{v.entity_id}/*", self._on_sample))
             self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
+        self._lockstep = scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP
+        if self._lockstep:
+            self._dl_names = tuple(p for p in scenario.run.participants if p.startswith(DATALINK_PREFIX))
+        for name in self._dl_names:
+            self._vehicle_subs.append(self.bus.subscribe(keys.clock_done(name), self._on_sample))
         log.info("loaded '%s': hosting %d vehicles", scenario.name, len(self._order))
         self._publish_params()
         if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다
@@ -275,6 +292,12 @@ class AgentRuntime:
 
     def _teardown(self) -> None:
         self._pending_tick = None
+        self._nav_timeout = False
+        self._lockstep = False
+        self._dl_names = ()
+        self._dl_done = {}
+        self._ticks_seen = 0
+        self._rx_hold = {}
         self._pending_params = []
         if self._initialized:
             for v in self._order:
@@ -300,8 +323,7 @@ class AgentRuntime:
         if name == "NavigationReport":
             v.nav = vi_pb2.NavigationReport.FromString(payload)
             v.nav_fresh = True
-            if self._pending_tick is not None and self._navs_ready(self._pending_tick[0].frame):
-                self._release_tick()
+            self._try_release()
             return
         msg = decode(f"swarm.v1.{name}", payload)
         if name == "SystemStatus":
@@ -326,6 +348,13 @@ class AgentRuntime:
             self.warn(f"{v.entity_id}: unknown msg_type '{env.msg_type}' on {key}")
             return
         iface = parts[3]
+        if self._lockstep:  # 다음 틱에서 rx_time_us <= 틱 시각인 것만 소비한다 (DEC-040)
+            self._rx_hold.setdefault(v.entity_id, []).append(
+                (env.rx_time_us, env.header.source, env.header.seq, iface, msg))
+            return
+        self._deliver(v, iface, msg)
+
+    def _deliver(self, v: Vehicle, iface: str, msg: Message) -> None:
         if iface == "c2":
             if isinstance(msg, C2_INBOUND):
                 v.ports.c2.buffer.push(msg)
@@ -345,18 +374,50 @@ class AgentRuntime:
                 return False
         return True
 
+    def _dl_ready(self, frame: int) -> bool:
+        """틱 frame을 처리하려면 Datalink의 FrameDone(frame-1)이 와 있어야 한다 (DEC-040)"""
+        return all(self._dl_done.get(n, 0) >= frame for n in self._dl_names)
+
+    def _on_done(self, d: sim_pb2.FrameDone) -> None:
+        if d.participant not in self._dl_names or self._ticks_seen == 0:  # 첫 틱 전의 frame 0은 준비 신호다
+            return
+        self._dl_done[d.participant] = max(self._dl_done.get(d.participant, 0), d.frame + 1)
+        self._try_release()
+
+    def _try_release(self) -> None:
+        if self._pending_tick is None:
+            return
+        frame = self._pending_tick[0].frame
+        navs_ok = self._nav_timeout or self._queue is None or not self._order or self._navs_ready(frame)
+        if navs_ok and self._dl_ready(frame):
+            self._release_tick()
+
     def _release_tick(self) -> None:
         tick, _ = self._pending_tick
         self._pending_tick = None
+        self._nav_timeout = False
         self._process_tick(tick)
+
+    def _release_rx(self, sim_time_us: int) -> None:
+        for v in self._order:
+            held = self._rx_hold.get(v.entity_id)
+            if not held:
+                continue
+            due = sorted((e for e in held if e[0] <= sim_time_us), key=lambda e: e[:3])
+            self._rx_hold[v.entity_id] = [e for e in held if e[0] > sim_time_us]
+            for _, _, _, iface, msg in due:
+                self._deliver(v, iface, msg)
 
     def _on_tick(self, tick: sim_pb2.ClockTick) -> None:
         # Zenoh는 키마다 다른 스레드에서 콜백을 부르므로 NavigationReport(N)가 틱(N)보다 늦게 올 수 있다.
         # threaded 모드에서는 그 기체들의 보고를 NAV_WAIT_S까지 기다린다
         if self._pending_tick is not None:
             self._release_tick()
-        if self._queue is not None and self._order and not self._navs_ready(tick.frame):
+        self._ticks_seen += 1
+        navs_wait = self._queue is not None and self._order and not self._navs_ready(tick.frame)
+        if navs_wait or (self._lockstep and not self._dl_ready(tick.frame)):
             self._pending_tick = (tick, time.monotonic() + NAV_WAIT_S)
+            self._nav_timeout = False
             return
         self._process_tick(tick)
 
@@ -382,6 +443,8 @@ class AgentRuntime:
 
     def _step(self, tick: sim_pb2.ClockTick) -> None:
         dt = tick.dt_us * 1e-6
+        if self._lockstep:
+            self._release_rx(tick.sim_time_us)
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
         if not self._initialized:
