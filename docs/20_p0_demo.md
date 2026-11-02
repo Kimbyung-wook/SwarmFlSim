@@ -74,6 +74,8 @@ uv run python scripts/run_p0_demo.py live --monitor
 | `--base-port`, `--bridge-port`, `--ui-port`, `--monitor-port` | 포트 (기본 17600, 8765, 5173, 5174) |
 | `--build-dir` | C++ 실행 파일 위치 (기본 `build/msvc-debug`) |
 | `--duration <s>` | n초 뒤 종료 |
+| `--lockstep`, `--rate <x>` | lockstep 실행. 시나리오는 Core에만 주고 Datalink·Agent는 `sim/ctrl/scenario`로 받는다. 실행기가 내보내는 시나리오에 `run.mode=lockstep`·`participants`를 넣는다 |
+| `--late-agent-s <s>` | Core 뒤 n초에 Agent를 띄운다 (지각 참여자 시험) |
 
 ### 명령 경로 자동 확인 (probe)
 
@@ -122,6 +124,11 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 | TC-INT-005 | 계약 0.6.0 병합 후 probe hold·racetrack·route: 임무 명령이 UI와 같은 TaskCommand로 C2 → Datalink → Agent → Core를 거쳐 실제 선회·레이스트랙·항로 비행, TaskStatus 수신 | 통과 |
 | TC-INT-006 | probe params: fa·ma·dynamics 모두 runtime 항목 변경이 `sim/param/<entity>/<owner>`에 반영, 잘못된 변경은 unknown·range·not_runtime으로 거부되고 기존 값 유지 | 통과 |
 | TC-INT-007 | UI: 12대 선택 → 레이스트랙 선회 임무 전송 → 임무 카드에 12대 `수행`, 기체가 레이스트랙으로 비행. 매개변수 패널: 적용·기본값 복원, 범위 밖 값은 `10000 이하여야 한다`로 막힘, runtime 불가 항목은 `실행 중에는 바꿀 수 없다`로 표시 | 통과 (아래 결함 있음) |
+| TC-INT-008 | 계약 0.8.0 병합 후 lockstep(`--lockstep --rate 2`): Core만 `--scenario`, Datalink·Agent는 인자 없이 `sim/ctrl/scenario`로 수신, 준비 신호 후 첫 틱, probe move 통과. 시나리오 `run.mode`가 realtime이고 CLI `--mode lockstep`만 주면 참여자가 준비 신호를 보내지 않아 틱이 나가지 않는다 | 통과 (조건 있음) |
+| TC-INT-009 | lockstep + Core 뒤 6 s에 Agent 시작: Core는 RUNNING으로 넘어가 기다리지만 `sim/ctrl/scenario`를 더 내보내지 않아 지각 Agent가 시나리오를 받지 못하고 틱이 나가지 않는다(`sim/ctrl/**`·`sim/clock/**` 무발행 확인) | 불합격 |
+| TC-INT-010 | probe params: `racetrack_guidance=foo` → `{'racetrack_guidance': 'choice'}` 거부, 기존 값 유지. 나머지 fa·ma·dynamics 변경·거부 통과 | 통과 |
+| TC-INT-011 | UI: 12대 선택 후 지도 우클릭 → `전송 (12대)`가 임무 패널 최상단에 있고 최상위 요소(가림 없음), 레이스트랙 유형도 같다. 재생: `재생` 배지, 재개·스텝·×배속·대기·귀환·편대 지정 비활성. Monitor 3배속 재생: 링크 지연 평균 16.8~25.5 ms, p95 ≤31.2 ms, 손실 0% | 통과 |
+| TC-INT-002/005 재확인 | realtime 0.8.0: probe move·hold·racetrack·params 통과, route 통과(1회 항로점 2/3 도달(불합격) 후 재시도 3/3 통과) | 통과 |
 
 | 화면 | 파일 |
 |---|---|
@@ -135,13 +142,22 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 | 재생: Monitor 배지 | ![](img/p0_demo/08_replay_monitor_badge.jpg) |
 | 매개변수 패널(12대 공통) | ![](img/p0_demo/09_params_panel.jpg) |
 | 레이스트랙 임무 비행 | ![](img/p0_demo/10_racetrack_flying.jpg) |
+| 12대 선택, 이동 임무 `전송` | ![](img/p0_demo/12_send_button_move.jpg) |
+| 12대 선택, 레이스트랙 `전송` | ![](img/p0_demo/11_send_button_12.jpg) |
+| 재생: 배지·버튼 비활성 | ![](img/p0_demo/13_replay_badge_disabled.jpg) |
+| 재생 3배속: Monitor 지연 | ![](img/p0_demo/14_monitor_replay_x3_latency.jpg) |
 
-## 6. 남은 문제
+## 6. 남은 문제 (계약 0.8.0 재점검, 2026-11-02)
 
-- UI(WP5)는 `SimStatus.replay`를 표시하지 않는다. 재생 중에도 `실행`으로 보이고 일시정지·배속 버튼이 활성이다(받는 Core가 없다).
-- Monitor(WP6) 상단 `링크 지연`이 3배속 재생 중 39.5 s로 표시된다. 벽시계와 sim 시각을 비교하는 값으로 보이며, 재생 배속을 반영하지 않는다.
-- Core가 `--scenario`로 시작하면 `LoadScenario`를 발행하지 않아 각 프로세스에 시나리오를 따로 줘야 한다. lockstep에서는 늦게 붙은 참여자가 틱을 놓친다. 계약(`sim/ctrl/**` 늦은 참여자 동기화) 변경이 필요하다.
-- FA 매개변수 `racetrack_guidance`는 설명이 `dubins | vector_field`인데 Core가 `foo`를 거부하지 않고 받는다 (`현재 foo`, `적용됨`). 열거형 값 검증이 없다. 담당: FA 매개변수를 선언·검증하는 WP(WP1 Core `set_params` 처리 또는 FA 플러그인). 확인 후 기본값으로 되돌렸다.
-- UI(WP5): 기체 12대를 선택하면 임무 패널의 `전송` 버튼이 아래 `매개변수` 머리글과 겹쳐(1400×850) 마우스 클릭이 머리글로 간다. 키보드·프로그램 클릭은 동작한다.
-- UI(WP5): Core가 거부한 사유(unknown·range·not_runtime)를 UI에서 확인하지 못했다. UI가 범위를 먼저 막고 runtime 불가 항목은 입력을 막아서 UI로는 거부 응답을 만들 수 없다. 거부 사유는 probe로 `sim/param` 발행값을 직접 확인했다.
-- Datalink(WP4)로 보이는 현상: 일부 TaskStatus가 순서가 뒤바뀌어 도착한다 (uav-008이 ACCEPTED보다 EXECUTING을 먼저 받음). 지연·지터 모델 때문으로 보이며 판정에는 영향이 없다.
+| 항목 | 결과 | 근거·담당 |
+|---|---|---|
+| lockstep: Core만 `--scenario`, 나머지는 `sim/ctrl/scenario`로 수신 | 통과 (조건 있음) | 시나리오 `run.mode=lockstep`일 때 정상 시작. 데모 시나리오는 realtime이라 Core `--mode lockstep`만 주면 참여자가 준비 신호(`FrameDone{0}`)를 보내지 않아 틱이 영영 나가지 않는다. 담당: WP1 Core·WP3 Agent·WP4 Datalink(CLI 재정의를 `Scenario`에 반영하거나, 참여자가 Core의 실행 모드를 받도록) |
+| lockstep 지각 참여자 | **불합격** | Core는 LOADED에서만 `Scenario`를 다시 내보내 RUNNING(준비 대기) 중 늦게 켠 Agent는 시나리오를 받지 못한다. 담당: WP1 Core(첫 틱 전까지 재발행) |
+| lockstep에서 hold·racetrack·route·params probe | 미확인 | 디버그 빌드에서 `rate=2`가 따라가지 못하고(overruns) probe의 벽시계 판정 창과 맞지 않아 realtime으로 확인 |
+| probe move·hold·racetrack·route·params (realtime) | 통과 | route는 1회 항로점 2/3 도달(불합격) 후 재시도 3/3 통과. 판정 창 문제로 추정 |
+| `racetrack_guidance="foo"` | 통과 | `choice`로 거부, 기존 값 유지 (WP3 Agent) |
+| UI `전송` 버튼 가림 (12대) | 통과 | 최상위 요소, 패널 맨 위로 이동 (WP5) |
+| UI 재생 표시·버튼 비활성 | 통과 | `재생` 배지, 제어 버튼 비활성. `리셋`만 활성 (WP5, 의도 확인 필요) |
+| Monitor 링크 지연 (3배속 재생) | 통과 | 평균 약 21 ms, p95 ≤31 ms (WP6) |
+| UI에서 거부 사유 확인 | 이월 | UI가 범위를 먼저 막아 거부 응답을 UI로 만들 수 없다. probe로 확인 (WP5) |
+| TaskStatus 순서 뒤바뀜 | 이월 | 일부 TaskStatus가 EXECUTING이 ACCEPTED보다 먼저 도착 (WP4 지연·지터로 추정, 판정 영향 없음). 이번 probe에서도 관찰 |

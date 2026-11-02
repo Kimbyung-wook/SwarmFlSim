@@ -563,6 +563,16 @@ def _probe_params(args: argparse.Namespace, bus) -> int:
             print(f"[probe] {key}: 잘못된 변경 거부 {got} (기대 {want}) {'일치' if good else '불일치'}, 기존 값 유지 {kept}")
             ok &= good and kept
             setp(owner, {sp.name: cur})  # 원래 값으로 되돌린다
+            if "racetrack_guidance" in specs:  # 문자열 열거형: 잘못된 값은 choice로 거부, 기존 값 유지 (DEC-036)
+                with lock:
+                    n0 = seq["n"]
+                setp(owner, {"racetrack_guidance": "foo"})
+                ep = wait_new(key, n0)
+                got = dict(rej(ep))
+                kept = ep is not None and val(ep, "racetrack_guidance") == specs["racetrack_guidance"].default_value.string_value
+                good = got.get("racetrack_guidance") == "choice"
+                print(f"[probe] {key}: racetrack_guidance=foo 거부 {got} (기대 choice) {'일치' if good else '불일치'}, 기존 값 유지 {kept}")
+                ok &= good and kept
             time.sleep(0.3)
         print(f"[probe] {'PASS' if ok else 'FAIL'}")
         return 0 if ok else 1
