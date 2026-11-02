@@ -15,6 +15,8 @@ namespace swarm::core {
 struct DynamicsProvider {
   // 엔티티 사양(DynamicsKind, airframe)으로 모델을 만든다. 지원하지 않으면 nullptr
   std::function<std::unique_ptr<dyn::DynamicsModel>(const v1::EntitySpec&)> make_model;
+  // IMP-CORE-017: airframe 이름이 표에 있는지. 비우면 모든 이름을 받는다. 빈 이름은 항상 기본값을 쓴다
+  std::function<bool(const std::string&)> known_airframe;
   std::function<std::unique_ptr<dyn::Integrator>()> make_integrator;
   // ControlOutput을 받기 전의 입력 u. 비우면 0으로 둔다
   std::function<void(const dyn::DynamicsModel&, std::span<const double> x, std::span<double> u)> init_input;

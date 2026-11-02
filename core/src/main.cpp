@@ -96,7 +96,8 @@ int main(int argc, char** argv) {
     // --mode/--rate/--hz/--seed 재정의는 적재할 시나리오와 재발행하는 Scenario.run에 반영한다 (DEC-037)
     core::apply_run_override(sc, {mode, rate, hz, seed});
     core::SimCore sim(*bus, std::move(provider), cfg);
-    if (!sim.load(sc)) return 1;
+    // 검증에 실패하면 종료하지 않고 sim/ctrl/cmd의 LoadScenario를 기다린다 (IMP-CORE-017, DEC-038)
+    if (!sim.load(sc)) std::fprintf(stderr, "[swarm_core] scenario rejected, waiting for LoadScenario\n");
 
     g_core = &sim;
     std::signal(SIGINT, on_signal);

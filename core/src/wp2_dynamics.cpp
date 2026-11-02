@@ -40,6 +40,12 @@ DynamicsProvider wp2_provider(const Wp2DynamicsOptions& opt) {
     throw std::invalid_argument("unknown integrator: " + opt.integrator);
 
   DynamicsProvider p;
+  p.known_airframe = [](const std::string& name) {
+    if (name == "generic") return true;  // 표 없이 기본값을 쓰는 내장 시나리오용 이름
+    for (const auto& row : kAirframes)
+      if (name == row.name) return true;
+    return false;
+  };
   p.make_model = [](const v1::EntitySpec& spec) {
     return dyn::make_model(spec.dynamics(), airframe_params(spec.dynamics(), spec.airframe()));
   };

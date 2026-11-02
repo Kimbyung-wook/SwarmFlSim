@@ -56,7 +56,7 @@ class SimCore {
   SimCore(const SimCore&) = delete;
   SimCore& operator=(const SimCore&) = delete;
 
-  // 시나리오를 읽어 LOADED로 둔다. RUNNING/PAUSED이면 거부(false). 형식 오류는 예외
+  // 시나리오를 읽어 LOADED로 둔다. RUNNING/PAUSED이면 거부(false). 검증 실패(DEC-038)도 거부하고 기존 상태를 그대로 둔다
   bool load(const Scenario& sc);
 
   // 명령을 큐에 넣는다. sim/ctrl/cmd 구독과 같은 경로로 처리된다. 어느 스레드에서나 호출할 수 있다
@@ -93,6 +93,7 @@ class SimCore {
 
   void handle(const v1::SimCommand& cmd, Clock::time_point now);
   void handle_start(const v1::Start& s, Clock::time_point now);
+  void log_waiting(Clock::time_point now, bool ready_phase);
   void handle_fault(const v1::InjectFault& f);
   void handle_set_params(const v1::SetParams& p);
   void publish_params(std::size_t i);
@@ -162,6 +163,7 @@ class SimCore {
   // 상태 보고
   Clock::time_point last_status_wall_{};
   Clock::time_point last_params_wall_{};
+  Clock::time_point last_wait_log_{};
   std::set<std::string> ready_;  // lockstep 준비 신호(FrameDone{frame=0})를 보낸 참여자 (DEC-037)
   Clock::time_point rate_wall_{};
   std::uint64_t rate_sim_us_ = 0;

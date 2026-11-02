@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -370,13 +371,7 @@ void test_scenario_status_reset() {
   // 형식이 잘못된 ID는 불러오기 실패
   auto bad = one_uav();
   bad.entities[0].set_id("UAV_1");
-  threw = false;
-  try {
-    sim.load(bad);
-  } catch (const std::invalid_argument&) {
-    threw = true;
-  }
-  CHECK(threw && sim.state() == v1::SIM_RUN_STATE_IDLE);
+  CHECK(!sim.load(bad) && sim.state() == v1::SIM_RUN_STATE_IDLE);  // 예외 없이 거부 (DEC-038)
 
   // sim/ctrl/cmd 버스 경로로 불러오기
   v1::SimCommand load;
@@ -819,10 +814,10 @@ void test_params_load() {
   set_number(dp, "bogus", 1.0);           // 선언하지 않은 이름
   set_number(dp, "tau_bank_s", 0.4);      // 2-DoF에는 없는 이름
   (*dp->mutable_fields())["min_speed_mps"].set_string_value("x");  // 타입 위반
-  v1::EntitySpec b = sc.entities[0];      // 모르는 airframe은 기본값, dynamics_params는 적용
+  v1::EntitySpec b = sc.entities[0];      // generic은 표 없이 기본값, dynamics_params는 적용. 모르는 이름은 적재 거부 (TC-CORE-028)
   b.set_id("uav-002");
   b.set_dynamics(v1::DYNAMICS_KIND_DOF3);
-  b.set_airframe("mystery");
+  b.set_airframe("generic");
   b.clear_dynamics_params();
   set_number(b.mutable_dynamics_params(), "min_speed_mps", 5.0);
   sc.entities.push_back(b);
@@ -1209,6 +1204,7 @@ void test_cli_override() {
     m.mutable_run()->add_participants("agent-host-1");
     return m;
   }());
+  proto_sc.entities = one_uav().entities;  // 엔티티가 없으면 적재를 거부한다 (DEC-038)
   core::apply_run_override(proto_sc, {"lockstep", "2.5", "60", "7"});
   CHECK(proto_sc.mode == v1::RUN_MODE_LOCKSTEP && proto_sc.rate == 2.5 && proto_sc.frame_hz == 60 && proto_sc.seed == 7);
   const auto out = core::to_proto(proto_sc);
@@ -1243,6 +1239,161 @@ void test_cli_override() {
 
 }  // namespace
 
+// TC-CORE-028: 적재 검증 (QA-001, DEC-038). 거부하면 기존 시나리오·상태를 그대로 둔다
+void test_load_validation() {
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  CHECK(sim.load(one_uav()));
+  const auto before = sim.status();
+  CHECK(before.scenario_name() == "one" && before.entity_count() == 2);
+
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  std::vector<std::pair<const char*, core::Scenario>> bad;
+  auto add = [&](const char* what, auto&& mutate) {
+    core::Scenario sc = one_uav();
+    sc.name = "bad";
+    mutate(sc);
+    bad.emplace_back(what, std::move(sc));
+  };
+  add("NaN 위치", [&](core::Scenario& s) { s.entities[0].mutable_initial()->mutable_position()->set_lat_deg(nan); });
+  add("inf 속도", [&](core::Scenario& s) { s.entities[0].mutable_initial()->mutable_velocity_ned_mps()->set_x(inf); });
+  add("위도 범위", [&](core::Scenario& s) { s.entities[0].mutable_initial()->mutable_position()->set_lat_deg(91.0); });
+  add("경도 범위", [&](core::Scenario& s) { s.entities[0].mutable_initial()->mutable_position()->set_lon_deg(-181.0); });
+  add("경로 위도", [&](core::Scenario& s) { s.entities[0].add_script_path()->set_lat_deg(120.0); });
+  add("엔티티 없음", [&](core::Scenario& s) { s.entities.clear(); });
+  add("중복 ID", [&](core::Scenario& s) { s.entities[1].set_id("uav-001"); });
+  add("없는 airframe", [&](core::Scenario& s) { s.entities[0].set_airframe("nonexistent"); });
+  add("없는 링크 프로파일", [&](core::Scenario& s) { s.entities[0].set_link_profile("nonexistent"); });
+  add("frame_hz 낮음", [&](core::Scenario& s) { s.frame_hz = 10; });
+  add("frame_hz 높음", [&](core::Scenario& s) { s.frame_hz = 500; });
+  add("frame_hz 0", [&](core::Scenario& s) { s.frame_hz = 0; });
+  add("rate NaN", [&](core::Scenario& s) {
+    s.mode = v1::RUN_MODE_FREERUN;
+    s.rate = nan;
+  });
+  add("rate 음수", [&](core::Scenario& s) { s.rate = -1.0; });
+  add("rate 과대", [&](core::Scenario& s) { s.rate = 1e9; });
+  add("Struct 매개변수 inf", [&](core::Scenario& s) {
+    (*s.entities[0].mutable_dynamics_params()->mutable_fields())["max_speed_mps"].set_number_value(inf);
+  });
+  for (const auto& [what, sc] : bad) {
+    if (sim.load(sc)) std::fprintf(stderr, "accepted: %s\n", what);
+    CHECK(!sim.load(sc));
+    const auto st = sim.status();
+    CHECK(st.scenario_name() == "one" && st.entity_count() == 2 && st.state() == v1::SIM_RUN_STATE_LOADED);
+  }
+
+  // 올바른 입력은 받는다: 알려진 airframe, 시나리오가 정의한 링크 프로파일
+  core::Scenario ok = one_uav();
+  ok.name = "ok";
+  ok.entities[0].set_airframe("aerosonde");
+  ok.entities[0].set_link_profile("uav_default");
+  ok.entities[1].set_link_profile("custom");
+  v1::Scenario msg = core::to_proto(ok);
+  msg.add_link_profiles()->set_name("custom");
+  CHECK(sim.load(core::from_proto(msg)));
+  CHECK(sim.status().scenario_name() == "ok");
+
+  // 실행 중에는 reset 전까지 거부한다. 거부 뒤에도 상태는 그대로다
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  sim.poll(Clock::now());
+  CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING && !sim.load(one_uav()) && sim.status().scenario_name() == "ok");
+}
+
+// TC-CORE-029: 지원하지 않는 DoF(dof5, dof6)는 적재를 거부하고 Core는 계속 산다 (D-3, DEC-038)
+void test_unsupported_dof() {
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  for (auto kind : {v1::DYNAMICS_KIND_DOF5, v1::DYNAMICS_KIND_DOF6}) {
+    core::Scenario sc = one_uav();
+    sc.name = "dof";
+    sc.entities[0].set_dynamics(kind);
+    CHECK(!sim.load(sc));  // 예외 없이 거부
+    CHECK(sim.state() == v1::SIM_RUN_STATE_IDLE);
+  }
+  CHECK(sim.load(one_uav()));
+  core::Scenario sc = one_uav();
+  sc.entities[0].set_dynamics(v1::DYNAMICS_KIND_DOF6);
+  CHECK(!sim.load(sc) && sim.state() == v1::SIM_RUN_STATE_LOADED && sim.status().scenario_name() == "one");
+
+  // LoadScenario 명령으로 받아도 같다
+  v1::SimCommand cmd;
+  cmd.set_issuer("ui-test");
+  *cmd.mutable_load()->mutable_scenario() = core::to_proto(sc);
+  sim.submit(cmd);
+  sim.poll(Clock::now());
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && sim.status().scenario_name() == "one");
+}
+
+// TC-CORE-030: Start·SetRate의 배속 검증 (QA-003, DEC-038). 0은 제한 없음, hz 0은 시나리오 값
+void test_rate_validation() {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  CHECK(sim.load(one_uav()));
+  const auto t = Clock::now();
+  for (double r : {nan, inf, -1.0, 1e9, core::kMaxRate * 2}) {
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, r, 50));
+    sim.poll(t);
+    CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED);
+  }
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 4.0, 0));  // hz 0 = 시나리오 값(50)
+  sim.poll(t);
+  CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING && sim.rate() == 4.0 && sim.frame_hz() == 50);
+
+  for (double r : {nan, inf, -2.0, 1e9}) {
+    sim.submit(simple([&](v1::SimCommand& c) { c.mutable_set_rate()->set_rate(r); }));
+    sim.poll(t);
+    CHECK(sim.rate() == 4.0);
+  }
+  sim.submit(simple([](v1::SimCommand& c) { c.mutable_set_rate()->set_rate(8.0); }));
+  sim.poll(t);
+  CHECK(sim.rate() == 8.0);
+  sim.submit(simple([](v1::SimCommand& c) { c.mutable_set_rate()->set_rate(0.0); }));
+  sim.poll(t);
+  CHECK(sim.rate() == 0.0);
+}
+
+// TC-CORE-031: 참여자를 오래 기다리면 5초마다 누구를 기다리는지 로그에 남긴다 (QA-004)
+void test_waiting_log() {
+  std::vector<std::string> lines;
+  core::CoreConfig cfg = quiet({"agent-host-1", "agent-host-2"});
+  cfg.log = [&](const std::string& m) { lines.push_back(m); };
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::mock::provider(), cfg);
+  CHECK(sim.load(one_uav()));
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  const auto t0 = Clock::now();
+  auto waiting = [&](const char* what) {
+    std::size_t n = 0;
+    for (const auto& l : lines)
+      if (l.find(what) != std::string::npos) ++n;
+    return n;
+  };
+  sim.poll(t0);
+  CHECK(waiting("waiting for ready") == 1 && waiting("agent-host-2") >= 1);
+  sim.poll(t0 + 3s);
+  CHECK(waiting("waiting for ready") == 1);
+  ready(bus, "agent-host-1");
+  sim.poll(t0 + 6s);
+  CHECK(waiting("waiting for ready") == 2);
+  CHECK(lines.back().find("agent-host-1") == std::string::npos && lines.back().find("agent-host-2") != std::string::npos);
+
+  // 준비가 끝나면 프레임 완료를 기다리는 참여자를 말한다
+  ready(bus, "agent-host-2");
+  sim.poll(t0 + 7s);
+  CHECK(sim.frame() == 0);
+  v1::FrameDone d;
+  d.set_participant("agent-host-1");
+  d.set_frame(0);
+  put(bus, keys::clock_done("agent-host-1"), d);
+  sim.poll(t0 + 13s);
+  CHECK(waiting("waiting for frame done") == 1);
+  CHECK(lines.back().find("agent-host-2") != std::string::npos && lines.back().find("agent-host-1") == std::string::npos);
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1268,6 +1419,10 @@ int main() {
   test_lockstep_ready();
   test_scenario_late_joiner();
   test_cli_override();
+  test_load_validation();
+  test_unsupported_dof();
+  test_rate_validation();
+  test_waiting_log();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
