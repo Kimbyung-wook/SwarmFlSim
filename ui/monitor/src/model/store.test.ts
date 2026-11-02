@@ -119,4 +119,24 @@ describe("MonitorStore", () => {
     expect(s.agg.all.total).toBe(2);
     expect(s.linkLagUs).toBe(72_580_000);
   });
+
+  // TC-MON-014: 링크 지연은 outcome을 받은 순간의 sim 시계 − tx 시각. 트래픽 공백은 지연이 아니다 (IMP-MON-026)
+  it("트래픽이 없는 구간은 링크 지연이 아니다(재생 배속과도 무관)", () => {
+    const s = new MonitorStore();
+    const status = (t: number) => frameOf("sim/ctrl/status", SimStatusSchema, { simTimeUs: BigInt(t) });
+    s.handleFrame(status(295_600_000));
+    s.handleFrame(outcomeFrame(outcome({ t: 295_500_000 })));
+    expect(s.linkLagUs).toBe(100_000);
+    // outcome 없이 시계만 150 s 흐른다: 이전 구현은 150 s로 표시했다
+    for (let t = 296_600_000; t <= 445_600_000; t += 1_000_000) s.handleFrame(status(t));
+    expect(s.linkLagUs).toBe(0);
+    // 다시 outcome이 오면 그 순간의 지연만 본다
+    s.handleFrame(outcomeFrame(outcome({ t: 445_000_000 })));
+    expect(s.linkLagUs).toBe(600_000);
+    // 데이터링크가 밀려 늦게 온 outcome은 그 지연이 보이고, 5 s 지나면 사라진다
+    s.handleFrame(outcomeFrame(outcome({ t: 405_600_000 })));
+    expect(s.linkLagUs).toBe(40_000_000);
+    s.handleFrame(status(452_000_000));
+    expect(s.linkLagUs).toBe(0);
+  });
 });

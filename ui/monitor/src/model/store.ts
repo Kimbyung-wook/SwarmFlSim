@@ -75,8 +75,9 @@ export class MonitorStore {
   rewinds = 0;
   /** 시계 출처(sim/ctrl/status, truth/state)의 최신 시각(µs). 되감기 판정 기준 */
   clockUs = 0;
-  /** 받은 outcome의 최신 tx 시각(µs) */
-  linkUs = 0;
+  /** 가장 최근 outcome을 받은 순간의 (시계 − outcome tx 시각)(µs)와 그때의 시계 */
+  private lagSampleUs = 0;
+  private lagAtUs = 0;
   /** 처리한 프레임 수, 해석 실패·무시 수, 누적 처리 시간(ms) */
   frames = 0;
   ignored = 0;
@@ -85,6 +86,7 @@ export class MonitorStore {
   /** 화면 갱신 판단용. 상태가 바뀔 때마다 증가한다 */
   version = 0;
   private readonly rewindUs: number;
+  private readonly staleUs = 5_000_000;
   private readonly timing: boolean;
 
   constructor(opts: StoreOptions = {}) {
@@ -150,7 +152,10 @@ export class MonitorStore {
 
   private onOutcome(o: LinkOutcome): void {
     const t = Number(o.txTimeUs);
-    if (t > this.linkUs) this.linkUs = t;
+    if (this.clockUs > 0 && t > 0) {
+      this.lagSampleUs = Math.max(0, this.clockUs - t);
+      this.lagAtUs = this.clockUs;
+    }
     this.agg.addOutcome(o);
     this.timeline.push(o);
     this.msgTypes.add(o.msgType);
@@ -215,9 +220,13 @@ export class MonitorStore {
     this.version++;
   }
 
-  /** 데이터링크가 시계보다 늦은 정도(µs). outcome이 없으면 0 */
+  /**
+   * 데이터링크가 시계보다 늦은 정도(µs). outcome을 받은 순간의 (sim 시계 − outcome tx 시각)이다.
+   * 둘 다 sim 시각이라 재생 배속과 무관하다. 트래픽이 없는 구간을 지연으로 보지 않도록,
+   * 마지막 outcome 이후 sim 시계가 staleUs 넘게 흐르면 0으로 본다.
+   */
   get linkLagUs(): number {
-    return this.clockUs > 0 && this.linkUs > 0 ? Math.max(0, this.clockUs - this.linkUs) : 0;
+    return this.lagSampleUs > 0 && this.clockUs - this.lagAtUs <= this.staleUs ? this.lagSampleUs : 0;
   }
 
   /** 되감기는 시계 출처로만 판정한다. outcome·엔벨로프는 데이터링크가 밀리면 늦게 오므로 쓰지 않는다 */
@@ -225,7 +234,8 @@ export class MonitorStore {
     if (this.clockUs > 0 && tUs > 0 && tUs + this.rewindUs < this.clockUs) {
       this.rewinds++;
       this.clearStats();
-      this.linkUs = 0;
+      this.lagSampleUs = 0;
+      this.lagAtUs = 0;
       this.clockUs = tUs;
       return;
     }
