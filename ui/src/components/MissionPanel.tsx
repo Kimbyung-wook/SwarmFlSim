@@ -217,6 +217,8 @@ interface RouteProps {
   draft: RouteDraft;
   targetCount: number;
   disabledReason: string | null;
+  /** 선택 기체 중 flocking MA (Route 미지원, 전송은 막지 않는다. DEC-039) */
+  flocking?: readonly string[];
   onAltitude(i: number, altM: number): void;
   onSpeed(i: number, v: number): void;
   onAction(i: number, a: WaypointAction): void;
@@ -238,6 +240,11 @@ export function RouteEditor(p: RouteProps) {
         <button className="link" onClick={p.onCancel} title="편집 버리기 (Esc)">취소</button>
       </header>
       <div className="muted hint">Ctrl+우클릭: 항로점 추가 · 점을 끌어 위치 변경</div>
+      {p.flocking && p.flocking.length > 0 && (
+        <div className="route-flock-note" title="flocking MA는 Route를 지원하지 않아 Agent가 unsupported task route로 거부한다. 거부 사유는 명령 패널에 표시된다">
+          flocking 기체 {p.flocking.length}대는 항로를 지원하지 않아 거부될 수 있다
+        </div>
+      )}
       <ol className="wp-list">
         {p.draft.waypoints.map((w, i) => (
           <li key={i}>
@@ -311,7 +318,7 @@ export function RouteEditor(p: RouteProps) {
         <label className="check">
           <input type="checkbox" checked={p.draft.loop} onChange={(e) => p.onLoop(e.target.checked)} /> 반복
         </label>
-        <button className="primary" disabled={off} title={p.disabledReason ?? (count === 0 ? "기체를 선택한다" : "")} onClick={p.onSend}>
+        <button className="primary" disabled={off} title={p.disabledReason ?? (count === 0 ? "기체를 선택한다" : p.flocking?.length ? "flocking MA 기체는 항로를 거부할 수 있다" : "")} onClick={p.onSend}>
           {p.draft.taskId ? "다시 전송" : "전송"} ({count}대)
         </button>
       </div>

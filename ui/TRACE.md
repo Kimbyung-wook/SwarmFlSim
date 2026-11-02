@@ -61,6 +61,8 @@
 | IMP-UI-052 | QA-009: realtime(`SimStatus.mode`)에서는 배속 버튼 비활성과 "실시간에서는 배속 고정" 안내. 목 소스는 모드를 갖고(기본 lockstep) realtime이면 배속을 무시한다 | `src/components/Toolbar.tsx`, `src/data/mockSource.ts` | DEC-005, DEC-038, REQ-UI-002 | TC-UI-036 |
 | IMP-UI-053 | 임무 응답의 거부·실패 사유를 툴팁이 아닌 본문에 표시(강조색) | `src/components/CommandPanel.tsx`, `src/styles.css` | REQ-UI-002, REQ-UI-004 | TC-UI-037 |
 | IMP-UI-054 | QA-010: 브리지 CLI가 stdout·stderr를 `errors="replace"`로 다시 설정해 콘솔 인코딩(cp949 등)에서 도움말·로그로 종료하지 않는다 | `bridge/src/swarm_bridge/cli.py` | DEC-027, DEC-038 | TC-UI-038 |
+| IMP-UI-055 | QA-015: truth·status를 3초 넘게 받지 못하면 도구 막대에 "시뮬레이션 응답 없음" 표시. status가 계속 오는 일시정지와 구분, 다시 받으면 해제 | `src/model/liveState.ts`, `src/components/Toolbar.tsx`, `src/App.tsx` | DEC-039 | TC-UI-039 |
+| IMP-UI-056 | D-10: 선택 기체의 MA 플러그인이 flocking이면 Route 편집기에 미지원 안내(툴팁). 전송은 막지 않고 거부 사유는 명령 패널에 표시 | `src/model/params.ts`, `src/components/MissionPanel.tsx`, `src/App.tsx` | DEC-039 | TC-UI-040 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -94,6 +96,8 @@
 | TC-UI-036 | realtime이면 ×1~×10 비활성과 안내, lockstep·freerun이면 활성·안내 없음 (2건) | `src/components/panels.test.tsx` | IMP-UI-052 | 통과 |
 | TC-UI-037 | 임무 응답: REJECTED·FAILED 사유 본문 표시, 정상 응답 무표시, 전송 실패 표시 (1건). 명령 직렬화·TaskStatus 연결·목 소스 응답은 TC-UI-006~, 매개변수 명령은 TC-UI-029~030이 이미 덮는다 | `src/components/panels.test.tsx` | IMP-UI-053 | 통과 |
 | TC-UI-038 | 브리지: `PYTHONIOENCODING=cp949`에서 `swarm-bridge --help`가 정상 종료(수정 전 실패 확인) (1건) | `bridge/tests/test_bridge.py` | IMP-UI-054 | 통과 |
+| TC-UI-039 | isStalled 경계, 일시정지(status만 수신) 비정지, 무수신 정지·재수신 해제, truth 갱신, 배지 표시 (4건) | `src/components/panels.test.tsx` | IMP-UI-055 | 통과 |
+| TC-UI-040 | `unsupported task route` 거부 사유 표시, flocking 안내 표시·전송 비차단 (2건) | `src/components/panels.test.tsx` | IMP-UI-056 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
 
 

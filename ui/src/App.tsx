@@ -22,7 +22,7 @@ import type { MenuState } from "./components/MissionPanel";
 import { MissionMenu, RouteEditor } from "./components/MissionPanel";
 import { ParamPanel } from "./components/ParamPanel";
 import { SelectionPanel } from "./components/SelectionPanel";
-import { ParamStore, setParamsCommands } from "./model/params";
+import { ParamStore, flockingEntities, setParamsCommands } from "./model/params";
 import type { ParamScalar } from "./model/params";
 import { Toolbar } from "./components/Toolbar";
 import type { CameraMode } from "./model/camera";
@@ -367,6 +367,7 @@ export function App() {
         conn={conn}
         gcs={source.gcs}
         status={live.status}
+        stalled={conn?.state !== "closed" && live.stalled()}
         simTimeUs={live.frame.simTimeUs}
         frame={live.frame.frame}
         entityCount={live.frame.entities.length}
@@ -420,6 +421,7 @@ export function App() {
               draft={draft}
               targetCount={targets.length}
               disabledReason={disabledReason}
+              flocking={flockingEntities(params, targets)}
               onAltitude={(i, v) => setDraft((d) => d && route.setAltitude(d, i, v))}
               onSpeed={(i, v) => setDraft((d) => d && route.setSpeed(d, i, v))}
               onAction={(i, a) => setDraft((d) => d && route.setAction(d, i, a))}
