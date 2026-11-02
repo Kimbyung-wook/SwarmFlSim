@@ -94,15 +94,29 @@ describe("MonitorStore", () => {
     expect([s.frames, s.ignored]).toEqual([3, 1]);
   });
 
-  it("시각이 5 s 넘게 거꾸로 가면(재생 되감기) 집계를 지운다", () => {
+  it("시계 시각이 5 s 넘게 거꾸로 가면(재생 되감기) 집계를 지운다", () => {
     const s = new MonitorStore();
+    const status = (t: number) => frameOf("sim/ctrl/status", SimStatusSchema, { simTimeUs: BigInt(t) });
+    s.handleFrame(status(60_000_000));
     s.handleFrame(outcomeFrame(outcome({ t: 60_000_000 })));
-    s.handleFrame(outcomeFrame(outcome({ t: 58_000_000 }))); // 지터 수준은 유지
+    s.handleFrame(status(58_000_000)); // 지터 수준은 유지
+    s.handleFrame(outcomeFrame(outcome({ t: 58_000_000 })));
     expect(s.agg.all.total).toBe(2);
+    s.handleFrame(status(1_000_000));
     s.handleFrame(outcomeFrame(outcome({ t: 1_000_000 })));
     expect(s.rewinds).toBe(1);
     expect(s.agg.all.total).toBe(1);
     expect(s.timeline.size).toBe(1);
     expect(s.entities.size).toBe(2);
+  });
+
+  it("데이터링크가 밀려 늦게 온 outcome은 되감기가 아니다. 지연을 잰다", () => {
+    const s = new MonitorStore();
+    s.handleFrame(frameOf("sim/ctrl/status", SimStatusSchema, { simTimeUs: 80_000_000n }));
+    s.handleFrame(outcomeFrame(outcome({ t: 7_400_000 })));
+    s.handleFrame(outcomeFrame(outcome({ t: 7_420_000 })));
+    expect(s.rewinds).toBe(0);
+    expect(s.agg.all.total).toBe(2);
+    expect(s.linkLagUs).toBe(72_580_000);
   });
 });

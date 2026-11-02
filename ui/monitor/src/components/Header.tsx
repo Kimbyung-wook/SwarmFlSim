@@ -57,7 +57,7 @@ export function Header(props: {
       </span>
       <span className="sep" />
       <span className="kv">
-        sim <b>{fmtSimTime(store.agg.nowUs)}</b>
+        sim <b>{fmtSimTime(store.clockUs || store.agg.nowUs)}</b>
       </span>
       {st && (
         <span className="kv">
@@ -66,6 +66,11 @@ export function Header(props: {
         </span>
       )}
       {store.rewinds > 0 && <span className="kv warn">되감기 {store.rewinds}회</span>}
+      {store.linkLagUs > 1_000_000 && (
+        <span className="kv warn" title="sim 시각 − 받은 link/outcome의 최신 tx 시각. 빈도(5 s 창)는 늦은 outcome을 세지 못한다">
+          링크 지연 {(store.linkLagUs / 1e6).toFixed(1)} s
+        </span>
+      )}
       <span className="sep" />
       <span className="kv" title="수신 프레임 처리율과 처리에 쓴 시간 비율(벽시계)">
         {fmtRate(load.framesPerS)} 프레임/s · 처리 {load.busyPct.toFixed(1)}%

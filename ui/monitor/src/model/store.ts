@@ -68,6 +68,10 @@ export class MonitorStore {
   status: SimStatus | undefined;
   view: RunView = "live";
   rewinds = 0;
+  /** 시계 출처(sim/ctrl/status, truth/state)의 최신 시각(µs). 되감기 판정 기준 */
+  clockUs = 0;
+  /** 받은 outcome의 최신 tx 시각(µs) */
+  linkUs = 0;
   /** 처리한 프레임 수, 해석 실패·무시 수, 누적 처리 시간(ms) */
   frames = 0;
   ignored = 0;
@@ -113,7 +117,7 @@ export class MonitorStore {
           if (cur && cur.fromTruth && cur.kind === e.kind && cur.side === e.side && cur.alive === e.alive) continue;
           this.entities.set(e.id, { id: e.id, kind: e.kind, side: e.side, alive: e.alive, fromTruth: true });
         }
-        if (ev.frame.header) this.checkTime(Number(ev.frame.header.simTimeUs));
+        if (ev.frame.header) this.onClock(Number(ev.frame.header.simTimeUs));
         return;
       case "truthEvent": {
         const e = ev.event.event;
@@ -128,7 +132,7 @@ export class MonitorStore {
       }
       case "status":
         this.status = ev.status;
-        this.checkTime(Number(ev.status.simTimeUs));
+        this.onClock(Number(ev.status.simTimeUs));
         this.agg.advance(Number(ev.status.simTimeUs));
         return;
       case "ignored":
@@ -139,7 +143,8 @@ export class MonitorStore {
   }
 
   private onOutcome(o: LinkOutcome): void {
-    this.checkTime(Number(o.txTimeUs));
+    const t = Number(o.txTimeUs);
+    if (t > this.linkUs) this.linkUs = t;
     this.agg.addOutcome(o);
     this.timeline.push(o);
     this.msgTypes.add(o.msgType);
@@ -150,7 +155,6 @@ export class MonitorStore {
   private onEnvelope(dir: Direction, entity: string, key: string, env: LinkEnvelope): void {
     const src = env.header?.source || (dir === "tx" ? entity : "");
     const tUs = dir === "tx" ? Number(env.header?.simTimeUs ?? 0n) : Number(env.rxTimeUs);
-    this.checkTime(tUs);
     const rec: EnvelopeRecord = {
       dir,
       entity,
@@ -188,11 +192,21 @@ export class MonitorStore {
     this.entities.set(id, { id, kind: EK.UNSPECIFIED, side: SD.UNSPECIFIED, alive: true, fromTruth: false });
   }
 
-  private checkTime(tUs: number): void {
-    if (this.agg.nowUs > 0 && tUs > 0 && tUs + this.rewindUs < this.agg.nowUs) {
+  /** 데이터링크가 시계보다 늦은 정도(µs). outcome이 없으면 0 */
+  get linkLagUs(): number {
+    return this.clockUs > 0 && this.linkUs > 0 ? Math.max(0, this.clockUs - this.linkUs) : 0;
+  }
+
+  /** 되감기는 시계 출처로만 판정한다. outcome·엔벨로프는 데이터링크가 밀리면 늦게 오므로 쓰지 않는다 */
+  private onClock(tUs: number): void {
+    if (this.clockUs > 0 && tUs > 0 && tUs + this.rewindUs < this.clockUs) {
       this.rewinds++;
       this.clearStats();
+      this.linkUs = 0;
+      this.clockUs = tUs;
+      return;
     }
+    if (tUs > this.clockUs) this.clockUs = tUs;
   }
 
   /** 집계·타임라인·echo를 지운다. 엔티티 목록과 링크 상태는 둔다 */
