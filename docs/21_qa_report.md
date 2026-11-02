@@ -1,6 +1,6 @@
 # QA/QC 보고서 (계약 0.8.0, 2026-11-02)
 
-시험 대상은 wp0-contracts 4e3c4c3(WP1 dcc58d8 병합 후)이다. 이 문서는 결함 보고만 한다. 수정은 담당 WP가 한다.
+시험 대상은 wp0-contracts 4e3c4c3(WP1 dcc58d8 병합 후)이다. 이 문서는 결함 보고만 한다. 수정은 담당 WP가 한다. §1~8은 1차, §9는 DEC-038 수정 병합 후의 2차 재시험이다. 2차에서 QA-001·002·003·009·010은 수정을 확인했고 QA-005는 대부분 수정, QA-004는 미지원 결정(DEC-038)으로 종결했다. 새 결함은 QA-012~015이다.
 
 ## 1. 범위와 방법
 
@@ -204,3 +204,114 @@ UI·Monitor 점검은 §3에 따로 적는다. 앱 내장 브라우저로 라이
 ## 8. 이미 알려진 항목
 
 lockstep 시나리오 재발행과 CLI `--mode/--rate` 재정의는 dcc58d8에서 고쳐졌다. 이 시험은 수정을 재확인했다(TC-QA-011, 020의 지각 합류). 새 결함으로 보고하지 않는다.
+
+## 9. 재시험 (2차, 2026-11-02)
+
+시험 대상은 wp0-contracts에 WP1(cddd678)·WP3(a20cd4a)·WP5(73baee1) 수정이 병합된 상태이다(DEC-038). Core를 포함해 `msvc-debug`로 다시 빌드했다. release 빌드(QA-007)는 제외했다.
+
+### 9.1 회귀 시험
+
+| TC | 1차 | 2차 | 판정 근거 |
+|---|---|---|---|
+| TC-QA-010 | 통과 | 통과 | 비정상 rate가 거부된다(QA-003 수정 확인) |
+| TC-QA-012 | 불합격 | 통과 | NaN 초기 위치·dof5/6·빈 시나리오는 적재 거부 후 Core 생존(QA-001, D-3 수정 확인) |
+| TC-QA-013 | 불합격 | 통과 | 기준을 바꿨다. 순서 뒤바뀜(D-9, DEC-038 (8))을 허용하고 "기체당 실행 중 임무 1개 이하"와 간격을 둔 마지막 명령의 도달·ACCEPTED로 판정 |
+| TC-QA-014 | 통과(비일관) | 불합격 | 경로 NaN(`routeNaN`)·`hold radius=NaN`(`holdRNaN`)이 응답 없이 무시된다(QA-014). 나머지 값은 REJECTED(사유)로 일관(QA-005 대부분 수정). 빈 `assignees` 거부, 중복 `task_id` 교체 확인(D-6, D-7) |
+| TC-QA-015 | 통과 | 불합격 | 홍수 후 lockstep이 영구 정지한다(QA-012). 2회 모두 재현 |
+| TC-QA-016 | 불합격 | 통과 | MA `k_p`에 `inf`·`NaN`·음수·1e12 모두 `range`로 거부, Agent 생존(QA-002 수정 확인) |
+| TC-QA-020 | 불합격 | 통과 | 기준 변경(DEC-038 (4)). Agent 이탈 중 정지, Core 로그 `waiting for frame done: agent-0`, Reset+Start로 복구 |
+| QA-009 | | 수정 확인 | realtime에서 UI 배속 버튼이 비활성이다 |
+| QA-010 | | 수정 확인 | cp949 콘솔에서 `swarm-bridge --help` 정상 |
+
+### 9.2 새 시험
+
+| TC | 내용 | 결과 | 비고 |
+|---|---|---|---|
+| TC-QA-024 | 결정성 추가. 시드 7·20261104, s3 불완전 링크, 각 2회 | 불합격 | 같은 시드인데 링크 DROPPED 수가 다르고 궤적이 다르다(QA-013). 손실 없는 시나리오는 1차 TC-QA-022에서 결정적 |
+| TC-QA-025 | Agent 프로세스 자체 CPU·RSS(50기 realtime 90 s, python 자식 합산) | 통과 | Agent CPU 평균 63%·최대 119%, RSS 4.5→72.7 MB(후반 -0.1 MB), Core 평균 50%, Logger +8.8 MB(QA-006), Datalink +2.7 MB |
+| TC-QA-026 | Monitor 통계 대 독립 집계(s3 라이브) | 통과 | 송신자별 건수·손실률·지연 평균이 독립 집계(`qa/link_count.py`)와 일치. 아래 참고 |
+| TC-QA-027 | 임무 중 Core·Datalink 재시작과 UI 복구(realtime, s3) | 통과 | 아래 참고. UI의 끊김 표시 없음(QA-015) |
+| UI 명령 | 선택·MoveTo·Hold·Racetrack·Route 전송(브라우저) | 통과 | 5종 모두 TaskStatus 수신. flocking 기체는 Route를 거부(D-10). 고장 표시는 시험하지 못함 |
+
+TC-QA-026 참고:
+- s3 40 s 창에서 송신자별 건수·손실률은 일치했다. 예: uav-011은 건수 650, 손실 0.76(QUEUE_OVERFLOW 444, OUT_OF_RANGE 50), 지연 평균 3.6 s.
+- Monitor의 지연 p95가 독립 집계보다 크게 나온다. 히스토그램 구간 양자화로 보이며 정확한 원인은 확인하지 못했다.
+- 시퀀스 타임라인은 s3에서 메시지 흐름이 표시된다. flocking 100기 부하에서는 대조하지 못했다.
+
+TC-QA-027 결과:
+
+| 단계 | 조작 | 관찰 |
+|---|---|---|
+| 1 | Core 종료 | UI의 T·F가 멈춘다. 연결 표시는 그대로 "연결"이고 정지·끊김 안내가 없다(QA-015) |
+| 2 | Core 재시작 | UI가 새로고침 없이 새 실행(T 0부터)을 따라간다. 엔티티 14 유지 |
+| 3 | Datalink 종료 | realtime에서는 Core가 계속 진행한다. UI T·F 정상 진행 |
+| 4 | Datalink 재시작 | 링크 결과가 다시 발행된다(10 s에 PeerStatus 2586건, 송신자 4곳, 손실 사유 정상) |
+
+```mermaid
+sequenceDiagram
+  participant U as UI
+  participant B as Bridge
+  participant C as Core
+  participant D as Datalink
+  Note over C: 종료
+  Note over U: T·F 정지, 표시 없음
+  Note over C: 재시작
+  C->>B: clock·truth
+  B->>U: T 0부터 갱신
+  Note over D: 종료
+  C->>B: 진행 유지
+  Note over D: 재시작
+  D->>B: link/outcome 재개
+```
+
+### 9.3 새 결함
+
+#### QA-012 — 명령 홍수 후 lockstep이 영구 정지한다
+- 담당 WP4 Datalink(원인 추정) / 높음 / TC-QA-015
+- 재현: lockstep 2배속, 20기에 10 s 동안 약 41만 건의 임무 명령을 보낸다.
+- 기대: 홍수 뒤 프레임 진행 재개(1차 시험에서는 회복했다).
+- 실제: 프레임 271→277에서 멈춘 채 150 s 안에 회복하지 못한다. Core 로그는 `waiting for frame done: datalink-0 (frame 278)`이다. Datalink RSS는 약 2.3 GB까지 늘었다. 2회 모두 재현.
+- 비고: 링크 결과 DROPPED 234,465, DELIVERED 1,812. 큐 적체로 `frame_done`을 못 내는 것으로 보인다. 확인하지 못했다.
+
+#### QA-013 — 불완전 링크에서 같은 시드의 결과가 달라진다
+- 담당 WP4 Datalink 또는 WP1 Core / 보통 / TC-QA-024
+- 재현: `qa_s3_link`를 같은 시드로 lockstep에서 2회 실행해 비교.
+- 기대: DEC-005의 결정성(손실 없는 시나리오는 최대 차이 0).
+- 실제: 시드 7은 최대 1.97 m, 시드 20261104는 최대 30.8 m 차이. 링크 DROPPED 수와 총 프레임 수도 다르다.
+- 비고: 링크 손실·지터 난수가 시드 외 요인(실행 순서·벽시계)에 의존하는 것으로 보인다. 확인하지 못했다. 결정성을 보장해야 하는 범위에 불완전 링크를 포함할지는 §9.5 항목이다.
+
+#### QA-014 — 경로·hold 반경의 NaN이 응답 없이 무시된다
+- 담당 WP3 Agent / 낮음 / TC-QA-014
+- 재현: 경로 점에 NaN을 넣은 Route, `hold radius=NaN`.
+- 기대: 다른 비정상 값처럼 `REJECTED(사유)`.
+- 실제: TaskStatus가 오지 않는다. 기체 이동 변화 없음.
+- 비고: QA-005의 나머지 항목(`alt=inf`, 범위 밖 좌표, `radius<=0` 등)은 REJECTED로 바뀌었다.
+
+#### QA-015 — Core가 죽어도 UI가 끊김을 표시하지 않는다
+- 담당 WP5 UI / 낮음 / TC-QA-027
+- 재현: 실행 중 Core 프로세스 종료.
+- 기대: 시계 정지·연결 끊김 표시.
+- 실제: T·F가 멈추고 연결 표시는 "연결" 그대로. 사용자가 정지를 알아보기 어렵다.
+
+### 9.4 갱신된 결정 확인 항목
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-3 | 해결 | dof5/6은 거부 후 Core 생존(DEC-038 (2)) |
+| D-4 | 해결 | 재합류 미지원, Reset+Start(DEC-038 (4)). 시험 기준을 바꿨다 |
+| D-5 | 해결 | UI 배속 비활성(QA-009) |
+| D-6 | 해결 | 빈 `assignees` 거부 |
+| D-7 | 해결 | 중복 `task_id`는 교체 |
+| D-8 | 확인 | KILL 후 `alive=false` 유지(DEC-038 (7)) |
+| D-9 | 확인 | 순서 뒤바뀜은 기대 동작(DEC-038 (8)) |
+| D-10 | 신규 | flocking MA는 Route를 `unsupported task route`로 거부한다. UI는 선택한 기체가 flocking이어도 Route 전송을 막지 않고 안내하지 않는다. 의도한 제한인지 확인 필요 |
+| D-11 | 신규 | QA-013. 불완전 링크 시나리오에서 같은 시드 결과 동일을 요구하는지(DEC-005) |
+
+### 9.5 2차에서 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| release 빌드 | 범위 제외(QA-007) |
+| flocking 100기 부하의 Monitor 통계 대조 | 시도하지 않았다. s3에서만 대조 |
+| UI의 고장 표시 | 시험하지 않았다 |
+| 이탈 후 Datalink 재시작의 lockstep 영향 | realtime에서만 시험. lockstep에서 Datalink 이탈은 시험하지 않았다 |

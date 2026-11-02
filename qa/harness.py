@@ -501,18 +501,25 @@ class ResourceSampler(threading.Thread):
 
     def run(self) -> None:
         import psutil
-        procs: dict[str, psutil.Process] = {}
+        cache: dict[int, psutil.Process] = {}
         while not self.stop_ev.wait(self.period):
             row = {}
             for n, p in list(self.stack.procs.items()):
                 if not p.alive():
                     continue
                 try:
-                    ps = procs.get(n)
-                    if ps is None or ps.pid != p.p.pid:
-                        ps = procs[n] = psutil.Process(p.p.pid)
-                        ps.cpu_percent(None)
-                    row[n] = (ps.cpu_percent(None), ps.memory_info().rss / 1e6)
+                    # venv 런처·uv 래퍼 밑의 자식(실제 python)까지 합산한다
+                    root = cache.get(p.p.pid) or psutil.Process(p.p.pid)
+                    cache[p.p.pid] = root
+                    cpu = mem = 0.0
+                    for ps in [root] + root.children(recursive=True):
+                        if ps.pid not in cache:
+                            cache[ps.pid] = ps
+                            ps.cpu_percent(None)
+                            continue
+                        cpu += cache[ps.pid].cpu_percent(None)
+                        mem += ps.memory_info().rss / 1e6
+                    row[n] = (cpu, mem)
                 except Exception:  # noqa: BLE001
                     pass
             self.samples.append((time.monotonic(), row))
