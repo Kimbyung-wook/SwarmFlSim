@@ -171,6 +171,7 @@ class Datalink {
   const dyn::Terrain* terrain_;
   DatalinkConfig cfg_;
 
+  std::recursive_mutex run_mu_;  // run_tick 전체(계산·발행·FrameDone) 직렬화
   mutable std::mutex mu_;
   std::map<std::string, LinkProfile> profiles_;
   std::map<std::string, Node> nodes_;
