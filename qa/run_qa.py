@@ -311,6 +311,9 @@ def t010(c: Case):
         ob.set_rate(r)
         time.sleep(1)
         c.note(f"set_rate({r}) 뒤 상태 {ob.status.state} rate_target={ob.status.rate_target} dead={st.dead()}")
+        if not (math.isfinite(r) and 0 <= r <= 1000):
+            c.check(math.isfinite(ob.status.rate_target) and 0 <= ob.status.rate_target <= 1000,
+                    f"set_rate({r}) 수용: rate_target={ob.status.rate_target}")
         ob.set_rate(2.0)
         time.sleep(0.5)
     # 리셋
@@ -418,6 +421,9 @@ def t012(c: Case):
         c.note(f"[Reset 뒤] Start(mode={mode}, rate={rate}, hz={hz}) → state={s.state} hz={s.frame_hz} "
                f"rate_target={s.rate_target} dead={st.dead()}")
         c.check(not st.dead(), f"[Reset 뒤] Start({mode},{rate},{hz}) 뒤 프로세스 종료 {st.dead()}")
+        if s.state == sim.SIM_RUN_STATE_RUNNING:
+            c.check(math.isfinite(s.rate_target) and s.rate_target >= 0 and 50 <= s.frame_hz <= 100 or mode == "realtime",
+                    f"[Reset 뒤] Start({mode},{rate},{hz}) 비정상 값 수용: rate_target={s.rate_target} hz={s.frame_hz}")
     for name, sc in cases.items():
         ob.reset()
         ob.wait(lambda: ob.status.state == sim.SIM_RUN_STATE_LOADED, 20)
@@ -429,6 +435,9 @@ def t012(c: Case):
         s = ob.status
         c.note(f"[Reset 뒤] 적재[{name}] → state={s.state} entity_count={s.entity_count} dead={st.dead()}")
         c.check(not st.dead(), f"[Reset 뒤] 적재[{name}] 뒤 프로세스 종료 {st.dead()}")
+        if name in ("중복 ID", "엔티티 0개", "NaN 위치", "frame_hz=5"):
+            c.check(s.entity_count == 21 and s.state == sim.SIM_RUN_STATE_LOADED,
+                    f"[Reset 뒤] 적재[{name}]가 거부되지 않음: state={s.state} entity_count={s.entity_count}")
     # 정상 시나리오 복구
     ob.reset()
     ob.wait(lambda: ob.status.state == sim.SIM_RUN_STATE_LOADED, 20)
@@ -474,9 +483,24 @@ def t013(c: Case):
     time.sleep(20)
     for tid in ("qa-m2", "qa-m3", "qa-m4", "qa-m5"):
         c.note(f"{tid}: uav-001 {status_of(ob, 'uav-001', tid)} / uav-002 {status_of(ob, 'uav-002', tid)}")
-    # 마지막 명령이 최종 권위여야 한다: 마지막 명령(m5)이 EXECUTING 또는 COMPLETED
-    c.check(any(("EXECUTING" in x or "COMPLETED" in x) for x in status_of(ob, "uav-001", "qa-m5")),
-            f"마지막 명령 qa-m5 실행 보고 없음: {status_of(ob, 'uav-001', 'qa-m5')}")
+    # 연속 전송 뒤 최종 임무: 링크 지터로 명령 도착 순서가 뒤바뀔 수 있으므로(DEC-038 (8) 현실 모사)
+    # 도착 순서를 판정하지 않고, 두 기체가 취소되지 않은 EXECUTING 임무를 하나씩만 가지는지(일관성)만 본다.
+    def live_tasks(u):
+        out = set()
+        for tid in ("qa-m2", "qa-m3", "qa-m4", "qa-m5"):
+            ss = status_of(ob, u, tid)
+            if any("EXECUTING" in x for x in ss) and not any("CANCELLED" in x for x in ss):
+                out.add(tid)
+        return out
+    lt = {u: live_tasks(u) for u in a}
+    c.note(f"연속 전송 뒤 살아 있는 임무: {lt}")
+    c.check(all(len(v) <= 1 for v in lt.values()), f"취소되지 않은 임무가 둘 이상 동시 실행: {lt}")
+    # 간격을 두고 보낸 마지막 명령은 반드시 최종 권위여야 한다
+    tgt6 = off(lat, lon, 500, 500)
+    ob.move_to(a, *tgt6, 1250.0, "qa-m6")
+    ok6 = ob.wait(lambda: h.dist_m(tgt6, ob.pos["uav-001"][:2]) < 400 and h.dist_m(tgt6, ob.pos["uav-002"][:2]) < 400, 150)
+    c.check(ok6, f"간격 두고 보낸 마지막 명령 qa-m6 목표 미도달 {[h.dist_m(tgt6, ob.pos[u][:2]) for u in a]}")
+    c.check(any(x.startswith("qa-m6:ACCEPTED") for x in status_of(ob, "uav-001", "qa-m6")), "qa-m6 ACCEPTED 보고 없음")
     # 이전 명령은 대체(SUPERSEDED/CANCELLED 등)로 보고되는가
     with ob.lock:
         allst = sorted(set(x.split(":")[1] for x in ob.taskstatus.get("uav-001", [])))
@@ -543,6 +567,14 @@ def t014(c: Case):
         tk.strike.target_id = "tgt-nonexistent"
         ob.task(tk, tg, i)
     run("strikeNoTarget", strike)
+    for nm in ("lat200", "lonNaN", "altInf", "routeNaN", "holdRNaN", "raceAxisNaN", "emptyTaskId"):
+        rs = status_of(ob, "uav-003", f"qa-bad-{nm}") if nm != "emptyTaskId" else []
+        if nm != "emptyTaskId":
+            c.check(any("REJECTED" in x for x in rs), f"{nm}: REJECTED 보고 없음 {rs}")
+    with ob.lock:
+        us = list(ob.taskstatus)
+    ex = [u for u in us if any("EXECUTING" in x for x in status_of(ob, u, "qa-bad-noAssignee"))]
+    c.check(not ex, f"assignees 빈 명령을 수행한 기체 {len(ex)}대")
     # 기체 명령을 아무 일 없던 듯 이어서 처리하는가
     ob.move_to(["uav-004"], *off(lat, lon, 700, 700), 1250.0, "qa-after-bad")
     ok = ob.wait(lambda: any(("EXECUTING" in x or "COMPLETED" in x) for x in status_of(ob, "uav-004", "qa-after-bad")), 30)
@@ -570,7 +602,11 @@ def t015(c: Case):
     s = ob.snapshot()
     c.note(f"홍수 뒤 프레임 진행 {snap0['last_frame']}→{s['last_frame']}, overruns {snap0['overruns']}→{s['overruns']}, "
            f"링크 결과 {s['outcomes']}")
-    c.check(s["last_frame"] > snap0["last_frame"] + 50, "홍수 뒤 시뮬레이션이 멈춤")
+    f10 = s["last_frame"]
+    tr = time.monotonic()
+    rec = ob.wait(lambda: ob.snapshot()["last_frame"] > f10 + 50, 150)
+    c.note(f"홍수 종료 10 s 뒤 프레임 {snap0['last_frame']}→{f10}, 이후 +50프레임 회복 {'%.0f s' % (time.monotonic() - tr) if rec else '150 s 안에 못 함'}")
+    c.check(rec, "홍수 뒤 150 s 안에 시뮬레이션이 회복하지 않음")
     ok = ob.wait(lambda: any(f"qa-flood-{n}:" in x for x in ob.taskstatus.get("uav-001", [])), 60)
     c.note(f"마지막 명령 qa-flood-{n} 응답 {status_of(ob, 'uav-001', f'qa-flood-{n}')}")
     with ob.lock:
@@ -830,23 +866,27 @@ def t020(c: Case):
     c.note(f"합류 뒤 frame {f_wait}→{ob.last_frame}")
     # 참여자 중간 이탈: agent 종료 → 멈추는가, 재기동하면 복구하는가
     st.kill("agent")
-    time.sleep(6)
+    time.sleep(8)
     f1 = ob.last_frame
     time.sleep(4)
     c.note(f"lockstep 중 Agent 이탈 뒤 진행: {f1}→{ob.last_frame} (장벽 대기면 정지)")
+    c.check((ob.last_frame or 0) - (f1 or 0) <= 2, f"참여자 이탈 뒤에도 진행 {f1}→{ob.last_frame}")
+    import re as _re
+    core = st.log_text().get("core", "")
+    waits = _re.findall(r"waiting for frame done: [^\n]*", core)
+    c.note(f"Core 대기 로그 {len(waits)}건: {waits[-1] if waits else None}")
+    c.check(any("agent-0" in w for w in waits), "Core가 대기 참여자(agent-0)를 로그로 알리지 않음")
     st.start_one("agent")
     time.sleep(10)
-    ok = ob.wait(lambda: (ob.last_frame or 0) > (f1 or 0) + 100, 60)
-    c.note(f"Agent 재합류 뒤 진행 {ok}, frame {ob.last_frame}")
-    c.check(ok, "Agent 재기동 뒤 lockstep이 재개되지 않음")
-    if not ok:
-        ob.reset()
-        ob.wait(lambda: ob.status.state == ob.m[0].SIM_RUN_STATE_LOADED, 20)
-        time.sleep(2)
-        f2 = ob.last_frame
-        ob.start("lockstep", 2.0)
-        ok2 = ob.wait(lambda: (ob.last_frame or 0) > 100 and ob.status.state == ob.m[0].SIM_RUN_STATE_RUNNING, 60)
-        c.note(f"Reset+Start 로 복구: {ok2} (frame {ob.last_frame})")
+    resumed = (ob.last_frame or 0) > (f1 or 0) + 100
+    c.note(f"Agent 재합류 뒤 진행 {resumed} (DEC-038: 미지원이 정상), frame {ob.last_frame}")
+    ob.reset()
+    ob.wait(lambda: ob.status.state == ob.m[0].SIM_RUN_STATE_LOADED, 20)
+    time.sleep(2)
+    ob.start("lockstep", 2.0)
+    ok2 = ob.wait(lambda: (ob.last_frame or 0) > 100 and ob.status.state == ob.m[0].SIM_RUN_STATE_RUNNING, 60)
+    c.note(f"Reset+Start 복구: {ok2} (frame {ob.last_frame})")
+    c.check(ok2, "이탈 뒤 Reset+Start 복구 실패")
     teardown(c, st, ob, allow=("time_regress", "tick_regress"))
 
 
@@ -945,6 +985,58 @@ def t023(c: Case):
         c.note(f"{n}: CPU 평균 {r['cpu_avg']}% 최대 {r['cpu_max']}%, RSS {r['rss_start_mb']}→{r['rss_end_mb']} MB "
                f"(후반 +{r['rss_growth_2nd_half_mb']} MB)")
         c.check(r["rss_growth_2nd_half_mb"] < 50, f"{n} 메모리 증가 후반 +{r['rss_growth_2nd_half_mb']} MB")
+    c.data["resources"] = res
+    teardown(c, st, ob, None)
+
+
+@tc("024", "결정성 추가: 다른 시드 2종, s3 불완전 링크, 각 2회 lockstep 비교")
+def t024(c: Case):
+    import copy
+    for seed in (7, 20261104):
+        d = json.loads((SC / "qa_s3_link.json").read_text(encoding="utf-8"))
+        d["run"]["seed"] = seed
+        sj = c.dir / f"s3_seed{seed}.json"
+        sj.write_text(json.dumps(d), encoding="utf-8")
+        traces = []
+        for run in range(2):
+            st = Stack(c.dir / f"seed{seed}_run{run}", sj, lockstep=True, rate=0.0, base_port=17980, record=False)
+            st.up()
+            ob = Observer([st.endpoint()])
+            ob.keep_traj = True
+            ob.wait(lambda: (ob.last_frame or 0) >= 2000, 240)
+            time.sleep(0.5)
+            with ob.lock:
+                traces.append({k: {f: (la, lo, al) for f, la, lo, al in v} for k, v in ob.traj.items()})
+            c.note(f"seed {seed} run{run}: 프레임 {ob.last_frame}, 누락 {ob.gap_frames}, 링크 {dict(ob.snapshot()['outcomes'])}")
+            ob.close()
+            st.down()
+            time.sleep(1)
+        a, b = traces
+        common = set(a["uav-001"]) & set(b["uav-001"])
+        worst, nd = 0.0, 0
+        for k in a:
+            for f in common:
+                if k in b and f in a[k] and f in b[k]:
+                    dd = h.dist_m(a[k][f][:2], b[k][f][:2]) + abs(a[k][f][2] - b[k][f][2])
+                    if dd > 1e-6:
+                        nd += 1
+                        worst = max(worst, dd)
+        c.note(f"seed {seed}: 공통 {len(common)} 프레임, 불일치 {nd}, 최대 {worst:.6f} m")
+        c.check(nd == 0, f"seed {seed} 같은 시드인데 불일치 {nd}건 최대 {worst:.3f} m")
+
+
+@tc("025", "Agent 프로세스 자체 CPU·RSS (python 자식 합산): 50대 realtime 90 s")
+def t025(c: Case):
+    st = mk(c, "qa_s6_load50", lockstep=False).up()
+    ob = Observer([st.endpoint()])
+    rs = ResourceSampler(st, 2.0)
+    rs.start()
+    ob.wait(lambda: ob.sim_s() >= 90, 150)
+    res = rs.stop()
+    for n, r in res.items():
+        c.note(f"{n}: CPU 평균 {r['cpu_avg']}% 최대 {r['cpu_max']}%, RSS {r['rss_start_mb']}→{r['rss_end_mb']} MB "
+               f"(후반 +{r['rss_growth_2nd_half_mb']} MB)")
+    c.check(res.get("agent", {}).get("rss_end_mb", 0) > 20, f"agent 표본이 python 자식을 포함하지 않음: {res.get('agent')}")
     c.data["resources"] = res
     teardown(c, st, ob, None)
 

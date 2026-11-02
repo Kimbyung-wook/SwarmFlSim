@@ -122,10 +122,14 @@
 | TC-QA-017 | 고장 주입(LINK_CUT·GCS_LINK_CUT·ENGINE·NAV·KILL·SENSOR) | `qa/run_qa.py --only 017` | DEC-014 |
 | TC-QA-018 | 재밍 구역 on/off | `qa/run_qa.py --only 018` | DEC-032 |
 | TC-QA-019 | Agent·Datalink·Core 재시작(realtime) | `qa/run_qa.py --only 019` | DEC-026 |
-| TC-QA-020 | lockstep 지각 참여·재합류 | `qa/run_qa.py --only 020` | DEC-037 |
+| TC-QA-020 | lockstep 지각 참여, 이탈 후 Reset+Start 복구, 대기 참여자 로그 | `qa/run_qa.py --only 020` | DEC-037, DEC-038 |
 | TC-QA-021 | Logger 기록·info·재생(배속 변경) | `qa/run_qa.py --only 021` | DEC-031 |
 | TC-QA-022 | 같은 시나리오 lockstep 결정성 | `qa/run_qa.py --only 022` | DEC-005 |
 | TC-QA-023 | 20기 realtime 10분 CPU·RSS 추세 | `qa/run_qa.py --only 023` | DEC-005 |
+| TC-QA-024 | 결정성 추가: 시드 2종, 불완전 링크 s3 | `qa/run_qa.py --only 024` | DEC-005 |
+| TC-QA-025 | Agent 프로세스 CPU·RSS(50기 realtime 90 s) | `uv run --with psutil python qa/run_qa.py --only 025` | DEC-003 |
+| TC-QA-026 | Monitor 통계 대 독립 집계(s3 라이브) | `qa/link_count.py` + Monitor | DEC-028 |
+| TC-QA-027 | 임무 중 Core·Datalink 재시작과 UI 복구 | `qa/recovery_stack.py` + 브라우저 | DEC-026, DEC-027 |
 
 ## 시험 결과
 
@@ -158,20 +162,24 @@
 | TC-QA-007 | 통과 | 2026-11-02 | 위와 같음. 실측 0.93배 |
 | TC-QA-008 | 통과 | 2026-11-02 | 위와 같음. 실측 0.22배, Logger RSS 증가(QA-006) |
 | TC-QA-009 | 통과 | 2026-11-02 | 위와 같음. sim/벽시계 1.00 |
-| TC-QA-010 | 통과 | 2026-11-02 | 위와 같음. 비정상 rate 수용(QA-003) |
+| TC-QA-010 | 통과 | 2026-11-02 | 위와 같음. 비정상 rate 거부 확인(QA-003 수정), 2차 재시험 |
 | TC-QA-011 | 통과 | 2026-11-02 | 위와 같음 |
-| TC-QA-012 | 불합격 | 2026-11-02 | NaN 초기 위치 적재(QA-001), 비정상 rate 수용(QA-003). 담당 WP1 |
-| TC-QA-013 | 불합격 | 2026-11-02 | 마지막 명령 EXECUTING 미관측. 순서 뒤바뀜은 기대 동작, 결함 아님 |
-| TC-QA-014 | 통과 | 2026-11-02 | 기체 종료·이상 이동 없음. 수용 범위 비일관(QA-005) |
-| TC-QA-015 | 통과 | 2026-11-02 | 프로세스 생존, 프레임 진행 저하(QA-011) |
-| TC-QA-016 | 불합격 | 2026-11-02 | MA `k_p=inf`에 Agent 종료(QA-002). 담당 WP3 |
+| TC-QA-012 | 통과 | 2026-11-02 | 2차: 비유한 위치·dof5/6·빈 시나리오 거부 후 생존(QA-001·003, D-3 수정 확인) |
+| TC-QA-013 | 통과 | 2026-11-02 | 2차: 기준 변경(순서 뒤바뀜 허용, 간격 둔 마지막 명령 도달) |
+| TC-QA-014 | 불합격 | 2026-11-02 | 2차: 경로·hold 반경 NaN 무응답(QA-014). 나머지 REJECTED 일관 |
+| TC-QA-015 | 불합격 | 2026-11-02 | 2차: 홍수 후 lockstep 영구 정지, Datalink 대기(QA-012) |
+| TC-QA-016 | 통과 | 2026-11-02 | 2차: `inf`·`NaN` 포함 모두 range 거부, Agent 생존(QA-002 수정 확인) |
 | TC-QA-017 | 통과 | 2026-11-02 | SENSOR 고장은 기록만(결정 확인 D-2) |
 | TC-QA-018 | 통과 | 2026-11-02 | `jam_zone`은 시험이 직접 발행 |
 | TC-QA-019 | 통과 | 2026-11-02 | realtime. Core 재기동 후 재개 |
-| TC-QA-020 | 불합격 | 2026-11-02 | 지각 합류 통과, 실행 중 Agent 재합류 미재개(QA-004) |
+| TC-QA-020 | 통과 | 2026-11-02 | 2차: Agent 이탈 정지, Core 대기 로그, Reset+Start 복구(DEC-038) |
 | TC-QA-021 | 통과 | 2026-11-02 | 고배속 재생 프레임 감소(QA-008) |
 | TC-QA-022 | 통과 | 2026-11-02 | 2579 프레임 최대 차이 0.000000 m |
 | TC-QA-023 | 통과 | 2026-11-02 | Core·Datalink 안정, Logger +5 MB(QA-006) |
+| TC-QA-024 | 불합격 | 2026-11-02 | 같은 시드 불완전 링크에서 결과 상이(QA-013) |
+| TC-QA-025 | 통과 | 2026-11-02 | Agent 평균 63%, RSS 4.5→72.7 MB, 증가 없음 |
+| TC-QA-026 | 통과 | 2026-11-02 | s3 송신자별 건수·손실률·지연 평균 일치 |
+| TC-QA-027 | 통과 | 2026-11-02 | Core·Datalink 재시작 후 UI 복구. 끊김 표시 없음(QA-015) |
 
 ## 프로세스 결정
 
