@@ -10,6 +10,7 @@
 | IMP-SCN-004 | 명령행 도구 `swarm-scenario validate/show` | `src/swarm_scenario/cli.py` | REQ-CFG-002 |
 | IMP-SCN-005 | 예제 시나리오: 고정익(2-DoF) 20대(2개 편대) + GCS 1 + 지상 표적 4(고정 3, 스크립트 1), 강원 일대, lockstep 50 Hz | `examples/korea_east_strike_20.json` | REQ-PRF-001, DEC-007, DEC-016, DEC-017 |
 | IMP-SCN-006 | `swarm.v1.Scenario` 변환(`to_proto`/`from_proto`), `RunSpec.participants` 스키마·변환, `LoadScenario.scenario`로 명령 생성, `swarm-scenario export`(.pb / proto JSON) | `src/swarm_scenario/convert.py`, `cli.py`, `schema/scenario.schema.json` | DEC-024, DEC-025 |
+| IMP-SCN-007 | 계약 0.3.0: 최상위 `link_profiles`(swarm.v1.LinkProfile) 스키마·변환 | `src/swarm_scenario/convert.py`, `schema/scenario.schema.json` | DEC-029 |
 
 ## 시험
 
@@ -25,5 +26,6 @@
 | TC-SCN-006 | `LoadScenario`·`Start` SimCommand 생성과 직렬화 | `tests/test_convert.py` | IMP-SCN-003 | Pass |
 | TC-SCN-007 | 스키마 `$defs`의 필드·열거값·수 타입이 proto 디스크립터와 일치(계약 이탈 감지) | `tests/test_convert.py` | IMP-SCN-001, PRP-CFG-001 | Pass |
 | TC-SCN-008 | Scenario ⇄ `swarm.v1.Scenario` 왕복(participants 포함), 최상위 필드 = proto `Scenario`, `MapSpec`·`RunSpec` 필드 일치 | `tests/test_convert.py` | IMP-SCN-006 | Pass |
+| TC-SCN-009 | `link_profiles` JSON ⇄ proto 왕복, 적지 않은 필드는 proto에서 미설정, `LinkProfile` 필드 = 스키마 | `tests/test_convert.py` | IMP-SCN-007 | Pass |
 
 시험 결과(2026-11-01): 60 passed

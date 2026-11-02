@@ -238,7 +238,17 @@ ReplayStats replay(Bus& bus, const std::filesystem::path& path, const ReplayOpti
     }
     auto it = encodings.find(ch.id);
     if (it == encodings.end()) it = encodings.emplace(ch.id, replay_encoding(ch, mv.schema)).first;
-    bus.put(ch.topic, {reinterpret_cast<const std::uint8_t*>(mv.message.data), mv.message.dataSize}, it->second);
+    const std::span<const std::uint8_t> data{reinterpret_cast<const std::uint8_t*>(mv.message.data),
+                                             mv.message.dataSize};
+    // IMP-LOG-008: 재생 중임을 SimStatus.replay로 알린다 (DEC-031)
+    v1::SimStatus status;
+    if (ch.topic == keys::kSimCtrlStatus && status.ParseFromArray(data.data(), static_cast<int>(data.size()))) {
+      status.set_replay(true);
+      const auto bytes = status.SerializeAsString();
+      bus.put(ch.topic, {reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()}, it->second);
+    } else {
+      bus.put(ch.topic, data, it->second);
+    }
     stats.log_span_ns = t - log0;
     ++stats.messages;
     return true;

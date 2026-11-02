@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.2.0
+- 계약 버전: 0.3.0
+  - 0.3.0: 재밍은 수신단 기준(DEC-028), 시나리오 `link_profiles`(DEC-029), `JamZoneEvent.area`(DEC-030), `SimStatus.replay`(DEC-031), 브로드캐스트 손실 집계 기준(DEC-032)
   - 0.2.0: `to_kinematic`에 `Environment` 추가(DEC-023), `Scenario`·`RunSpec` 메시지(DEC-024, DEC-025), 공용 버스 `bus/`와 `open_bus`(DEC-026), 브라우저 연동은 WebSocket 브리지(DEC-027)
 
 ## 1. 산출물
@@ -64,7 +65,7 @@ flowchart LR
 | `sim/clock/tick` | `ClockTick` | Core | 모든 참여자의 런타임 |
 | `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽) |
 | `sim/ctrl/cmd` | `SimCommand` | UI | Core |
-| `sim/ctrl/status` | `SimStatus` | Core | UI, Monitor |
+| `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS) |
 | `onboard/<id>/<msg>` | `NavigationReport`, `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
@@ -84,6 +85,10 @@ flowchart LR
 - `onboard/**`는 같은 기체 안의 신호다. 데이터링크를 거치지 않는다. FA→MA 간 VI도 같은 기체 안이면 런타임 내부 호출로 처리하고 버스에 싣지 않아도 된다.
 - MA 플러그인은 버스에 직접 접근하지 않는다. 런타임은 `sim/ctrl/`, `truth/`, `link/` 접두어를 플러그인에 노출하지 않는다 (`MA_FORBIDDEN_PREFIXES`).
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
+- 데이터링크 판정
+  - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
+  - 브로드캐스트(`dst` 비움): 같은 편 무전기 엔티티 전원이 수신 대상이다. 닿지 않는 수신자마다 사유를 담은 `LinkOutcome`을 낸다 (DEC-032).
+  - 링크 프로파일: `EntitySpec.link_profile`이 내장 프로파일 또는 시나리오 `link_profiles`의 이름을 참조한다. 시나리오 항목은 `base`(비우면 같은 이름의 내장, 없으면 `default`)를 복사한 뒤 값이 있는 필드만 덮어쓴다 (DEC-029).
 
 ### 3.4 버스 열기 (DEC-026)
 
@@ -116,7 +121,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.2.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.3.0"}` | 접속 승인 |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
@@ -153,9 +158,9 @@ flowchart LR
 | `ms.proto` | Sensor/Jammer/Strike Command·Activity, StoreLoadout (STD) / Detection (EXT) | STD/EXT |
 | `mp.proto` | MissionPlan, RoutePlan, EngagementCriteria | STD |
 | `fa.proto` | ControlOutput (Kinematic/Attitude/Actuator) | SIM |
-| `link.proto` | LinkEnvelope, LinkOutcome, LinkState | SIM |
-| `sim.proto` | SimCommand, SimStatus, ClockTick, FrameDone, Scenario(MapSpec, RunSpec) | SIM |
-| `truth.proto` | TruthFrame, TruthEvent | SIM |
+| `link.proto` | LinkEnvelope, LinkOutcome, LinkState, LinkProfile | SIM |
+| `sim.proto` | SimCommand, SimStatus(`replay`), ClockTick, FrameDone, Scenario(MapSpec, RunSpec, link_profiles) | SIM |
+| `truth.proto` | TruthFrame, TruthEvent(JamZoneEvent.area) | SIM |
 
 - 시나리오: `LoadScenario.scenario`(`Scenario`)로 보낸다. `scenario_json`은 폐기 예정이다 (DEC-024). `Scenario`의 필드 구성은 `scenario/` JSON Schema와 같고, 변환은 `swarm_scenario.to_proto` / `from_proto`가 한다. `swarm_core --scenario`에 줄 파일은 `swarm-scenario export`로 만든다.
 

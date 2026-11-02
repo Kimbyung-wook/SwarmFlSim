@@ -18,7 +18,11 @@
       "items": { "$ref": "#/$defs/EntitySpec" }
     },
     "mission_plan": { "$ref": "#/$defs/MissionPlan" },
-    "engagement_criteria": { "$ref": "#/$defs/EngagementCriteria" }
+    "engagement_criteria": { "$ref": "#/$defs/EngagementCriteria" },
+    "link_profiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/LinkProfile" }
+    }
   },
   "$defs": {
     "EntityId": {
@@ -284,6 +288,38 @@
         "require_approval": { "type": "boolean" },
         "weapons_free": { "type": "array", "items": { "$ref": "#/$defs/Area" } },
         "no_strike": { "type": "array", "items": { "$ref": "#/$defs/Area" } }
+      }
+    },
+    "LinkProfile": {
+      "description": "swarm.v1.LinkProfile (DEC-029). base를 복사한 뒤 적은 필드만 덮어쓴다",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "base": { "type": "string" },
+        "freq_mhz": { "type": "number", "exclusiveMinimum": 0 },
+        "tx_power_dbm": { "type": "number" },
+        "antenna_gain_dbi": { "type": "number" },
+        "noise_floor_dbm": { "type": "number" },
+        "snr_min_db": { "type": "number" },
+        "max_range_m": { "type": "number", "minimum": 0 },
+        "unlimited_range": { "type": "boolean" },
+        "latency_ms": { "type": "number", "minimum": 0 },
+        "jitter_ms": { "type": "number", "minimum": 0 },
+        "bandwidth_bps": { "type": "number", "minimum": 0 },
+        "bucket_bytes": { "type": "number", "minimum": 0 },
+        "queue_len": { "type": "integer", "minimum": 0 },
+        "ge": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "p_gb": { "type": "number", "minimum": 0, "maximum": 1 },
+            "p_bg": { "type": "number", "minimum": 0, "maximum": 1 },
+            "loss_good": { "type": "number", "minimum": 0, "maximum": 1 },
+            "loss_bad": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
       }
     }
   }

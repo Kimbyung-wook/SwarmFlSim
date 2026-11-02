@@ -32,10 +32,12 @@ message KillEvent {
   string cause = 2;  // impact | collision | ground | fault
 }
 
+// 재밍 영역 (DEC-009, DEC-028, DEC-030). 영역 안의 수신단은 100% 손실
 message JamZoneEvent {
   string owner = 1;
-  Circle zone = 2;
+  Circle zone = 2;  // 폐기 예정 (DEC-030). area를 쓴다. area가 없을 때만 읽는다
   bool active = 3;
+  Area area = 4;    // 원 또는 다각형 × 고도대
 }
 
 message SpawnEvent {

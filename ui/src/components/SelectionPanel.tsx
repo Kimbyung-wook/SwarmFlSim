@@ -1,4 +1,4 @@
-// IMP-UI-017: 선택 목록 패널 (REQ-UI-002). 명령 전송(REQ-UI-003)은 다음 단계.
+// IMP-UI-017: 선택 목록 패널 (REQ-UI-002). 명령은 CommandPanel(IMP-UI-031)
 import type { CameraMode } from "../model/camera";
 import type { EntityView } from "../model/entityView";
 import { isAirborneKind, kindLabel, sideLabel } from "../model/entityView";
@@ -23,7 +23,7 @@ function fmtHeading(rad: number): string {
 
 export function SelectionPanel({ entities, ids, followId, cameraMode, onFocus, onRemove, onClear, onCamera }: Props) {
   return (
-    <aside className="panel">
+    <section className="sel">
       <header className="panel-head">
         <span>선택 {ids.length}</span>
         <button disabled={ids.length === 0} onClick={onClear}>해제</button>
@@ -69,6 +69,6 @@ export function SelectionPanel({ entities, ids, followId, cameraMode, onFocus, o
           })}
         </ul>
       )}
-    </aside>
+    </section>
   );
 }

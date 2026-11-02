@@ -224,6 +224,26 @@ void test_stop(const std::filesystem::path& path) {
   check(stats.stopped && stats.messages == 4, "stopped after 4");
 }
 
+// TC-LOG-007: 재생한 SimStatus는 replay=true, 나머지 필드는 기록값 그대로 (DEC-031)
+void test_replay_status(const std::filesystem::path& path) {
+  {
+    swarm::InMemoryBus bus;
+    swarm::logger::Recorder rec(bus, path);
+    swarm::v1::SimStatus st;
+    st.set_frame(42);
+    st.set_state(swarm::v1::SIM_RUN_STATE_RUNNING);
+    put(bus, swarm::keys::kSimCtrlStatus, st);
+    rec.close();
+  }
+  swarm::InMemoryBus bus;
+  swarm::v1::SimStatus got;
+  auto sub = bus.subscribe(swarm::keys::kSimCtrlStatus, [&](const swarm::Sample& s) {
+    got.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size()));
+  });
+  swarm::logger::replay(bus, path, {.rate = 0.0});
+  check(got.replay() && got.frame() == 42 && got.state() == swarm::v1::SIM_RUN_STATE_RUNNING, "replay flag set");
+}
+
 // TC-LOG-006: 여러 스레드에서 동시에 들어오는 샘플을 모두 기록한다
 void test_concurrent(const std::filesystem::path& path) {
   constexpr int kThreads = 4, kPerThread = 500;
@@ -253,6 +273,7 @@ int main() {
   test_filters(dir / "filter.mcap");
   test_stop(dir / "stop.mcap");
   test_concurrent(dir / "concurrent.mcap");
+  test_replay_status(dir / "status.mcap");
   check(swarm::logger::protobuf_type_of("application/protobuf;swarm.v1.X") == "swarm.v1.X", "type of");
   check(swarm::logger::protobuf_type_of("text/plain").empty(), "type of non-protobuf");
   std::error_code ec;

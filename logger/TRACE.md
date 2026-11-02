@@ -21,6 +21,7 @@ flowchart LR
 | IMP-LOG-005 | 실행 파일 `swarm_logger info / record / replay [--rate] [--key] [--backend] [--dry-run]`. 버스 백엔드는 현재 `memory`만 있다(Zenoh는 통합 시 연결) | `src/main.cpp` | REQ-LOG-001, REQ-NET-001 |
 | IMP-LOG-006 | 의존성: vcpkg `mcap`(`unofficial-mcap`, 헤더 전용, 압축 없음). 없으면 `MCAP_INCLUDE_DIR`에서 헤더를 찾고, 둘 다 없으면 logger/를 건너뛴다 | `CMakeLists.txt`, 루트 `vcpkg.json` | DEC-022 |
 | IMP-LOG-007 | `swarm_logger`의 버스를 공용 `open_bus`로 연다. Zenoh 백엔드와 공통 버스 옵션(`--bus`, `--connect` 등) 지원 | `src/main.cpp`, `CMakeLists.txt` | DEC-026 |
+| IMP-LOG-008 | 재생 시 `sim/ctrl/status`의 `SimStatus.replay`를 true로 바꿔 발행 | `src/mcap_log.cpp` | DEC-031 |
 
 ## 시험
 
@@ -34,5 +35,6 @@ flowchart LR
 | TC-LOG-004 | 재생 키 필터(`swarm/*/tx/**`)와 기록 키 필터(`truth/**`) | `tests/test_logger.cpp` | IMP-LOG-001, IMP-LOG-003 | Pass |
 | TC-LOG-005 | `stop_token`으로 재생 중단 | `tests/test_logger.cpp` | IMP-LOG-003 | Pass |
 | TC-LOG-006 | 4개 스레드 동시 발행 2000건을 모두 기록 | `tests/test_logger.cpp` | IMP-LOG-001 | Pass |
+| TC-LOG-007 | 재생한 `SimStatus`의 `replay`=true, 나머지 필드 보존 | `tests/test_logger.cpp` | IMP-LOG-008 | Pass |
 
 시험 결과(2026-11-01, msvc-debug): swarm_api_tests, swarm_logger_tests 통과 (100% tests passed out of 2)

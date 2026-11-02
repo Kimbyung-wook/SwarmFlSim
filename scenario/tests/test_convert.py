@@ -3,7 +3,7 @@ import json
 import pytest
 from google.protobuf.descriptor import FieldDescriptor
 
-from swarm.v1 import c2_pb2, common_pb2, entity_pb2, mp_pb2, sim_pb2
+from swarm.v1 import c2_pb2, common_pb2, entity_pb2, link_pb2, mp_pb2, sim_pb2
 from swarm_scenario import from_dict, from_proto, schema, sim_commands, to_dict, to_proto
 from swarm_scenario.enums import full_to_short
 
@@ -121,6 +121,7 @@ _SCHEMA_TO_PROTO = {
     "TaskCommand": c2_pb2.TaskCommand,
     "MapSpec": sim_pb2.MapSpec,
     "RunSpec": sim_pb2.RunSpec,
+    "LinkProfile": link_pb2.LinkProfile,
 }
 _ENUMS = {
     "EntityKind": entity_pb2.EntityKind,
@@ -172,3 +173,15 @@ def test_proto_round_trip(doc):
     assert len(msg.entities) == len(doc["entities"])
     back = sim_pb2.Scenario.FromString(msg.SerializeToString())
     assert to_dict(from_proto(back)) == to_dict(sc)
+
+
+# TC-SCN-009: 링크 프로파일 재정의 왕복. 적지 않은 필드는 proto에서도 비어 있다 (DEC-029)
+def test_link_profiles_round_trip(doc):
+    profiles = [{"name": "uav_long", "base": "uav_default", "tx_power_dbm": 37.0, "queue_len": 128,
+                 "ge": {"p_gb": 0.02, "p_bg": 0.5, "loss_good": 0.01, "loss_bad": 0.4}}]
+    sc = from_dict(dict(doc, link_profiles=profiles))
+    msg = sim_pb2.Scenario.FromString(to_proto(sc).SerializeToString())
+    p = msg.link_profiles[0]
+    assert (p.name, p.base, p.tx_power_dbm, p.queue_len) == ("uav_long", "uav_default", 37.0, 128)
+    assert p.HasField("tx_power_dbm") and not p.HasField("latency_ms") and p.HasField("ge")
+    assert to_dict(from_proto(msg))["link_profiles"] == profiles
