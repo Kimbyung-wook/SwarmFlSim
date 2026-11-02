@@ -1,0 +1,26 @@
+[project]
+name = "swarm-agent"
+version = "0.1.0"
+description = "Vehicle Agent runtime: L1 ports, plugin loading, lockstep, default FA (WP3)"
+requires-python = ">=3.12"
+dependencies = [
+    "swarm-api",
+    "numpy>=2.0",
+    "protobuf>=5.28",
+]
+
+[project.scripts]
+swarm-agent = "swarm_agent.cli:main"
+
+[project.entry-points."swarm.fa"]
+default = "swarm_agent.fa:DefaultFlightAutonomy"
+
+[tool.uv.sources]
+swarm-api = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swarm_agent"]
