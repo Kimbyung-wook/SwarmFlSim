@@ -103,6 +103,29 @@
 | TC-INT-009 | lockstep 지각 참여자: Core 뒤 6 s에 Agent를 켜도 준비 신호 후 첫 틱이 나간다 | `scripts/run_p0_demo.py live --lockstep --late-agent-s 6` | IMP-INT-005 |
 | TC-INT-010 | probe params: `racetrack_guidance=foo`가 `choice`로 거부되고 기존 값 유지 | `scripts/run_p0_demo.py probe --kind params` | IMP-INT-005 |
 | TC-INT-011 | UI·Monitor 재확인: 12대 선택 시 `전송` 버튼 비가림, 재생 표시·버튼 비활성, 3배속 재생 Monitor 링크 지연 정상 | `docs/img/p0_demo/11~14_*.jpg` | IMP-INT-001 |
+| TC-QA-001 | s1 6기 3-DoF 편대 120 s 안정성 | `qa/run_qa.py --only 001` | DEC-005 |
+| TC-QA-002 | s2 20기 임무 혼합(hold·route·racetrack·search_area) 240 s | `qa/run_qa.py --only 002` | DEC-005 |
+| TC-QA-003 | s3 불완전 링크 프로파일, 거리 밖 기체 | `qa/run_qa.py --only 003` | DEC-032 |
+| TC-QA-004 | s4 적·표적·센서·무장 선언 시나리오 견고성 | `qa/run_qa.py --only 004` | DEC-017, DEC-018, DEC-019 |
+| TC-QA-005 | s5 2/3-DoF·기체 혼합, dof5/dof6 적재 | `qa/run_qa.py --only 005` | DEC-017 |
+| TC-QA-006 | 50기 lockstep 2배속 부하 | `qa/run_qa.py --only 006` | DEC-005 |
+| TC-QA-007 | 100기 lockstep 1배속 부하 | `qa/run_qa.py --only 007` | DEC-005 |
+| TC-QA-008 | 100기 flocking(P2P) 부하 | `qa/run_qa.py --only 008` | DEC-005 |
+| TC-QA-009 | 100기 realtime 실시간성 | `qa/run_qa.py --only 009` | DEC-005 |
+| TC-QA-010 | 통제 명령: pause·resume·step·set_rate·reset | `qa/run_qa.py --only 010` | DEC-014 |
+| TC-QA-011 | 모드 전환 lockstep·realtime·freerun | `qa/run_qa.py --only 011` | DEC-005, DEC-037 |
+| TC-QA-012 | 잘못된 SimCommand·시나리오 적재 | `qa/run_qa.py --only 012` | DEC-014 |
+| TC-QA-013 | 임무 명령 연속·충돌·중복 task_id | `qa/run_qa.py --only 013` | DEC-013 |
+| TC-QA-014 | 잘못된 임무 값(범위·NaN·빈 값) | `qa/run_qa.py --only 014` | DEC-013 |
+| TC-QA-015 | 명령 홍수 10 s | `qa/run_qa.py --only 015` | DEC-013 |
+| TC-QA-016 | 실행 중 매개변수 변경과 거부 | `qa/run_qa.py --only 016` | DEC-035, DEC-036 |
+| TC-QA-017 | 고장 주입(LINK_CUT·GCS_LINK_CUT·ENGINE·NAV·KILL·SENSOR) | `qa/run_qa.py --only 017` | DEC-014 |
+| TC-QA-018 | 재밍 구역 on/off | `qa/run_qa.py --only 018` | DEC-032 |
+| TC-QA-019 | Agent·Datalink·Core 재시작(realtime) | `qa/run_qa.py --only 019` | DEC-026 |
+| TC-QA-020 | lockstep 지각 참여·재합류 | `qa/run_qa.py --only 020` | DEC-037 |
+| TC-QA-021 | Logger 기록·info·재생(배속 변경) | `qa/run_qa.py --only 021` | DEC-031 |
+| TC-QA-022 | 같은 시나리오 lockstep 결정성 | `qa/run_qa.py --only 022` | DEC-005 |
+| TC-QA-023 | 20기 realtime 10분 CPU·RSS 추세 | `qa/run_qa.py --only 023` | DEC-005 |
 
 ## 시험 결과
 
@@ -126,6 +149,29 @@
 | TC-INT-011 | 통과 | 2026-11-02 | 12대 선택 `전송 (12대)` 최상단, 재생 배지·버튼 비활성, 3배속 지연 평균 약 21 ms |
 | TC-API-006 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 | TC-API-007 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
+| TC-QA-001 | 통과 | 2026-11-02 | `msvc-debug`, 계약 0.8.0 (4e3c4c3). 결과·결함은 `docs/21_qa_report.md` |
+| TC-QA-002 | 통과 | 2026-11-02 | 위와 같음 |
+| TC-QA-003 | 통과 | 2026-11-02 | 위와 같음 |
+| TC-QA-004 | 통과 | 2026-11-02 | 위와 같음. 견고성만, 탐지·교전은 Core 미구현 |
+| TC-QA-005 | 통과 | 2026-11-02 | 위와 같음. dof5/dof6은 Core 종료(결정 확인 D-3) |
+| TC-QA-006 | 통과 | 2026-11-02 | 위와 같음. 실측 1.57배 |
+| TC-QA-007 | 통과 | 2026-11-02 | 위와 같음. 실측 0.93배 |
+| TC-QA-008 | 통과 | 2026-11-02 | 위와 같음. 실측 0.22배, Logger RSS 증가(QA-006) |
+| TC-QA-009 | 통과 | 2026-11-02 | 위와 같음. sim/벽시계 1.00 |
+| TC-QA-010 | 통과 | 2026-11-02 | 위와 같음. 비정상 rate 수용(QA-003) |
+| TC-QA-011 | 통과 | 2026-11-02 | 위와 같음 |
+| TC-QA-012 | 불합격 | 2026-11-02 | NaN 초기 위치 적재(QA-001), 비정상 rate 수용(QA-003). 담당 WP1 |
+| TC-QA-013 | 불합격 | 2026-11-02 | 마지막 명령 EXECUTING 미관측. 순서 뒤바뀜은 기대 동작, 결함 아님 |
+| TC-QA-014 | 통과 | 2026-11-02 | 기체 종료·이상 이동 없음. 수용 범위 비일관(QA-005) |
+| TC-QA-015 | 통과 | 2026-11-02 | 프로세스 생존, 프레임 진행 저하(QA-011) |
+| TC-QA-016 | 불합격 | 2026-11-02 | MA `k_p=inf`에 Agent 종료(QA-002). 담당 WP3 |
+| TC-QA-017 | 통과 | 2026-11-02 | SENSOR 고장은 기록만(결정 확인 D-2) |
+| TC-QA-018 | 통과 | 2026-11-02 | `jam_zone`은 시험이 직접 발행 |
+| TC-QA-019 | 통과 | 2026-11-02 | realtime. Core 재기동 후 재개 |
+| TC-QA-020 | 불합격 | 2026-11-02 | 지각 합류 통과, 실행 중 Agent 재합류 미재개(QA-004) |
+| TC-QA-021 | 통과 | 2026-11-02 | 고배속 재생 프레임 감소(QA-008) |
+| TC-QA-022 | 통과 | 2026-11-02 | 2579 프레임 최대 차이 0.000000 m |
+| TC-QA-023 | 통과 | 2026-11-02 | Core·Datalink 안정, Logger +5 MB(QA-006) |
 
 ## 프로세스 결정
 
