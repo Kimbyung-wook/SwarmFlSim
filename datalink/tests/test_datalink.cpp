@@ -1,4 +1,4 @@
-// TC-LNK-001~015: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~016: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -817,6 +817,113 @@ void tc015() {
   check(r.rx.size() == 1 && r.rx[0].first == "swarm/uav-002/rx/p2p/PeerStatus", "only reachable recipient gets rx");
 }
 
+// ---- TC-LNK-016: sim/ctrl/scenario 적재와 lockstep 준비 신호 (DEC-037) ----
+v1::Scenario scenario_msg(const std::string& name, v1::RunMode mode, double latency_ms, double north_b_m) {
+  v1::Scenario sc;
+  sc.set_name(name);
+  sc.mutable_run()->set_mode(mode);
+  sc.mutable_run()->set_seed(5);
+  auto* lp = sc.add_link_profiles();
+  lp->set_name("slow");
+  lp->set_base("uav_default");
+  lp->set_latency_ms(latency_ms);
+  for (const auto& [id, north] : {std::pair<std::string, double>{"uav-001", 0.0}, {"uav-002", north_b_m}}) {
+    auto* e = sc.add_entities();
+    e->set_id(id);
+    e->set_kind(v1::ENTITY_KIND_UAV);
+    e->set_side(v1::SIDE_BLUE);
+    e->set_link_profile("slow");
+    auto* p = e->mutable_initial()->mutable_position();
+    p->set_lat_deg(kLat0 + north / kMPerDegLat);
+    p->set_lon_deg(kLon0);
+    p->set_alt_m(1000.0);
+  }
+  return sc;
+}
+
+void tc016() {
+  InMemoryBus bus;
+  std::vector<v1::FrameDone> dones;
+  auto sub = bus.subscribe("sim/clock/done/*", [&](const Sample& s) { dones.push_back(parse<v1::FrameDone>(s)); });
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.0;
+  Datalink dl(bus, nullptr, cfg);
+
+  // LoadScenario 없이 sim/ctrl/scenario만으로 적재, lockstep이면 준비 신호 1건
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s1", v1::RUN_MODE_LOCKSTEP, 40.0, 1000.0));
+  check(dl.seed() == 5, "seed from published scenario");
+  check(dl.pair_state("uav-001", "uav-002").range_m > 900.0, "entities loaded from published scenario");
+  check(dones.size() == 1, "one ready signal after load");
+  if (!dones.empty()) {
+    check(dones[0].participant() == "datalink-0", "ready participant");
+    check(dones[0].frame() == 0, "ready frame 0");
+  }
+
+  // 같은 name 재발행(1 s 주기)은 무시: 상태·준비 신호 변화 없음. 내용이 달라도 name이 같으면 무시한다
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s1", v1::RUN_MODE_LOCKSTEP, 40.0, 1000.0));
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s1", v1::RUN_MODE_LOCKSTEP, 40.0, 9000.0));
+  check(dones.size() == 1, "same name: no new ready signal");
+  check(dl.pair_state("uav-001", "uav-002").range_m < 1500.0, "same name: not reloaded");
+
+  // 다른 name이면 다시 적재하고 준비 신호를 다시 보낸다
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s2", v1::RUN_MODE_LOCKSTEP, 40.0, 3000.0));
+  check(dl.pair_state("uav-001", "uav-002").range_m > 2900.0, "different name: reloaded");
+  check(dones.size() == 2, "different name: ready signal again");
+
+  // LoadScenario(명령)로 적재한 뒤 같은 name 재발행은 무시한다
+  v1::SimCommand cmd;
+  *cmd.mutable_load()->mutable_scenario() = scenario_msg("s3", v1::RUN_MODE_LOCKSTEP, 40.0, 2000.0);
+  put(bus, std::string(keys::kSimCtrlCmd), cmd);
+  check(dones.size() == 3, "LoadScenario: ready signal");
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s3", v1::RUN_MODE_LOCKSTEP, 40.0, 2000.0));
+  check(dones.size() == 3, "LoadScenario then republish: ignored");
+
+  // 실시간 시나리오는 준비 신호를 보내지 않지만 적재는 한다
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("s4", v1::RUN_MODE_REALTIME, 40.0, 4000.0));
+  check(dones.size() == 3, "realtime: no ready signal");
+  check(dl.pair_state("uav-001", "uav-002").range_m > 3900.0, "realtime: loaded");
+
+  // participant_id를 비우면 lockstep이어도 보내지 않는다
+  InMemoryBus bus2;
+  int n2 = 0;
+  auto sub2 = bus2.subscribe("sim/clock/done/*", [&](const Sample&) { ++n2; });
+  DatalinkConfig cfg2;
+  cfg2.participant_id = "";
+  Datalink dl2(bus2, nullptr, cfg2);
+  put(bus2, std::string(keys::kSimCtrlScenario), scenario_msg("s1", v1::RUN_MODE_LOCKSTEP, 40.0, 1000.0));
+  check(n2 == 0, "empty participant: no ready signal");
+  check(dl2.seed() == 5, "empty participant: still loaded");
+}
+
+// 적재한 시나리오의 링크 프로파일이 실제 지연에 반영된다 (sim/ctrl/scenario 경유)
+void tc016_delay() {
+  InMemoryBus bus;
+  int rx = 0;
+  auto sub = bus.subscribe("swarm/*/rx/**", [&](const Sample&) { ++rx; });
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.0;
+  Datalink dl(bus, nullptr, cfg);
+  put(bus, std::string(keys::kSimCtrlScenario), scenario_msg("d1", v1::RUN_MODE_REALTIME, 100.0, 1000.0));
+  v1::LinkEnvelope env;
+  env.mutable_header()->set_source("uav-001");
+  env.add_dst("uav-002");
+  env.set_iface(v1::L1_INTERFACE_P2P);
+  env.set_msg_type("swarm.v1.PeerStatus");
+  env.set_payload("x");
+  put(bus, keys::tx("uav-001", keys::Iface::P2P, "PeerStatus"), env);
+  auto tick = [&](std::uint64_t us) {
+    v1::ClockTick t;
+    t.set_sim_time_us(us);
+    t.set_dt_us(20000);
+    put(bus, std::string(keys::kClockTick), t);
+  };
+  tick(0);
+  tick(50000);
+  check(rx == 0, "scenario profile latency 100 ms: not yet delivered at 50 ms");
+  tick(150000);
+  check(rx == 1, "scenario profile latency 100 ms: delivered by 150 ms");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -827,6 +934,7 @@ const Case kCases[] = {
     {"TC-LNK-005", tc005}, {"TC-LNK-006", tc006}, {"TC-LNK-007", tc007}, {"TC-LNK-008", tc008},
     {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
+    {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
 };
 
 }  // namespace

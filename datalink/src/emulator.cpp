@@ -64,6 +64,7 @@ Datalink::Datalink(Bus& bus, const dyn::Terrain* terrain, DatalinkConfig cfg)
   subs_.push_back(bus_.subscribe(keys::kTruthState, [this](const Sample& s) { on_truth(s); }));
   subs_.push_back(bus_.subscribe("truth/event/*", [this](const Sample& s) { on_event(s); }));
   subs_.push_back(bus_.subscribe(keys::kSimCtrlCmd, [this](const Sample& s) { on_cmd(s); }));
+  subs_.push_back(bus_.subscribe(std::string(keys::kSimCtrlScenario), [this](const Sample& s) { on_scenario(s); }));
   subs_.push_back(bus_.subscribe(keys::kClockTick, [this](const Sample& s) { on_tick(s); }));
 }
 
@@ -74,8 +75,11 @@ void Datalink::log(const std::string& msg) const {
 }
 
 void Datalink::load(const v1::Scenario& sc) {
-  std::lock_guard lock(mu_);
-  load_locked(sc);
+  {
+    std::lock_guard lock(mu_);
+    load_locked(sc);
+  }
+  send_ready(sc.run().mode() == v1::RUN_MODE_LOCKSTEP);
 }
 
 bool Datalink::wait_shutdown(int timeout_ms) {
@@ -185,10 +189,13 @@ void Datalink::on_cmd(const Sample& s) {
         log("LoadScenario.scenario_json: " + std::string(st.message()));
         return;
       }
-      std::lock_guard lock(mu_);
-      load_locked(sc);
-      log("scenario loaded: " + sc.name() + ", " + std::to_string(nodes_.size()) + " entities, seed " +
-          std::to_string(seed_));
+      {
+        std::lock_guard lock(mu_);
+        load_locked(sc);
+        log("scenario loaded: " + sc.name() + ", " + std::to_string(nodes_.size()) + " entities, seed " +
+            std::to_string(seed_));
+      }
+      send_ready(sc.run().mode() == v1::RUN_MODE_LOCKSTEP);
       break;
     }
     case v1::SimCommand::kStart: {
@@ -224,6 +231,32 @@ void Datalink::on_cmd(const Sample& s) {
     default:
       break;
   }
+}
+
+// DEC-037: LoadScenario를 못 받았어도 sim/ctrl/scenario(재발행)에서 시나리오를 얻는다.
+// 이름이 이전과 같으면 무시하고(상태·준비 신호 유지), 다르면 다시 적재한다
+void Datalink::on_scenario(const Sample& s) {
+  v1::Scenario sc;
+  if (!parse(s, sc)) return;
+  {
+    std::lock_guard lock(mu_);
+    if (loaded_ && sc.name() == loaded_name_) return;
+    load_locked(sc);
+    log("scenario received: " + sc.name() + ", " + std::to_string(nodes_.size()) + " entities, seed " +
+        std::to_string(seed_));
+  }
+  send_ready(sc.run().mode() == v1::RUN_MODE_LOCKSTEP);
+}
+
+void Datalink::send_ready(bool lockstep) {
+  if (!lockstep || cfg_.participant_id.empty()) return;
+  v1::FrameDone d;
+  d.set_participant(cfg_.participant_id);
+  d.set_frame(0);
+  const std::string bytes = d.SerializeAsString();
+  bus_.put(keys::clock_done(cfg_.participant_id),
+           std::span(reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()),
+           encoding_of<v1::FrameDone>());
 }
 
 void Datalink::on_tick(const Sample& s) {
@@ -263,6 +296,8 @@ void Datalink::on_tick(const Sample& s) {
 // ---- 상태 ----
 
 void Datalink::load_locked(const v1::Scenario& sc) {
+  loaded_ = true;
+  loaded_name_ = sc.name();
   // DEC-029: base(비우면 같은 이름의 내장·설정 프로파일, 없으면 default)를 복사하고 값이 있는 필드만 덮어쓴다.
   // base는 앞서 정의한 시나리오 항목도 참조할 수 있다
   profiles_ = base_profiles_;
