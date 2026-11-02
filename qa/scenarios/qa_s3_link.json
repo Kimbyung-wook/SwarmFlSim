@@ -1,0 +1,434 @@
+{
+  "schema_version": "0.1",
+  "name": "qa-s3-link",
+  "description": "불완전 링크: 손실·지연·짧은 사거리·좁은 대역폭 프로파일과 80 km 밖 기체",
+  "map": {
+    "origin": {
+      "lat_deg": 37.4,
+      "lon_deg": 127.4,
+      "alt_m": 100.0
+    },
+    "extent": {
+      "south_deg": 37.04067553000359,
+      "north_deg": 37.75932446999641,
+      "west_deg": 126.94768648422631,
+      "east_deg": 127.8523135157737
+    }
+  },
+  "run": {
+    "mode": "lockstep",
+    "frame_hz": 50,
+    "seed": 20261103,
+    "rate": 2.0,
+    "duration_s": 1800.0
+  },
+  "entities": [
+    {
+      "id": "gcs-01",
+      "kind": "gcs",
+      "side": "blue",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.4,
+          "alt_m": 100.0
+        }
+      },
+      "link_profile": "gcs_default"
+    },
+    {
+      "id": "uav-001",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3915191,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-002",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.397173,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_lossy",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-003",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.402827,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_slow",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-004",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.4084809,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_short",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-005",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.3915191,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_narrow",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-006",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.397173,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-007",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.402827,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-008",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.4084809,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_lossy",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-009",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4044916,
+          "lon_deg": 127.3915191,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "flocking",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_slow",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-010",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4044916,
+          "lon_deg": 127.397173,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "flocking",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_short",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-011",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4044916,
+          "lon_deg": 127.402827,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "flocking",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "qa_narrow",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-012",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4044916,
+          "lon_deg": 127.4084809,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "flocking",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-013",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.7957743,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    }
+  ],
+  "link_profiles": [
+    {
+      "name": "qa_lossy",
+      "base": "uav_default",
+      "ge": {
+        "p_gb": 0.2,
+        "p_bg": 0.2,
+        "loss_good": 0.05,
+        "loss_bad": 0.9
+      }
+    },
+    {
+      "name": "qa_slow",
+      "base": "uav_default",
+      "latency_ms": 800.0,
+      "jitter_ms": 300.0
+    },
+    {
+      "name": "qa_short",
+      "base": "uav_default",
+      "max_range_m": 3000.0
+    },
+    {
+      "name": "qa_narrow",
+      "base": "uav_default",
+      "bandwidth_bps": 2000.0,
+      "queue_len": 5
+    }
+  ]
+}

@@ -1,0 +1,578 @@
+{
+  "schema_version": "0.1",
+  "name": "qa-s4-engage",
+  "description": "적/표적 + 센서·무장 선언. Core는 탐지·무장을 아직 모사하지 않는다(WP8 미구현)",
+  "map": {
+    "origin": {
+      "lat_deg": 37.4,
+      "lon_deg": 127.4,
+      "alt_m": 100.0
+    },
+    "extent": {
+      "south_deg": 37.04067553000359,
+      "north_deg": 37.75932446999641,
+      "west_deg": 126.94768648422631,
+      "east_deg": 127.8523135157737
+    }
+  },
+  "run": {
+    "mode": "lockstep",
+    "frame_hz": 50,
+    "seed": 20261103,
+    "rate": 2.0,
+    "duration_s": 1800.0
+  },
+  "entities": [
+    {
+      "id": "gcs-01",
+      "kind": "gcs",
+      "side": "blue",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4,
+          "lon_deg": 127.4,
+          "alt_m": 100.0
+        }
+      },
+      "link_profile": "gcs_default"
+    },
+    {
+      "id": "uav-001",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3915191,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "uav-002",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3949115,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "uav-003",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3983038,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "uav-004",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.4016962,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "uav-005",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.4050885,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "uav-006",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.4084809,
+          "alt_m": 1200.0
+        },
+        "velocity_ned_mps": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "waypoint",
+        "ma_params": {
+          "hold_radius_m": 200,
+          "acceptance_m": 80
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01",
+      "payloads": [
+        {
+          "id": "cam0",
+          "type": "camera"
+        },
+        {
+          "id": "jam0",
+          "type": "jammer"
+        },
+        {
+          "id": "agm0",
+          "type": "agm_short",
+          "count": 2,
+          "overrides": {
+            "max_range_m": 8000.0
+          }
+        },
+        {
+          "id": "aam0",
+          "type": "aam_short",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "tgt-001",
+      "kind": "ground_target",
+      "side": "red",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4538987,
+          "lon_deg": 127.4,
+          "alt_m": 120.0
+        }
+      }
+    },
+    {
+      "id": "tgt-002",
+      "kind": "ground_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4538987,
+          "lon_deg": 127.4113078,
+          "alt_m": 120.0
+        },
+        "velocity_ned_mps": {
+          "x": 8.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.4538987,
+          "lon_deg": 127.4113078,
+          "alt_m": 120.0
+        },
+        {
+          "lat_deg": 37.4628818,
+          "lon_deg": 127.4113078,
+          "alt_m": 120.0
+        },
+        {
+          "lat_deg": 37.4628818,
+          "lon_deg": 127.4282696,
+          "alt_m": 120.0
+        }
+      ]
+    },
+    {
+      "id": "tgt-003",
+      "kind": "air_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4449156,
+          "lon_deg": 127.3773843,
+          "alt_m": 800.0
+        },
+        "velocity_ned_mps": {
+          "x": 0.0,
+          "y": 25.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.4449156,
+          "lon_deg": 127.3773843,
+          "alt_m": 800.0
+        },
+        {
+          "lat_deg": 37.4449156,
+          "lon_deg": 127.4339235,
+          "alt_m": 800.0
+        }
+      ]
+    },
+    {
+      "id": "site-01",
+      "kind": "jammer_site",
+      "side": "red",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.4359324,
+          "lon_deg": 127.4056539,
+          "alt_m": 100.0
+        }
+      }
+    },
+    {
+      "id": "wpn-uav-001-01",
+      "kind": "missile",
+      "side": "blue",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3949115,
+          "alt_m": 1200.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.3955084,
+          "lon_deg": 127.3949115,
+          "alt_m": 1200.0
+        },
+        {
+          "lat_deg": 37.4538987,
+          "lon_deg": 127.4,
+          "alt_m": 130.0
+        }
+      ]
+    },
+    {
+      "id": "fpv-001",
+      "kind": "fpv",
+      "side": "blue",
+      "dynamics": "dof3",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.3982034,
+          "lon_deg": 127.4,
+          "alt_m": 300.0
+        },
+        "velocity_ned_mps": {
+          "x": 18.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "autonomy": {
+        "ma_plugin": "hold"
+      },
+      "link_profile": "fpv_default",
+      "controlling_gcs": "gcs-01"
+    }
+  ],
+  "mission_plan": {
+    "plan_id": "plan-s4",
+    "tasks": [
+      {
+        "task_id": "s4-search",
+        "assignees": [
+          "uav-001",
+          "uav-002",
+          "uav-003"
+        ],
+        "search_area": {
+          "area": {
+            "circle": {
+              "center": {
+                "lat_deg": 37.4538987,
+                "lon_deg": 127.4056539
+              },
+              "radius_m": 1500.0
+            },
+            "min_alt_m": 0.0,
+            "max_alt_m": 3000.0
+          }
+        }
+      },
+      {
+        "task_id": "s4-strike",
+        "assignees": [
+          "uav-004"
+        ],
+        "strike": {
+          "target_id": "tgt-001",
+          "weapon_type": "agm_short"
+        }
+      },
+      {
+        "task_id": "s4-jam",
+        "assignees": [
+          "uav-005"
+        ],
+        "jam": {
+          "area": {
+            "circle": {
+              "center": {
+                "lat_deg": 37.4359324,
+                "lon_deg": 127.4056539
+              },
+              "radius_m": 2000.0
+            }
+          },
+          "duration_s": 120.0
+        }
+      },
+      {
+        "task_id": "s4-track",
+        "assignees": [
+          "uav-006"
+        ],
+        "track": {
+          "target_id": "tgt-003"
+        }
+      }
+    ]
+  },
+  "engagement_criteria": {
+    "hostile_sides": [
+      "red"
+    ],
+    "require_approval": true,
+    "weapons_free": [
+      {
+        "circle": {
+          "center": {
+            "lat_deg": 37.4538987,
+            "lon_deg": 127.4056539
+          },
+          "radius_m": 8000.0
+        }
+      }
+    ],
+    "no_strike": [
+      {
+        "circle": {
+          "center": {
+            "lat_deg": 37.4628818,
+            "lon_deg": 127.4282696
+          },
+          "radius_m": 500.0
+        }
+      }
+    ]
+  }
+}

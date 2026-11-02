@@ -1,0 +1,1479 @@
+{
+ "001": {
+  "title": "s1 소규모 편대 6대(3-DoF, formation) 기준선과 대형 유지",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "중심 거리 85~350 m, 고도 1200~1200 m, 리더 TaskStatus 없음 시 mission_plan 반영 여부 확인용"
+  ],
+  "data": {
+   "wall_s": 66.3,
+   "sim_s": 120.2,
+   "snap": {
+    "frames": 6005,
+    "last_frame": 6008,
+    "sim_s": 120.16,
+    "entities": 7,
+    "entity_min_max": [
+     7,
+     7
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 522,
+    "rate_actual": 1.89,
+    "status_entities": 7,
+    "outcomes": {
+     "DELIVERED": 17633,
+     "DROPPED": 359
+    },
+    "drops": {
+     "BURST_LOSS": 359
+    },
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "logger": {
+     "cpu_avg": 11.4,
+     "cpu_max": 31.0,
+     "rss_start_mb": 26.2,
+     "rss_end_mb": 27.6,
+     "rss_growth_2nd_half_mb": 0.3
+    },
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "core": {
+     "cpu_avg": 16.7,
+     "cpu_max": 39.1,
+     "rss_start_mb": 25.6,
+     "rss_end_mb": 25.5,
+     "rss_growth_2nd_half_mb": -0.1
+    },
+    "datalink": {
+     "cpu_avg": 11.6,
+     "cpu_max": 32.8,
+     "rss_start_mb": 24.2,
+     "rss_end_mb": 24.2,
+     "rss_growth_2nd_half_mb": -0.1
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 6008,
+    "last_frame": 6011,
+    "sim_s": 120.22,
+    "entities": 7,
+    "entity_min_max": [
+     7,
+     7
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 522,
+    "rate_actual": 1.89,
+    "status_entities": 7,
+    "outcomes": {
+     "DELIVERED": 17641,
+     "DROPPED": 359
+    },
+    "drops": {
+     "BURST_LOSS": 359
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 70.1
+ },
+ "002": {
+  "title": "s2 20대 군집 다중 임무(hold·route·racetrack·search_area) 기준선",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "hold(uav-001~005) 중심 거리 312~312 m (반경 300 m)",
+   "racetrack(uav-011~015) 중심 거리 578~699 m (반폭 약 900 m)"
+  ],
+  "data": {
+   "wall_s": 143.3,
+   "sim_s": 240.2,
+   "snap": {
+    "frames": 12011,
+    "last_frame": 12009,
+    "sim_s": 240.18,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 1,
+    "state": 3,
+    "overruns": 1672,
+    "rate_actual": 1.53,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 45
+    },
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "logger": {
+     "cpu_avg": 21.7,
+     "cpu_max": 42.6,
+     "rss_start_mb": 26.8,
+     "rss_end_mb": 32.1,
+     "rss_growth_2nd_half_mb": 2.4
+    },
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "core": {
+     "cpu_avg": 33.3,
+     "cpu_max": 63.6,
+     "rss_start_mb": 25.0,
+     "rss_end_mb": 24.9,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "datalink": {
+     "cpu_avg": 7.8,
+     "cpu_max": 21.1,
+     "rss_start_mb": 23.7,
+     "rss_end_mb": 23.7,
+     "rss_growth_2nd_half_mb": -0.0
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 12016,
+    "last_frame": 12014,
+    "sim_s": 240.28,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 1,
+    "state": 3,
+    "overruns": 1672,
+    "rate_actual": 1.53,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 45
+    },
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 146.3
+ },
+ "003": {
+  "title": "s3 불완전 링크 프로파일(손실·지연·사거리·대역폭) + 사거리 밖 기체",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "TaskStatus 수신 기체 13/13, 종류 ['ACCEPTED', 'EXECUTING']",
+   "링크 결과 {'DROPPED': 10037, 'DELIVERED': 29058} 사유 {'OUT_OF_RANGE': 3001, 'BURST_LOSS': 622, 'QUEUE_OVERFLOW': 6414}",
+   "uav-013(35 km): 10건, uav-004(qa_short 3 km): 11건, uav-002(qa_lossy): 8건, uav-005(qa_narrow): 11건",
+   "지연 us p50 24171, p99 4129697, max 4211985",
+   "로그: agent: 2026-11-02 20:17:36,738 swarm_agent WARNING uav-009: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:17:36,738 swarm_agent WARNING uav-010: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:17:36,738 swarm_agent WARNING uav-011: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:17:36,738 swarm_agent WARNING uav-012: ma param 'acceptance_m' rejected (unknown)"
+  ],
+  "data": {
+   "wall_s": 12.0,
+   "sim_s": 20.3,
+   "snap": {
+    "frames": 1010,
+    "last_frame": 1016,
+    "sim_s": 20.32,
+    "entities": 14,
+    "entity_min_max": [
+     14,
+     14
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 129,
+    "rate_actual": 1.85,
+    "status_entities": 14,
+    "outcomes": {
+     "DROPPED": 1033,
+     "DELIVERED": 4126
+    },
+    "drops": {
+     "OUT_OF_RANGE": 405,
+     "BURST_LOSS": 88,
+     "QUEUE_OVERFLOW": 540
+    },
+    "reorder": 588,
+    "findings": []
+   },
+   "taskstatus_per_uav": {
+    "uav-001": 10,
+    "uav-006": 11,
+    "uav-007": 11,
+    "uav-005": 11,
+    "uav-013": 10,
+    "uav-004": 11,
+    "uav-002": 8,
+    "uav-010": 6,
+    "uav-012": 6,
+    "uav-008": 7,
+    "uav-003": 11,
+    "uav-009": 6,
+    "uav-011": 1
+   },
+   "resources": {
+    "logger": {
+     "cpu_avg": 22.7,
+     "cpu_max": 37.2,
+     "rss_start_mb": 26.4,
+     "rss_end_mb": 28.9,
+     "rss_growth_2nd_half_mb": 1.0
+    },
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "core": {
+     "cpu_avg": 31.8,
+     "cpu_max": 63.6,
+     "rss_start_mb": 24.6,
+     "rss_end_mb": 24.6,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "datalink": {
+     "cpu_avg": 15.2,
+     "cpu_max": 33.3,
+     "rss_start_mb": 23.6,
+     "rss_end_mb": 24.1,
+     "rss_growth_2nd_half_mb": -0.0
+    }
+   },
+   "log_hits": 4,
+   "snap_end": {
+    "frames": 7502,
+    "last_frame": 7508,
+    "sim_s": 150.16,
+    "entities": 14,
+    "entity_min_max": [
+     14,
+     14
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 959,
+    "rate_actual": 1.78,
+    "status_entities": 14,
+    "outcomes": {
+     "DROPPED": 10051,
+     "DELIVERED": 29074
+    },
+    "drops": {
+     "OUT_OF_RANGE": 3003,
+     "BURST_LOSS": 622,
+     "QUEUE_OVERFLOW": 6426
+    },
+    "reorder": 4925,
+    "findings": []
+   }
+  },
+  "wall_s": 90.8
+ },
+ "004": {
+  "title": "s4 적/표적/센서·무장 선언 시나리오 견고성 (Core 미구현 범위 포함)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "엔티티 13종, 생존 13, 이벤트 0건 []",
+   "tgt-002 이동 446 m",
+   "tgt-003 이동 1502 m",
+   "wpn-uav-001-01 이동 0 m",
+   "KILL 후 uav-002 alive=False, 이벤트 ['truth/event/kill']"
+  ],
+  "data": {
+   "wall_s": 65.9,
+   "sim_s": 120.1,
+   "snap": {
+    "frames": 5996,
+    "last_frame": 6007,
+    "sim_s": 120.14,
+    "entities": 13,
+    "entity_min_max": [
+     13,
+     13
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 439,
+    "rate_actual": 1.67,
+    "status_entities": 13,
+    "outcomes": {
+     "DELIVERED": 6
+    },
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "logger": {
+     "cpu_avg": 20.2,
+     "cpu_max": 36.4,
+     "rss_start_mb": 25.6,
+     "rss_end_mb": 26.9,
+     "rss_growth_2nd_half_mb": 0.3
+    },
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "core": {
+     "cpu_avg": 35.3,
+     "cpu_max": 62.8,
+     "rss_start_mb": 24.7,
+     "rss_end_mb": 24.7,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "datalink": {
+     "cpu_avg": 9.9,
+     "cpu_max": 24.2,
+     "rss_start_mb": 23.2,
+     "rss_end_mb": 23.1,
+     "rss_growth_2nd_half_mb": -0.0
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 9287,
+    "last_frame": 9298,
+    "sim_s": 185.96,
+    "entities": 13,
+    "entity_min_max": [
+     13,
+     13
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 646,
+    "rate_actual": 1.89,
+    "status_entities": 13,
+    "outcomes": {
+     "DELIVERED": 6
+    },
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 104.5
+ },
+ "005": {
+  "title": "s5 2-DoF/3-DoF·skywalker_x8/aerosonde 혼합, MA 혼합 + 미지원 dof5/dof6 적재",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "속력 skywalker 20.0~22.0 m/s (12~28), aerosonde 22.0~24.0 m/s (18~32)",
+   "로그: agent: 2026-11-02 20:20:52,096 swarm_agent WARNING uav-002: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:20:52,096 swarm_agent WARNING uav-002: ma param 'hold_radius_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:20:52,102 swarm_agent WARNING uav-003: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:20:52,102 swarm_agent WARNING uav-006: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:20:52,102 swarm_agent WARNING uav-006: ma param 'hold_radius_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:20:52,103 swarm_agent WARNING uav-007: ma param 'acceptance_m' rejected (unknown)",
+   "dof5: 종료=['core(code 1)'] Core 로그 끝: swarm_core: unsupported dynamics for uav-003: DYNAMICS_KIND_DOF5 | ",
+   "dof6: 종료=['core(code 1)'] Core 로그 끝: swarm_core: unsupported dynamics for uav-003: DYNAMICS_KIND_DOF6 | "
+  ],
+  "data": {
+   "wall_s": 108.2,
+   "sim_s": 180.3,
+   "snap": {
+    "frames": 9008,
+    "last_frame": 9017,
+    "sim_s": 180.34,
+    "entities": 17,
+    "entity_min_max": [
+     17,
+     17
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 1314,
+    "rate_actual": 1.42,
+    "status_entities": 17,
+    "outcomes": {
+     "DELIVERED": 56611,
+     "DROPPED": 1097
+    },
+    "drops": {
+     "BURST_LOSS": 1097
+    },
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "logger": {
+     "cpu_avg": 23.7,
+     "cpu_max": 39.1,
+     "rss_start_mb": 27.0,
+     "rss_end_mb": 30.0,
+     "rss_growth_2nd_half_mb": 1.2
+    },
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "core": {
+     "cpu_avg": 32.4,
+     "cpu_max": 56.6,
+     "rss_start_mb": 24.9,
+     "rss_end_mb": 24.8,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "datalink": {
+     "cpu_avg": 15.8,
+     "cpu_max": 40.3,
+     "rss_start_mb": 23.9,
+     "rss_end_mb": 24.1,
+     "rss_growth_2nd_half_mb": 0.1
+    }
+   },
+   "log_hits": 12,
+   "snap_end": {
+    "frames": 9010,
+    "last_frame": 9019,
+    "sim_s": 180.38,
+    "entities": 17,
+    "entity_min_max": [
+     17,
+     17
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 1314,
+    "rate_actual": 1.42,
+    "status_entities": 17,
+    "outcomes": {
+     "DELIVERED": 56636,
+     "DROPPED": 1097
+    },
+    "drops": {
+     "BURST_LOSS": 1097
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 130.1
+ },
+ "010": {
+  "title": "통제: pause/resume/step/set_rate/reset/재시작 (lockstep, s2)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "set_rate(4.0): 실측 2.34배, status.rate_target=4.0",
+   "set_rate(0.5): 실측 0.50배, status.rate_target=0.5",
+   "set_rate(8.0): 실측 5.13배, status.rate_target=8.0",
+   "set_rate(2.0): 실측 1.56배, status.rate_target=2.0",
+   "set_rate(0.0) 뒤 상태 3 rate_target=0.0 dead=[]",
+   "set_rate(-1.0) 뒤 상태 3 rate_target=-1.0 dead=[]",
+   "set_rate(nan) 뒤 상태 3 rate_target=nan dead=[]",
+   "set_rate(inf) 뒤 상태 3 rate_target=inf dead=[]",
+   "set_rate(1000000000.0) 뒤 상태 3 rate_target=1000000000.0 dead=[]",
+   "reset 뒤 상태=2 frame=0 sim_s=0.0 엔티티=21",
+   "reset/start 3회 뒤 상태 3 frame 217"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 5715,
+    "last_frame": 222,
+    "sim_s": 4.44,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 33,
+    "rate_actual": 1.54,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 139,
+     "DROPPED": 1
+    },
+    "drops": {
+     "BURST_LOSS": 1
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 72.9
+ },
+ "011": {
+  "title": "통제: 모드 전환 lockstep/realtime/freerun (Start 명령)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "realtime rate=1.0: RUNNING=True, status.mode=1, 실측 1.00배, 프레임 409",
+   "freerun rate=1.0: RUNNING=True, status.mode=3, 실측 1.00배, 프레임 409",
+   "lockstep rate=3.0: RUNNING=True, status.mode=2, 실측 1.89배, 프레임 771",
+   "realtime rate=1.0: RUNNING=True, status.mode=1, 실측 1.00배, 프레임 409"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 2118,
+    "last_frame": 411,
+    "sim_s": 8.22,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 0,
+    "rate_actual": 1.0,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 196,
+     "DROPPED": 4
+    },
+    "drops": {
+     "BURST_LOSS": 4
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 53.5
+ },
+ "012": {
+  "title": "통제: 잘못된 SimCommand (Start 값 범위, 빈 명령, 적재 불가 시나리오)",
+  "status": "FAIL",
+  "fails": [
+   "[nan_inf] uav-003 frame 0: (nan, 127.39151909999998, 1200.0, 20.0, 0.0, 0.0)",
+   "[nan_inf] uav-003 frame 0: (nan, 127.39151909999998, 1200.0, 20.0, 0.0, 0.0)"
+  ],
+  "notes": [
+   "Start(mode=lockstep, rate=2.0, hz=10) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "Start(mode=lockstep, rate=2.0, hz=5000) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "Start(mode=lockstep, rate=nan, hz=50) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "Start(mode=lockstep, rate=-3.0, hz=50) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "Start(mode=realtime, rate=5.0, hz=50) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "Start(mode=lockstep, rate=2.0, hz=0) → state=4 hz=50 rate_target=2.0 dead=[]",
+   "적재[중복 ID] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[엔티티 0개] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[NaN 위치] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[없는 airframe] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[없는 MA 플러그인] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[frame_hz=5] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "적재[없는 링크 프로파일] → state=4 entity_count=21 scenario='qa-s2-swarm20' dead=[]",
+   "[Reset 뒤] Start(mode=lockstep, rate=2.0, hz=10) → state=2 hz=50 rate_target=2.0 dead=[]",
+   "[Reset 뒤] Start(mode=lockstep, rate=2.0, hz=5000) → state=2 hz=50 rate_target=2.0 dead=[]",
+   "[Reset 뒤] Start(mode=lockstep, rate=nan, hz=50) → state=3 hz=50 rate_target=nan dead=[]",
+   "[Reset 뒤] Start(mode=lockstep, rate=-3.0, hz=50) → state=3 hz=50 rate_target=-3.0 dead=[]",
+   "[Reset 뒤] Start(mode=realtime, rate=5.0, hz=50) → state=3 hz=50 rate_target=1.0 dead=[]",
+   "[Reset 뒤] Start(mode=lockstep, rate=2.0, hz=0) → state=3 hz=50 rate_target=2.0 dead=[]",
+   "[Reset 뒤] 적재[중복 ID] → state=2 entity_count=21 dead=[]",
+   "[Reset 뒤] 적재[엔티티 0개] → state=2 entity_count=0 dead=[]",
+   "[Reset 뒤] 적재[NaN 위치] → state=2 entity_count=21 dead=[]",
+   "[Reset 뒤] 적재[없는 airframe] → state=2 entity_count=21 dead=[]",
+   "[Reset 뒤] 적재[없는 MA 플러그인] → state=2 entity_count=21 dead=[]",
+   "[Reset 뒤] 적재[frame_hz=5] → state=2 entity_count=21 dead=[]",
+   "[Reset 뒤] 적재[없는 링크 프로파일] → state=2 entity_count=21 dead=[]",
+   "로그: agent: 2026-11-02 21:15:08,769 swarm_agent WARNING uav-003: MA plugin 'nonexistent_ma' not found; FA holds",
+   "로그: agent: 2026-11-02 21:15:57,456 swarm_agent WARNING uav-003: MA plugin 'nonexistent_ma' not found; FA holds",
+   "로그: agent: 2026-11-02 21:16:00,464 swarm_agent WARNING uav-003: MA plugin 'nonexistent_ma' not found; FA holds",
+   "로그: core: [swarm_core] start mode=RUN_MODE_LOCKSTEP hz=50 rate=nan seed=1"
+  ],
+  "data": {
+   "log_hits": 4,
+   "snap_end": {
+    "frames": 1796,
+    "last_frame": 0,
+    "sim_s": 0.0,
+    "entities": 21,
+    "entity_min_max": [
+     0,
+     21
+    ],
+    "gap_frames": 68,
+    "dup": 0,
+    "state": 3,
+    "overruns": 0,
+    "rate_actual": 1.86,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 196,
+     "DROPPED": 4
+    },
+    "drops": {
+     "BURST_LOSS": 4
+    },
+    "reorder": 0,
+    "findings": [
+     "[nan_inf] uav-003 frame 0: (nan, 127.39151909999998, 1200.0, 20.0, 0.0, 0.0)",
+     "[nan_inf] uav-003 frame 0: (nan, 127.39151909999998, 1200.0, 20.0, 0.0, 0.0)"
+    ]
+   }
+  },
+  "wall_s": 119.1
+ },
+ "013": {
+  "title": "임무 명령: move/hold/racetrack/route/recon 정상 경로와 연속·충돌 명령",
+  "status": "FAIL",
+  "fails": [
+   "마지막 명령 qa-m5 실행 보고 없음: ['qa-m5:CANCELLED(preempted)', 'qa-m5:ACCEPTED']"
+  ],
+  "notes": [
+   "qa-m2: uav-001 ['qa-m2:ACCEPTED', 'qa-m2:CANCELLED(preempted)'] / uav-002 ['qa-m2:ACCEPTED', 'qa-m2:CANCELLED(preempted)']",
+   "qa-m3: uav-001 ['qa-m3:ACCEPTED', 'qa-m3:EXECUTING'] / uav-002 ['qa-m3:ACCEPTED', 'qa-m3:EXECUTING']",
+   "qa-m4: uav-001 ['qa-m4:ACCEPTED', 'qa-m4:CANCELLED(preempted)'] / uav-002 ['qa-m4:ACCEPTED', 'qa-m4:CANCELLED(preempted)']",
+   "qa-m5: uav-001 ['qa-m5:CANCELLED(preempted)', 'qa-m5:ACCEPTED'] / uav-002 ['qa-m5:CANCELLED(preempted)', 'qa-m5:ACCEPTED']",
+   "uav-001 TaskStatus 종류: ['ACCEPTED', 'CANCELLED(preempted)', 'EXECUTING']",
+   "중복 task_id 재전송 뒤 qa-m1: ['qa-m1:CANCELLED(preempted)', 'qa-m1:ACCEPTED', 'qa-m1:ACCEPTED', 'qa-m1:EXECUTING']"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 4143,
+    "last_frame": 4255,
+    "sim_s": 85.1,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 594,
+    "rate_actual": 1.65,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 90
+    },
+    "drops": {},
+    "reorder": 10,
+    "findings": []
+   }
+  },
+  "wall_s": 66.3
+ },
+ "014": {
+  "title": "임무 명령: 잘못된 값(범위 밖·없는 기체·빈 경로·NaN·빈 문자열)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "lat200: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "lonNaN: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "altInf: dead=[], 응답 uav-003=['qa-bad-altInf:ACCEPTED', 'qa-bad-altInf:EXECUTING', 'qa-bad-altInf:CANCELLED(preempted)'] (전체 응답 기체 1)",
+   "altNeg: dead=[], 응답 uav-003=['qa-bad-altNeg:ACCEPTED', 'qa-bad-altNeg:EXECUTING'] (전체 응답 기체 1)",
+   "alt100km: dead=[], 응답 uav-003=['qa-bad-alt100km:ACCEPTED', 'qa-bad-alt100km:EXECUTING'] (전체 응답 기체 1)",
+   "outOfMap: dead=[], 응답 uav-003=['qa-bad-outOfMap:ACCEPTED', 'qa-bad-outOfMap:EXECUTING'] (전체 응답 기체 1)",
+   "zeroLatLon: dead=[], 응답 uav-003=['qa-bad-zeroLatLon:ACCEPTED', 'qa-bad-zeroLatLon:EXECUTING'] (전체 응답 기체 1)",
+   "noEntity: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "noAssignee: dead=[], 응답 uav-003=['qa-bad-noAssignee:ACCEPTED', 'qa-bad-noAssignee:EXECUTING'] (전체 응답 기체 19)",
+   "emptyTaskId: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "emptyRoute: dead=[], 응답 uav-003=['qa-bad-emptyRoute:REJECTED(empty route)'] (전체 응답 기체 1)",
+   "route1: dead=[], 응답 uav-003=['qa-bad-route1:ACCEPTED', 'qa-bad-route1:EXECUTING'] (전체 응답 기체 1)",
+   "route500: dead=[], 응답 uav-003=['qa-bad-route500:ACCEPTED', 'qa-bad-route500:EXECUTING'] (전체 응답 기체 1)",
+   "routeNaN: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "holdR0: dead=[], 응답 uav-003=['qa-bad-holdR0:REJECTED(hold radius_m <= 0)'] (전체 응답 기체 1)",
+   "holdRneg: dead=[], 응답 uav-003=['qa-bad-holdRneg:REJECTED(hold radius_m <= 0)'] (전체 응답 기체 1)",
+   "holdRNaN: dead=[], 응답 uav-003=[] (전체 응답 기체 0)",
+   "holdR1e9: dead=[], 응답 uav-003=['qa-bad-holdR1e9:ACCEPTED', 'qa-bad-holdR1e9:EXECUTING'] (전체 응답 기체 1)",
+   "raceLeg0: dead=[], 응답 uav-003=['qa-bad-raceLeg0:ACCEPTED'] (전체 응답 기체 1)",
+   "raceLegNeg: dead=[], 응답 uav-003=['qa-bad-raceLegNeg:REJECTED(racetrack leg_length_m < 0)'] (전체 응답 기체 1)",
+   "raceAxis999: dead=[], 응답 uav-003=['qa-bad-raceAxis999:ACCEPTED', 'qa-bad-raceAxis999:EXECUTING'] (전체 응답 기체 1)",
+   "raceAxisNaN: dead=[], 응답 uav-003=['qa-bad-raceAxisNaN:ACCEPTED', 'qa-bad-raceAxisNaN:EXECUTING'] (전체 응답 기체 1)",
+   "emptyTask: dead=[], 응답 uav-003=['qa-bad-emptyTask:REJECTED(unsupported task None)'] (전체 응답 기체 1)",
+   "strikeNoTarget: dead=[], 응답 uav-003=['qa-bad-strikeNoTarget:REJECTED(unsupported task strike)'] (전체 응답 기체 1)",
+   "전체 기체 최대 이동 1442 m (비정상 이동 점검)"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 4674,
+    "last_frame": 4731,
+    "sim_s": 94.62,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 48,
+    "dup": 0,
+    "state": 3,
+    "overruns": 725,
+    "rate_actual": 1.88,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 166,
+     "DROPPED": 6
+    },
+    "drops": {
+     "NODE_DEAD": 1,
+     "BURST_LOSS": 5
+    },
+    "reorder": 15,
+    "findings": []
+   }
+  },
+  "wall_s": 73.2
+ },
+ "015": {
+  "title": "임무 명령 홍수: 20대에 초당 수백 건",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "홍수: 299349건/10 s 송신(각 20대)",
+   "홍수 뒤 프레임 진행 181→313, overruns 25→71, 링크 결과 {'DELIVERED': 13667, 'DROPPED': 512342}",
+   "마지막 명령 qa-flood-299349 응답 []",
+   "uav-001이 보낸 TaskStatus 총 453건"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 5322,
+    "last_frame": 5325,
+    "sim_s": 106.5,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 823,
+    "rate_actual": 1.68,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 13685,
+     "DROPPED": 512342
+    },
+    "drops": {
+     "BURST_LOSS": 199,
+     "QUEUE_OVERFLOW": 512143
+    },
+    "reorder": 6381,
+    "findings": []
+   }
+  },
+  "wall_s": 100.1
+ },
+ "016": {
+  "title": "실행 중 매개변수 변경과 거부 (FA·MA·dynamics, 잘못된 값)",
+  "status": "FAIL",
+  "fails": [
+   "MA k_p=inf SetParams 뒤 프로세스 종료 ['agent(code 1)']",
+   "프로세스 종료됨: ['agent(code 1)']"
+  ],
+  "notes": [
+   "fa: plugin=default 선언 ['acceptance_radius_m', 'cross_track_inf_deg', 'k_altitude', 'k_cross_track', 'k_heading', 'k_orbit', 'k_racetrack_line', 'max_altitude_m', 'max_bank_deg', 'max_climb_mps', 'max_speed_mps', 'min_speed_mps', 'racetrack_gamma', 'racetrack_guidance']",
+   "ma: plugin=formation 선언 ['acceptance_m', 'corr_max_mps', 'group', 'hold_radius_m', 'k_p', 'leader_speed_mps', 'leader_timeout_s', 'peer_hz']",
+   "dynamics: plugin=dof3 선언 ['max_bank_rad', 'max_climb_rate_mps', 'max_gamma_rad', 'max_speed_mps', 'min_speed_mps', 'tau_bank_s', 'tau_gamma_s', 'tau_speed_s']",
+   "MA 음수 'k_p'=-5 → 거부 [('k_p', 'range')], k_p 현재 0.3",
+   "MA 큰값 'k_p'=1000000000000.0 → 거부 [('k_p', 'range')], k_p 현재 0.3",
+   "MA 문자열 'k_p'='abc' → 거부 [('k_p', 'type')], k_p 현재 0.3",
+   "MA bool 'k_p'=True → 거부 [('k_p', 'type')], k_p 현재 0.3",
+   "MA null 'k_p'=None → 거부 [('k_p', 'type')], k_p 현재 0.3",
+   "MA 빈이름 ''=1.0 → 거부 [('', 'unknown')], k_p 현재 0.3",
+   "MA 없는이름 'zzz'=1.0 → 거부 [('zzz', 'unknown')], k_p 현재 0.3",
+   "MA 고정항목 'group'='beta' → 거부 [('group', 'not_runtime')], k_p 현재 0.3",
+   "MA 빈문자열값 'group'='' → 거부 [('group', 'not_runtime')], k_p 현재 0.3",
+   "dynamics 선언 8개, runtime 수치 8개: ['tau_speed_s', 'tau_bank_s', 'tau_gamma_s', 'min_speed_mps', 'max_speed_mps', 'max_bank_rad', 'max_climb_rate_mps', 'max_gamma_rad']",
+   "dynamics tau_speed_s=NaN → 거부 [('tau_speed_s', 'range')], 현재 1.0",
+   "dynamics tau_speed_s=inf → 거부 [('tau_speed_s', 'range')], 현재 1.0",
+   "dynamics tau_speed_s=음수 → 거부 [('tau_speed_s', 'range')], 현재 1.0",
+   "dynamics tau_speed_s=0 → 거부 [('tau_speed_s', 'range')], 현재 1.0",
+   "dynamics tau_speed_s=범위밖 → 거부 [('tau_speed_s', 'range')], 현재 1.0",
+   "없는 기체 set_params 뒤 발행 증가 24, dead=[]",
+   "MA k_p=inf 뒤 dead=['agent(code 1)']",
+   "로그: agent: 2026-11-02 21:16:34,451 swarm_agent WARNING uav-002: ma param 'k_p' rejected (range)",
+   "로그: agent: 2026-11-02 21:16:36,154 swarm_agent WARNING uav-002: ma param 'k_p' rejected (range)",
+   "로그: agent: 2026-11-02 21:16:37,864 swarm_agent WARNING uav-002: ma param 'k_p' rejected (type)",
+   "로그: agent: 2026-11-02 21:16:39,554 swarm_agent WARNING uav-002: ma param 'k_p' rejected (type)",
+   "로그: agent: 2026-11-02 21:16:41,257 swarm_agent WARNING uav-002: ma param 'k_p' rejected (type)",
+   "로그: agent: 2026-11-02 21:16:42,961 swarm_agent WARNING uav-002: ma param '' rejected (unknown)"
+  ],
+  "data": {
+   "log_hits": 12,
+   "snap_end": {
+    "frames": 3039,
+    "last_frame": 3057,
+    "sim_s": 61.14,
+    "entities": 7,
+    "entity_min_max": [
+     7,
+     7
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 213,
+    "rate_actual": 1.9,
+    "status_entities": 7,
+    "outcomes": {
+     "DELIVERED": 8999,
+     "DROPPED": 168
+    },
+    "drops": {
+     "BURST_LOSS": 168
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 54.8
+ },
+ "017": {
+  "title": "고장 주입: LINK_CUT·GCS_LINK_CUT(기한/해제)·ENGINE·NAV·KILL·SENSOR, 잘못된 대상",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "GCS_LINK_CUT uav-001 중 명령: uav-001 응답 [], uav-002 응답 ['qa-f1:ACCEPTED', 'qa-f1:EXECUTING']",
+   "LINK_CUT(5 s) 중 응답 [], 만료 뒤 응답 ['qa-f4:ACCEPTED', 'qa-f4:EXECUTING']",
+   "ENGINE uav-005: alive=True 속력 12.0 m/s 고도 1200→1200 m",
+   "NAV uav-006: alive=True 속력 20.0 m/s 고도 1300→1300 m",
+   "KILL uav-007: alive=False 속력 20.0 m/s 고도 1300→1300 m",
+   "KILL 뒤 truth 엔티티 수 21",
+   "KILL 해제 뒤 alive=False",
+   "잘못된 고장 주입 뒤 dead=[] state=3"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 2825,
+    "last_frame": 2843,
+    "sim_s": 56.86,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 17,
+    "dup": 0,
+    "state": 3,
+    "overruns": 407,
+    "rate_actual": 1.95,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 52,
+     "DROPPED": 3
+    },
+    "drops": {
+     "FAULT_INJECTED": 2,
+     "NODE_DEAD": 1
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 50.5
+ },
+ "018": {
+  "title": "재밍 구역 on/off (truth/event/jam_zone 직접 발행)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "재밍 전: 전달/손실 (1961, 369), 사유 {'OUT_OF_RANGE': 152, 'BURST_LOSS': 62, 'QUEUE_OVERFLOW': 155}",
+   "재밍 중(반경 20 km, 전 기체 포함): 전달/손실 (22, 3313), 사유 {'JAMMED': 3070, 'OUT_OF_RANGE': 243}",
+   "재밍 해제 뒤: 전달/손실 (2701, 807), 사유 {'OUT_OF_RANGE': 239, 'BURST_LOSS': 71, 'QUEUE_OVERFLOW': 497}",
+   "비정상 재밍 구역 뒤 dead=[]",
+   "로그: agent: 2026-11-02 20:44:17,827 swarm_agent WARNING uav-009: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:44:17,827 swarm_agent WARNING uav-010: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:44:17,827 swarm_agent WARNING uav-011: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 20:44:17,827 swarm_agent WARNING uav-012: ma param 'acceptance_m' rejected (unknown)"
+  ],
+  "data": {
+   "log_hits": 4,
+   "snap_end": {
+    "frames": 2530,
+    "last_frame": 2529,
+    "sim_s": 50.58,
+    "entities": 14,
+    "entity_min_max": [
+     14,
+     14
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 302,
+    "rate_actual": 1.9,
+    "status_entities": 14,
+    "outcomes": {
+     "DROPPED": 1718,
+     "DELIVERED": 4084
+    },
+    "drops": {
+     "OUT_OF_RANGE": 380,
+     "BURST_LOSS": 86,
+     "QUEUE_OVERFLOW": 784,
+     "JAMMED": 468
+    },
+    "reorder": 1246,
+    "findings": []
+   }
+  },
+  "wall_s": 45.4
+ },
+ "020": {
+  "title": "lockstep 지각 참여: Agent를 Core 뒤 15 s에 기동, 장벽 대기·재개",
+  "status": "FAIL",
+  "fails": [
+   "Agent 재기동 뒤 lockstep이 재개되지 않음"
+  ],
+  "notes": [
+   "Agent 없이 12 s: frame=None, state=None",
+   "합류 뒤 frame None→111",
+   "lockstep 중 Agent 이탈 뒤 진행: 149→149 (장벽 대기면 정지)",
+   "Agent 재합류 뒤 진행 False, frame 149",
+   "Reset+Start 로 복구: True (frame 104)"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 260,
+    "last_frame": 108,
+    "sim_s": 2.16,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 12,
+    "rate_actual": 1.61,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 79,
+     "DROPPED": 1
+    },
+    "drops": {
+     "BURST_LOSS": 1
+    },
+    "reorder": 20,
+    "findings": []
+   }
+  },
+  "wall_s": 106.1
+ },
+ "019": {
+  "title": "프로세스 장애: Agent 재시작·Datalink 재시작·Core 재시작 (realtime)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "Agent 없는 동안 명령 응답 []",
+   "Agent 재기동 후 엔티티 21, 로그     2026-11-02 20:57:16,772 swarm_agent INFO loaded 'qa-s2-swarm20': hosting 20 vehicles\n    2026-11-02 20:57:16,774 swarm_agent INFO swarm-agent participant=agent-0 ready",
+   "Datalink 없는 동안 응답 []",
+   "Core 재기동: 프레임 재개 True, frame 1915→326, 엔티티 21, sim_s=6.5"
+  ],
+  "data": {
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 1919,
+    "last_frame": 338,
+    "sim_s": 6.76,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 102,
+    "dup": 0,
+    "state": 3,
+    "overruns": 0,
+    "rate_actual": 1.01,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 92,
+     "DROPPED": 1
+    },
+    "drops": {
+     "BURST_LOSS": 1
+    },
+    "reorder": 25,
+    "findings": []
+   }
+  },
+  "wall_s": 54.9
+ },
+ "021": {
+  "title": "Logger: 기록 → info → 재생(배속 변경 포함) → 재생 중 관측",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "info: messages: 97416  span: 33.909 s  channels: 337 |   link/outcome/uav-001/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-002/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-003/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-004/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-005/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-006/gcs-01                             2  application/protobuf;swarm.v1.LinkOutcome |   link/outcome/uav-00",
+   "재생 rate=1.0: 벽시계 33.3 s, truth 프레임 1970, 엔티티 (21, 21), 마지막 sim 40.2 s, 발견 []",
+   "재생 rate=4.0: 벽시계 8.2 s, truth 프레임 1942, 엔티티 (21, 21), 마지막 sim 40.2 s, 발견 []",
+   "재생 rate=0.5: 벽시계 67.6 s, truth 프레임 1970, 엔티티 (21, 21), 마지막 sim 40.2 s, 발견 []",
+   "재생 rate=20.0: 벽시계 1.4 s, truth 프레임 1849, 엔티티 (21, 21), 마지막 sim 40.2 s, 발견 []",
+   "Logger 로그 이상 1건 ['core: [swarm_core] stopped at frame 2011, sim_time 40.220 s, overruns 265']"
+  ],
+  "data": {},
+  "wall_s": 160.1
+ },
+ "022": {
+  "title": "결정성: 같은 시드 lockstep 두 번 실행해 truth 궤적 비교",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "run0: 프레임 2704, 누락 62",
+   "run1: 프레임 2654, 누락 64",
+   "공통 프레임 2579",
+   "불일치 표본 0, 최대 차이 0.000000 m"
+  ],
+  "data": {},
+  "wall_s": 29.2
+ },
+ "006": {
+  "title": "s6 부하 50대 lockstep 2배속",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "50대: rate_actual=1.57, 프레임 3006, overruns=760, 갭 0, 벽시계 50.5 s/60.1 sim-s",
+   "  agent: CPU 평균 0.0% 최대 0.0%, RSS 4.4→4.4 MB (후반 +-0.0 MB)",
+   "  logger: CPU 평균 28.9% 최대 54.3%, RSS 26.9→60.9 MB (후반 +11.1 MB)",
+   "  core: CPU 평균 42.3% 최대 73.7%, RSS 35.8→55.1 MB (후반 +0.1 MB)",
+   "  datalink: CPU 평균 11.0% 최대 50.4%, RSS 21.5→45.0 MB (후반 +5.8 MB)"
+  ],
+  "data": {
+   "wall_s": 50.5,
+   "sim_s": 60.1,
+   "snap": {
+    "frames": 3007,
+    "last_frame": 3006,
+    "sim_s": 60.12,
+    "entities": 51,
+    "entity_min_max": [
+     51,
+     51
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 760,
+    "rate_actual": 1.57,
+    "status_entities": 51,
+    "outcomes": {},
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.4,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "logger": {
+     "cpu_avg": 28.9,
+     "cpu_max": 54.3,
+     "rss_start_mb": 26.9,
+     "rss_end_mb": 60.9,
+     "rss_growth_2nd_half_mb": 11.1
+    },
+    "core": {
+     "cpu_avg": 42.3,
+     "cpu_max": 73.7,
+     "rss_start_mb": 35.8,
+     "rss_end_mb": 55.1,
+     "rss_growth_2nd_half_mb": 0.1
+    },
+    "datalink": {
+     "cpu_avg": 11.0,
+     "cpu_max": 50.4,
+     "rss_start_mb": 21.5,
+     "rss_end_mb": 45.0,
+     "rss_growth_2nd_half_mb": 5.8
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 3010,
+    "last_frame": 3009,
+    "sim_s": 60.18,
+    "entities": 51,
+    "entity_min_max": [
+     51,
+     51
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 760,
+    "rate_actual": 1.57,
+    "status_entities": 51,
+    "outcomes": {},
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 57.2
+ },
+ "007": {
+  "title": "s6 부하 100대 lockstep 1배속",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "100대: rate_actual=0.93, 프레임 2000, overruns=55, 갭 0, 벽시계 55.7 s/40.0 sim-s",
+   "  agent: CPU 평균 0.0% 최대 0.0%, RSS 4.5→4.4 MB (후반 +0.0 MB)",
+   "  logger: CPU 평균 41.2% 최대 77.3%, RSS 25.9→91.6 MB (후반 +21.5 MB)",
+   "  core: CPU 평균 52.0% 최대 86.7%, RSS 37.1→56.6 MB (후반 +0.0 MB)",
+   "  datalink: CPU 평균 15.0% 최대 76.6%, RSS 22.4→44.4 MB (후반 +6.8 MB)"
+  ],
+  "data": {
+   "wall_s": 55.7,
+   "sim_s": 40.0,
+   "snap": {
+    "frames": 1999,
+    "last_frame": 2000,
+    "sim_s": 40.0,
+    "entities": 101,
+    "entity_min_max": [
+     101,
+     101
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 55,
+    "rate_actual": 0.93,
+    "status_entities": 101,
+    "outcomes": {},
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "logger": {
+     "cpu_avg": 41.2,
+     "cpu_max": 77.3,
+     "rss_start_mb": 25.9,
+     "rss_end_mb": 91.6,
+     "rss_growth_2nd_half_mb": 21.5
+    },
+    "core": {
+     "cpu_avg": 52.0,
+     "cpu_max": 86.7,
+     "rss_start_mb": 37.1,
+     "rss_end_mb": 56.6,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "datalink": {
+     "cpu_avg": 15.0,
+     "cpu_max": 76.6,
+     "rss_start_mb": 22.4,
+     "rss_end_mb": 44.4,
+     "rss_growth_2nd_half_mb": 6.8
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 1999,
+    "last_frame": 2000,
+    "sim_s": 40.0,
+    "entities": 101,
+    "entity_min_max": [
+     101,
+     101
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 55,
+    "rate_actual": 0.93,
+    "status_entities": 101,
+    "outcomes": {},
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 62.8
+ },
+ "008": {
+  "title": "s6 부하 100대 flocking(P2P) lockstep 1배속",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "100대 flocking: rate_actual=0.22, 프레임 1500, overruns=1500, 갭 0, 벽시계 147.6 s/30.0 sim-s",
+   "  agent: CPU 평균 0.0% 최대 0.0%, RSS 4.5→4.4 MB (후반 +0.0 MB)",
+   "  logger: CPU 평균 62.0% 최대 85.9%, RSS 25.6→313.2 MB (후반 +128.8 MB)",
+   "  core: CPU 평균 14.7% 최대 67.4%, RSS 37.2→56.4 MB (후반 +-0.0 MB)",
+   "  datalink: CPU 평균 127.2% 최대 142.2%, RSS 22.6→114.9 MB (후반 +6.5 MB)",
+   "로그: agent: 2026-11-02 21:10:53,759 swarm_agent WARNING uav-001: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 21:10:53,759 swarm_agent WARNING uav-002: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 21:10:53,760 swarm_agent WARNING uav-003: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 21:10:53,760 swarm_agent WARNING uav-004: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 21:10:53,760 swarm_agent WARNING uav-005: ma param 'acceptance_m' rejected (unknown)",
+   "로그: agent: 2026-11-02 21:10:53,760 swarm_agent WARNING uav-006: ma param 'acceptance_m' rejected (unknown)"
+  ],
+  "data": {
+   "wall_s": 147.6,
+   "sim_s": 30.0,
+   "snap": {
+    "frames": 1486,
+    "last_frame": 1500,
+    "sim_s": 30.0,
+    "entities": 101,
+    "entity_min_max": [
+     101,
+     101
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 1500,
+    "rate_actual": 0.22,
+    "status_entities": 101,
+    "outcomes": {
+     "DROPPED": 27739,
+     "DELIVERED": 1461488
+    },
+    "drops": {
+     "BURST_LOSS": 27739
+    },
+    "reorder": 0,
+    "findings": []
+   },
+   "resources": {
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "logger": {
+     "cpu_avg": 62.0,
+     "cpu_max": 85.9,
+     "rss_start_mb": 25.6,
+     "rss_end_mb": 313.2,
+     "rss_growth_2nd_half_mb": 128.8
+    },
+    "core": {
+     "cpu_avg": 14.7,
+     "cpu_max": 67.4,
+     "rss_start_mb": 37.2,
+     "rss_end_mb": 56.4,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "datalink": {
+     "cpu_avg": 127.2,
+     "cpu_max": 142.2,
+     "rss_start_mb": 22.6,
+     "rss_end_mb": 114.9,
+     "rss_growth_2nd_half_mb": 6.5
+    }
+   },
+   "log_hits": 100,
+   "snap_end": {
+    "frames": 1486,
+    "last_frame": 1500,
+    "sim_s": 30.0,
+    "entities": 101,
+    "entity_min_max": [
+     101,
+     101
+    ],
+    "gap_frames": 0,
+    "dup": 0,
+    "state": 3,
+    "overruns": 1500,
+    "rate_actual": 0.22,
+    "status_entities": 101,
+    "outcomes": {
+     "DROPPED": 27739,
+     "DELIVERED": 1461946
+    },
+    "drops": {
+     "BURST_LOSS": 27739
+    },
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 154.9
+ },
+ "009": {
+  "title": "s6 부하 100대 realtime 실시간성 (벽시계 대비 sim 시간)",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "realtime 100대: sim/벽시계 = 1.00, overruns=3, rate_actual=1.01"
+  ],
+  "data": {
+   "resources": {
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.4,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "logger": {
+     "cpu_avg": 49.2,
+     "cpu_max": 91.5,
+     "rss_start_mb": 27.6,
+     "rss_end_mb": 78.3,
+     "rss_growth_2nd_half_mb": 21.3
+    },
+    "core": {
+     "cpu_avg": 91.1,
+     "cpu_max": 175.2,
+     "rss_start_mb": 39.4,
+     "rss_end_mb": 57.3,
+     "rss_growth_2nd_half_mb": -0.1
+    },
+    "datalink": {
+     "cpu_avg": 38.4,
+     "cpu_max": 91.5,
+     "rss_start_mb": 22.8,
+     "rss_end_mb": 43.4,
+     "rss_growth_2nd_half_mb": 5.4
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 1341,
+    "last_frame": 2193,
+    "sim_s": 43.86,
+    "entities": 101,
+    "entity_min_max": [
+     101,
+     101
+    ],
+    "gap_frames": 505,
+    "dup": 0,
+    "state": 3,
+    "overruns": 3,
+    "rate_actual": 1.01,
+    "status_entities": 101,
+    "outcomes": {},
+    "drops": {},
+    "reorder": 0,
+    "findings": []
+   }
+  },
+  "wall_s": 50.2
+ },
+ "023": {
+  "title": "자원 추세: 20대 realtime 10분 CPU·RSS 추세",
+  "status": "PASS",
+  "fails": [],
+  "notes": [
+   "agent: CPU 평균 0.0% 최대 0.0%, RSS 4.5→4.6 MB (후반 +-0.0 MB)",
+   "logger: CPU 평균 23.0% 최대 58.6%, RSS 27.8→39.5 MB (후반 +5.0 MB)",
+   "core: CPU 평균 38.7% 최대 72.0%, RSS 26.1→27.4 MB (후반 +0.0 MB)",
+   "datalink: CPU 평균 7.3% 최대 30.5%, RSS 23.0→26.2 MB (후반 +0.0 MB)"
+  ],
+  "data": {
+   "resources": {
+    "agent": {
+     "cpu_avg": 0.0,
+     "cpu_max": 0.0,
+     "rss_start_mb": 4.5,
+     "rss_end_mb": 4.6,
+     "rss_growth_2nd_half_mb": -0.0
+    },
+    "logger": {
+     "cpu_avg": 23.0,
+     "cpu_max": 58.6,
+     "rss_start_mb": 27.8,
+     "rss_end_mb": 39.5,
+     "rss_growth_2nd_half_mb": 5.0
+    },
+    "core": {
+     "cpu_avg": 38.7,
+     "cpu_max": 72.0,
+     "rss_start_mb": 26.1,
+     "rss_end_mb": 27.4,
+     "rss_growth_2nd_half_mb": 0.0
+    },
+    "datalink": {
+     "cpu_avg": 7.3,
+     "cpu_max": 30.5,
+     "rss_start_mb": 23.0,
+     "rss_end_mb": 26.2,
+     "rss_growth_2nd_half_mb": 0.0
+    }
+   },
+   "log_hits": 0,
+   "snap_end": {
+    "frames": 29457,
+    "last_frame": 30003,
+    "sim_s": 600.06,
+    "entities": 21,
+    "entity_min_max": [
+     21,
+     21
+    ],
+    "gap_frames": 221,
+    "dup": 0,
+    "state": 3,
+    "overruns": 7,
+    "rate_actual": 1.01,
+    "status_entities": 21,
+    "outcomes": {
+     "DELIVERED": 60
+    },
+    "drops": {},
+    "reorder": 6,
+    "findings": []
+   }
+  },
+  "wall_s": 607.9
+ }
+}
