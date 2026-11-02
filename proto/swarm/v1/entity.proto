@@ -80,6 +80,7 @@ message ParamSpec {
   optional double max = 6;
   string description = 7;
   bool runtime = 8;                         // 실행 중 변경 가능
+  repeated string choices = 9;              // 문자열 값의 허용 목록. 비면 제한 없음 (DEC-036)
 }
 
 message AutonomySpec {

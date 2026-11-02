@@ -22,6 +22,7 @@ flowchart LR
 | IMP-LOG-006 | 의존성: vcpkg `mcap`(`unofficial-mcap`, 헤더 전용, 압축 없음). 없으면 `MCAP_INCLUDE_DIR`에서 헤더를 찾고, 둘 다 없으면 logger/를 건너뛴다 | `CMakeLists.txt`, 루트 `vcpkg.json` | DEC-022 |
 | IMP-LOG-007 | `swarm_logger`의 버스를 공용 `open_bus`로 연다. Zenoh 백엔드와 공통 버스 옵션(`--bus`, `--connect` 등) 지원 | `src/main.cpp`, `CMakeLists.txt` | DEC-026 |
 | IMP-LOG-008 | 재생 시 `sim/ctrl/status`의 `SimStatus.replay`를 true로 바꿔 발행 | `src/mcap_log.cpp` | DEC-031 |
+| IMP-LOG-009 | `swarm_logger record`가 SIGTERM과 Windows Ctrl+Break(SIGBREAK)도 처리해 MCAP을 닫고 종료 (P0 데모 실행기에서 프로그램으로 정지) | `src/main.cpp` | REQ-LOG-001, DEC-026 |
 
 ## 시험
 

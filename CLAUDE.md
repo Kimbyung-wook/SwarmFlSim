@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 - 군집/편대 알고리즘 연구용 군집 무인항공기 시뮬레이터다.
 - 모노레포이며, 작업 패키지(WP)별 디렉터리로 나눈다 (DEC-021). 디렉터리 배정은 `docs/00_proposal.md` §12를 따른다.
-- 계약 버전 0.6.0. 1차 WP(WP1·WP2·WP5·WP7)와 2차 WP1-2·WP3·WP4·WP5·WP6이 통합되었다.
+- 계약 버전 0.8.0. 1차 WP(WP1·WP2·WP5·WP7)와 2차 WP1-2·WP3·WP4·WP5·WP6이 통합되었다.
 - 빌드는 CMake 프리셋 `msvc-*`(vcpkg), `mingw-*`(MSYS2 UCRT64), `linux-*`를 모두 지원한다 (DEC-022). 설치·빌드·시험 명령은 `docs/10_contracts.md` §7에 있다.
 - C++ 의존성은 `find_package`로만 찾는다. 툴체인 전용 설정을 CMake에 넣지 않는다.
 

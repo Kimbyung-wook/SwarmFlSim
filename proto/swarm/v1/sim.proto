@@ -115,7 +115,7 @@ message SetParams {
 
 message ParamRejection {
   string name = 1;
-  string reason = 2;  // unknown | type | range | not_runtime
+  string reason = 2;  // unknown | type | range | choice | not_runtime
 }
 
 // 기체·소유자별 매개변수 선언과 적용 값 (sim/param/<entity>/<owner>)
