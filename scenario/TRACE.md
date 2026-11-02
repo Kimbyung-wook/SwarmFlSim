@@ -12,6 +12,7 @@
 | IMP-SCN-006 | `swarm.v1.Scenario` 변환(`to_proto`/`from_proto`), `RunSpec.participants` 스키마·변환, `LoadScenario.scenario`로 명령 생성, `swarm-scenario export`(.pb / proto JSON) | `src/swarm_scenario/convert.py`, `cli.py`, `schema/scenario.schema.json` | DEC-024, DEC-025 |
 | IMP-SCN-007 | 계약 0.3.0: 최상위 `link_profiles`(swarm.v1.LinkProfile) 스키마·변환 | `src/swarm_scenario/convert.py`, `schema/scenario.schema.json` | DEC-029 |
 | IMP-SCN-008 | 계약 0.4.0: `HoldTask` 매개변수, `route`(RouteTask)·`RouteWaypoint`(loiter·recon 중 하나)·`TurnDirection` 스키마. 0.5.0: `RacetrackShape`(hold·loiter) | `schema/scenario.schema.json` | DEC-033, DEC-034 |
+| IMP-SCN-009 | 계약 0.6.0: `EntitySpec.dynamics_params` 스키마 | `schema/scenario.schema.json` | DEC-035 |
 
 ## 시험
 
@@ -29,5 +30,6 @@
 | TC-SCN-008 | Scenario ⇄ `swarm.v1.Scenario` 왕복(participants 포함), 최상위 필드 = proto `Scenario`, `MapSpec`·`RunSpec` 필드 일치 | `tests/test_convert.py` | IMP-SCN-006 | Pass |
 | TC-SCN-009 | `link_profiles` JSON ⇄ proto 왕복, 적지 않은 필드는 proto에서 미설정, `LinkProfile` 필드 = 스키마 | `tests/test_convert.py` | IMP-SCN-007 | Pass |
 | TC-SCN-010 | `RouteTask`·`HoldTask` JSON ⇄ proto 왕복, 항로점 행위 종류, loiter·recon 동시 지정 거부, 레이스트랙 loiter, `RouteWaypoint`·`RacetrackShape`·`TurnDirection` = proto | `tests/test_convert.py` | IMP-SCN-008 | Pass |
+| TC-SCN-011 | `dynamics_params`·`fa_params`·`ma_params` JSON ⇄ proto 왕복(수·문자열·불리언) | `tests/test_convert.py` | IMP-SCN-009 | Pass |
 
-시험 결과(2026-11-01): 60 passed
+시험 결과(2026-11-02): 62 passed

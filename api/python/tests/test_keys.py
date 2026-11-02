@@ -11,6 +11,9 @@ def test_builders():
     assert keys.rx("gcs-01", Iface.C2, "TaskStatus") == "swarm/gcs-01/rx/c2/TaskStatus"
     assert keys.onboard("uav-001", "ControlOutput") == "onboard/uav-001/ControlOutput"
     assert keys.link_state("uav-002", "uav-001") == "link/state/uav-001/uav-002"
+    assert keys.sim_param("uav-001", "fa") == "sim/param/uav-001/fa"
+    with pytest.raises(ValueError):
+        keys.sim_param("uav-001", "core")
 
 
 @pytest.mark.parametrize("bad", ["UAV-001", "uav", "uav/001", "uav-*", "-uav-1", "a" * 30 + "-123"])

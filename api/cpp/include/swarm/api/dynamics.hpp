@@ -34,6 +34,20 @@ struct KinematicSample {
   double rate_frd_rps[3] = {0.0, 0.0, 0.0};
 };
 
+// 매개변수 선언 (DEC-035). layer 값은 proto ParamLayer와 같다
+enum class ParamLayer : int { kAirframe = 1, kControl = 2, kGuidance = 3, kBehavior = 4, kDecision = 5 };
+
+struct ParamDesc {
+  std::string_view name;
+  ParamLayer layer;
+  double default_value;
+  std::string_view unit;
+  double min;
+  double max;
+  bool runtime;  // 실행 중 변경 가능
+  std::string_view description;
+};
+
 class DynamicsModel {
  public:
   virtual ~DynamicsModel() = default;
@@ -53,6 +67,12 @@ class DynamicsModel {
   virtual void to_kinematic(std::span<const double> x, const Environment& env, KinematicSample& out) const = 0;
   // 초기 상태 설정용. in.vel_ned_mps는 대기 속도로 해석한다
   virtual void from_kinematic(const KinematicSample& in, std::span<double> x) const = 0;
+
+  // 매개변수 (DEC-035). 기본값은 airframe 표가 정한다. 매개변수가 없는 모델은 빈 목록
+  virtual std::span<const ParamDesc> param_descs() const { return {}; }
+  virtual double get_param(std::string_view name) const { (void)name; return 0.0; }
+  // 이름이 없거나 범위 밖이면 false. 값은 바꾸지 않는다
+  virtual bool set_param(std::string_view name, double value) { (void)name; (void)value; return false; }
 };
 
 // 영점 교차 이벤트 함수. 예: 고도 - DEM 고도 (탄착, 지면 충돌)

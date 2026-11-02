@@ -57,6 +57,14 @@ inline std::string clock_done(const std::string& participant) {
   return "sim/clock/done/" + check_entity_id(participant);
 }
 
+// 매개변수 (DEC-035). owner: dynamics | fa | ma
+inline constexpr std::string_view kSimParamAll = "sim/param/**";
+
+inline std::string sim_param(const std::string& id, std::string_view owner) {
+  if (owner != "dynamics" && owner != "fa" && owner != "ma") throw std::invalid_argument("invalid param owner");
+  return "sim/param/" + check_entity_id(id) + "/" + std::string(owner);
+}
+
 inline std::string tx(const std::string& src, Iface iface, std::string_view msg) {
   return "swarm/" + check_entity_id(src) + "/tx/" + std::string(to_string(iface)) + "/" + std::string(msg);
 }
