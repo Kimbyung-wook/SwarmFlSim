@@ -29,6 +29,7 @@ flowchart LR
 | IMP-AGT-016 | 공용 `TaskPilot`을 구간(Leg) 상태 기계로 전환, Hold 매개변수(center 없으면 시작 위치·고도, radius 없으면 `hold_radius_m`, `duration_s` 0·없음 = 다음 명령까지 / 있으면 원 위 체류 후 COMPLETED, 방향 기본 CW). 같은 task_id는 CANCELLED 없이 교체, 빈 Route·반경 ≤ 0 Hold·모양 없는 SearchArea는 REJECTED. waypoint MA·편대 리더가 사용 | `src/swarm_algorithms/common.py` | REQ-BHV-002, REQ-UI-003, DEC-033 | Pass (TC-AGT-020, TC-AGT-024, TC-AGT-025) |
 | IMP-AGT-017 | RouteTask: 항로점마다 goto(그 점의 alt_m·speed_mps·acceptance) + 행위 선회(Loiter: duration_s, Recon: 반경 원 1바퀴 이상 또는 duration_s), loop 반복, `TaskStatus.progress` = 마친 항로점 / 전체. SearchArea 원(다각형은 외접 원)은 정찰 원 1바퀴. 선회 반경은 최소 선회 반경 × 1.3 이상으로 보정. StrikeTask.aim_point는 REJECTED 유지 | `src/swarm_algorithms/common.py`, `waypoint.py`, `formation.py` | REQ-BHV-002, REQ-UI-004, DEC-033 | Pass (TC-AGT-021~025) |
 | IMP-AGT-018 | flocking Hold: 중심·반경·방향의 접선 벡터장 선회, duration_s 체류 후 COMPLETED. Route는 REJECTED | `src/swarm_algorithms/flocking.py` | REQ-BHV-002, DEC-033 | Pass (TC-AGT-025) |
+| IMP-AGT-020 | 레이스트랙 선회 대기(DEC-034): `HoldTask.racetrack`·`LoiterAction.racetrack`이 있으면 `TaskPilot`이 `CurveCommand.racetrack`을 FA에 보낸다(중심·반경·방향은 작업에서, duration 처리는 원형과 같고 체류 판정은 경로 오차). `leg_length_m < 0`은 REJECTED. flocking Hold는 vector_field 침로로 레이스트랙을 따른다 | `src/swarm_algorithms/common.py`, `flocking.py` | REQ-BHV-002, DEC-034 | Pass (TC-AGT-028) |
 
 ## TC
 
@@ -50,5 +51,6 @@ flowchart LR
 | TC-AGT-023 | Recon 반경 600 m 원 1바퀴 이상(누적 각 ≥ 0.95 × 2π) 뒤 COMPLETED. SearchArea 원 700 m ±10% 선회 후 COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-017 | Pass |
 | TC-AGT-024 | 같은 task_id Route 교체(CANCELLED 없이 ACCEPTED 재송신, 새 항로점 도달), loop 2바퀴 이상(진행 0 → 0.5 → 1.0 → 0.5), 빈 Route REJECTED | `tests/test_alg_mission.py` | IMP-AGT-016, IMP-AGT-017 | Pass |
 | TC-AGT-025 | 편대 리더 Route 수행·추종기 이탈 800 m 미만, flocking Route REJECTED, flocking Hold 3대 반경 600 m ±25%·duration 후 COMPLETED | `tests/test_alg_mission.py` | IMP-AGT-016~018 | Pass |
+| TC-AGT-028 | 레이스트랙: Hold(중심·반경 300 m·축 90°·duration) 명령이 FA 레이스트랙으로 전달되고 duration 뒤 COMPLETED, Route Loiter 레이스트랙 수행 후 다음 항로점·COMPLETED, `leg_length_m < 0` REJECTED, flocking Hold 레이스트랙 duration 후 COMPLETED. 수렴 정확도는 TC-AGT-027 | `tests/test_alg_mission.py` | IMP-AGT-020 | Pass |
 
-시험 결과(2026-11-02): algorithms/tests 23 passed (기존 12 + 신규 11)
+시험 결과(2026-11-02): algorithms/tests 26 passed (기존 12 + DEC-033 11 + DEC-034 3)

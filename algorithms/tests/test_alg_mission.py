@@ -1,4 +1,4 @@
-"""TC-AGT-020~025: 지도 임무 명령 Hold 매개변수·Route·정찰·SearchArea 원 (IMP-AGT-016~018, DEC-033)"""
+"""TC-AGT-020~025, 028: 지도 임무 명령 Hold 매개변수·Route·정찰·SearchArea 원·레이스트랙 (IMP-AGT-016~018, 020, DEC-033, DEC-034)"""
 
 import math
 
@@ -257,3 +257,60 @@ def test_tc_agt_025_flocking_route_rejected_hold_orbit():
     ds = track(h, 30.0, lambda _, b: math.hypot(*rel(b, 1500, 1500)))
     assert all(d == pytest.approx(600.0, rel=0.25) for d in ds)
     assert statuses(h, "h1")[-1].state == S.COMMAND_STATE_COMPLETED
+
+
+# ---- 레이스트랙 (IMP-AGT-020, DEC-034) ----
+
+def fa_of(h, uav=UAV):
+    return h.rt.vehicles[uav].fa
+
+
+def test_tc_agt_028_hold_racetrack_goes_to_fa_and_completes():
+    h = Harness(make_scenario(1, "waypoint", course_deg=0.0))
+    t = task()
+    set_pos(t.hold.center, 2000, 0, 1600.0)
+    t.hold.radius_m, t.hold.duration_s = 300.0, 100.0
+    t.hold.racetrack.leg_length_m, t.hold.racetrack.axis_heading_deg = 1200.0, 90.0
+    send_c2(h.bus, "gcs-01", t, [UAV])
+    h.run_s(30.0)
+    race = fa_of(h)._race
+    assert race is not None and race[2:5] == pytest.approx((300.0, 1200.0, math.pi / 2))
+    h.run_s(300.0)
+    assert [s.state for s in statuses(h, "t1")] == [
+        S.COMMAND_STATE_ACCEPTED, S.COMMAND_STATE_EXECUTING, S.COMMAND_STATE_COMPLETED]
+
+
+def test_tc_agt_028_loiter_racetrack_in_route():
+    pts = [(2000, 0, 1500.0, 22.0, ("loiter", 60.0, 300.0)), (2000, 3000, 1500.0, 22.0, None)]
+    t = route(pts)
+    w = t.route.waypoints[0]
+    w.loiter.racetrack.leg_length_m, w.loiter.racetrack.axis_heading_deg = 1000.0, 0.0
+    h = Harness(make_scenario(1, "waypoint", course_deg=0.0))
+    send_c2(h.bus, "gcs-01", t, [UAV])
+    seen = False
+    for _ in range(300):
+        h.run_s(1.0)
+        seen = seen or fa_of(h)._race is not None
+    assert seen
+    assert fa_of(h)._race is None or statuses(h, "t1")[-1].state == S.COMMAND_STATE_COMPLETED
+    assert statuses(h, "t1")[-1].state == S.COMMAND_STATE_COMPLETED
+
+
+def test_tc_agt_028_negative_leg_rejected_flocking_racetrack_hold():
+    h = Harness(make_scenario(2, "flocking", spacing_m=150.0, course_deg=0.0))
+    bad = task("bad", "")
+    bad.ClearField("assignees")
+    bad.hold.racetrack.leg_length_m = -1.0
+    send_c2(h.bus, "gcs-01", bad, [UAV])
+    h.run_s(1.0)
+    assert [s.state for s in statuses(h, "bad")] == [S.COMMAND_STATE_REJECTED]
+    t = c2_pb2.TaskCommand(task_id="rk")
+    set_pos(t.hold.center, 1500, 1500)
+    t.hold.radius_m, t.hold.duration_s = 400.0, 40.0
+    t.hold.racetrack.leg_length_m, t.hold.racetrack.axis_heading_deg = 1200.0, 45.0
+    for uav in ("uav-001", "uav-002"):
+        send_c2(h.bus, "gcs-01", t, [uav])
+    h.run_s(300.0)
+    assert statuses(h, "rk")[-1].state == S.COMMAND_STATE_COMPLETED
+    dn, de = rel(h.core.bodies[UAV], 1500, 1500)
+    assert math.hypot(dn, de) < 400.0 + 600.0 + 300.0  # 레이스트랙 둘레 안

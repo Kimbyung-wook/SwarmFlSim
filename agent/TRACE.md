@@ -1,7 +1,7 @@
 # WP3 Vehicle Agent 런타임 추적표 (모듈 AGT)
 
 - 패키지 `swarm-agent`, 실행 파일 `swarm-agent`. 한 프로세스가 여러 기체를 호스팅한다.
-- 기본 MA 플러그인은 `algorithms/`(IMP-AGT-011~018, TC-AGT-014~025)에 있다.
+- 기본 MA 플러그인은 `algorithms/`(IMP-AGT-011~018·020, TC-AGT-014~025·028)에 있다.
 
 ## 구성
 
@@ -46,6 +46,7 @@ flowchart LR
 | IMP-AGT-008 | 실행 파일 `swarm-agent`: `--participant`, `--entities`, `--scenario`, `--frames`, `--list-plugins`, 공통 버스 옵션(`--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast`), 종료 시 처리 시간 출력 | `src/swarm_agent/cli.py` | DEC-026 | Pass (TC-AGT-012, 수동 시험) |
 | IMP-AGT-009 | 시험 도구: 가짜 Core(2-DoF 운동학, truth·NavigationReport·tick 발행), 가짜 Datalink(tx → rx 즉시, 손실 함수), 시나리오 생성기, Harness, 일치 판정 캐시 InMemoryBus | `src/swarm_agent/testing.py` | DEC-015 | Pass (시험 전체) |
 | IMP-AGT-010 | FA·런타임 성능 측정 스크립트 | `bench/bench_fa.py` | REQ-PRF-001, REQ-PRF-002 | 아래 측정값 |
+| IMP-AGT-019 | 기본 FA 레이스트랙(`CurveCommand.racetrack`, DEC-034): 반경 R 두 원 + 접선 직선 두 개의 폐경로. 매개변수 `racetrack_guidance` = `dubins`(기본: 원 구간 벡터장 + 직선 구간 횡오차 진입각 `ψ − χ∞·(2/π)·atan(k·e)`) 또는 `vector_field`(MATLAB `reference/racetrack_vectorfield.m`: 원 구간 수렴+접선 합성장, 직선 구간 `χ∞ = atan2(10R, L)`, `atan(k·√|e|)`). 구간은 축 방향 투영으로 나눈다. 반경 ≤ 0·길이 < 0 REJECTED | `src/swarm_agent/racetrack.py`, `src/swarm_agent/fa.py` | REQ-GNC-001, REQ-BHV-002, DEC-034 | Pass (TC-AGT-026, TC-AGT-027) |
 
 ## TC
 
@@ -66,8 +67,10 @@ flowchart LR
 | TC-AGT-011 | 플러그인 예외 격리(FA는 계속 출력), Reset 후 재구성, Shutdown | `tests/test_agent_runtime.py` | IMP-AGT-006 | Pass |
 | TC-AGT-012 | 명령행·버스 옵션 해석, 시나리오 파일 .pb·proto JSON·시나리오 JSON(예제 20대 flocking_basic 호스팅), `--list-plugins` | `tests/test_agent_runtime.py` | IMP-AGT-008 | Pass |
 | TC-AGT-013 | Zenoh(open_bus, 멀티캐스트 끔) threaded 런타임: LoadScenario → 5틱 → ControlOutput 10개, FrameDone 0~4. 25회 반복 통과 | `tests/test_agent_runtime.py` | IMP-AGT-006, DEC-026 | Pass |
+| TC-AGT-026 | 레이스트랙 기하: 경로 오차(원 위·직선 위 0, 중심 R), 경로 위 점에서 침로가 접선(CW·CCW, dubins·vector_field), 안쪽 점은 바깥쪽·바깥쪽 점은 안쪽으로 | `tests/test_agent_racetrack.py` | IMP-AGT-019 | Pass |
+| TC-AGT-027 | 레이스트랙 수렴: 서로 다른 초기점·침로·축·방향 4가지 × dubins·vector_field. 400 s 뒤 100 s 동안 경로 오차 < 40 m, 침로와 경로 접선 차 < 30°, 고도 수렴 | `tests/test_agent_racetrack.py` | IMP-AGT-019 | Pass |
 
-시험 결과(2026-11-02): `uv run pytest` 168 passed (agent 21, algorithms 23, 기존 124)
+시험 결과(2026-11-02): `uv run pytest` 183 passed (agent 32, algorithms 26, 기존 125)
 
 ## FA 성능 측정 (IMP-AGT-010)
 

@@ -2,6 +2,7 @@
 
 FlightCommand(HSA, Waypoint, Curve/Orbit) → 2/3-DoF용 KinematicCmd.
 - 유도: 목표 침로·속도·고도를 만든다. Waypoint는 직행, Orbit은 벡터장(Beard & McLain).
+  Racetrack(DEC-034)은 매개변수 racetrack_guidance(dubins 기본 | vector_field)로 고른다 (racetrack.py).
 - 제어: 침로 오차 비례 선회율(최대 뱅크로 제한), 고도 오차 비례 상승률.
 - KinematicCmd는 heading_rate(2-DoF)와 협조선회 뱅크 bank = atan(V·ψ̇/g)(3-DoF)를 함께 채운다.
   두 모델이 같은 출력으로 같은 궤적을 따른다.
@@ -17,6 +18,7 @@ from typing import Any
 from swarm.v1 import common_pb2, fa_pb2, vi_pb2
 from swarm_api import FlightAutonomy
 
+from . import racetrack
 from .geo import G_MPS2, course_rad, ned_offset, wrap_pi
 
 DEFAULTS: dict[str, float] = {
@@ -29,6 +31,10 @@ DEFAULTS: dict[str, float] = {
     "k_altitude": 0.3,          # 1/s, 고도 오차 → 상승률
     "k_orbit": 2.0,             # 벡터장 수렴 이득
     "acceptance_radius_m": 50.0,  # Waypoint.acceptance_radius_m가 0일 때
+    "k_cross_track": 0.02,      # 1/m, dubins 직선 구간 횡오차 이득
+    "cross_track_inf_deg": 60.0,  # dubins 직선 구간 최대 진입각
+    "k_racetrack_line": 0.3,    # vector_field 직선 구간 이득
+    "racetrack_gamma": 0.2,     # vector_field 원 구간 접선 이득
 }
 
 _S = common_pb2
@@ -39,6 +45,9 @@ class DefaultFlightAutonomy(FlightAutonomy):
         self.entity_id = entity_id
         p = {**DEFAULTS, **{k: v for k, v in params.items() if k in DEFAULTS}}
         self.p = p
+        self.race_guidance = str(params.get("racetrack_guidance", "dubins"))
+        if self.race_guidance not in racetrack.GUIDANCE:
+            raise ValueError(f"racetrack_guidance must be one of {racetrack.GUIDANCE}")
         self.v_min = float(p["min_speed_mps"])
         self.v_max = float(p["max_speed_mps"])
         self.climb_max = float(p["max_climb_mps"])
@@ -54,6 +63,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
         self._wp_idx = 0
         self._loop = False
         self._orbit: tuple[float, float, float, float] | None = None  # lat, lon, radius, λ
+        self._race: tuple[float, float, float, float, float, float] | None = None  # lat, lon, R, L, α, λ
         self._course = 0.0
         return vi_pb2.FlightCapability(
             min_speed_mps=self.v_min, max_speed_mps=self.v_max, max_climb_mps=self.climb_max,
@@ -88,10 +98,20 @@ class DefaultFlightAutonomy(FlightAutonomy):
             if not update:
                 self._wp_idx = 0
             self._wp_idx = min(self._wp_idx, len(self._wps) - 1)
+        elif cmd.curve.WhichOneof("curve") == "racetrack":
+            r = cmd.curve.racetrack
+            lam = -1.0 if r.direction == vi_pb2.TURN_DIRECTION_CCW else 1.0
+            self._race = (r.center.lat_deg, r.center.lon_deg, r.radius_m, r.leg_length_m,
+                          math.radians(r.axis_heading_deg), lam)
+            if r.HasField("speed_mps"):
+                self._spd = r.speed_mps
+            if r.center.alt_m > 0:
+                self._alt = r.center.alt_m
         else:
             o = cmd.curve.orbit
             lam = -1.0 if o.direction == vi_pb2.TURN_DIRECTION_CCW else 1.0
             self._orbit = (o.center.lat_deg, o.center.lon_deg, o.radius_m, lam)
+            self._race = None
             if o.HasField("speed_mps"):
                 self._spd = o.speed_mps
             if o.center.alt_m > 0:
@@ -112,9 +132,15 @@ class DefaultFlightAutonomy(FlightAutonomy):
         if mode == "waypoint" and not cmd.waypoint.waypoints:
             return "empty waypoint list"
         if mode == "curve":
-            if cmd.curve.WhichOneof("curve") != "orbit":
+            curve = cmd.curve.WhichOneof("curve")
+            if curve == "racetrack":
+                if cmd.curve.racetrack.radius_m <= 0:
+                    return "racetrack radius must be > 0"
+                if cmd.curve.racetrack.leg_length_m < 0:
+                    return "racetrack leg_length_m must be >= 0"
+            elif curve != "orbit":
                 return "unsupported curve"
-            if cmd.curve.orbit.radius_m <= 0:
+            elif cmd.curve.orbit.radius_m <= 0:
                 return "orbit radius must be > 0"
         return ""
 
@@ -190,11 +216,26 @@ class DefaultFlightAutonomy(FlightAutonomy):
         self._pending.append(self._status(self._cmd_id, _S.COMMAND_STATE_COMPLETED))
         radius = max(2.0 * self.turn_radius(max(v, self.v_min)), wp.acceptance_radius_m)
         self._orbit = (wp.position.lat_deg, wp.position.lon_deg, radius, 1.0)
+        self._race = None
         if wp.position.alt_m > 0:
             self._alt = wp.position.alt_m
         self._kind = "loiter"
 
+    def _racetrack_course(self, lat: float, lon: float) -> float:
+        clat, clon, r, leg, alpha, lam = self._race
+        n, e = (float(x) for x in ned_offset(clat, clon, lat, lon))
+        if self.race_guidance == "vector_field":
+            self._hdg = racetrack.vector_field_course(n, e, r, leg, alpha, lam, self.p["k_racetrack_line"],
+                                                      self.p["racetrack_gamma"])
+        else:
+            self._hdg = racetrack.dubins_course(n, e, r, leg, alpha, lam, self.p["k_orbit"],
+                                                self.p["k_cross_track"],
+                                                math.radians(self.p["cross_track_inf_deg"]))
+        return self._hdg
+
     def _orbit_course(self, lat: float, lon: float) -> float:
+        if self._race is not None:
+            return self._racetrack_course(lat, lon)
         clat, clon, r, lam = self._orbit
         n, e = ned_offset(clat, clon, lat, lon)
         d = math.hypot(n, e)

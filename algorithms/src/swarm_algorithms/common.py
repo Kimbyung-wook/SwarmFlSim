@@ -12,6 +12,7 @@ from google.protobuf.message import Message
 from swarm.v1 import c2_pb2, common_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext
 from swarm_agent.geo import G_MPS2, ned_offset, wrap_pi
+from swarm_agent.racetrack import path_error
 
 S = common_pb2
 PILOT_TASKS = ("move_to", "hold", "return_to_base", "search_area", "route")
@@ -50,6 +51,7 @@ class Goal:
     radius: float | None = None
     duration: float | None = None  # None이면 다음 명령까지
     direction: int = vi_pb2.TURN_DIRECTION_UNSPECIFIED
+    racetrack: tuple[float, float] | None = None  # (직선 구간 길이 m, 축 방향 deg), DEC-034
 
 
 class TaskTracker:
@@ -139,7 +141,9 @@ class TaskTracker:
             h = t.hold
             g = Goal(t.task_id, kind, radius=h.radius_m if h.HasField("radius_m") else None,
                      duration=h.duration_s if h.HasField("duration_s") and h.duration_s > 0 else None,
-                     direction=h.direction)
+                     direction=h.direction,
+                     racetrack=(h.racetrack.leg_length_m, h.racetrack.axis_heading_deg)
+                     if h.HasField("racetrack") else None)
             if h.HasField("center"):
                 g.has_center = True
                 g.lat, g.lon, g.alt = h.center.lat_deg, h.center.lon_deg, h.center.alt_m
@@ -153,6 +157,11 @@ def invalid_reason(t: c2_pb2.TaskCommand) -> str:
         return "empty route"
     if kind == "hold" and t.hold.HasField("radius_m") and t.hold.radius_m <= 0:
         return "hold radius_m <= 0"
+    if kind == "hold" and t.hold.HasField("racetrack") and t.hold.racetrack.leg_length_m < 0:
+        return "racetrack leg_length_m < 0"
+    if kind == "route" and any(w.WhichOneof("action") == "loiter" and w.loiter.HasField("racetrack")
+                               and w.loiter.racetrack.leg_length_m < 0 for w in t.route.waypoints):
+        return "racetrack leg_length_m < 0"
     if kind == "search_area" and t.search_area.area.WhichOneof("shape") is None:
         return "search area without shape"
     return ""
@@ -172,6 +181,7 @@ class Leg:
     duration: float | None = None   # orbit: 원 위에서 보낼 시간
     revs: float = 0.0               # orbit: duration이 없을 때 최소 바퀴 수. 둘 다 없으면 끝나지 않는다
     wp_index: int = -1              # 이 구간을 마치면 항로점 wp_index를 마친 것으로 센다
+    racetrack: tuple[float, float] | None = None  # orbit: (직선 구간 길이 m, 축 방향 deg). 중심 = 레이스트랙 중점
 
 
 def orbit_done(leg: Leg, on_station_s: float, angle_rad: float) -> bool:
@@ -259,7 +269,8 @@ class TaskPilot:
         if kind == "hold":
             lat, lon, alt = (g.lat, g.lon, g.alt) if g.has_center else (p.lat_deg, p.lon_deg, p.alt_m)
             return [Leg("orbit", lat, lon, alt, self.speed_mps, radius=g.radius or self.hold_radius_m,
-                        direction=g.direction or vi_pb2.TURN_DIRECTION_CW, duration=g.duration)]
+                        direction=g.direction or vi_pb2.TURN_DIRECTION_CW, duration=g.duration,
+                        racetrack=g.racetrack)]
         speed = g.speed if g.speed is not None else self.speed_mps
         return [Leg("goto", g.lat, g.lon, g.alt, speed, self.acceptance_m)]
 
@@ -277,7 +288,9 @@ class TaskPilot:
                 legs.append(Leg("orbit", pos.lat_deg, pos.lon_deg, pos.alt_m, speed,
                                 radius=a.radius_m if a.HasField("radius_m") else self.hold_radius_m,
                                 direction=a.direction or vi_pb2.TURN_DIRECTION_CW,
-                                duration=a.duration_s, wp_index=i))
+                                duration=a.duration_s, wp_index=i,
+                                racetrack=(a.racetrack.leg_length_m, a.racetrack.axis_heading_deg)
+                                if a.HasField("racetrack") else None))
             elif action == "recon":
                 a = w.recon
                 legs.append(Leg("orbit", pos.lat_deg, pos.lon_deg, pos.alt_m, speed, radius=a.radius_m,
@@ -318,8 +331,12 @@ class TaskPilot:
         leg = self.leg
         p = nav.kinematics.position
         n, e = ned_offset(leg.lat, leg.lon, p.lat_deg, p.lon_deg)
-        d = math.hypot(float(n), float(e))
-        if abs(d - leg.radius) < max(0.25 * leg.radius, 50.0):
+        if leg.racetrack is not None:
+            err = path_error(float(n), float(e), leg.radius, leg.racetrack[0],
+                             math.radians(leg.racetrack[1]))
+        else:
+            err = abs(math.hypot(float(n), float(e)) - leg.radius)
+        if err < max(0.25 * leg.radius, 50.0):
             if self._on_station_since is None:
                 self._on_station_since = self.ctx.sim_time_s
             b = math.atan2(float(e), float(n))
@@ -339,7 +356,9 @@ class TaskPilot:
             v = speed if speed is not None else math.hypot(nav.kinematics.velocity_ned_mps.x,
                                                            nav.kinematics.velocity_ned_mps.y)
             leg.radius = max(leg.radius, 1.3 * turn_radius(max(v, 12.0)))
-            o = cmd.curve.orbit
+            o = cmd.curve.racetrack if leg.racetrack is not None else cmd.curve.orbit
+            if leg.racetrack is not None:
+                o.leg_length_m, o.axis_heading_deg = leg.racetrack
             o.center.lat_deg, o.center.lon_deg, o.center.alt_m = leg.lat, leg.lon, leg.alt
             o.radius_m = leg.radius
             o.direction = leg.direction

@@ -9,6 +9,7 @@
   Hold (DEC-033): 중심(없으면 작업 시작 위치) 둘레 반경(없으면 hold_radius_m) 원의 접선 벡터장
   v_goal = normalize(t − clip((d − R)/R, ±1)·u) × cruise, u = 중심→자기 단위벡터, t = 방향(CW 기본) 접선.
   duration_s가 있으면 원 위(|d − R| < max(0.25R, 50 m))에 처음 든 뒤 그 시간이 지나면 COMPLETED.
+  레이스트랙(DEC-034)이면 같은 중심·반경·방향으로 vector_field 레이스트랙 침로를 쓴다(체류 판정은 경로 오차).
   Route는 지원하지 않는다(REJECTED).
 - params: group(같은 group_id 이웃만), cruise_mps(22), neighbor_radius_m(600), separation_m(80),
   w_sep(1.5), w_align(0.5), w_coh(0.02), peer_hz(5), stale_s(2), goal_radius_m(300),
@@ -23,6 +24,7 @@ import numpy as np
 from swarm.v1 import common_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch
 from swarm_agent.geo import ned_offset
+from swarm_agent.racetrack import path_error, vector_field_course
 
 from .common import Goal, TaskTracker, every, peer_status
 
@@ -159,6 +161,14 @@ class Flocking(BatchMissionAutonomy):
         n, e = ned_offset(g.lat, g.lon, lat, lon)
         n, e = float(n), float(e)
         d = math.hypot(n, e)
+        if g.racetrack is not None:
+            leg, alpha = g.racetrack[0], math.radians(g.racetrack[1])
+            lam = -1.0 if g.direction == vi_pb2.TURN_DIRECTION_CCW else 1.0
+            if path_error(n, e, r, leg, alpha) < max(0.25 * r, 50.0) and a.hold_since is None:
+                a.hold_since = c.sim_time_s
+            Flocking._maybe_finish(c, a, g)
+            h = vector_field_course(n, e, r, leg, alpha, lam)
+            return math.cos(h), math.sin(h)
         if d < 1.0:
             return 1.0, 0.0  # 중심 위: 북쪽으로 벗어난다
         un, ue = n / d, e / d
@@ -168,11 +178,15 @@ class Flocking(BatchMissionAutonomy):
         norm = math.hypot(vn, ve)
         if abs(d - r) < max(0.25 * r, 50.0) and a.hold_since is None:
             a.hold_since = c.sim_time_s
+        Flocking._maybe_finish(c, a, g)
+        return vn / norm, ve / norm
+
+    @staticmethod
+    def _maybe_finish(c: AgentContext, a: _Agent, g: Goal) -> None:
         if (g.duration is not None and a.hold_since is not None and a.tracker.current is not None
                 and c.sim_time_s - a.hold_since >= g.duration):
             a.tracker.finish(S.COMMAND_STATE_COMPLETED)
             a.tracker.changed = False
-        return vn / norm, ve / norm
 
 
 __all__ = ["Flocking"]
