@@ -51,6 +51,7 @@ class ParamSet:
             spec = msg.specs.add(name=d.name, layer=int(d.layer), unit=d.unit, description=d.description,
                                  runtime=d.runtime)
             json_format.ParseDict(d.default, spec.default_value)
+            spec.choices.extend(d.choices)
             if d.min is not None:
                 spec.min = d.min
             if d.max is not None:

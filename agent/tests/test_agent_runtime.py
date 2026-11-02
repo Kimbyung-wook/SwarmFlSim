@@ -347,7 +347,7 @@ def test_tc_agt_013_zenoh_threaded():
             time.sleep(0.005)
         stop.set()
         th.join(2)
-        assert [d.frame for d in got_done] == [0, 1, 2, 3, 4]
+        assert [d.frame for d in got_done] == [0, 0, 1, 2, 3, 4]  # 첫 0은 적재 직후 준비 신호 (DEC-037)
         assert len(got_ctrl) == 10
         rt.close()
     finally:

@@ -6,7 +6,7 @@
   3. FA: 이번 프레임에 항법 보고를 받은 기체만 step → onboard/<id>/ControlOutput
   4. lockstep이면 sim/clock/done/<participant>에 FrameDone
 
-구독하는 키: sim/clock/tick, sim/ctrl/cmd(런타임만, MA에 노출하지 않음), 기체마다 onboard/<id>/*,
+구독하는 키: sim/clock/tick, sim/ctrl/cmd·sim/ctrl/scenario(런타임만, MA에 노출하지 않음, DEC-037), 기체마다 onboard/<id>/*,
 swarm/<id>/rx/**. truth/**와 link/**는 구독하지 않는다 (PRP-SIM-003).
 """
 
@@ -92,7 +92,8 @@ class AgentRuntime:
         # 항법 보고를 기다리는 틱과 기한 (threaded 모드만)
         self._pending_tick: tuple[sim_pb2.ClockTick, float] | None = None
         self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
-                      bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample)]
+                      bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample),
+                      bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_sample)]
         self._vehicle_subs: list = []
         self.scenario: sim_pb2.Scenario | None = None
         self.vehicles: dict[str, Vehicle] = {}
@@ -124,6 +125,8 @@ class AgentRuntime:
             self._on_tick(sim_pb2.ClockTick.FromString(s.payload))
         elif key == keys.SIM_CTRL_CMD:
             self._on_command(sim_pb2.SimCommand.FromString(s.payload))
+        elif key == keys.SIM_CTRL_SCENARIO:
+            self._on_scenario(sim_pb2.Scenario.FromString(s.payload))
         elif key.startswith("onboard/"):
             self._on_onboard(key, s.payload)
         elif key.startswith("swarm/"):
@@ -155,6 +158,12 @@ class AgentRuntime:
         self._subs = []
 
     # ---- sim/ctrl (런타임 전용) ----
+
+    def _on_scenario(self, scenario: sim_pb2.Scenario) -> None:
+        """Core가 재발행한 시나리오 (DEC-037). 이미 적재한 것과 name이 같으면 무시, 다르면 다시 적재"""
+        if self.scenario is not None and self.scenario.name == scenario.name:
+            return
+        self.load(scenario)
 
     def _on_command(self, cmd: sim_pb2.SimCommand) -> None:
         which = cmd.WhichOneof("cmd")
@@ -196,6 +205,8 @@ class AgentRuntime:
             self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
         log.info("loaded '%s': hosting %d vehicles", scenario.name, len(self._order))
         self._publish_params()
+        if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다
+            self._send_done(0)
 
     def _hosts(self, spec: entity_pb2.EntitySpec) -> bool:
         if self.config.entities is not None:
@@ -324,6 +335,10 @@ class AgentRuntime:
             return
         self._process_tick(tick)
 
+    def _send_done(self, frame: int) -> None:
+        done = sim_pb2.FrameDone(participant=self.config.participant, frame=frame)
+        self.bus.put(keys.clock_done(self.config.participant), done.SerializeToString(), encoding(done))
+
     def _process_tick(self, tick: sim_pb2.ClockTick) -> None:
         t_start = time.perf_counter()
         self.mode = tick.mode
@@ -333,8 +348,7 @@ class AgentRuntime:
         if self._order:
             self._step(tick)
         if tick.mode == sim_pb2.RUN_MODE_LOCKSTEP:
-            done = sim_pb2.FrameDone(participant=self.config.participant, frame=tick.frame)
-            self.bus.put(keys.clock_done(self.config.participant), done.SerializeToString(), encoding(done))
+            self._send_done(tick.frame)
         self.stats.ticks += 1
         fs = self.stats.frame_s
         fs.append(time.perf_counter() - t_start)
