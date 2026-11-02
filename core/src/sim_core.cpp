@@ -108,10 +108,12 @@ bool SimCore::load(const Scenario& sc) {
   rate_ = mode_ == v1::RUN_MODE_REALTIME ? 1.0 : sc.rate;
   seed_ = sc.seed;
   reset_run_state();
+  ready_.clear();
 
   const auto now = Clock::now();
   publish_truth();
   publish_all_params();
+  publish_scenario();
   last_params_wall_ = now;
   set_state(v1::SIM_RUN_STATE_LOADED, now);
   log("loaded scenario '" + sc.name + "', " + std::to_string(store_.size()) + " entities");
@@ -187,7 +189,6 @@ void SimCore::handle_start(const v1::Start& s, Clock::time_point now) {
   log("start mode=" + v1::RunMode_Name(mode_) + " hz=" + std::to_string(hz) + " rate=" + std::to_string(rate_) +
       " seed=" + std::to_string(seed_));
   set_state(v1::SIM_RUN_STATE_RUNNING, now);
-  if (!frame_published_) publish_frame();
 }
 
 void SimCore::handle_fault(const v1::InjectFault& f) {
@@ -274,6 +275,8 @@ void SimCore::publish_params(std::size_t i) {
   publish(keys::sim_param(store_.id(i), "dynamics"), ep);
 }
 
+void SimCore::publish_scenario() { publish(std::string(keys::kSimCtrlScenario), to_proto(scenario_)); }
+
 void SimCore::publish_all_params() {
   for (std::size_t i = 0; i < store_.size(); ++i) publish_params(i);
 }
@@ -320,6 +323,7 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
       reset_run_state();
       publish_truth();
       publish_all_params();
+      publish_scenario();
       last_params_wall_ = now;
       set_state(v1::SIM_RUN_STATE_LOADED, now);
       break;
@@ -346,7 +350,10 @@ bool SimCore::poll(Clock::time_point now) {
   }
   for (const auto& d : in.dones) {
     auto it = done_.find(d.participant());
-    if (it != done_.end()) it->second = std::max(it->second, d.frame() + 1);
+    if (it == done_.end()) continue;
+    // 첫 틱 전의 FrameDone{frame=0}은 준비 신호다 (DEC-037)
+    if (frame_ == 0 && !frame_published_) ready_.insert(d.participant());
+    else it->second = std::max(it->second, d.frame() + 1);
   }
   for (const auto& c : in.commands) handle(c, now);
 
@@ -355,12 +362,17 @@ bool SimCore::poll(Clock::time_point now) {
     publish_status(now);
   if (state_ == v1::SIM_RUN_STATE_LOADED && now - last_params_wall_ >= std::chrono::seconds(1)) {
     publish_all_params();
+    publish_scenario();
     last_params_wall_ = now;
   }
 
   const bool stepping = state_ == v1::SIM_RUN_STATE_PAUSED && step_budget_ > 0;
   if (state_ != v1::SIM_RUN_STATE_RUNNING && !stepping) return false;
-  if (!frame_published_) publish_frame();
+  if (!frame_published_) {
+    // lockstep은 참여자 전원이 준비되어야 첫 틱을 낸다. 시작 후 동적 참여는 없다 (DEC-037)
+    if (mode_ == v1::RUN_MODE_LOCKSTEP && frame_ == 0 && ready_.size() < done_.size()) return false;
+    publish_frame();
+  }
   if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) return false;
 
   if (!stepping && paced()) {

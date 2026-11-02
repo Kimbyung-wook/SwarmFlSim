@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,12 +28,16 @@ struct Scenario {
   std::uint64_t seed = 0;
   std::vector<std::string> participants;  // lockstep 장벽 참여자 (sim/clock/done/<participant>)
   std::vector<v1::EntitySpec> entities;
+  std::optional<v1::Scenario> source;  // proto로 받은 시나리오 원본. 재발행에 쓴다 (DEC-037)
 };
 
 // 형식 오류면 std::invalid_argument
 Scenario parse_scenario_json(const std::string& json);
 
 Scenario from_proto(const v1::Scenario& msg);
+
+// sim/ctrl/scenario 재발행용 (DEC-037). 원본이 있으면 그대로, 없으면 Scenario 필드에서 만든다
+v1::Scenario to_proto(const Scenario& sc);
 
 // 파일: .pb는 swarm.v1.Scenario 바이너리, 그 밖은 JSON.
 // JSON에 "run" 객체가 있으면 swarm.v1.Scenario의 proto JSON(swarm-scenario export 출력), 없으면 최소 형식

@@ -97,6 +97,7 @@ class SimCore {
   void handle_set_params(const v1::SetParams& p);
   void publish_params(std::size_t i);
   void publish_all_params();
+  void publish_scenario();
   bool fault_active(std::size_t i, v1::FaultKind kind) const;
   void kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, std::uint64_t frame);
   void reset_run_state();
@@ -161,6 +162,7 @@ class SimCore {
   // 상태 보고
   Clock::time_point last_status_wall_{};
   Clock::time_point last_params_wall_{};
+  std::set<std::string> ready_;  // lockstep 준비 신호(FrameDone{frame=0})를 보낸 참여자 (DEC-037)
   Clock::time_point rate_wall_{};
   std::uint64_t rate_sim_us_ = 0;
   double rate_actual_ = 0.0;
