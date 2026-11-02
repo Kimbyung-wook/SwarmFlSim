@@ -99,6 +99,7 @@ flowchart LR
   - lockstep 수신 결정성(DEC-040): Datalink는 틱 f의 rx를 모두 발행한 뒤 `FrameDone{f}`를 보낸다. Agent는 틱 f+1 처리 전에 Datalink의 `FrameDone{f}`를 받아야 하며(Datalink가 `participants`에 있을 때), 틱 t에서는 `rx_time_us <= t`인 rx만 소비한다. realtime과 free-run에는 적용하지 않는다.
   - 참여자 응답 없음(DEC-041): lockstep에서 Core는 이탈한 참여자를 계속 기다린다. 벽시계 5 s 넘게 `FrameDone`이 없는 참여자를 `SimStatus.waiting_participants`에 싣고, 기다리는 동안에도 `sim/ctrl/status`를 계속 발행한다. UI·Monitor는 이를 경고로 표시한다. 복구는 Reset+Start다.
   - 재생 한계(DEC-042): MCAP 재생기는 속도 조절이나 배압 없이 배속대로 발행한다. 고배속에서 수신자가 놓치는 프레임은 허용하고, UI·Monitor는 `truth/state` 프레임 번호의 공백으로 누락 수를 표시한다.
+  - 버스 QoS(DEC-043): `open_bus`의 Zenoh 백엔드는 모든 키를 우선순위 DATA·비express로 보내고, `sim/clock/**`와 `swarm/**`는 혼잡 제어 BLOCK, 그 밖은 DROP으로 보낸다. 참여자는 이 키들을 `open_bus`가 아닌 별도 세션이나 다른 QoS로 발행하지 않는다.
   - 입력 검증(DEC-038): 시나리오·`SimCommand`·임무·매개변수의 비유한 값과 범위 밖 값은 거부한다. 지원하지 않는 DoF 시나리오는 적재를 거부하고 Core는 종료하지 않는다. `assignees`가 비면 임무를 거부한다.
   - 참여자는 받은 시나리오의 `name`이 이전과 다르면 다시 적재하고 준비 신호를 다시 보낸다. 같으면 무시한다.
 - 기체별 매개변수 (DEC-035)

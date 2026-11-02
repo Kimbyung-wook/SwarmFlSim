@@ -117,6 +117,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-040 | lockstep에서 Datalink→Agent 수신 메시지의 결정적 소비 규칙: (1) Datalink는 틱 f에서 낼 rx를 모두 발행한 뒤에 `FrameDone{f}`를 보낸다. (2) Agent는 틱 f+1을 처리하기 전에 Datalink의 `FrameDone{f}`를 받아야 한다(Datalink가 `RunSpec.participants`에 있을 때). (3) Agent는 틱 t에서 `rx_time_us <= t`인 rx만 소비하고 나머지는 다음 틱으로 미룬다 | docs/21_qa_report.md QA-013, DEC-039, DEC-005 | Confirmed |
 | DEC-041 | lockstep에서 참여자가 이탈하면 Core는 계속 기다리고, 벽시계 5 s 넘게 `FrameDone`이 없는 참여자를 `SimStatus.waiting_participants`로 알려 UI가 경고한다. 복구는 Reset+Start(DEC-038 유지) | docs/21_qa_report.md D-12, TC-QA-028, 사용자 답변: "대기+경고 표시" | Confirmed |
 | DEC-042 | MCAP 재생은 관찰용이며 속도 조절·배압을 넣지 않는다. 고배속에서 수신 프레임 누락을 설계 한계로 허용하고, UI·Monitor가 프레임 번호 공백으로 누락 수를 표시한다 | docs/21_qa_report.md D-13, QA-008, 사용자 답변: "설계 한계로 명시" | Confirmed |
+| DEC-043 | 버스 QoS: Zenoh 버스는 모든 키를 같은 우선순위(DATA)·비express로 보낸다. lockstep 경로 키(`sim/clock/**`, `swarm/**`)는 혼잡 제어를 BLOCK으로 해 혼잡 시에도 버리지 않고 같은 링크 큐에서 순서를 지킨다. 그 밖의 키는 DROP. QA-016 잔여 원인(교차 키 도착 순서) 대응의 1단계이며, 해소되지 않으면 FrameDone 송신 개수 장벽(WP3 제안)을 OPN으로 다시 올린다 | docs/21_qa_report.md QA-016, DEC-040, 사용자 답변: "QoS 통일로 먼저 시도" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 

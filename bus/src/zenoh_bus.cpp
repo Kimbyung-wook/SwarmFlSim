@@ -29,6 +29,11 @@ zenoh::Config make_config(const ZenohOptions& o) {
   return config;
 }
 
+// DEC-043: lockstep 장벽과 데이터링크 경로(`sim/clock/**`, `swarm/**`)
+bool is_lockstep_path_key(std::string_view key) {
+  return key.starts_with("sim/clock/") || key.starts_with("swarm/");
+}
+
 class ZenohSubscription final : public Subscription {
  public:
   explicit ZenohSubscription(zenoh::Subscriber<void>&& sub) : sub_(std::move(sub)) {}
@@ -58,6 +63,10 @@ ZenohBus::~ZenohBus() = default;
 void ZenohBus::put(std::string_view key, std::span<const std::uint8_t> payload, std::string_view encoding) {
   if (key.find('*') != std::string_view::npos) throw std::invalid_argument("wildcard in put key");
   zenoh::Session::PutOptions opts;
+  // DEC-043: lockstep 경로 키는 같은 우선순위·BLOCK으로 보내 혼잡 시 버리지 않고 링크 큐 하나의 순서를 지킨다
+  opts.priority = Z_PRIORITY_DATA;
+  opts.is_express = false;
+  if (is_lockstep_path_key(key)) opts.congestion_control = Z_CONGESTION_CONTROL_BLOCK;
   if (!encoding.empty()) opts.encoding = zenoh::Encoding(encoding);
   impl_->session.put(zenoh::KeyExpr(key), zenoh::Bytes(std::vector<std::uint8_t>(payload.begin(), payload.end())),
                      std::move(opts));
