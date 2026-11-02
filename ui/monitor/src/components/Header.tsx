@@ -72,7 +72,7 @@ export function Header(props: {
       )}
       {store.rewinds > 0 && <span className="kv warn">되감기 {store.rewinds}회</span>}
       {store.linkLagUs > 1_000_000 && (
-        <span className="kv warn" title="sim 시각 − 받은 link/outcome의 최신 tx 시각. 빈도(5 s 창)는 늦은 outcome을 세지 못한다">
+        <span className="kv warn" title="outcome을 받은 순간의 (sim 시각 − 그 outcome의 tx 시각). 둘 다 sim 시각이라 재생 배속과 무관하다. outcome이 없는 구간은 지연으로 보지 않는다">
           링크 지연 {(store.linkLagUs / 1e6).toFixed(1)} s
         </span>
       )}
