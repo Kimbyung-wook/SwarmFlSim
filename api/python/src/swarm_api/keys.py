@@ -31,6 +31,17 @@ def clock_done(participant: str) -> str:
     return f"sim/clock/done/{check_entity_id(participant)}"
 
 
+# 매개변수 (DEC-035). owner: dynamics | fa | ma
+PARAM_OWNERS = ("dynamics", "fa", "ma")
+SIM_PARAM_ALL = "sim/param/**"
+
+
+def sim_param(entity_id: str, owner: str) -> str:
+    if owner not in PARAM_OWNERS:
+        raise ValueError(f"invalid param owner: {owner!r}")
+    return f"sim/param/{check_entity_id(entity_id)}/{owner}"
+
+
 # L1 메시지 (데이터링크 경유)
 def tx(src: str, iface: Iface, msg: str) -> str:
     return f"swarm/{check_entity_id(src)}/tx/{iface}/{msg}"

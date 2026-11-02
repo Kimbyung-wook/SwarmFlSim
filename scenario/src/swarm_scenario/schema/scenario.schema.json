@@ -187,7 +187,8 @@
         "autonomy": { "$ref": "#/$defs/AutonomySpec" },
         "link_profile": { "type": "string" },
         "controlling_gcs": { "$ref": "#/$defs/EntityId" },
-        "script_path": { "type": "array", "items": { "$ref": "#/$defs/Geodetic" } }
+        "script_path": { "type": "array", "items": { "$ref": "#/$defs/Geodetic" } },
+        "dynamics_params": { "type": "object", "description": "DEC-035 동역학·제어 매개변수 재정의" }
       },
       "if": { "properties": { "dynamics": { "const": "scripted" } } },
       "then": { "required": ["script_path"], "properties": { "script_path": { "minItems": 2 } } }

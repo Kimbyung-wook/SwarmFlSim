@@ -60,6 +60,28 @@ message PayloadSpec {
   uint32 count = 5;                    // 무장 수량. 센서는 0
 }
 
+// 매개변수 계층 (DEC-035). UI가 계층별로 묶어 보여준다
+enum ParamLayer {
+  PARAM_LAYER_UNSPECIFIED = 0;
+  PARAM_LAYER_AIRFRAME = 1;  // 기체 물리 모델 (질량, 속도·뱅크 한계 등)
+  PARAM_LAYER_CONTROL = 2;   // 제어 (자세·속도·고도 루프 이득)
+  PARAM_LAYER_GUIDANCE = 3;  // 유도 (경로·선회 추종)
+  PARAM_LAYER_BEHAVIOR = 4;  // 행위 (편대·군집·경로 계획)
+  PARAM_LAYER_DECISION = 5;  // 결정 (임무·행동 선택)
+}
+
+// 매개변수 선언. 소유자(동역학·FA·MA)가 기본값과 함께 내보낸다 (DEC-035)
+message ParamSpec {
+  string name = 1;
+  ParamLayer layer = 2;
+  google.protobuf.Value default_value = 3;  // number | string | bool
+  string unit = 4;
+  optional double min = 5;                  // number만
+  optional double max = 6;
+  string description = 7;
+  bool runtime = 8;                         // 실행 중 변경 가능
+}
+
 message AutonomySpec {
   string ma_plugin = 1;  // 플러그인 등록명 (entry point 이름)
   google.protobuf.Struct ma_params = 2;
@@ -80,4 +102,5 @@ message EntitySpec {
   string link_profile = 9;
   string controlling_gcs = 10;  // 통제 GCS 엔티티 ID
   repeated Geodetic script_path = 11;  // DYNAMICS_KIND_SCRIPTED 경로
+  google.protobuf.Struct dynamics_params = 12;  // 동역학·제어 매개변수 재정의. airframe 값 위에 덮어쓴다 (DEC-035)
 }

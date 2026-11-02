@@ -4,6 +4,7 @@ syntax = "proto3";
 
 package swarm.v1;
 
+import "google/protobuf/struct.proto";
 import "swarm/v1/common.proto";
 import "swarm/v1/entity.proto";
 import "swarm/v1/link.proto";
@@ -97,6 +98,39 @@ message InjectFault {
   bool clear = 4;
 }
 
+// 매개변수 소유자 (DEC-035)
+enum ParamOwner {
+  PARAM_OWNER_UNSPECIFIED = 0;
+  PARAM_OWNER_DYNAMICS = 1;  // Core 동역학 모델 (airframe·control)
+  PARAM_OWNER_FA = 2;        // Agent 런타임의 FA 플러그인
+  PARAM_OWNER_MA = 3;        // Agent 런타임의 MA 플러그인
+}
+
+// 실행 중 매개변수 변경. 다음 프레임 시작에 적용한다 (DEC-035)
+message SetParams {
+  string entity_id = 1;
+  ParamOwner owner = 2;
+  google.protobuf.Struct values = 3;  // 바꿀 이름만 적는다
+}
+
+message ParamRejection {
+  string name = 1;
+  string reason = 2;  // unknown | type | range | not_runtime
+}
+
+// 기체·소유자별 매개변수 선언과 적용 값 (sim/param/<entity>/<owner>)
+message EntityParams {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  string entity_id = 1;
+  ParamOwner owner = 2;
+  string plugin = 3;                     // 플러그인 등록명 또는 동역학 모델명
+  repeated ParamSpec specs = 4;
+  google.protobuf.Struct values = 5;     // 적용 중인 값 (기본값 포함 전체)
+  repeated ParamRejection rejected = 6;  // 직전 적재·변경에서 거부한 항목
+  uint64 sim_time_us = 7;
+}
+
 message SimCommand {
   option (mapping) = MAPPING_CLASS_SIM;
 
@@ -111,6 +145,7 @@ message SimCommand {
     Reset reset = 8;
     Shutdown shutdown = 9;
     InjectFault fault = 10;
+    SetParams set_params = 11;  // DEC-035
   }
 }
 
