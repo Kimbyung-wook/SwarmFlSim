@@ -120,7 +120,7 @@
 | TC-INT-005 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
 | TC-INT-006 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
 | TC-INT-007 | 통과 | 2026-11-02 | 위와 같음, 계약 0.6.0 병합 후 (wp0-contracts dacf4be) |
-| TC-INT-008 | 통과 | 2026-11-02 | 계약 0.8.0(wp0-contracts fde329c까지). 시나리오의 run.mode=lockstep일 때만. CLI `--mode lockstep`만으로는 준비 신호가 없어 교착 |
+| TC-INT-008 | 통과 | 2026-11-02 | 계약 0.8.0(wp0-contracts fde329c까지). 시나리오의 run.mode=lockstep일 때만. CLI `--mode lockstep`만으로는 준비 신호가 없어 교착. lockstep `--rate 1`에서 probe hold·racetrack·route·params도 통과 |
 | TC-INT-009 | 불합격 | 2026-11-02 | 지각 Agent가 시나리오를 받지 못해 틱이 나가지 않는다. 담당 WP1(Core). `docs/20_p0_demo.md` §6 |
 | TC-INT-010 | 통과 | 2026-11-02 | `{'racetrack_guidance': 'choice'}` 거부, 기존 값 유지 |
 | TC-INT-011 | 통과 | 2026-11-02 | 12대 선택 `전송 (12대)` 최상단, 재생 배지·버튼 비활성, 3배속 지연 평균 약 21 ms |
