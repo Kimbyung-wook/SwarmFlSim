@@ -73,6 +73,9 @@ export class MonitorStore {
   /** 배지로 바꾼 표시. SimStatus.replay 값이 바뀌면 지운다 */
   private viewManual: RunView | undefined;
   rewinds = 0;
+  /** truth/state 프레임 번호 공백으로 센 누락 프레임 수. 재생 한계(DEC-042). 통계 초기화·되감기에서 0 */
+  missedFrames = 0;
+  private lastFrameNo = 0;
   /** 시계 출처(sim/ctrl/status, truth/state)의 최신 시각(µs). 되감기 판정 기준 */
   clockUs = 0;
   /** 가장 최근 outcome을 받은 순간의 (시계 − outcome tx 시각)(µs)와 그때의 시계 */
@@ -124,7 +127,10 @@ export class MonitorStore {
           if (cur && cur.fromTruth && cur.kind === e.kind && cur.side === e.side && cur.alive === e.alive) continue;
           this.entities.set(e.id, { id: e.id, kind: e.kind, side: e.side, alive: e.alive, fromTruth: true });
         }
-        if (ev.frame.header) this.onClock(Number(ev.frame.header.simTimeUs));
+        if (ev.frame.header) {
+          this.onClock(Number(ev.frame.header.simTimeUs));
+          this.onFrameNo(Number(ev.frame.header.frame));
+        }
         return;
       case "truthEvent": {
         const e = ev.event.event;
@@ -229,6 +235,16 @@ export class MonitorStore {
     return this.lagSampleUs > 0 && this.clockUs - this.lagAtUs <= this.staleUs ? this.lagSampleUs : 0;
   }
 
+  private onFrameNo(n: number): void {
+    if (n > this.lastFrameNo) {
+      if (this.lastFrameNo > 0) this.missedFrames += n - this.lastFrameNo - 1;
+      this.lastFrameNo = n;
+    } else if (n > 0 && n < this.lastFrameNo) {
+      // 번호가 줄면 재생을 처음부터 다시 시작한 것이다. 기준만 새로 잡는다
+      this.lastFrameNo = n;
+    }
+  }
+
   /** 되감기는 시계 출처로만 판정한다. outcome·엔벨로프는 데이터링크가 밀리면 늦게 오므로 쓰지 않는다 */
   private onClock(tUs: number): void {
     if (this.clockUs > 0 && tUs > 0 && tUs + this.rewindUs < this.clockUs) {
@@ -244,6 +260,8 @@ export class MonitorStore {
 
   /** 집계·타임라인·echo를 지운다. 엔티티 목록과 링크 상태는 둔다 */
   clearStats(): void {
+    this.missedFrames = 0;
+    this.lastFrameNo = 0;
     this.agg.clear();
     this.timeline.clear();
     this.echo.clear();

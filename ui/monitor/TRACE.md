@@ -33,6 +33,7 @@
 | IMP-MON-024 | 재생 표시를 `SimStatus.replay`로 판단. `?replay=1`은 SimStatus 수신 전 대체값, 배지 수동 전환은 `replay` 값이 바뀌면 해제. 목 생성기 `replay` 옵션 | `src/model/store.ts`, `src/components/Header.tsx`, `src/App.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-UI-002, DEC-031 | TC-MON-012 |
 | IMP-MON-025 | 손실률 분모는 수신자별 outcome임을 표 툴팁에 명시하고 `거리 밖 제외`(OUT_OF_RANGE를 분자·분모에서 뺌) 선택 추가. 목 브로드캐스트 수신 대상을 같은 편 무전기 엔티티로 한정 | `src/model/aggregator.ts`, `src/components/StatsTable.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-LNK-002, DEC-032 | TC-MON-013 |
 | IMP-MON-026 | 링크 지연을 outcome을 받은 순간의 (sim 시계 − tx 시각)으로 계산. 마지막 outcome 이후 sim 시계가 5 s 넘게 흐르면 0. 트래픽 공백(`최신 tx 시각`이 멈춘 구간)을 지연으로 보이던 결함 수정 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, PRP-UI-002, DEC-005 | TC-MON-014 |
+| IMP-MON-027 | `truth/state` 프레임 번호 공백으로 누락 프레임 수를 세어 머리줄에 표시(재생 한계), `SimStatus.waiting_participants`를 머리줄에 경고 표시 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, DEC-041, DEC-042 | TC-MON-015 |
 
 ## 시험 (TC)
 
@@ -52,8 +53,9 @@
 | TC-MON-012 | 재생 표시: SimStatus 수신 전 `?replay=1`, 수신 후 `replay` 필드, 실행 중 전환 시 머리줄 배지 변경, 수동 전환 해제, 목 `replay` 옵션 (3건) | `src/model/replay.test.ts` | IMP-MON-024 | 통과 |
 | TC-MON-013 | 손실률 분모: 브로드캐스트 수신자별 outcome, 거리 밖 제외 계산, 목 브로드캐스트 수신 대상 = 같은 편 무전기 (2건) | `src/model/aggregator.test.ts`, `src/mock/mockTraffic.test.ts` | IMP-MON-025 | 통과 |
 | TC-MON-014 | 트래픽 공백은 링크 지연이 아님, 늦은 outcome은 그 지연만 표시하고 5 s 후 해제 (1건) | `src/model/store.test.ts` | IMP-MON-026 | 통과 |
+| TC-MON-015 | 프레임 번호 공백 누락 계수·재생 재시작·초기화, waiting_participants 보관 (2건) | `src/model/store.test.ts` | IMP-MON-027 | 통과 |
 
-`npm test`: 9개 파일 52건 통과. `npm run build`: 통과(tsc -b, vite build).
+`npm test`: 9개 파일 54건 통과. `npm run build`: 통과(tsc -b, vite build).
 
 ## 부하 측정 (TC-MON-009)
 
