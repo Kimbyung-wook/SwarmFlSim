@@ -1,6 +1,8 @@
 // IMP-UI-016: 지도 뷰. Viewer 생성, 렌더 루프에서 엔티티 갱신, 클릭·드래그 박스 선택 입력 (REQ-UI-001, REQ-UI-002)
 // IMP-UI-032: 우클릭(끌지 않음) 지점을 MoveTo 목적지로 넘기고 잠시 표시한다 (REQ-UI-003)
 // IMP-UI-065: truth 이벤트(재밍 구역·생성 엔티티·impact·kill)와 센서 시야를 렌더 루프에서 갱신한다 (DEC-046)
+// IMP-UI-067: 2D·2.5D·3D 전환 시 직전 화면 중심·폭을 새 모드에 그대로 옮긴다 (REQ-UI-001, DEC-003)
+// IMP-UI-068: 첫 엔티티 수신과 시나리오 교체 때 한 번씩 맞춤 뷰 (REQ-UI-001)
 // IMP-UI-037: 우클릭 → 임무 메뉴, Ctrl+우클릭 → 항로점 추가, 항로점 손잡이 왼쪽 끌기 → 위치 변경 (DEC-033)
 import { useEffect, useRef, useState } from "react";
 import type { Viewer } from "cesium";
@@ -8,6 +10,8 @@ import { Cartesian2, Cartographic, Math as CesiumMath, SceneMode } from "cesium"
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { EntityLayer } from "../cesium/entityLayer";
 import { EventLayer } from "../cesium/eventLayer";
+import { captureView, restoreView } from "../cesium/cameraView";
+import { FitGate } from "../model/viewKeep";
 import { eventOverlay } from "../model/eventOverlay";
 import { MissionLayer } from "../cesium/missionLayer";
 import type { MapDataStatus } from "../cesium/viewer";
@@ -56,7 +60,8 @@ function pickGround(viewer: Viewer, x: number, y: number): MapPoint | null {
   return { latDeg: CesiumMath.toDegrees(c.latitude), lonDeg: CesiumMath.toDegrees(c.longitude), heightM: Math.max(0, c.height) };
 }
 
-const MORPH_S = 0.8;
+/** 모핑 애니메이션은 지구 전체 뷰를 거치므로 즉시 전환하고 바로 직전 화면을 되살린다 (IMP-UI-067) */
+const MORPH_S = 0;
 
 export function MapView(props: Props) {
   const { live, selection, onSelect, viewMode, cameraMode, followId, onReady, overlay } = props;
@@ -85,6 +90,8 @@ export function MapView(props: Props) {
         return;
       }
       viewerRef.current = viewer;
+      // 개발 서버에서만: 브라우저 확인 절차(TC-UI-056)가 카메라 값을 읽는다
+      if (import.meta.env.DEV) (window as unknown as { __swarmViewer?: Viewer }).__swarmViewer = viewer;
       const layer = new EntityLayer(viewer.scene);
       layerRef.current = layer;
       const missions = new MissionLayer(viewer);
@@ -93,14 +100,14 @@ export function MapView(props: Props) {
       const events = new EventLayer(viewer);
       let seenEv = "";
       let seen = -1;
-      let fitted = false;
+      const gate = new FitGate();
       const onPreRender = () => {
         if (live.version !== seen) {
           seen = live.version;
           layer.update(live.frame, live.trails);
-          if (!fitted && live.frame.entities.length > 0) {
-            layer.fitAll();
-            fitted = true;
+          if (gate.check(live.frame.entities.length, live.status?.scenarioName) && !layer.fitAll()) {
+            // 위치가 쓸 만한 엔티티가 없었다: 다음 갱신에서 다시 맞춘다
+            gate.rearm();
           }
         }
         const ev = `${live.version}/${live.events.version}/${live.sensors.version}`;
@@ -240,6 +247,14 @@ export function MapView(props: Props) {
     if (!v) return;
     const target = viewMode === "2d" ? SceneMode.SCENE2D : viewMode === "columbus" ? SceneMode.COLUMBUS_VIEW : SceneMode.SCENE3D;
     if (v.scene.mode === target) return;
+    // 전환 직전 화면을 기억했다가 전환이 끝나면 새 모드에서 같은 중심·폭으로 놓는다 (지구 전체 뷰로 가지 않음)
+    const memo = captureView(v.scene);
+    if (memo) {
+      const off = v.scene.morphComplete.addEventListener(() => {
+        off();
+        if (viewerRef.current === v) restoreView(v.scene, memo);
+      });
+    }
     if (target === SceneMode.SCENE2D) v.scene.morphTo2D(MORPH_S);
     else if (target === SceneMode.COLUMBUS_VIEW) v.scene.morphToColumbusView(MORPH_S);
     else v.scene.morphTo3D(MORPH_S);

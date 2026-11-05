@@ -13,7 +13,6 @@ import {
   Material,
   NearFarScalar,
   PolylineCollection,
-  Rectangle,
   SceneMode,
   SceneTransforms,
   VerticalOrigin,
@@ -21,6 +20,8 @@ import {
 import type { Billboard, Label, Polyline, Scene } from "cesium";
 import type { CameraMode } from "../model/camera";
 import { cameraPose } from "../model/camera";
+import { fitRect } from "../model/viewKeep";
+import { fitTo } from "./cameraView";
 import type { EntityView, FrameView } from "../model/entityView";
 import type { ScreenEntity } from "../model/selection";
 import { ICON_SIZE, iconUrl, isDirectional, sideColor } from "../model/symbology";
@@ -166,14 +167,12 @@ export class EntityLayer {
     });
   }
 
-  /** 엔티티 전체가 보이도록 카메라를 놓는다 */
-  fitAll(margin = 0.15): void {
-    const vs = [...this.items.values()].map((i) => i.view);
-    if (vs.length === 0) return;
-    const lats = vs.map((v) => v.lat), lons = vs.map((v) => v.lon);
-    const [s, n, w, e] = [Math.min(...lats), Math.max(...lats), Math.min(...lons), Math.max(...lons)];
-    const dl = Math.max(n - s, 0.05) * margin, dn = Math.max(e - w, 0.05) * margin;
-    this.scene.camera.setView({ destination: Rectangle.fromDegrees(w - dn, s - dl, e + dn, n + dl) });
+  /** 엔티티 전체가 보이도록 카메라를 놓는다 (IMP-UI-068). 맞출 엔티티가 없으면 false */
+  fitAll(margin = 0.15): boolean {
+    const r = fitRect([...this.items.values()].map((i) => i.view), margin);
+    if (!r) return false;
+    fitTo(this.scene, r);
+    return true;
   }
 
   flyTo(id: string): void {
