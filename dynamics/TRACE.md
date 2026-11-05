@@ -28,6 +28,7 @@ flowchart LR
 | IMP-DYN-006 | 모델·적분기 팩토리(이름·DynamicsKind → 인스턴스, 파라미터 재정의). dof5/dof6은 자리만(nullptr) | `include/swarm/dyn/factory.hpp`, `src/factory.cpp` | REQ-DYN-001, REQ-DYN-004 |
 | IMP-DYN-007 | 바람 반영: 위치 변화와 `to_kinematic` 속도 = 대기 속도 + `env.wind_ned_mps`, 2-DoF 뱅크·3-DoF 선회율에 `env.gravity_mps2` | `src/models.cpp` | DEC-023 |
 | IMP-DYN-008 | 2/3-DoF 매개변수 노출: `param_descs`·`get_param`·`set_param`. 시정수는 제어(CONTROL), 속도·선회·상승 한계는 기체(AIRFRAME). 범위 밖·모르는 이름은 false이고 값을 바꾸지 않는다. 질량·관성 같은 실행 중 변경 불가 항목은 질점 모델에 없어 모두 `runtime`=true. dof5/6은 자리만 | `include/swarm/dyn/models.hpp`, `src/models.cpp` | DEC-035, REQ-CFG-003, IMP-API-012 | TC-DYN-014 |
+| IMP-DYN-009 | DEM 적재: `RawDemLoader`(int16 리틀엔디언 원시 격자 + JSON 머리글 `swarm-dem-grid` v1, 남→북 행, nodata 채움, 형식 오류 `invalid_argument`·파일 오류 `runtime_error`), `GridTerrain` int16 격자(`kInt16Heights` 생성자, float 격자의 절반 메모리). 자료는 `scripts/fetch_dem.py`가 Copernicus GLO-90에서 만든다 | `include/swarm/dyn/terrain.hpp`, `src/terrain.cpp`, `../scripts/fetch_dem.py`, `tests/data/` | DEC-053, DEC-004, REQ-SIM-003, QA-022 | TC-DYN-015 |
 
 ## 시험 (TC)
 
@@ -47,6 +48,7 @@ flowchart LR
 | TC-DYN-012 | 팩토리: 이름·DynamicsKind 생성, 예약 모델 nullptr, 파라미터 재정의, 모르는 파라미터 예외 | `tests/test_dynamics.cpp` | IMP-DYN-006 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-013 | 바람: 북향 50 m/s, 동풍 10 m/s 60 s 비행의 북·동 이동 거리, 대지 속도 출력, 3-DoF 선회율의 중력값 | `tests/test_dynamics.cpp` | IMP-DYN-007 | 통과 (msvc-debug, 2026-11-01) |
 | TC-DYN-014 | 매개변수 노출: 선언 기본값 = 모델 기본값, 두 계층 존재, set/get, 하한·상한·NaN·모르는 이름 거부(값 불변), 선언 이름 = 팩토리 파라미터 이름, 변경한 한계가 `derivatives`에 반영 | `tests/test_dynamics.cpp` | IMP-DYN-008 | 통과 (msvc-debug, 2026-11-02) |
+| TC-DYN-015 | 합성 능선 DEM(101×101, `tests/data/ridge.{bin,json}`, `gen_test_dem.py`) 적재: 능선·사면 고도, nodata 채움, 격자 밖 값, `contains` 경계, 머리글 오류 14종 거부, 자료·머리글 파일 없음, int16 크기 불일치·쌍선형 | `tests/test_dynamics.cpp` | IMP-DYN-009 | 통과 (msvc-debug, 2026-11-06) |
 
 ## 제약과 계약 변경 요청
 

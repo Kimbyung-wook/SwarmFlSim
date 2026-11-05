@@ -12,10 +12,13 @@ target_compile_features(swarm_dynamics PUBLIC cxx_std_20)
 if(SWARM_BUILD_TESTS)
   add_executable(swarm_dynamics_tests tests/test_dynamics.cpp)
   target_link_libraries(swarm_dynamics_tests PRIVATE swarm_dynamics)
+  # 합성 DEM (tests/data/gen_test_dem.py로 만든다, TC-DYN-015)
+  target_compile_definitions(swarm_dynamics_tests PRIVATE SWARM_DYN_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/data")
   # 시험 케이스마다 CTest 항목 하나 (TC-DYN-NNN)
   foreach(tc
       TC-DYN-001 TC-DYN-002 TC-DYN-003 TC-DYN-004 TC-DYN-005 TC-DYN-006
-      TC-DYN-007 TC-DYN-008 TC-DYN-009 TC-DYN-010 TC-DYN-011 TC-DYN-012 TC-DYN-013 TC-DYN-014)
+      TC-DYN-007 TC-DYN-008 TC-DYN-009 TC-DYN-010 TC-DYN-011 TC-DYN-012 TC-DYN-013 TC-DYN-014
+      TC-DYN-015)
     add_test(NAME dyn.${tc} COMMAND swarm_dynamics_tests ${tc})
   endforeach()
 endif()

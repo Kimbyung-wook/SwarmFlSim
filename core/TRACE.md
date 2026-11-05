@@ -58,6 +58,9 @@ flowchart LR
 | IMP-CORE-020 | lockstep 응답 없는 참여자 표시 (DEC-041): 준비·프레임 완료 대기가 벽시계 5 s를 넘으면 해당 참여자를 `SimStatus.waiting_participants`에 싣고 기다리는 동안 status를 1초마다 발행한다. 응답·Reset·정지하면 비운다. 재합류는 지원하지 않는다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-041, DEC-038 | TC-CORE-032 |
 | IMP-CORE-021 | 대기 로그 오탐 수정 (D-14): `log_waiting`은 같은 대기가 5 s 넘게 이어질 때만 남기고 이후 5 s마다 반복한다. 정상 진행 중 프레임마다 생기는 짧은 장벽 대기는 기록하지 않는다 (IMP-CORE-018 갱신) | `src/sim_core.cpp` | DEC-038, DEC-041 | TC-CORE-031, TC-CORE-033 |
 | IMP-CORE-022 | WP8 Payload 통합 (DEC-046, DEC-047): 적재 때 `PayloadSystem` 생성(프로파일·재정의 오류는 적재 거부), Reset 때 `reset()`. 프레임마다 프레임 시작 상태와 SENSOR 고장·`onboard/<id>/{Sensor,Jammer,Strike}Command`(엔티티 ID 순 정렬)로 `step()`을 한 번 부르고, onboard 출력(Detection·*Activity·StoreLoadout)을 키별 seq로, 이벤트를 `truth/event/<kind>`로 발행한다. 무장 엔티티는 TruthFrame에 덧붙이고(Core는 적분하지 않는다), `killed`는 적분 뒤 alive=false로 한다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp`, `CMakeLists.txt` | DEC-046, DEC-047, DEC-044, REQ-PAY-002~004 | TC-CORE-034, TC-CORE-035 |
+| IMP-CORE-023 | `--terrain-dem <json>`: `dyn::RawDemLoader`로 DEM을 적재해 `Wp2DynamicsOptions::terrain`에 넣는다(격자 밖 0 m). 지면 충돌과 Payload 가시선이 같은 지형을 쓴다. 시작 메시지에 `terrain=dem RxC lat .. lon ..`을 찍고 적재 실패는 종료 코드 1 (IMP-CORE-012의 자리 표시 대체) | `src/main.cpp`, `CMakeLists.txt` | DEC-053, DEC-004, DEC-016, IMP-DYN-009, QA-022 | TC-CORE-036, TC-CORE-037, TC-CORE-040 |
+| IMP-CORE-024 | JamZone 재발행 (DEC-052): 활성 재밍 구역을 소유자별로 기억하고, 변화 시 발행에 더해 모의 시간 1 s마다(프레임 기준, `sim_time ≥ 다음 경계`) `truth/event/jam_zone`에 다시 발행한다. 같은 프레임에 변화로 이미 낸 소유자는 건너뛰고, 소유자 ID 순, 헤더 시각·프레임·seq는 재발행 시점 값. 꺼진 구역은 지우고 다시 내지 않는다. Reset·적재 때 비운다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-052, DEC-044, QA-021, IMP-CORE-022 | TC-CORE-038 |
+| IMP-CORE-025 | 적재 검증 추가: 엔티티 ID 형식(`keys::check_entity_id`)과 25자 초과(DEC-050), 엔티티당 `type=jammer` 탑재물 2개 이상(DEC-049)을 `validate_scenario`에서 거부한다. 거부 시 Core는 이전 시나리오로 계속 동작한다(IMP-CORE-017) | `src/scenario.cpp`, `include/swarm/core/scenario.hpp` | DEC-049, DEC-050, DEC-038 | TC-CORE-039 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -99,11 +102,16 @@ flowchart LR
 | TC-CORE-033 | 정상 lockstep 진행 12 s(매 프레임 짧은 대기) 동안 대기 로그와 `waiting_participants`가 나타나지 않는다 | `tests/test_core.cpp` | IMP-CORE-021 | 통과 (msvc-debug, 2026-11-05; 수정 전 코드에서는 실패 확인) |
 | TC-CORE-034 | 시나리오 통합: 카메라 탐지 발행 → StrikeCommand → Launch·Spawn → 무장 엔티티가 TruthFrame에 나타나고 종료 시 alive=false → Impact·Kill → 표적 alive=false, 이벤트 seq 연속 | `tests/test_core.cpp` | IMP-CORE-022 | 통과 (msvc-debug, 2026-11-05) |
 | TC-CORE-035 | 재머 부지 → `truth/event/jam_zone`(owner=jam-01), 같은 시드 두 번 실행의 truth 바이트와 이벤트 순서가 같다 | `tests/test_core.cpp` | IMP-CORE-022 | 통과 (msvc-debug, 2026-11-05) |
+| TC-CORE-036 | DEM 지면 충돌: 합성 능선 DEM에서 고도 800 m 북진 기체가 800 m 등고선(위도 37.00667, 오차 < 5e-5°)에서 kill(cause=ground), 고도 = 지형 고도(< 0.5 m), 시각 28.5–30.5 s. 평지 0 m에서는 생존. 두 번 실행의 truth 바이트 동일 | `tests/test_core.cpp` | IMP-CORE-023 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-037 | DEM 가시선: 능선 남쪽 고도 500 m 카메라가 능선 북쪽 지상 표적을 DEM에서는 탐지하지 않고 평지에서는 탐지한다 | `tests/test_core.cpp` | IMP-CORE-023 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-038 | JamZone 재발행: 재머 부지는 프레임 0(변화)·50·100(1 s 주기) 뒤 끄면 꺼짐 1회 이후 없음. 프레임 30 무렵 켠 탑재 재머는 변화 1회 + 50·100·150·200·250. 두 번 실행의 이벤트 바이트 동일 | `tests/test_core.cpp` | IMP-CORE-024 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-039 | 적재 검증: ID 25자 수락, 26자·형식 오류 거부, 재머 2개(UAV·재머 부지) 거부, 재머 1개 수락, 거부 뒤 이전 시나리오·LOADED 유지 | `tests/test_core.cpp` | IMP-CORE-025 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-040 | 실행 파일: `swarm_core --terrain-dem ridge.json`이 `terrain=dem 101x101`을 출력하고 20 프레임 진행, 없는 경로는 0이 아닌 종료 코드 (ctest `core.TC-CORE-040.*`) | `CMakeLists.txt` | IMP-CORE-023 | 통과 (msvc-debug, 2026-11-06) |
 
 ## 제약과 후속
 
 - 최소 JSON 시나리오 형식은 폐기 예정이다(`scenario.hpp` 주석).
-- 지형은 평지만 쓴다. DEM 로더(`dyn::DemLoader`)가 구현되면 `Wp2DynamicsOptions::terrain`에 넣고 `--terrain-dem`을 연결한다 (DEC-016).
+- DEM 격자 밖(위도 33–43°N, 경도 124–131°E 밖)은 0 m다. 한반도 90 m DEM은 int16 약 200 MB를 메모리에 올린다 (DEC-053).
 - 5/6-DoF(DYNAMICS_KIND_DOF5/6)는 WP2 팩토리가 nullptr를 주므로 불러오기에서 거부된다.
 - 스크립트 이동은 대지 기준이며 바람을 더하지 않는다.
 - 준비 신호는 `load()`에서만 비운다. Reset 뒤에는 참여자가 다시 보내지 않아도 이전 준비 상태를 유지한다. 시작 후 새 참여자는 받지 않는다(DEC-037).
