@@ -3,7 +3,7 @@
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
 - 계약 버전: 0.12.0
-  - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056)
+  - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056), DEM 파일 형식과 받기 절차(DEC-053)
   - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
   - 0.10.0: `FrameDone.sent_count`(lockstep 송신 개수 장벽) (DEC-044)
   - 0.9.0: `SimStatus.waiting_participants`(lockstep 참여자 응답 없음 표시) (DEC-041)
@@ -248,6 +248,12 @@ flowchart TB
 - `Integrator::step(model, t0, dt, x, u, env, event)`: 프레임 한 칸을 적분한다. RK45는 프레임 안에서 가변 스텝을 쓴다.
 - `EventFn`: 영점 교차 함수(예: 고도 − DEM 고도). 적분기는 교차 시점을 이분법으로 찾아 그 시점에서 멈춘다 (DEC-005).
 - `Terrain::elevation_m(lat, lon)`: DEM 조회. 구현은 WP2가 맡는다.
+- DEM 파일 형식 (DEC-053): int16 리틀엔디언 원시 격자와 JSON 머리글 한 쌍이다. `RawDemLoader`가 읽는다.
+  - 머리글 필수 키: `format="swarm-dem-grid"`, `version=1`, `data_file`(머리글 기준 상대 경로), `sample_type="int16"`, `byte_order="little"`, `row_order="south_to_north"`, `rows`, `cols`(≥2), `lat0_deg`, `lon0_deg`(0행 0열 노드), `dlat_deg`, `dlon_deg`(>0), `units="m"`.
+  - 선택 키: `nodata`(정수). 그 노드는 0 m로 채운다. 그 밖의 키는 무시한다.
+  - 자료 파일 크기는 rows×cols×2 B다. 노드 (r, c)는 (lat0 + r·dlat, lon0 + c·dlon)에 있고 고도는 쌍선형 보간한다. 격자 밖은 0 m다.
+  - 기본 자료: Copernicus GLO-90, 33–43°N, 124–131°E, 3″ 간격, 12001×8401.
+  - 지면 충돌과 Payload 가시선은 같은 지형을 쓴다.
 
 ## 7. 빌드 환경과 시험 (DEC-022)
 
@@ -393,6 +399,18 @@ uv run python scripts/gen_proto.py
 ```bash
 uv run pytest
 ```
+
+#### 지형 DEM 받기와 적용 (DEC-053)
+
+```bash
+uv run scripts/fetch_dem.py
+```
+
+```bash
+swarm_core --terrain-dem data/dem/korea_glo90.json
+```
+
+- 내려받은 파일은 `data/dem/`에 두고 저장소에 커밋하지 않는다(gitignore). `--terrain-dem`과 `--terrain-flat`은 함께 쓰지 않는다.
 
 ### 7.4 툴체인별 제약
 
