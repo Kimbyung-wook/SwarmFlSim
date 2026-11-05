@@ -23,7 +23,7 @@ flowchart LR
 - 프로세스 k는 `tcp/127.0.0.1:<base+k>`에서 대기하고 앞서 뜬 프로세스 전부에 연결한다. 같은 PC의 다른 버스와 섞이지 않게 멀티캐스트 스카우팅을 끈다.
 - 시작 순서: Logger → Datalink → Agent → 브리지 → (2초 대기) → Core(`--autostart --mode realtime`) → UI → Monitor.
 - Core는 `--scenario`로 시작하면 `LoadScenario`를 발행하지 않는다. 그래서 Datalink·Agent에도 같은 시나리오(.pb)를 `--scenario`로 준다. 실행기가 JSON을 `scenario.pb`로 내보내 세 프로세스에 넘긴다.
-- 실시간 모드를 쓴다. lockstep은 늦게 붙은 참여자가 틱을 놓친다(`agent/TRACE.md` 남은 일).
+- 기본은 실시간 모드다. lockstep은 `--lockstep`으로 켜며, 첫 틱 전까지 늦게 켠 참여자도 재발행 시나리오를 받아 합류한다 (DEC-037, IMP-CORE-016).
 
 ### 명령 경로 (C2)
 
@@ -152,7 +152,7 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 | 항목 | 결과 | 근거·담당 |
 |---|---|---|
 | lockstep: Core만 `--scenario`, 나머지는 `sim/ctrl/scenario`로 수신 | 통과 (조건 있음) | 시나리오 `run.mode=lockstep`일 때 정상 시작. 데모 시나리오는 realtime이라 Core `--mode lockstep`만 주면 참여자가 준비 신호(`FrameDone{0}`)를 보내지 않아 틱이 영영 나가지 않는다. 담당: WP1 Core·WP3 Agent·WP4 Datalink(CLI 재정의를 `Scenario`에 반영하거나, 참여자가 Core의 실행 모드를 받도록) |
-| lockstep 지각 참여자 | **불합격** | Core는 LOADED에서만 `Scenario`를 다시 내보내 RUNNING(준비 대기) 중 늦게 켠 Agent는 시나리오를 받지 못한다. 담당: WP1 Core(첫 틱 전까지 재발행) |
+| lockstep 지각 참여자 | 통과 (2026-11-05 재확인) | IMP-CORE-016으로 준비 대기 중에도 재발행. `--lockstep --rate 1 --late-agent-s 6`: Core가 agent-0 준비를 기다린 뒤 시작해 2143 프레임까지 진행 (TC-INT-009) |
 | lockstep에서 hold·racetrack·route·params probe | 통과 | `--lockstep --rate 1`로 4종 모두 통과. `rate=2`는 디버그 빌드가 따라가지 못해(overruns) probe의 벽시계 판정 창과 맞지 않았다 |
 | probe move·hold·racetrack·route·params (realtime) | 통과 | route는 1회 항로점 2/3 도달(불합격) 후 재시도 3/3 통과. 판정 창 문제로 추정 |
 | `racetrack_guidance="foo"` | 통과 | `choice`로 거부, 기존 값 유지 (WP3 Agent) |
