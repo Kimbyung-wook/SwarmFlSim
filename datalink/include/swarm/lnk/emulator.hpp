@@ -132,6 +132,7 @@ class Datalink {
   };
 
   void on_tx(const Sample& s);
+  void enqueue_locked(const std::string& src, const std::string& suffix, const Sample& s, v1::LinkEnvelope&& env);
   void on_tick(const Sample& s);
   void on_done(const Sample& s);
   void run_tick();
@@ -195,6 +196,10 @@ class Datalink {
   v1::ClockTick waiting_;
   bool has_waiting_ = false;
   std::uint64_t ticks_seen_ = 0;
+  // 송신 개수 장벽 (DEC-044)
+  std::map<std::string, std::uint64_t> tx_recv_;  // 엔티티 → 받은 swarm/<e>/tx/** 누적 수
+  std::map<std::string, std::uint64_t> rx_sent_;  // 엔티티 → 발행한 swarm/<e>/rx/** 누적 수
+  std::map<std::string, std::map<std::string, std::uint64_t>> peer_sent_;  // 참여자 → 마지막 FrameDone.sent_count
   std::uint64_t next_state_us_ = 0;
   std::uint32_t state_seq_ = 0;
   mutable std::map<std::string, bool> warned_;

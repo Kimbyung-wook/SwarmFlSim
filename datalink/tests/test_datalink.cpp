@@ -1,4 +1,4 @@
-// TC-LNK-001~021: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~022: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -1183,6 +1183,126 @@ void tc021() {
   }
 }
 
+// ---- TC-LNK-022: 송신 개수 장벽 (DEC-044) ----
+struct BarrierRig {
+  InMemoryBus bus;
+  std::vector<v1::FrameDone> dones;  // datalink-0만
+  std::uint64_t rx_count = 0;
+  std::vector<std::uint64_t> rx_at_done;
+  std::unique_ptr<Subscription> s1, s2;
+  std::unique_ptr<Datalink> dl;
+  std::uint32_t seq = 0;
+
+  BarrierRig(double north_b_m, v1::RunMode mode) {
+    s1 = bus.subscribe("sim/clock/done/*", [&](const Sample& s) {
+      auto d = parse<v1::FrameDone>(s);
+      if (d.participant() != "datalink-0") return;
+      dones.push_back(d);
+      rx_at_done.push_back(rx_count);
+    });
+    s2 = bus.subscribe("swarm/*/rx/**", [&](const Sample&) { ++rx_count; });
+    DatalinkConfig cfg;
+    cfg.state_period_s = 0.0;
+    dl = std::make_unique<Datalink>(bus, nullptr, cfg);
+    v1::Scenario sc = scenario_msg("s22", mode, 0.0, north_b_m);
+    sc.mutable_run()->add_participants("datalink-0");
+    sc.mutable_run()->add_participants("agent-0");
+    dl->load(sc);
+    dones.clear();
+    rx_at_done.clear();
+  }
+  void tick(std::uint64_t frame, v1::RunMode mode = v1::RUN_MODE_LOCKSTEP) {
+    v1::ClockTick t;
+    t.set_frame(frame);
+    t.set_sim_time_us(frame * 20000);
+    t.set_dt_us(20000);
+    t.set_mode(mode);
+    put(bus, std::string(keys::kClockTick), t);
+  }
+  void agent_done(std::uint64_t frame, std::uint64_t sent) {
+    v1::FrameDone d;
+    d.set_participant("agent-0");
+    d.set_frame(frame);
+    if (sent) (*d.mutable_sent_count())["uav-001"] = sent;
+    put(bus, keys::clock_done("agent-0"), d);
+  }
+  void tx(std::uint64_t t_us) {
+    v1::LinkEnvelope env;
+    auto* h = env.mutable_header();
+    h->set_source("uav-001");
+    h->set_sim_time_us(t_us);
+    h->set_seq(seq++);
+    env.add_dst("uav-002");
+    env.set_iface(v1::L1_INTERFACE_P2P);
+    env.set_msg_type("swarm.v1.PeerStatus");
+    env.set_payload("x");
+    put(bus, keys::tx("uav-001", keys::Iface::P2P, "PeerStatus"), env);
+  }
+};
+
+void tc022() {
+  {  // 개수 부족이면 대기, 채워지면 진행
+    BarrierRig r(1000.0, v1::RUN_MODE_LOCKSTEP);
+    r.tick(0);
+    r.tx(0);
+    r.agent_done(0, 3);  // 3건 보냈다고 알리지만 1건만 받았다
+    r.tick(1);
+    check(r.dones.size() == 1, "tick 1 waits: sent_count 3 > received 1");
+    check(r.dl->pending() == 1, "received message held");
+    r.tx(0);
+    check(r.dones.size() == 1, "still waiting at 2 of 3");
+    r.tx(0);
+    check(r.dones.size() == 2 && r.dones[1].frame() == 1, "tick 1 processed when count reached");
+    check(r.dl->pending() == 0, "all three processed in the tick");
+  }
+  {  // sent_count가 없으면(구버전) 개수 조건 없이 FrameDone만으로 진행
+    BarrierRig r(1000.0, v1::RUN_MODE_LOCKSTEP);
+    r.tick(0);
+    r.agent_done(0, 0);
+    r.tick(1);
+    check(r.dones.size() == 2, "no sent_count: no count condition");
+  }
+  {  // Datalink의 sent_count = 발행한 rx 누적 수
+    BarrierRig r(1000.0, v1::RUN_MODE_LOCKSTEP);
+    r.tick(0);
+    std::uint64_t last = 0;
+    for (std::uint64_t f = 1; f <= 10; ++f) {
+      r.tx(f * 20000 - 1000);
+      r.agent_done(f - 1, 0);
+      r.tick(f);
+      const auto& d = r.dones.back();
+      const auto it = d.sent_count().find("uav-002");
+      const std::uint64_t n = it == d.sent_count().end() ? 0 : it->second;
+      check(n == r.rx_at_done.back(), "sent_count equals rx published before FrameDone");
+      check(n >= last, "cumulative");
+      last = n;
+    }
+    check(last > 0, "some rx delivered");
+  }
+  {  // 모의 손실로 버린 메시지(통신 범위 밖)는 세지 않는다
+    BarrierRig r(40000.0, v1::RUN_MODE_LOCKSTEP);
+    r.tick(0);
+    for (std::uint64_t f = 1; f <= 5; ++f) {
+      r.tx(f * 20000 - 1000);
+      r.agent_done(f - 1, 0);
+      r.tick(f);
+    }
+    check(r.rx_count == 0, "out-of-range messages are not delivered");
+    check(r.dones.back().sent_count().empty(), "dropped messages are not counted");
+  }
+  {  // realtime: 참여자 FrameDone·개수와 무관하게 틱 즉시 처리, sent_count 없음
+    BarrierRig r(1000.0, v1::RUN_MODE_REALTIME);
+    r.tick(0, v1::RUN_MODE_REALTIME);
+    r.agent_done(0, 99);
+    for (std::uint64_t f = 1; f <= 3; ++f) {
+      r.tx(f * 20000 - 1000);
+      r.tick(f, v1::RUN_MODE_REALTIME);
+    }
+    check(r.dones.size() == 4, "realtime ticks processed without waiting");
+    check(r.dones.back().sent_count().empty(), "realtime: no sent_count");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1194,7 +1314,7 @@ const Case kCases[] = {
     {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
-    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021},
+    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
 };
 
 }  // namespace

@@ -143,9 +143,22 @@ void Datalink::on_tx(const Sample& s) {
   v1::LinkEnvelope env;
   if (!parse(s, env)) {
     log("drop unparsable LinkEnvelope on " + s.key);
+    {
+      std::lock_guard lock(mu_);
+      ++tx_recv_[src];
+    }
+    run_tick();
     return;
   }
-  std::lock_guard lock(mu_);
+  {
+    std::lock_guard lock(mu_);
+    enqueue_locked(src, suffix, s, std::move(env));
+    ++tx_recv_[src];  // 큐에 넣은 뒤에 센다. 장벽이 풀렸을 때 이 메시지가 이미 큐에 있어야 한다
+  }
+  run_tick();
+}
+
+void Datalink::enqueue_locked(const std::string& src, const std::string& suffix, const Sample& s, v1::LinkEnvelope&& env) {
   // 송신 시각은 헤더의 sim_time_us를 쓴다(DEC-039: 받은 시점·도착 순서에 의존하지 않는다). 없으면 마지막 tick 시각
   const std::uint64_t tx_us = env.header().sim_time_us() != 0 ? env.header().sim_time_us() : now_us_;
   Pending p{tx_us, src, s.key, env.header().seq(), arrival_++, suffix, s.payload.size(), std::move(env)};
@@ -299,6 +312,9 @@ void Datalink::on_done(const Sample& s) {
     std::lock_guard lock(mu_);
     if (ticks_seen_ == 0) return;  // 첫 틱 전의 frame 0은 준비 신호다
     auto& f = done_frame_[d.participant()];
+    if (d.frame() + 1 >= f) {
+      peer_sent_[d.participant()] = {d.sent_count().begin(), d.sent_count().end()};
+    }
     f = std::max(f, d.frame() + 1);
   }
   run_tick();
@@ -318,6 +334,13 @@ void Datalink::run_tick() {
     if (waiting_.mode() == v1::RUN_MODE_LOCKSTEP && waiting_.frame() > 0 && ticks_seen_ > 0) {
       for (const auto& p : required_)
         if (const auto it = done_frame_.find(p); it == done_frame_.end() || it->second < waiting_.frame()) return;
+      // 송신 개수 장벽 (DEC-044): 참여자들이 실은 e별 송신 수만큼 받은 뒤에 처리한다. sent_count가 없으면 조건이 없다
+      std::map<std::string, std::uint64_t> need;
+      for (const auto& p : required_)
+        if (const auto it = peer_sent_.find(p); it != peer_sent_.end())
+          for (const auto& [e, n] : it->second) need[e] += n;
+      for (const auto& [e, n] : need)
+        if (const auto it = tx_recv_.find(e); (it == tx_recv_.end() ? 0 : it->second) < n) return;
     }
     tick = waiting_;
     has_waiting_ = false;
@@ -366,6 +389,10 @@ void Datalink::run_tick() {
     v1::FrameDone d;
     d.set_participant(cfg_.participant_id);
     d.set_frame(tick.frame());
+    if (tick.mode() == v1::RUN_MODE_LOCKSTEP) {
+      std::lock_guard lock(mu_);
+      for (const auto& [e, n] : rx_sent_) (*d.mutable_sent_count())[e] = n;
+    }
     const std::string bytes = d.SerializeAsString();
     bus_.put(keys::clock_done(cfg_.participant_id),
              std::span(reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()),
@@ -433,6 +460,9 @@ void Datalink::reset_locked() {
   overflow_.clear();
   overflow_dropped_ = 0;
   in_flight_.clear();
+  tx_recv_.clear();
+  rx_sent_.clear();
+  peer_sent_.clear();
   next_state_us_ = now_us_;
 }
 
@@ -711,6 +741,15 @@ void Datalink::outcome_locked(const std::string& src, const std::string& dst, co
 }
 
 void Datalink::publish(std::vector<Out>& out) {
+  for (const auto& o : out) {
+    constexpr std::string_view kPrefix = "swarm/";
+    const std::string_view key = o.key;
+    const auto slash = key.find('/', kPrefix.size());
+    if (key.substr(0, kPrefix.size()) == kPrefix && slash != std::string_view::npos && key.substr(slash, 4) == "/rx/") {
+      std::lock_guard lock(mu_);
+      ++rx_sent_[std::string(key.substr(kPrefix.size(), slash - kPrefix.size()))];
+    }
+  }
   for (const auto& o : out)
     bus_.put(o.key, std::span(reinterpret_cast<const std::uint8_t*>(o.bytes.data()), o.bytes.size()), o.encoding);
 }
