@@ -1,0 +1,23 @@
+{
+  "type": "aam_short",
+  "default": "aam_generic",
+  "note": "단거리 공대공 미사일 일반값 (DEC-019, PRP-DYN-003). 질점 + 비례항법, 추력 가속도·연소 시간, 항력 k·V²",
+  "profiles": {
+    "aam_generic": {
+      "max_range_m": 8000.0,
+      "lock_range_m": 8000.0,
+      "seeker_fov_deg": 90.0,
+      "seeker_el_deg": 0.0,
+      "launch_speed_mps": 20.0,
+      "thrust_accel_mps2": 200.0,
+      "burn_time_s": 3.0,
+      "drag_k_per_m": 0.00004,
+      "max_g": 30.0,
+      "nav_gain": 4.0,
+      "max_flight_time_s": 25.0,
+      "arm_time_s": 0.5,
+      "proximity_m": 8.0,
+      "lethal_radius_m": 10.0
+    }
+  }
+}
