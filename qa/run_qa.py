@@ -1080,6 +1080,43 @@ def t028(c: Case):
     teardown(c, st, ob, allow=("time_regress", "tick_regress"))
 
 
+@tc("030", "lockstep 참여자 이탈: SimStatus.waiting_participants 5 s 뒤 표시, Reset 후 비움 (DEC-041)")
+def t030(c: Case):
+    st = mk(c, "qa_s2_swarm20", lockstep=True, rate=2.0).up()
+    ob = Observer([st.endpoint("logger")])
+    ok0 = ob.wait(lambda: (ob.last_frame or 0) > 200, 90)
+    c.check(ok0, "초기 진행 실패")
+    with ob.lock:
+        c.note(f"정상 중 waiting_participants={list(ob.status.waiting_participants)}")
+        c.check(not ob.status.waiting_participants, "정상 진행인데 waiting_participants가 비어 있지 않음")
+    st.kill("agent")
+    t0 = time.monotonic()
+    seen = None
+    early = []
+    while time.monotonic() - t0 < 15:
+        time.sleep(0.5)
+        with ob.lock:
+            w = list(ob.status.waiting_participants)
+        if w and seen is None:
+            seen = (time.monotonic() - t0, w)
+        if not w and time.monotonic() - t0 < 3:
+            early.append(1)
+    c.note(f"Agent 종료 뒤 최초 표시: {seen}, frame {ob.last_frame}")
+    c.check(seen is not None, "15 s 안에 waiting_participants에 이름이 실리지 않음")
+    if seen:
+        c.check("agent-0" in seen[1], f"agent-0이 아님: {seen[1]}")
+        c.check(seen[0] >= 4.0, f"5 s 전에 표시됨 {seen[0]:.1f} s")
+    ob.reset()
+    ok = ob.wait(lambda: ob.status.state == ob.m[0].SIM_RUN_STATE_LOADED, 20)
+    time.sleep(2)
+    with ob.lock:
+        w2 = list(ob.status.waiting_participants)
+    c.note(f"Reset 뒤 state LOADED={ok}, waiting_participants={w2}")
+    c.check(not w2, f"Reset 뒤에도 비워지지 않음 {w2}")
+    st.start_one("agent")
+    teardown(c, st, ob, allow=("time_regress", "tick_regress"))
+
+
 # ---------------------------------------------------------------- 실행
 
 def main() -> int:
