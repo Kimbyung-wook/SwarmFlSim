@@ -111,9 +111,9 @@
 | TC-QA-003 | s3 불완전 링크 프로파일, 거리 밖 기체 | `qa/run_qa.py --only 003` | DEC-032 |
 | TC-QA-004 | s4 적·표적·센서·무장 선언 시나리오 견고성 | `qa/run_qa.py --only 004` | DEC-017, DEC-018, DEC-019 |
 | TC-QA-005 | s5 2/3-DoF·기체 혼합, dof5/dof6 적재 | `qa/run_qa.py --only 005` | DEC-017 |
-| TC-QA-006 | 50기 lockstep 2배속 부하 | `qa/run_qa.py --only 006` | DEC-005 |
-| TC-QA-007 | 100기 lockstep 1배속 부하 | `qa/run_qa.py --only 007` | DEC-005 |
-| TC-QA-008 | 100기 flocking(P2P) 부하 | `qa/run_qa.py --only 008` | DEC-005 |
+| TC-QA-006 | 통과 | 2026-11-05 | 4차 DEC-044 후 1.61배 (`docs/21_qa_report.md` §11) |
+| TC-QA-007 | 통과 | 2026-11-05 | 4차 0.92배 |
+| TC-QA-008 | 통과 | 2026-11-05 | 4차 0.27배 |
 | TC-QA-009 | 100기 realtime 실시간성 | `qa/run_qa.py --only 009` | DEC-005 |
 | TC-QA-010 | 통제 명령: pause·resume·step·set_rate·reset | `qa/run_qa.py --only 010` | DEC-014 |
 | TC-QA-011 | 모드 전환 lockstep·realtime·freerun | `qa/run_qa.py --only 011` | DEC-005, DEC-037 |
@@ -129,12 +129,12 @@
 | TC-QA-021 | Logger 기록·info·재생(배속 변경) | `qa/run_qa.py --only 021` | DEC-031 |
 | TC-QA-022 | 같은 시나리오 lockstep 결정성 | `qa/run_qa.py --only 022` | DEC-005 |
 | TC-QA-023 | 20기 realtime 10분 CPU·RSS 추세 | `qa/run_qa.py --only 023` | DEC-005 |
-| TC-QA-024 | 결정성 추가: 시드 2종, 불완전 링크 s3 | `qa/run_qa.py --only 024` | DEC-005 |
+| TC-QA-024 | 통과 | 2026-11-05 | 4차: DEC-044 후 s3 시드 7·20261104, s6 flocking 100기 모두 불일치 0 (QA-016 해결) |
 | TC-QA-025 | Agent 프로세스 CPU·RSS(50기 realtime 90 s) | `uv run --with psutil python qa/run_qa.py --only 025` | DEC-003 |
-| TC-QA-026 | Monitor 통계 대 독립 집계(s3 라이브) | `qa/link_count.py` + Monitor | DEC-028 |
+| TC-QA-026 | 불일치 | 2026-11-05 | 4차: flocking 100기에서 Monitor 손실률 4.3~5.0% 대 독립 2.30% (QA-018) |
 | TC-QA-027 | 임무 중 Core·Datalink 재시작과 UI 복구 | `qa/recovery_stack.py` + 브라우저 | DEC-026, DEC-027 |
-| TC-QA-028 | lockstep 중 Datalink 이탈·재기동 | `uv run --with psutil python qa/run_qa.py --only 028` | DEC-038 |
-| TC-QA-029 | QA-008 재생 전달 판별 | `uv run --with mcap python qa/qa008_replay.py <rec.mcap>` | DEC-009 |
+| TC-QA-028 | 통과 | 2026-11-05 | 4차: 이탈 시 정지·Core 대기 로그, Reset+Start 복구. waiting_participants 필드는 미확인 |
+| TC-QA-029 | 해석 | 2026-11-05 | 4차: 20배속 수신기 1358/관찰자 1082, 설계 한계 |
 
 ## 시험 결과
 
@@ -163,9 +163,9 @@
 | TC-QA-003 | 통과 | 2026-11-03 | 위와 같음 |
 | TC-QA-004 | 통과 | 2026-11-03 | 위와 같음. 견고성만, 탐지·교전은 Core 미구현 |
 | TC-QA-005 | 통과 | 2026-11-03 | 위와 같음. dof5/dof6은 Core 종료(결정 확인 D-3) |
-| TC-QA-006 | 통과 | 2026-11-03 | 위와 같음. 실측 1.57배 |
-| TC-QA-007 | 통과 | 2026-11-03 | 위와 같음. 실측 0.93배 |
-| TC-QA-008 | 통과 | 2026-11-03 | 위와 같음. 실측 0.22배, Logger RSS 증가(QA-006) |
+| TC-QA-006 | 통과 | 2026-11-05 | 4차 DEC-044 후 1.61배 (`docs/21_qa_report.md` §11) |
+| TC-QA-007 | 통과 | 2026-11-05 | 4차 0.92배 |
+| TC-QA-008 | 통과 | 2026-11-05 | 4차 0.27배 |
 | TC-QA-009 | 통과 | 2026-11-03 | 위와 같음. sim/벽시계 1.00 |
 | TC-QA-010 | 통과 | 2026-11-03 | 위와 같음. 비정상 rate 거부 확인(QA-003 수정), 2차 재시험 |
 | TC-QA-011 | 통과 | 2026-11-03 | 위와 같음 |
@@ -181,12 +181,12 @@
 | TC-QA-021 | 통과 | 2026-11-03 | 고배속 재생 프레임 감소(QA-008) |
 | TC-QA-022 | 통과 | 2026-11-03 | 2579 프레임 최대 차이 0.000000 m |
 | TC-QA-023 | 통과 | 2026-11-03 | Core·Datalink 안정, Logger +5 MB(QA-006) |
-| TC-QA-024 | 불합격 | 2026-11-03 | flocking/P2P 기체 같은 시드 궤적 불일치(QA-016) |
+| TC-QA-024 | 통과 | 2026-11-05 | 4차: DEC-044 후 s3 시드 7·20261104, s6 flocking 100기 모두 불일치 0 (QA-016 해결) |
 | TC-QA-025 | 통과 | 2026-11-03 | Agent 평균 63%, RSS 4.5→72.7 MB, 증가 없음 |
-| TC-QA-026 | 통과 | 2026-11-02 | s3 송신자별 건수·손실률·지연 평균 일치 |
+| TC-QA-026 | 불일치 | 2026-11-05 | 4차: flocking 100기에서 Monitor 손실률 4.3~5.0% 대 독립 2.30% (QA-018) |
 | TC-QA-027 | 통과 | 2026-11-03 | Core·Datalink 재시작 후 UI 복구. Core 정지 시 붉은 배지 표시(QA-015 수정) |
-| TC-QA-028 | 통과 | 2026-11-03 | Datalink 이탈 시 Core 대기, 재기동 후 재개 없음(DEC-038), Reset+Start로 복구 |
-| TC-QA-029 | 해석 | 2026-11-03 | 재생기는 전부 발행, 수신 쪽에서 유실(고배속). 설계 한계 |
+| TC-QA-028 | 통과 | 2026-11-05 | 4차: 이탈 시 정지·Core 대기 로그, Reset+Start 복구. waiting_participants 필드는 미확인 |
+| TC-QA-029 | 해석 | 2026-11-05 | 4차: 20배속 수신기 1358/관찰자 1082, 설계 한계 |
 
 ## 프로세스 결정
 

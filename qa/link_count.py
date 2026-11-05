@@ -1,6 +1,6 @@
 """라이브 스택의 link/outcome을 독립적으로 집계해 Traffic Monitor 통계와 대조한다 (TC-QA-026).
 
-uv run python qa/link_count.py --connect tcp/127.0.0.1:18101 --seconds 40
+uv run python qa/link_count.py --connect tcp/127.0.0.1:48181 --seconds 40
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import harness as h  # noqa: E402
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--connect", default="tcp/127.0.0.1:18101")
+    ap.add_argument("--connect", default="tcp/127.0.0.1:48181")
     ap.add_argument("--seconds", type=float, default=40.0)
     ap.add_argument("--out", default="")
     ap.add_argument("--verbose", default="", help="msg_type에 이 문자열이 있는 결과를 한 줄씩 출력")

@@ -207,7 +207,7 @@ def t005(c: Case):
         doc["entities"][3]["dynamics"] = dyn
         p = c.dir / f"s5_{dyn}.json"
         p.write_text(json.dumps(doc), encoding="utf-8")
-        st2 = Stack(c.dir / dyn, p, lockstep=False, record=False, base_port=17950)
+        st2 = Stack(c.dir / dyn, p, lockstep=False, record=False, base_port=48010)
         try:
             st2.up()
             time.sleep(6)
@@ -914,9 +914,9 @@ def t021(c: Case):
     for rate in (1.0, 4.0, 0.5, 20.0):
         d = c.dir / f"replay_{rate}"
         d.mkdir(exist_ok=True)
-        mesh = h.p0.Mesh(17970)
+        mesh = h.p0.Mesh(48050)
         br = h.p0.Proc(f"obs_{rate}", [sys.executable, "-c", "import time; time.sleep(0.1)"], d)  # 로그 파일 자리
-        ob2 = Observer([f"tcp/127.0.0.1:17970"]) if False else None
+        ob2 = Observer([f"tcp/127.0.0.1:48050"]) if False else None
         # 관측자를 먼저 열고 재생기를 붙인다
         from swarm_api import BusConfig, open_bus
         procs = []
@@ -925,7 +925,7 @@ def t021(c: Case):
                                               str(rate), *mesh.next()], d)
             procs.append(rp)
             time.sleep(0.3)
-            ob2 = Observer(["tcp/127.0.0.1:17970"])
+            ob2 = Observer(["tcp/127.0.0.1:48050"])
             t0 = time.monotonic()
             ob2.wait(lambda: not rp.alive(), 120)
             wall = time.monotonic() - t0
@@ -945,7 +945,7 @@ def t021(c: Case):
 def t022(c: Case):
     traces = []
     for run in range(2):
-        st = Stack(c.dir / f"run{run}", SC / "qa_s2_swarm20.json", lockstep=True, rate=0.0, base_port=17980,
+        st = Stack(c.dir / f"run{run}", SC / "qa_s2_swarm20.json", lockstep=True, rate=0.0, base_port=48060,
                    record=True)
         st.up()
         ob = Observer([st.endpoint()])
@@ -1003,7 +1003,7 @@ def t024(c: Case):
         sj.write_text(json.dumps(d), encoding="utf-8")
         traces = []
         for run in range(2):
-            st = Stack(c.dir / f"seed{seed}_run{run}", sj, lockstep=True, rate=0.0, base_port=17980, record=False)
+            st = Stack(c.dir / f"seed{seed}_run{run}", sj, lockstep=True, rate=0.0, base_port=48060, record=False)
             st.up()
             ob = Observer([st.endpoint()])
             ob.keep_traj = True
