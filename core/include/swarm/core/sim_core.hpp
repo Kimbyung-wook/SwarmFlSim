@@ -94,6 +94,8 @@ class SimCore {
   void handle(const v1::SimCommand& cmd, Clock::time_point now);
   void handle_start(const v1::Start& s, Clock::time_point now);
   void log_waiting(Clock::time_point now, bool ready_phase);
+  void update_waiting(Clock::time_point now, bool ready_phase);
+  void clear_waiting(Clock::time_point now);
   void handle_fault(const v1::InjectFault& f);
   void handle_set_params(const v1::SetParams& p);
   void publish_params(std::size_t i);
@@ -164,6 +166,10 @@ class SimCore {
   Clock::time_point last_status_wall_{};
   Clock::time_point last_params_wall_{};
   Clock::time_point last_wait_log_{};
+  // IMP-CORE-020: lockstep 대기 시작 시각과, 5 s 넘게 응답이 없는 참여자 (DEC-041)
+  bool blocked_ = false;
+  Clock::time_point wait_since_{};
+  std::vector<std::string> waiting_;
   std::set<std::string> ready_;  // lockstep 준비 신호(FrameDone{frame=0})를 보낸 참여자 (DEC-037)
   Clock::time_point rate_wall_{};
   std::uint64_t rate_sim_us_ = 0;

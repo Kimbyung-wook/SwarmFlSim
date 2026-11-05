@@ -148,6 +148,8 @@ void SimCore::reset_run_state() {
   step_budget_ = 0;
   done_.clear();
   for (const auto& p : participants_) done_[p] = 0;
+  blocked_ = false;
+  waiting_.clear();
   overruns_ = 0;
   rng_.seed(seed_);
   std::lock_guard lock(inbox_mu_);
@@ -385,6 +387,10 @@ bool SimCore::poll(Clock::time_point now) {
     last_params_wall_ = now;
   }
 
+  if (state_ != v1::SIM_RUN_STATE_RUNNING && blocked_) {  // 정지·중단하면 대기 표시를 거둔다. status는 1초 안에 나간다
+    blocked_ = false;
+    waiting_.clear();
+  }
   const bool stepping = state_ == v1::SIM_RUN_STATE_PAUSED && step_budget_ > 0;
   if (state_ != v1::SIM_RUN_STATE_RUNNING && !stepping) return false;
   if (!frame_published_) {
@@ -396,14 +402,18 @@ bool SimCore::poll(Clock::time_point now) {
         last_params_wall_ = now;
       }
       log_waiting(now, true);
+      update_waiting(now, true);
       return false;
     }
+    clear_waiting(now);
     publish_frame();
   }
   if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) {
     log_waiting(now, false);
+    update_waiting(now, false);
     return false;
   }
+  clear_waiting(now);
 
   if (!stepping && paced()) {
     const auto deadline = next_deadline();
@@ -442,6 +452,30 @@ void SimCore::log_waiting(Clock::time_point now, bool ready_phase) {
   }
   log(std::string(ready_phase ? "waiting for ready: " : "waiting for frame done: ") + names + " (frame " +
       std::to_string(frame_) + ")");
+}
+
+// IMP-CORE-020: lockstep 장벽에서 5 s(벽시계) 넘게 기다리면 응답 없는 참여자를 SimStatus.waiting_participants에
+// 싣고 status를 계속 발행한다. 참여자는 기다리는 동안에도 기다린 채 남는다 (재합류 미지원, DEC-038, DEC-041)
+void SimCore::update_waiting(Clock::time_point now, bool ready_phase) {
+  if (!blocked_) {
+    blocked_ = true;
+    wait_since_ = now;
+    return;
+  }
+  if (now - wait_since_ < std::chrono::seconds(5)) return;
+  std::vector<std::string> names;
+  for (const auto& [p, next] : done_)
+    if (ready_phase ? !ready_.count(p) : next < frame_ + 1) names.push_back(p);
+  const bool changed = names != waiting_;
+  waiting_ = std::move(names);
+  if (changed || now - last_status_wall_ >= std::chrono::seconds(1)) publish_status(now);
+}
+
+void SimCore::clear_waiting(Clock::time_point now) {
+  blocked_ = false;
+  if (waiting_.empty()) return;
+  waiting_.clear();
+  publish_status(now);
 }
 
 void SimCore::integrate_frame() {
@@ -525,6 +559,7 @@ v1::SimStatus SimCore::status() const {
   st.set_entity_count(static_cast<std::uint32_t>(store_.size()));
   st.set_frame_overruns(overruns_);
   st.set_scenario_name(scenario_.name);
+  for (const auto& p : waiting_) st.add_waiting_participants(p);
   return st;
 }
 

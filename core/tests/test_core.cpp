@@ -1394,6 +1394,63 @@ void test_waiting_log() {
   CHECK(lines.back().find("agent-host-2") != std::string::npos && lines.back().find("agent-host-1") == std::string::npos);
 }
 
+// TC-CORE-032: lockstep에서 5 s 넘게 FrameDone이 없는 참여자를 SimStatus.waiting_participants에 싣는다 (DEC-041)
+void test_waiting_participants() {
+  core::CoreConfig cfg = quiet({"agent-host-1", "agent-host-2"});
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::mock::provider(), cfg);
+  CHECK(sim.load(one_uav()));
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  const auto t0 = Clock::now();
+  auto done = [&](const char* who, std::uint64_t frame) {
+    v1::FrameDone d;
+    d.set_participant(who);
+    d.set_frame(frame);
+    put(bus, keys::clock_done(who), d);
+  };
+  auto last_waiting = [&]() {
+    std::vector<std::string> v;
+    if (!rec.statuses.empty())
+      for (const auto& p : rec.statuses.back().waiting_participants()) v.push_back(p);
+    return v;
+  };
+  ready(bus, "agent-host-1");
+  ready(bus, "agent-host-2");
+  sim.poll(t0 + 1s);
+  CHECK(sim.frame() == 0);
+  done("agent-host-1", 0);  // host-2는 멈춘다
+  sim.poll(t0 + 2s);
+  sim.poll(t0 + 5s);
+  CHECK(last_waiting().empty());  // 5 s 전에는 비어 있다
+  const auto n_before = rec.statuses.size();
+  sim.poll(t0 + 7s);
+  CHECK(last_waiting() == std::vector<std::string>{"agent-host-2"} && sim.frame() == 0);
+  // 기다리는 동안에도 status가 계속 나간다
+  sim.poll(t0 + 8100ms);
+  sim.poll(t0 + 9200ms);
+  CHECK(rec.statuses.size() >= n_before + 3 && last_waiting().size() == 1);
+
+  // 응답하면 목록이 비고 진행한다
+  done("agent-host-2", 0);
+  sim.poll(t0 + 10s);
+  CHECK(sim.frame() == 1 && last_waiting().empty());
+
+  // Reset하면 비운다. 다시 시작해 멈추면 또 나타난다
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(t0 + 11s);
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && last_waiting().empty());
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  sim.poll(t0 + 12s);  // 준비 대기. host-1만 준비
+  ready(bus, "agent-host-1");
+  sim.poll(t0 + 13s);
+  sim.poll(t0 + 19s);
+  CHECK(last_waiting() == std::vector<std::string>{"agent-host-2"});
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(t0 + 20s);
+  CHECK(last_waiting().empty());
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1423,6 +1480,7 @@ int main() {
   test_unsupported_dof();
   test_rate_validation();
   test_waiting_log();
+  test_waiting_participants();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
