@@ -1,4 +1,4 @@
-// TC-LNK-001~020: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~021: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -10,6 +10,8 @@
 #include <span>
 #include <string>
 #include <tuple>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include "swarm/api/bus.hpp"
@@ -1131,6 +1133,56 @@ void tc020() {
   check(delivered > 0, "rx published before FrameDone");
 }
 
+// ---- TC-LNK-021: on_tick과 on_done이 다른 스레드에서 동시에 불려도 rx가 FrameDone보다 먼저 나간다 (DEC-040) ----
+void tc021() {
+  InMemoryBus bus;
+  std::mutex mu;
+  std::vector<std::string> log;
+  auto sub = bus.subscribe("**", [&](const Sample& s) {
+    std::lock_guard lock(mu);
+    if (s.key.find("/rx/") != std::string::npos) log.push_back("rx");
+    else if (s.key == keys::clock_done("datalink-0")) log.push_back("done");
+  });
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.0;
+  Datalink dl(bus, nullptr, cfg);
+  v1::Scenario sc = scenario_msg("s21", v1::RUN_MODE_LOCKSTEP, 0.0, 1000.0);
+  sc.mutable_run()->add_participants("datalink-0");
+  sc.mutable_run()->add_participants("agent-0");
+  dl.load(sc);
+  for (int f = 0; f < 300; ++f) {
+    {
+      std::lock_guard lock(mu);
+      log.clear();
+    }
+    v1::LinkEnvelope env;
+    auto* h = env.mutable_header();
+    h->set_source("uav-001");
+    h->set_sim_time_us(f == 0 ? 0 : static_cast<std::uint64_t>(f) * 20000 - 1000);
+    h->set_seq(static_cast<std::uint32_t>(f));
+    env.add_dst("uav-002");
+    env.set_iface(v1::L1_INTERFACE_P2P);
+    env.set_msg_type("swarm.v1.PeerStatus");
+    env.set_payload("x");
+    put(bus, keys::tx("uav-001", keys::Iface::P2P, "PeerStatus"), env);
+    v1::ClockTick t;
+    t.set_frame(static_cast<std::uint64_t>(f));
+    t.set_sim_time_us(static_cast<std::uint64_t>(f) * 20000);
+    t.set_dt_us(20000);
+    t.set_mode(v1::RUN_MODE_LOCKSTEP);
+    v1::FrameDone d;
+    d.set_participant("agent-0");
+    d.set_frame(f > 0 ? static_cast<std::uint64_t>(f - 1) : 0);
+    std::thread a([&] { put(bus, std::string(keys::kClockTick), t); });
+    std::thread b([&] { put(bus, keys::clock_done("agent-0"), d); });
+    a.join();
+    b.join();
+    std::lock_guard lock(mu);
+    check(!log.empty() && log.back() == "done" && std::count(log.begin(), log.end(), "done") == 1,
+          "FrameDone last, once, under concurrent callbacks");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1142,7 +1194,7 @@ const Case kCases[] = {
     {"TC-LNK-009", tc009}, {"TC-LNK-010", tc010}, {"TC-LNK-011", tc011}, {"TC-LNK-012", tc012},
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
-    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020},
+    {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021},
 };
 
 }  // namespace

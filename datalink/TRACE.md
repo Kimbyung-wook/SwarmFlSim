@@ -58,6 +58,7 @@ flowchart LR
 | IMP-LNK-017 | 입력 폭주 보호: 입력 큐 `max_pending`, 틱당 처리 (메시지, 수신자) 쌍 `max_routes_per_tick`(남은 것은 다음 틱), 전송 중 `max_in_flight`. 초과분은 payload를 버리고 `DROPPED(QUEUE_OVERFLOW)` LinkOutcome(틱당 `max_overflow_outcomes`건, 나머지는 건수만 로그)으로 기록. 어떤 부하에서도 `FrameDone`을 막지 않는다 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-039, DEC-005, QA-012 |
 | IMP-LNK-018 | 송신 시각을 도착 시각 대신 `header.sim_time_us`로 찍고 `tx_time < 틱 시각`인 메시지만 그 틱에서 처리(정렬 키 tx_time, src, key, seq). 메시지가 틱보다 먼저/나중에 도착해도 같은 프레임에서 처리 | `src/emulator.cpp` | DEC-039, DEC-005, QA-013 |
 | IMP-LNK-019 | lockstep 참여자 대기: `sim/clock/done/*` 구독(`on_done`), 시나리오 `run.participants`(자신 제외)가 프레임 f-1의 FrameDone을 모두 보낸 뒤에 틱 f를 처리(`run_tick`). 콜백은 막지 않고 보류 틱을 보관, 시각이 되돌아가면 초기화 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-039, DEC-005, QA-013 |
+| IMP-LNK-020 | `run_tick` 전체(틱 계산, rx·outcome 발행, `FrameDone` 발행)를 `run_mu_`(재귀 뮤텍스)로 직렬화. `on_tick`·`on_done`이 다른 스레드에서 불려도 틱 f의 rx가 모두 나간 뒤에 `FrameDone{f}`가 나간다 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-040, DEC-039, QA-016 |
 | IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
@@ -84,6 +85,7 @@ flowchart LR
 | TC-LNK-018 | 불완전 링크(GE·지터·대역폭) 3기 200 프레임: 같은 시드에서 송신이 틱 전/후에 도착해도, 반복해도 outcome 동일, 다른 시드는 다름, 손실·전달이 모두 있음 | `tests/test_datalink.cpp` | IMP-LNK-018, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-019 | 참여자 FrameDone 대기: 첫 틱은 즉시, 이후 틱은 `agent-0`의 이전 프레임 FrameDone 전까지 보류(FrameDone 미발행, 늦게 온 tx 보류), 도착 후 처리·FrameDone, FrameDone이 틱보다 먼저 와도 즉시 처리 | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-039 | 통과 (msvc-debug, 2026-11-02) |
 | TC-LNK-020 | 틱마다 rx·link/outcome·link/state를 모두 발행한 뒤 FrameDone이 마지막, 틱당 FrameDone 1건 (같은 스레드에서 순서대로 발행) | `tests/test_datalink.cpp` | IMP-LNK-017, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
+| TC-LNK-021 | on_tick·on_done을 다른 스레드에서 동시에 호출(300프레임)해도 틱마다 FrameDone은 rx 뒤에 정확히 1건 (`run_mu_` 직렬화) | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
 
 ## 제약과 다음 단계
 

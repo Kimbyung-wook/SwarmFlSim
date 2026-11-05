@@ -307,6 +307,9 @@ void Datalink::on_done(const Sample& s) {
 // lockstep에서는 프레임 f-1의 FrameDone을 모든 참여자에게서 받은 뒤에 틱 f를 처리한다. 그래야 메시지가
 // 틱보다 먼저 도착하느냐에 따라 처리 프레임이 달라지지 않는다. 대기 중에도 콜백을 막지 않는다
 void Datalink::run_tick() {
+  // 틱 계산부터 rx 발행, FrameDone 발행까지 한 스레드가 끝내도록 직렬화한다. on_tick과 on_done이 서로 다른 버스 스레드에서
+  // 불려도 rx와 FrameDone이 섞이지 않는다 (DEC-040). 재진입(동기 버스)을 허용한다
+  std::lock_guard run_lock(run_mu_);
   std::vector<Out> out;
   v1::ClockTick tick;
   {
