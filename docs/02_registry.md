@@ -158,6 +158,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-033 | 브리지 바이너리 프레임에 구독 ID 포함(겹치는 구독의 중복 수신 해소). 보류: 브리지 프로토콜 v2에서 검토 | Open |
 | OPN-034 | 수백 대 규모의 트래픽 관측(데이터링크 주기 집계 메시지 또는 브리지 키 필터). 보류: WP10 성능 단계 | Open |
 | OPN-035 | 외부 시뮬레이션 상호운용(HLA/DIS). 제안: 내부 버스는 Zenoh 유지(DEC-002), 별도 Gateway federate(`hla/`, C++20, IEEE 1516e API, 개발 RTI OpenRTI, RPR FOM 2.0)가 `truth/**`를 외부로 발행. 단계: ① 발행 전용 ② lockstep 시간관리 참여(Gateway가 `participants`에 들어가 TAG(f+1) 수신 뒤 `FrameDone{f}`, lookahead 1프레임) ③ 외부 엔티티 수신(Core 입력 채널 신설, truth로만 반영해 DEC-013 유지). 기체 간 통신은 Datalink 경유를 유지하고 HLA로 보내지 않는다. 버스를 RTI로 교체하는 안은 DEC-002·DEC-026·DEC-040 충돌로 기각 제안. 확인 필요: 연동 상대의 표준(HLA/DIS)·FOM·RTI, Gateway C++ 작성에 따른 DEC-001 예외, 외부 연동 시 lockstep 결정성의 조건(외부 입력 동일). 보류: 연동 상대 미정(사용자: "연동상대 정보에 대해서는 아직 정해진 사항은 없어") | Open |
+| OPN-036 | lockstep 결정성 잔여 차(QA-016): DEC-043(QoS 통일) 적용 후에도 s3 시드 7·20261104에서 uav-009~012 최대 0.041 m, s6 100기 flocking에서 최대 0.358 m 불일치(프레임 3부터). 같은 rx가 틱 69/70으로 갈림 → 교차 키 도착 순서 문제로 추정. 제안(WP3): `FrameDone`에 틱 f 동안 해당 참여자가 발행한 메시지 수(`sent_count`, 수신자별 또는 키 접두어별)를 싣고, 수신 측(Agent·Datalink)은 그 수만큼 받은 뒤에만 틱을 진행하는 개수 장벽. 계약 변경(proto `FrameDone` 필드 추가, 0.10.0) 필요. 확인 필요: 개수 단위(수신자별/전체), 손실 시 처리(lockstep 경로는 BLOCK이라 손실 없음 전제), 성능 영향 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
