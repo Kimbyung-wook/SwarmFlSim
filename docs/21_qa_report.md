@@ -714,7 +714,8 @@ realtime 실행에 앱 내장 브라우저(`http://localhost:45173/?source=bus&b
 ### 14.9 새 결함
 
 #### QA-019 — P5 시나리오 lockstep 같은 시드 궤적이 mm 단위로 달라진다
-- 담당 WP1 Core 또는 WP4 Datalink (원인 미확인) / 보통 / TC-QA-035
+- 담당 WP4 Datalink (계약 보완 WP0) / 보통 / TC-QA-035, TC-QA-037
+- 상태: 원인 확인(§15), 수정 대기 (D-18)
 - 재현: `p5_payload_demo_5`를 lockstep으로 같은 시드에서 3회 실행하고 `--compare`로 비교.
 - 기대: DEC-005·DEC-044의 결정성. 4차(§11.2)에서 flocking·P2P 포함 시나리오는 완전히 같았다.
 - 실제: 3회 중 d2만 프레임 11,427부터 다섯 기체가 차례로(11,427~11,434) 어긋난다. 차이는 끝까지 커져 최대 2 mm이다. 이벤트 순서·프레임은 같다.
@@ -773,3 +774,115 @@ realtime 실행에 앱 내장 브라우저(`http://localhost:45173/?source=bus&b
 | Datalink 재시작 뒤 재밍 구역 | QA-021로 예상만 했다 |
 | UI의 생성 엔티티 궤적·영향 반경 원 | QA-023으로 렌더링이 멈춰 보지 못했다 |
 | release 빌드 | debug만 실시 |
+
+## 15. 7차 시험: QA-019 원인 좁히기 (2026-11-06)
+
+§14.7의 QA-019(같은 시드 P5 lockstep에서 d2만 프레임 11,427부터 mm 단위로 어긋남)의 원인을 좁혔다. 코드는 고치지 않았다. 근거 결정은 DEC-005·DEC-044·DEC-045다.
+
+### 15.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 기록 옵션 | `qa/p5_e2e.py --trace-io`. 프레임별로 세 가지를 저장한다. ① `link_io.pkl.gz`: LinkOutcome 전체(src·dst·seq·iface·종류·사유·tx_time·rx_time). ② `agent_io.txt`: `qa/p5_probe_agent.py`가 MA `on_step_batch` 시작 시점에 기록하는 기체별 입력(항법 프레임·신선도·위치/속도 16진 실수·P2P/C2 수신함의 `src:seq:sim_time` 순서). ③ `ctrl_io.pkl.gz`: `onboard/*/ControlOutput` 바이트 |
+| 변형 | `qa/make_p5_variants.py`가 예제에서 만든다. `qa_p5_nosensor`(카메라 제거), `qa_p5_nopayload`(페이로드 전부 제거), `qa_p5_noloss`(`uav_default`·`gcs_default` 링크 프로파일의 GE 손실을 0으로) |
+| 반복 | 변형마다 같은 시드(20261105)로 6회, 14,000 프레임, lockstep. `qa/qa019_batch.sh`, base_port 48400·48440 두 줄로 병렬 |
+| 비교 | `qa/qa019_diff.py`(실행 쌍 비교), `qa/qa019_summary.py`(변형별로 궤적이 같은 실행끼리 묶고 0 지연 전달을 센다) |
+| 재현 | `uv run python qa/p5_e2e.py --mode lockstep --frames 14000 --trace-io --out qa/out/p5/q19_base_1 --base-port 48400` 후 `uv run python qa/qa019_summary.py base nosensor nopayload noloss --n 6` |
+
+### 15.2 결과 요약
+
+| 변형 | 실행 | 궤적 무리 | 어긋난 실행 | 처음 다른 MA 입력 | 첫 궤적 차이 | LinkOutcome 집합·순서 차이 | 0 지연 전달(실행마다) | stale 항법 |
+|---|---|---|---|---|---|---|---|---|
+| base | 6 | {1,3,4,5,6} {2} | 2 | 11,426 uav-001 P2P | 11,427 uav-001, 끝까지 최대 0.036 mm | 0 / 0 | 1건: uav-004→uav-001 seq 1142, tx = rx = 228,500,000 µs (T11425) | 0 |
+| nosensor | 6 | {1,3,4,5,6} {2} | 2 | 11,426 uav-001 P2P | 11,427 uav-001, 0.036 mm | 0 / 0 | base와 같은 1건 | 0 |
+| nopayload | 6 | {1,3,4,5,6} {2} | 2 | 11,426 uav-001 P2P | 11,427 uav-001, 0.036 mm | 0 / 0 | base와 같은 1건 | 0 |
+| noloss | 6 | {1,2,3,4,5,6} | 없음 | 없음 | 없음 | 0 / 0 | 2건: uav-001→gcs-01 seq 487(T4878), uav-004→uav-001 seq 1128(T11285) | 0 |
+
+- 24회 모두 rc 0으로 끝났다. 비교는 공통 프레임(약 14,400까지)에서 했다.
+- LinkOutcome은 같은 변형 안에서 모든 실행·모든 프레임이 같다(집합도 순서도). Datalink의 경로·손실·지연 판정은 결정적이다.
+- 어긋난 세 실행 모두 같은 프레임에서 MA 입력이 처음 달라진다. 다른 필드(항법 프레임·신선도·위치·속도·C2)는 그 전까지 같다.
+- `ctrl_io`(Agent가 낸 ControlOutput)는 nosensor·nopayload에서 실행 1·2를 비교했다. 처음 다른 것은 11,426 uav-001이다. 그 전에는 모두 같다. 1·3은 끝까지 같다. Core가 ControlOutput을 받는 쪽에는 차이가 없다.
+- 실행 2가 세 변형 모두에서 어긋났다. 두 줄(48400·48440)을 함께 돌렸으므로 그때의 부하와 관련이 있을 수 있다. 확인하지는 않았다.
+
+### 15.3 처음 어긋나는 프레임 직전의 차이
+
+0 지연 메시지(uav-004→uav-001 seq 1142)가 uav-001 MA 수신함에 처음 보인 프레임은 다음과 같다.
+
+| 변형 | 실행 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| base | 11,427 | **11,426** | 11,427 | 11,427 | 11,427 | 11,427 |
+| nosensor | 11,427 | **11,426** | 11,427 | 11,427 | 11,427 | 11,427 |
+| nopayload | 11,427 | **11,426** | 11,427 | 11,427 | 11,427 | 11,427 |
+| noloss (seq 1128, T11285) | 11,287 | 11,287 | 11,287 | 11,287 | 11,287 | 11,287 |
+
+base 실행 1·2의 프레임 11,426 uav-001 P2P 수신함은 다음과 같다.
+
+| 실행 | 11,426 | 11,427 |
+|---|---|---|
+| 1 | `[]` | `[uav-005:1142:228480000, uav-004:1142:228500000]` |
+| 2 | `[uav-004:1142:228500000]` | `[uav-005:1142:228480000]` |
+
+다른 기체 메시지는 모두 송신 뒤 2틱째에 소비된다(지연 20 ms ±5 ms가 1틱 안이고, DEC-045의 최소 1틱이 더해진다). 0 지연 메시지만 1틱째(실행 2) 또는 2틱째(나머지)로 갈린다. 1틱째로 들어가면 uav-001의 flocking 이웃 표가 한 프레임 일찍 바뀐다. 그 결과 11,426의 ControlOutput이 달라지고, 11,427부터 궤적이 어긋나 다른 기체로 번진다.
+
+### 15.4 메커니즘
+
+```mermaid
+sequenceDiagram
+  participant A as Agent (uav-001)
+  participant D as Datalink
+  Note over D: 틱 11425: uav-004가 tx_time=T11425로 PeerStatus 송신
+  D->>A: FrameDone{11425}
+  Note over D: 틱 11426: tx_time < T11426인 송신 처리<br/>sample_delay_us = 0 → arrive = T11425<br/>arrive <= now 이므로 바로 rx 발행 (rx_time = T11425)
+  Note over A: 틱 11426: FrameDone{11425}만 기다린 뒤<br/>rx_time <= T11425 인 rx를 소비 (DEC-045)
+  D-->>A: rx(rx_time=T11425)  ← 소비보다 먼저 오면 11426, 늦으면 11427
+  D->>A: FrameDone{11426}
+```
+
+- Datalink는 틱 k에서 `tx_time_us < T_k`인 송신, 곧 틱 k-1에 보낸 것을 처리한다(`datalink/src/emulator.cpp:358-359`). 도착은 `depart + sample_delay_us`다(`emulator.cpp:637`). `arrive <= now`이면 같은 틱에 rx를 낸다(`emulator.cpp:646-671`).
+- `sample_delay_us`는 `llround(max(latency + jitter·N(0,1), 0)·1000)`이다(`datalink/src/channel.cpp:129-133`). 기본 프로파일(20 ms, 5 ms)에서 z ≤ -4이면 정확히 0이다. 확률은 약 3.2×10⁻⁵이다. 실행마다 약 35,600건을 전달하므로 기대값은 약 1.1건이다. 관측은 1~2건이었다.
+- 지연이 0이고 토큰 버킷이 출발을 늦추지 않으면 rx_time = T(k-1)이다. 이 rx는 Datalink 틱 k에서 나온다.
+- Agent는 틱 k에서 Datalink `FrameDone{k-1}`만 기다린 뒤 `rx_time <= T(k-1)`인 rx를 소비한다(`agent/src/swarm_agent/runtime.py:389-399`, `424-435`, `471-475`). 틱 k의 Datalink rx는 이 장벽에 들어 있지 않다. 그래서 위 rx가 소비 전에 도착할지는 벽시계 경쟁이다.
+- DEC-045는 "틱 f의 rx는 … 확정될 수 없다"를 전제로 `rx_time <= T(f-1)`만 소비한다. 이 규칙은 "rx_time <= T(f-1)인 rx는 모두 Datalink 틱 f-1 이전에 나왔다"는 불변식에 기대고 있다. 그러나 Datalink는 이 불변식을 지키지 않는다. 계약 문서에도 이 불변식이 적혀 있지 않다.
+- 같은 틀이 틱당 처리량 상한(`max_routes_per_tick`, `emulator.cpp:363-374`)으로 넘어간 송신에도 해당할 수 있다. 한 틱 이상 늦게 처리되면 rx_time이 T(k-1)보다 작을 수 있다. 상한 기본값이 20,000쌍이라 이 시나리오에서는 일어나지 않았다(확인하지 못한 경로).
+
+### 15.5 범위 좁히기 결과
+
+| 끈 것 | 결과 | 판정 |
+|---|---|---|
+| Payload 센서(nosensor) | 같은 0 지연 전달이 남고 같은 프레임·같은 메시지로 1/6 어긋남 | 원인 아님 |
+| Payload 전부(nopayload) | 같음 | 원인 아님. 페이로드는 Datalink 난수열을 바꾸지 않는다 |
+| BURST_LOSS(noloss) | GE 난수 소비가 바뀌어 0 지연 전달이 다른 프레임(4,878·11,285)으로 옮겨진다. 6회 모두 소비 프레임이 같아 어긋나지 않았다 | 원인 아님. 난수열을 바꿔 사건 위치만 옮긴다. 경쟁은 그대로 남아 있다 |
+
+§14.7과 §11.2의 차이(4차 시나리오는 완전히 같았음)도 이것으로 설명된다. 0 지연 표본이 나오는지와 경쟁에서 지는지는 시나리오·난수열·부하에 따라 다르다. 0 지연 표본이 없는 실행은 결정적이다.
+
+### 15.6 원인 WP
+
+| 구분 | WP | 내용 |
+|---|---|---|
+| 원인 | **WP4 Datalink** | lockstep 틱 k에서 `rx_time_us <= T(k-1)`인 rx를 낸다. 지연 0(`channel.cpp:132`의 0 하한)에서 생긴다. 처리량 상한 이월에서도 생길 수 있다 |
+| 계약 공백 | WP0 | DEC-045가 기대는 불변식("Datalink 틱 k가 내는 rx는 rx_time > T(k-1)")이 `docs/10_contracts.md`·DEC-045에 없다 |
+| 다른 고칠 곳 | WP3 Agent | rx_time 대신 Datalink가 낸 틱 번호로 소비하면 Datalink 쪽 불변식 없이도 결정적이다. 이 방식은 DEC-045 문구와 다르다 |
+| 관계없음 | WP1 Core, Payload | ControlOutput 수신과 Payload 출력은 어긋나기 전까지 같다 |
+
+고칠 방법은 D-18로 올린다. QA는 고치지 않았다.
+
+### 15.7 결함 상태 갱신
+
+- QA-019의 담당을 "WP1 Core 또는 WP4 Datalink (원인 미확인)"에서 "WP4 Datalink (계약 보완 WP0)"로 바꾼다. 상태는 원인 확인, 수정 대기다.
+- §14.10 D-11(Payload 시나리오의 결정성 요구)은 Payload가 원인이 아니므로 QA-019와 떼어 볼 수 있다.
+
+### 15.8 결정 확인 항목
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-18 | 확인 필요 | QA-019. lockstep rx 불변식을 어디서 지킬지. (a) Datalink: 틱 k에서 내는 rx의 rx_time을 T(k-1)보다 크게 한다(예: 도착 시각 하한을 T_k로, 또는 지연 하한 1 µs). 이월된 송신도 같은 하한을 쓴다. (b) Agent: Datalink가 낸 틱 번호로 소비한다. (c) 계약: 어느 쪽이든 DEC-045 또는 `docs/10_contracts.md`에 불변식을 적는다 |
+
+### 15.9 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 처리량 상한 이월 경로 | 이 시나리오의 부하로는 상한(20,000쌍)에 닿지 않는다 |
+| 실행 2에서만 어긋난 이유 | 두 줄을 함께 돌린 부하로 추정만 했다. 소비 시점 경쟁 자체는 §15.3으로 확인했다 |
+| 0 지연 이외의 rx_time = T(k-1) 경로 | 토큰 버킷 지연이 있으면 rx_time이 T(k-1)보다 커지므로 생기지 않는다고 봤다. 실측하지 않았다 |
+| 지상국(gcs-01) 쪽 0 지연 수신 | noloss의 uav-001→gcs-01 seq 487. GCS Agent 입력은 기록하지 않았다 |
+| base 실행 1·2와 noloss 실행 1~3의 ControlOutput | 이 기록을 넣기 전에 시작한 실행이다 |

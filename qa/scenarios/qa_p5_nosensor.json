@@ -1,0 +1,455 @@
+{
+  "schema_version": "0.1",
+  "name": "qa_p5_nosensor",
+  "description": "QA-019 변형: qa_p5_nosensor (원본 p5_payload_demo_5.json)",
+  "map": {
+    "origin": {
+      "lat_deg": 37.37,
+      "lon_deg": 128.39,
+      "alt_m": 500.0
+    },
+    "extent": {
+      "south_deg": 37.0,
+      "north_deg": 38.2,
+      "west_deg": 127.8,
+      "east_deg": 129.3
+    }
+  },
+  "run": {
+    "mode": "lockstep",
+    "frame_hz": 50,
+    "seed": 20261105,
+    "rate": 10.0,
+    "duration_s": 2400.0
+  },
+  "entities": [
+    {
+      "id": "gcs-01",
+      "kind": "gcs",
+      "side": "blue",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.37,
+          "lon_deg": 128.39,
+          "alt_m": 500.0
+        }
+      },
+      "link_profile": "gcs_default"
+    },
+    {
+      "id": "uav-001",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.37,
+          "lon_deg": 128.39,
+          "alt_m": 1500.0
+        },
+        "velocity_ned_mps": {
+          "x": 17.678,
+          "y": 17.678,
+          "z": 0.0
+        }
+      },
+      "payloads": [
+        {
+          "id": "sta1",
+          "type": "agm_short",
+          "profile": "agm_generic",
+          "count": 2
+        }
+      ],
+      "autonomy": {
+        "ma_plugin": "flocking_basic",
+        "ma_params": {
+          "group": "alpha"
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-002",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.374,
+          "lon_deg": 128.39,
+          "alt_m": 1500.0
+        },
+        "velocity_ned_mps": {
+          "x": 17.678,
+          "y": 17.678,
+          "z": 0.0
+        }
+      },
+      "payloads": [
+        {
+          "id": "sta1",
+          "type": "aam_short",
+          "profile": "aam_generic",
+          "count": 2
+        }
+      ],
+      "autonomy": {
+        "ma_plugin": "flocking_basic",
+        "ma_params": {
+          "group": "alpha"
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-003",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.378,
+          "lon_deg": 128.39,
+          "alt_m": 1500.0
+        },
+        "velocity_ned_mps": {
+          "x": 17.678,
+          "y": 17.678,
+          "z": 0.0
+        }
+      },
+      "payloads": [
+        {
+          "id": "fpv1",
+          "type": "fpv",
+          "profile": "fpv_generic",
+          "count": 2
+        }
+      ],
+      "autonomy": {
+        "ma_plugin": "flocking_basic",
+        "ma_params": {
+          "group": "alpha"
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-004",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.382,
+          "lon_deg": 128.39,
+          "alt_m": 1500.0
+        },
+        "velocity_ned_mps": {
+          "x": 17.678,
+          "y": 17.678,
+          "z": 0.0
+        }
+      },
+      "payloads": [
+        {
+          "id": "sta1",
+          "type": "agm_short",
+          "profile": "agm_generic",
+          "count": 2
+        },
+        {
+          "id": "sta2",
+          "type": "aam_short",
+          "profile": "aam_generic",
+          "count": 2
+        }
+      ],
+      "autonomy": {
+        "ma_plugin": "flocking_basic",
+        "ma_params": {
+          "group": "alpha"
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-005",
+      "kind": "uav",
+      "side": "blue",
+      "dynamics": "dof2",
+      "airframe": "skywalker_x8",
+      "initial": {
+        "position": {
+          "lat_deg": 37.386,
+          "lon_deg": 128.39,
+          "alt_m": 1500.0
+        },
+        "velocity_ned_mps": {
+          "x": 17.678,
+          "y": 17.678,
+          "z": 0.0
+        }
+      },
+      "payloads": [],
+      "autonomy": {
+        "ma_plugin": "flocking_basic",
+        "ma_params": {
+          "group": "alpha"
+        }
+      },
+      "link_profile": "uav_default",
+      "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "tgt-001",
+      "kind": "ground_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.62,
+          "lon_deg": 128.71,
+          "alt_m": 300.0
+        },
+        "velocity_ned_mps": {
+          "x": 8.0,
+          "y": 8.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.62,
+          "lon_deg": 128.71,
+          "alt_m": 300.0
+        },
+        {
+          "lat_deg": 37.63,
+          "lon_deg": 128.73,
+          "alt_m": 305.0
+        },
+        {
+          "lat_deg": 37.64,
+          "lon_deg": 128.75,
+          "alt_m": 310.0
+        }
+      ]
+    },
+    {
+      "id": "tgt-002",
+      "kind": "ground_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.61,
+          "lon_deg": 128.72,
+          "alt_m": 300.0
+        },
+        "velocity_ned_mps": {
+          "x": -1.0,
+          "y": 12.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.61,
+          "lon_deg": 128.72,
+          "alt_m": 300.0
+        },
+        {
+          "lat_deg": 37.605,
+          "lon_deg": 128.75,
+          "alt_m": 295.0
+        },
+        {
+          "lat_deg": 37.6,
+          "lon_deg": 128.78,
+          "alt_m": 290.0
+        }
+      ]
+    },
+    {
+      "id": "tgt-003",
+      "kind": "ground_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.6,
+          "lon_deg": 128.7,
+          "alt_m": 290.0
+        },
+        "velocity_ned_mps": {
+          "x": -10.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.6,
+          "lon_deg": 128.7,
+          "alt_m": 290.0
+        },
+        {
+          "lat_deg": 37.58,
+          "lon_deg": 128.7,
+          "alt_m": 285.0
+        }
+      ]
+    },
+    {
+      "id": "air-001",
+      "kind": "air_target",
+      "side": "red",
+      "dynamics": "scripted",
+      "initial": {
+        "position": {
+          "lat_deg": 37.66,
+          "lon_deg": 128.76,
+          "alt_m": 1600.0
+        },
+        "velocity_ned_mps": {
+          "x": -8.0,
+          "y": -35.0,
+          "z": 0.0
+        }
+      },
+      "script_path": [
+        {
+          "lat_deg": 37.66,
+          "lon_deg": 128.76,
+          "alt_m": 1600.0
+        },
+        {
+          "lat_deg": 37.64,
+          "lon_deg": 128.68,
+          "alt_m": 1600.0
+        },
+        {
+          "lat_deg": 37.62,
+          "lon_deg": 128.6,
+          "alt_m": 1600.0
+        }
+      ]
+    },
+    {
+      "id": "jam-site-01",
+      "kind": "jammer_site",
+      "side": "red",
+      "dynamics": "static",
+      "initial": {
+        "position": {
+          "lat_deg": 37.55,
+          "lon_deg": 128.617,
+          "alt_m": 400.0
+        }
+      },
+      "payloads": [
+        {
+          "id": "jam0",
+          "type": "jammer",
+          "profile": "site_generic"
+        }
+      ]
+    }
+  ],
+  "mission_plan": {
+    "plan_id": "plan-001",
+    "tasks": [
+      {
+        "task_id": "task-001",
+        "assignees": [
+          "uav-001",
+          "uav-002",
+          "uav-003",
+          "uav-004",
+          "uav-005"
+        ],
+        "move_to": {
+          "destination": {
+            "lat_deg": 37.6,
+            "lon_deg": 128.69,
+            "alt_m": 1500.0
+          },
+          "speed_mps": 25.0
+        }
+      },
+      {
+        "task_id": "task-002",
+        "assignees": [
+          "uav-001"
+        ],
+        "strike": {
+          "target_id": "tgt-001",
+          "weapon_type": "agm_short"
+        }
+      },
+      {
+        "task_id": "task-003",
+        "assignees": [
+          "uav-002"
+        ],
+        "strike": {
+          "target_id": "air-001",
+          "weapon_type": "aam_short"
+        }
+      },
+      {
+        "task_id": "task-004",
+        "assignees": [
+          "uav-003"
+        ],
+        "strike": {
+          "target_id": "tgt-002",
+          "weapon_type": "fpv"
+        }
+      }
+    ],
+    "formations": [
+      {
+        "group_id": "alpha",
+        "members": [
+          "uav-001",
+          "uav-002",
+          "uav-003",
+          "uav-004",
+          "uav-005"
+        ],
+        "leader": "uav-001",
+        "shape": "wedge",
+        "spacing_m": 150.0
+      }
+    ]
+  },
+  "engagement_criteria": {
+    "hostile_sides": [
+      "red"
+    ],
+    "require_approval": true,
+    "weapons_free": [
+      {
+        "circle": {
+          "center": {
+            "lat_deg": 37.62,
+            "lon_deg": 128.72
+          },
+          "radius_m": 12000.0
+        }
+      }
+    ]
+  }
+}

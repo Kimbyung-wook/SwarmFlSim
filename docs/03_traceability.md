@@ -144,6 +144,7 @@
 | TC-QA-034 | P5: jam_zone 이벤트가 Datalink 구역에 반영되어 구역 안 수신이 JAMMED | `qa/p5_e2e.py` | DEC-009, DEC-028 |
 | TC-QA-035 | P5: 같은 시드 lockstep 반복의 truth·이벤트 동일 | `qa/p5_e2e.py --compare <A> <B>` | DEC-005, DEC-044 |
 | TC-QA-036 | P5: UI 구역·궤적·영향 반경·센서 FOV 표시(TC-UI-051, 실버스) | `qa/p5_e2e.py --mode realtime --bridge --ui` + 앱 내장 브라우저 | DEC-003, DEC-046 |
+| TC-QA-037 | QA-019 원인 좁히기: 같은 시드 P5 lockstep 6회×4변형(base·nosensor·nopayload·noloss), 프레임별 LinkOutcome·Agent 입력·ControlOutput 비교 | `qa/p5_e2e.py --trace-io`, `qa/qa019_batch.sh`, `qa/qa019_summary.py` | DEC-045, DEC-044, DEC-005 |
 
 ## 시험 결과
 
@@ -203,6 +204,7 @@
 | TC-QA-034 | 통과 | 2026-11-05 | 구역 안 수신 27,121건 모두 JAMMED. 늦은 구독자는 구역을 못 받음(QA-021) |
 | TC-QA-035 | 불합격 | 2026-11-05 | 3회 중 1회가 프레임 11,427부터 최대 2 mm 어긋남(QA-019) |
 | TC-QA-036 | 불합격 | 2026-11-05 | 구역 표시됨. 발사 순간 렌더링 중지(QA-023), FOV 입력 없음(QA-020) |
+| TC-QA-037 | 원인 확인 | 2026-11-06 | 0 지연 전달(rx_time = T(k-1))을 Datalink가 틱 k에 내어 Agent 소비 프레임이 벽시계에 따라 갈린다. WP4 Datalink, 계약 보완 WP0 (QA-019, D-18) |
 
 ## 프로세스 결정
 

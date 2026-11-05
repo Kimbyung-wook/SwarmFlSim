@@ -30,14 +30,19 @@ EXAMPLE = ROOT / "scenario/examples/p5_payload_demo_5.json"
 
 
 class P5Stack(h.Stack):
-    def __init__(self, *a, probe_out: Path, **k) -> None:  # noqa: ANN002, ANN003
+    def __init__(self, *a, probe_out: Path, probe_io: Path | None = None, **k) -> None:  # noqa: ANN002, ANN003
         super().__init__(*a, **k)
         self.probe_out = probe_out
+        self.probe_io = probe_io
 
     def _cmd(self, name: str) -> list[str]:
         c = super()._cmd(name)
         if name == "agent":
             os.environ["P5_PROBE_OUT"] = str(self.probe_out)
+            if self.probe_io is not None:
+                os.environ["P5_PROBE_IO"] = str(self.probe_io)
+            else:
+                os.environ.pop("P5_PROBE_IO", None)
             c = [sys.executable, str(Path(__file__).parent / "p5_probe_agent.py"), *c[3:]]
         return c
 
@@ -52,6 +57,8 @@ class P5Observer(h.Observer):
         self.sact: list[tuple[int, str, str, bool]] = []
         self.stk: list[tuple[int, str, str, str, str]] = []
         self.lo: list[tuple[int, str, str, str, str]] = []  # (frame, src, dst, kind, reason)
+        self.lo_full: list[tuple] | None = None  # --trace-io: LinkOutcome 전체 필드, 수신 순서 그대로
+        self.ctrl: list[tuple[int, str, bytes]] | None = None  # --trace-io: Agent가 낸 ControlOutput (frame, id, 바이트)
         self.subs += [
             self.bus.subscribe("onboard/*/Detection", self._det),
             self.bus.subscribe("onboard/*/SensorActivity", self._sact),
@@ -68,6 +75,16 @@ class P5Observer(h.Observer):
         with self.lock:
             self.sact.append((a.header.frame, s.key.split("/")[1], a.payload_id, a.active))
 
+    def trace_io(self) -> None:
+        self.lo_full, self.ctrl = [], []
+        self.subs.append(self.bus.subscribe("onboard/*/ControlOutput", self._ctrl))
+
+    def _ctrl(self, s) -> None:  # noqa: ANN001
+        from swarm.v1 import fa_pb2
+        c = fa_pb2.ControlOutput.FromString(s.payload)
+        with self.lock:
+            self.ctrl.append((c.header.frame, s.key.split("/")[1], bytes(s.payload)))
+
     def _stk(self, s) -> None:  # noqa: ANN001
         a = self.ms.StrikeActivity.FromString(s.payload)
         with self.lock:
@@ -82,6 +99,9 @@ class P5Observer(h.Observer):
         reason = link.DropReason.Name(o.reason).removeprefix("DROP_REASON_") if kind == "DROPPED" else ""
         with self.lock:
             self.lo.append((o.tx_time_us // 20000, o.src, o.dst, kind, reason))
+            if self.lo_full is not None:
+                self.lo_full.append((o.tx_time_us // 20000, o.src, o.dst, o.seq, int(o.iface),
+                                     o.msg_type, o.size_bytes, kind, reason, o.tx_time_us, o.rx_time_us))
 
     def parsed_events(self) -> list[tuple[str, object, bytes]]:
         sim, truth, *_ = self.m
@@ -198,7 +218,8 @@ def run(a: argparse.Namespace) -> None:
     sc = Path(a.scenario)
     probe_out = out / "probe.json"
     st = P5Stack(out / "stack", sc, base_port=a.base_port, lockstep=(a.mode == "lockstep"), rate=a.rate,
-                 record=a.record, bridge=a.bridge, probe_out=probe_out)
+                 record=a.record, bridge=a.bridge, probe_out=probe_out,
+                 probe_io=(out / "agent_io.txt") if a.trace_io else None)
     web = []
     t0 = time.monotonic()
     fault = None
@@ -211,6 +232,8 @@ def run(a: argparse.Namespace) -> None:
         if st.bridge:
             st.start_one("bridge")
         ob = P5Observer([st.endpoint()])
+        if a.trace_io:
+            ob.trace_io()
         if a.ui:
             for name, port in (("ui", 45173),):
                 web.append(subprocess.Popen(["npm.cmd", "run", "dev", "--", "--port", str(port), "--strictPort"],
@@ -275,6 +298,13 @@ def run(a: argparse.Namespace) -> None:
         with gzip.open(out / "trace.pkl.gz", "wb") as f:
             with ob.lock:
                 pickle.dump({"traj": dict(ob.traj), "events": [(k, p) for k, p in ob.events]}, f)
+        if a.trace_io:
+            with gzip.open(out / "link_io.pkl.gz", "wb") as f:
+                with ob.lock:
+                    pickle.dump(list(ob.lo_full), f)
+            with gzip.open(out / "ctrl_io.pkl.gz", "wb") as f:
+                with ob.lock:
+                    pickle.dump(list(ob.ctrl), f)
         print(json.dumps({k: res[k] for k in ("event_kinds", "det_bus", "det_ms", "weapons", "assign")},
                          ensure_ascii=False, default=str), flush=True)
         ob.close()
@@ -335,6 +365,8 @@ def main() -> None:
     ap.add_argument("--ui", action="store_true")
     ap.add_argument("--hold-s", type=float, default=0.0)
     ap.add_argument("--record", action="store_true")
+    ap.add_argument("--trace-io", action="store_true",
+                    help="프레임별 LinkOutcome 전체(link_io.pkl.gz)와 Agent MA 입력(agent_io.txt)을 남긴다 (QA-019)")
     ap.add_argument("--compare", nargs=2)
     ap.add_argument("--upto", type=int, default=10**9)
     a = ap.parse_args()
