@@ -53,6 +53,7 @@ flowchart LR
 | IMP-AGT-026 | lockstep 수신 결정성(DEC-040): `run.participants` 중 `datalink`로 시작하는 참여자의 `FrameDone{f}`를 받을 때까지 틱 f+1을 보류 틱으로 두고(콜백은 막지 않음, 첫 틱 전 frame 0은 준비 신호로 무시), rx는 `rx_time_us <= 틱 시각`인 것만 (rx_time, source, seq) 순으로 틱 시작에 소비한다. realtime·free-run은 즉시 소비 | `src/swarm_agent/runtime.py` | DEC-040, DEC-005, DEC-039 | Pass (TC-AGT-044~046) |
 | IMP-AGT-027 | lockstep rx 소비 상한을 이전 틱 시각으로 변경(QA-016, DEC-005·039·040): 틱 f는 Datalink가 그 틱의 rx를 내는 중일 수 있으므로 FrameDone{f-1}이 보장하는 시각(틱 f-1)까지만 소비. 계약 문구(`rx_time_us <= t`)와 달라 OPN-037 → DEC-045로 확정 | `src/swarm_agent/runtime.py` | DEC-005, DEC-040, DEC-045 | Done |
 | IMP-AGT-028 | 송신 개수 장벽(DEC-044): lockstep FrameDone{f}에 기체별 `swarm/<e>/tx/**` 누적 발행 수를 `sent_count`로 싣고, 틱 f+1은 Datalink FrameDone{f}에 더해 자기 기체의 `swarm/<e>/rx/**` 누적 수신 수가 그 `sent_count[e]` 이상일 때 처리. 자기 기체가 아닌 e·빈 값은 기다리지 않고 realtime·free-run은 영향 없음. IMP-AGT-027 소비 조건은 유지 | `src/swarm_agent/runtime.py` | DEC-044, DEC-040, QA-016 | TC-AGT-047~050 Pass |
+| IMP-AGT-029 | 임무장비 상태 자동 보고(DEC-051): 자기 기체의 `onboard/<id>/{Sensor,Jammer,Strike}Activity`를 (메시지, payload_id)별로 보관하고, 헤더를 뺀 값이 바뀌면 다음 틱 시작에, 모의 시간 1 s 경계마다 전체를 `swarm/<id>/tx/ms/<Msg>`로 GCS(`controlling_gcs`, 없으면 시나리오의 첫 GCS)에 보냄. 송신은 틱 처리 안에서 하므로 `sent_count`에 포함(DEC-044). MA 플러그인과 무관 | `src/swarm_agent/runtime.py` | DEC-051, DEC-044, QA-020 | TC-AGT-051~054 Pass |
 
 ## TC
 
@@ -97,8 +98,12 @@ flowchart LR
 | TC-AGT-048 | 다른 기체의 sent_count·빈 sent_count는 기다리지 않음 | `tests/test_agent_lockstep_rx.py` | IMP-AGT-028 | Pass |
 | TC-AGT-049 | Agent FrameDone에 기체별 tx 누적 수가 실림 | `tests/test_agent_lockstep_rx.py` | IMP-AGT-028 | Pass |
 | TC-AGT-050 | realtime은 sent_count 무시 | `tests/test_agent_lockstep_rx.py` | IMP-AGT-028 | Pass |
+| TC-AGT-051 | 임무장비 상태가 바뀌면 다음 틱에 GCS로 보고, 헤더만 다른 같은 값은 다시 보내지 않음 | `tests/test_agent_activity_report.py` | IMP-AGT-029 | Pass |
+| TC-AGT-052 | 모의 시간 1 s 경계마다 주기 보고 | `tests/test_agent_activity_report.py` | IMP-AGT-029 | Pass |
+| TC-AGT-053 | 보고 송신이 FrameDone.sent_count에 반영 | `tests/test_agent_activity_report.py` | IMP-AGT-029 | Pass |
+| TC-AGT-054 | GCS 링크 두절이면 Datalink(FakeDatalink)에서 손실되어 GCS에 닿지 않음 | `tests/test_agent_activity_report.py` | IMP-AGT-029 | Pass |
 
-시험 결과(2026-11-05): agent 52 passed
+시험 결과(2026-11-06): agent 56, algorithms 52 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 

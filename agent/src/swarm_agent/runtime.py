@@ -94,6 +94,8 @@ PARAM_PUBLISH_S = 1.0
 
 # threaded 모드에서 틱을 받았는데 같은 프레임의 항법 보고가 덜 왔을 때 기다리는 최대 시간(벽시계)
 NAV_WAIT_S = 0.05
+ACTIVITY_PERIOD_US = 1_000_000  # 임무장비 상태 주기 보고 (DEC-051)
+ACTIVITY_NAMES = frozenset({"SensorActivity", "JammerActivity", "StrikeActivity"})
 DATALINK_PREFIX = "datalink"  # run.participants 중 이 접두어로 시작하는 것이 Datalink (DEC-040)
 
 
@@ -118,6 +120,11 @@ class AgentRuntime:
         self._tx_count: dict[str, int] = {}
         self._rx_count: dict[str, int] = {}
         self._dl_sent: dict[str, dict[int, dict[str, int]]] = {}  # 참여자 → 프레임 → FrameDone.sent_count
+        # 임무장비 상태 보고 (DEC-051): 기체 → (메시지, payload_id) → (헤더 뺀 직렬화, 메시지)
+        self._activity: dict[str, dict[tuple[str, str], tuple[bytes, Message]]] = {}
+        self._activity_dirty: dict[str, set[tuple[str, str]]] = {}
+        self._activity_period: dict[str, int] = {}
+        self._gcs: dict[str, str] = {}
         self._ticks_seen = 0
         self._prev_tick_us: int | None = None
         self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
@@ -244,6 +251,11 @@ class AgentRuntime:
             if v is not None:
                 self.vehicles[spec.id] = v
         self._order = [self.vehicles[k] for k in sorted(self.vehicles)]
+        gcs_ids = sorted(e.id for e in scenario.entities if e.kind == entity_pb2.ENTITY_KIND_GCS)
+        for v in self._order:
+            gcs = v.spec.controlling_gcs or (gcs_ids[0] if gcs_ids else "")
+            if gcs:
+                self._gcs[v.entity_id] = gcs
         for v in self._order:
             self._vehicle_subs.append(self.bus.subscribe(f"onboard/{v.entity_id}/*", self._on_sample))
             self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
@@ -306,6 +318,10 @@ class AgentRuntime:
         self._tx_count = {}
         self._rx_count = {}
         self._dl_sent = {}
+        self._activity = {}
+        self._activity_dirty = {}
+        self._activity_period = {}
+        self._gcs = {}
         self._ticks_seen = 0
         self._prev_tick_us = None
         self._rx_hold = {}
@@ -343,6 +359,35 @@ class AgentRuntime:
             v.ports.ms.detection_buffer.push(msg)
         else:
             v.ports.ms.on_activity(msg)
+            if name in ACTIVITY_NAMES:
+                self._note_activity(v, name, msg)
+
+    def _note_activity(self, v: Vehicle, name: str, msg: Message) -> None:
+        body = type(msg)()
+        body.CopyFrom(msg)
+        body.ClearField("header")
+        k = (name, msg.payload_id)
+        blob = body.SerializeToString(deterministic=True)
+        state = self._activity.setdefault(v.entity_id, {})
+        prev = state.get(k)
+        state[k] = (blob, msg)
+        if prev is None or prev[0] != blob:
+            self._activity_dirty.setdefault(v.entity_id, set()).add(k)
+
+    def _report_activity(self, sim_time_us: int) -> None:
+        """바뀐 임무장비 상태는 이번 틱에, 전체는 모의 시간 1 s마다 GCS로 보낸다 (DEC-051)"""
+        period = sim_time_us // ACTIVITY_PERIOD_US
+        for v in self._order:
+            state = self._activity.get(v.entity_id)
+            gcs = self._gcs.get(v.entity_id)
+            if not state or not gcs:
+                continue
+            dirty = self._activity_dirty.pop(v.entity_id, set())
+            if self._activity_period.get(v.entity_id) != period:
+                self._activity_period[v.entity_id] = period
+                dirty = set(state)
+            for k in sorted(dirty):
+                self.send_link(v, "ms", state[k][1], [gcs])
 
     def _on_rx(self, key: str, payload: bytes) -> None:
         parts = key.split("/")
@@ -475,6 +520,7 @@ class AgentRuntime:
             self._prev_tick_us = tick.sim_time_us
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
+        self._report_activity(tick.sim_time_us)
         if not self._initialized:
             self._initialized = True
             for v in self._order:

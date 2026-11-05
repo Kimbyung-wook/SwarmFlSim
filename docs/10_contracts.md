@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.10.0
+- 계약 버전: 0.11.0
+  - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
   - 0.10.0: `FrameDone.sent_count`(lockstep 송신 개수 장벽) (DEC-044)
   - 0.9.0: `SimStatus.waiting_participants`(lockstep 참여자 응답 없음 표시) (DEC-041)
   - 0.8.0: 키 `sim/ctrl/scenario`(Core가 적재한 시나리오 재발행), lockstep 준비 신호 `FrameDone{frame=0}` (DEC-037)
@@ -88,6 +89,7 @@ flowchart LR
 - `<iface>`: `c2`, `vi`, `ms`, `mp`, `md`, `p2p`. `<msg>`: proto 메시지의 짧은 이름(예: `FlightCommand`).
 - 엔티티 ID: `^[a-z][a-z0-9]*(-[a-z0-9]+)+$`, 32자 이하.
   - 관례: `uav-001`, `gcs-01`, `tgt-001`, `site-01`, 발사체는 `wpn-<발사기체>-<순번>`
+  - 시나리오에 정의하는 엔티티 ID는 25자 이하다. 발사체 ID가 32자 안에 들게 한다. 넘으면 시나리오 적재를 거부한다 (DEC-050).
   - 참여자(프로세스) ID도 같은 형식이다. 예: `core-0`, `datalink-0`, `agent-host-1`
 - 인코딩: Zenoh encoding을 `application/protobuf;<전체 메시지 이름>`으로 둔다.
 - 기체 간·지상-기체 간 메시지는 반드시 `tx` → Datalink → `rx`로 흐른다. 런타임은 다른 엔티티의 `rx`에 직접 발행하지 않는다.
@@ -118,6 +120,12 @@ flowchart LR
   - 항로: `RouteTask`. 항로점마다 고도(`position.alt_m`)·속력·행위(`LoiterAction`, `ReconAction`)를 둔다. 같은 `task_id`로 다시 보내면 항로 전체를 바꾼다.
   - 레이스트랙 선회 대기: `HoldTask.racetrack` 또는 `LoiterAction.racetrack`(직선 길이·축 방향). 중심은 두 원 중심의 중점이다. MA는 VI `CurveCommand.racetrack`으로 FA에 넘긴다. 유도 방식은 FA 매개변수 `racetrack_guidance`(`dubins` 기본, `vector_field`)로 고른다 (DEC-034).
   - 지원하지 않는 작업을 받은 MA는 `TaskStatus` REJECTED로 답한다.
+- 임무장비 상태 보고 (DEC-051)
+  - Agent 런타임은 자기 기체의 `onboard/<id>/{SensorActivity,JammerActivity,StrikeActivity}`를 받아 값이 바뀔 때와 1 Hz(모의 시간)로 GCS에 `swarm/<id>/tx/ms/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
+  - Datalink를 거치므로 GCS 링크가 끊기면 지상 표시에도 반영된다. UI는 `swarm/<gcs>/rx/ms/<Msg>`만 읽고 `onboard/**`를 구독하지 않는다.
+- 재밍 구역 (DEC-049, DEC-052)
+  - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
+  - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
 - 데이터링크 판정
   - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
   - 브로드캐스트(`dst` 비움): 같은 편 무전기 엔티티 전원이 수신 대상이다. 닿지 않는 수신자마다 사유를 담은 `LinkOutcome`을 낸다 (DEC-032).
