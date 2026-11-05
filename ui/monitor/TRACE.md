@@ -34,6 +34,7 @@
 | IMP-MON-025 | 손실률 분모는 수신자별 outcome임을 표 툴팁에 명시하고 `거리 밖 제외`(OUT_OF_RANGE를 분자·분모에서 뺌) 선택 추가. 목 브로드캐스트 수신 대상을 같은 편 무전기 엔티티로 한정 | `src/model/aggregator.ts`, `src/components/StatsTable.tsx`, `src/mock/mockTraffic.ts` | REQ-UI-005, PRP-LNK-002, DEC-032 | TC-MON-013 |
 | IMP-MON-026 | 링크 지연을 outcome을 받은 순간의 (sim 시계 − tx 시각)으로 계산. 마지막 outcome 이후 sim 시계가 5 s 넘게 흐르면 0. 트래픽 공백(`최신 tx 시각`이 멈춘 구간)을 지연으로 보이던 결함 수정 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, PRP-UI-002, DEC-005 | TC-MON-014 |
 | IMP-MON-027 | `truth/state` 프레임 번호 공백으로 누락 프레임 수를 세어 머리줄에 표시(재생 한계), `SimStatus.waiting_participants`를 머리줄에 경고 표시 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, DEC-041, DEC-042 | TC-MON-015 (Superseded by IMP-UI-059: 1 Hz 구독으로 누락을 과다 계수해 WP5 구현으로 대체) |
+| IMP-MON-028 | QA-018 조사: 집계 정의는 변경 없음. 같은 outcome 열에서 독립 집계와 일치함을 시험으로 고정 | `src/model/aggregator.test.ts` | REQ-UI-005, DEC-044 | TC-MON-016 |
 
 ## 시험 (TC)
 
@@ -54,8 +55,9 @@
 | TC-MON-013 | 손실률 분모: 브로드캐스트 수신자별 outcome, 거리 밖 제외 계산, 목 브로드캐스트 수신 대상 = 같은 편 무전기 (2건) | `src/model/aggregator.test.ts`, `src/mock/mockTraffic.test.ts` | IMP-MON-025 | 통과 |
 | TC-MON-014 | 트래픽 공백은 링크 지연이 아님, 늦은 outcome은 그 지연만 표시하고 5 s 후 해제 (1건) | `src/model/store.test.ts` | IMP-MON-026 | 통과 |
 | TC-MON-015 | 프레임 번호 공백 누락 계수·재생 재시작·초기화, waiting_participants 보관 (2건) | `src/model/store.test.ts` | IMP-MON-027 | Superseded by IMP-UI-059 시험 |
+| TC-MON-016 | 송신자별 누적 손실률·평균 지연이 독립 단순 계수와 일치, 창 이동(advance)이 누적값을 바꾸지 않음 (1건) | `src/model/aggregator.test.ts` | IMP-MON-028 | 통과 |
 
-`npm test`: 9개 파일 54건 통과. `npm run build`: 통과(tsc -b, vite build).
+`npm test`: 10개 파일 60건 통과. `npm run build`: 통과(tsc -b, vite build).
 
 ## 부하 측정 (TC-MON-009)
 
@@ -84,3 +86,10 @@
 - 대상: 통합 커밋 d7538ef(WP1-2·WP4·WP5·WP6 병합). `swarm_core --autostart --mode realtime --hz 50 --uavs 20`, `swarm_datalink --no-frame-done`(둘 다 msvc-debug), `swarm-bridge --port 8765`, Zenoh. Agent(WP3)가 없어 시험용 생성기가 `truth/state` 시각에 맞춰 UAV마다 PeerStatus p2p 브로드캐스트와 TaskStatus(→gcs-01, 1 Hz)를 tx로 냈다.
 - 10 Hz: 연결·계약 0.2.0·SimStatus 표시, 엔티티 21(truth), 엔티티당 송신 11 msg/s·outcome 201/s(수신자 20), 전체 4,020 outcome/s, 지연 평균 20 ms·p95 33 ms, 손실은 버스트만 2.0%. 타임라인 화살표, rx echo의 LinkEnvelope(rxTimeUs)·PeerStatus 해석 확인. 처리 시간 비율 4%.
 - 50 Hz: 데이터링크(debug 빌드)가 실시간을 따라가지 못해 outcome tx 시각이 sim 시각보다 수십 초 늦었고 대부분 QUEUE_OVERFLOW였다. 수정 전 모니터는 이를 되감기로 보고 통계를 계속 지웠다(되감기 2,000회 이상). IMP-MON-023 후 되감기 0회, 머리줄에 `링크 지연 29.9 s`, 누적 손실 통계 유지.
+
+## QA-018 재현 시도 기록 (IMP-MON-028)
+
+- 기준: wp0-contracts e60ba45(계약 0.10.0, DEC-044). msvc-debug, `qa_s6_load100_flock`, lockstep ×1(실제 ×0.14~0.22), Bridge 경유 Monitor(`?source=bridge`).
+- 같은 창: Monitor `통계 초기화` 직후 `qa/link_count.py --seconds 40`을 동시에 실행. 전체 손실 1.90%·지연 20.0 ms(독립 집계, 439,049건). Monitor 엔티티별 값이 일치(uav-001 2.18%/2.1%, uav-002 2.3%/2.3%, uav-003 1.27%/1.3%, uav-037 0.75%/0.8%, uav-097 2.6%/2.7%, 지연 평균 19.8~20.2 ms). 되감기·프레임 누락 표시 없음.
+- Bridge 단독: 같은 40 s에 Zenoh 직접 1.91% vs WebSocket(전체 구독) 1.91% vs WebSocket(outcome만) 1.91%. outcome 편향 없음.
+- 결론: e60ba45에서 재현되지 않는다.
