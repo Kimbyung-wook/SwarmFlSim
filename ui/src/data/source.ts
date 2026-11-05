@@ -1,9 +1,10 @@
 // IMP-UI-008: 데이터 소스 추상화 (REQ-UI-001, DEC-002)
 // UI는 이 인터페이스로만 truth/state, sim/ctrl/status를 받고 sim/ctrl/cmd를 보낸다.
 // 구현: MockSource(내장 시나리오), BusSource(BusTransport, 브리지 WebSocket은 BridgeTransport)
+// IMP-UI-062: truth/event/<kind>(TruthEvent) 수신을 더한다 (DEC-046)
 // IMP-UI-028: C2 명령 송신(swarm/<gcs>/tx/c2/**)과 swarm/<gcs>/rx/** 수신을 더한다 (REQ-UI-003, REQ-UI-004)
 import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
-import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
+import type { TruthEvent, TruthFrame } from "../gen/swarm/v1/truth_pb";
 import type { EntityParams, SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
 import type { OutgoingC2 } from "../model/commands";
 
@@ -18,6 +19,8 @@ export interface DataHandlers {
   rx?: (key: string, env: LinkEnvelope) => void;
   /** sim/param/<entity>/<owner> (DEC-035) */
   params?: (p: EntityParams) => void;
+  /** truth/event/<kind> (launch·impact·kill·jam_zone·spawn) */
+  event?: (key: string, ev: TruthEvent) => void;
 }
 
 export interface DataSource {
@@ -60,5 +63,9 @@ export class HandlerSet {
 
   params(p: EntityParams): void {
     for (const h of this.set) h.params?.(p);
+  }
+
+  event(key: string, ev: TruthEvent): void {
+    for (const h of this.set) h.event?.(key, ev);
   }
 }

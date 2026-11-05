@@ -1,11 +1,14 @@
 // IMP-UI-016: 지도 뷰. Viewer 생성, 렌더 루프에서 엔티티 갱신, 클릭·드래그 박스 선택 입력 (REQ-UI-001, REQ-UI-002)
 // IMP-UI-032: 우클릭(끌지 않음) 지점을 MoveTo 목적지로 넘기고 잠시 표시한다 (REQ-UI-003)
+// IMP-UI-065: truth 이벤트(재밍 구역·생성 엔티티·impact·kill)와 센서 시야를 렌더 루프에서 갱신한다 (DEC-046)
 // IMP-UI-037: 우클릭 → 임무 메뉴, Ctrl+우클릭 → 항로점 추가, 항로점 손잡이 왼쪽 끌기 → 위치 변경 (DEC-033)
 import { useEffect, useRef, useState } from "react";
 import type { Viewer } from "cesium";
 import { Cartesian2, Cartographic, Math as CesiumMath, SceneMode } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { EntityLayer } from "../cesium/entityLayer";
+import { EventLayer } from "../cesium/eventLayer";
+import { eventOverlay } from "../model/eventOverlay";
 import { MissionLayer } from "../cesium/missionLayer";
 import type { MapDataStatus } from "../cesium/viewer";
 import { createViewer } from "../cesium/viewer";
@@ -87,6 +90,8 @@ export function MapView(props: Props) {
       const missions = new MissionLayer(viewer);
       missionRef.current = missions;
       missions.set(propsRef.current.overlay);
+      const events = new EventLayer(viewer);
+      let seenEv = "";
       let seen = -1;
       let fitted = false;
       const onPreRender = () => {
@@ -97,6 +102,13 @@ export function MapView(props: Props) {
             layer.fitAll();
             fitted = true;
           }
+        }
+        const ev = `${live.version}/${live.events.version}/${live.sensors.version}`;
+        if (ev !== seenEv) {
+          seenEv = ev;
+          events.update(
+            eventOverlay(live.events, live.sensors.active(), (id) => live.get(id), events.groundAlt),
+          );
         }
         layer.follow(follow.current.id, follow.current.mode);
         layer.orient();
@@ -200,6 +212,7 @@ export function MapView(props: Props) {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         viewer.scene.preRender.removeEventListener(onPreRender);
+        events.destroy();
         missions.destroy();
         missionRef.current = null;
         layer.destroy();

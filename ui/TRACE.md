@@ -70,6 +70,12 @@
 | TC-UI-045 | Monitor 쪽 frameGap 단위 시험 (4건) | `ui/monitor/src/model/frameGap.test.ts` | IMP-UI-059 | 통과 |
 | IMP-UI-058 | DEC-041: `SimStatus.waiting_participants`가 비어 있지 않으면 UI 툴바와 Monitor 헤더에 "참여자 응답 없음: <이름> — Reset 후 Start로 복구"를 보이고, 비면 지운다 | `ui/src/components/Toolbar.tsx`, `ui/src/model/liveState.ts`, `ui/monitor/src/components/Header.tsx`, `ui/monitor/src/model/store.ts` | DEC-041 | TC-UI-042, TC-UI-044 |
 | IMP-UI-059 | DEC-042: 재생(`SimStatus.replay`) 중 `truth/state` 프레임 번호 공백으로 누락 프레임을 세어 UI 툴바·Monitor 헤더에 표시. 브리지 다운샘플로는 공백을 셀 수 없어 truth를 무제한 구독하고 헤더만 읽어 번호를 세며, 엔티티 해석은 UI 30 Hz·Monitor 1 Hz(벽시계)로 줄인다. 재생기는 건드리지 않는다 | `ui/src/model/frameGap.ts`, `ui/src/data/busSource.ts`, `ui/monitor/src/model/frameGap.ts`, `ui/monitor/src/bridge/source.ts` | DEC-042 | TC-UI-042~045 |
+| IMP-UI-060 | truth/event/** 보관소: 재밍 구역(owner별 최신, area 원·다각형 우선·폐기 예정 zone 대체, 도형 없는 끄기는 이전 도형을 꺼짐으로, owner 진영은 truth/state), 생성 엔티티(launch·spawn·`wpn-` ID·missile/fpv) 시작·궤적(200 ms 간격, 600점)·종료(impact 위치·살상반경, kill 원인, alive=false, 프레임에서 사라짐), 추적 대상 아닌 kill 위치. 종료 후 60 s 보관, 시각 역행 시 비움 | `src/model/truthEvents.ts`, `src/model/liveState.ts` | DEC-046, DEC-003, DEC-009, DEC-012 | TC-UI-046, TC-UI-049 |
+| IMP-UI-061 | 센서 시야: GCS rx `SensorActivity`(송신 기체 = envelope source)를 기체·장비별로 두고 5 s 소식 없으면 만료, active=false(고장 DEC-047 포함)는 그리지 않음. 카메라 축은 Payload와 같게(오른쪽 수평), FOV 네 모서리·경계 광선을 max_range 또는 지면(기체 아래 지형 고도의 평면)까지 그어 사각뿔·풋프린트를 만든다 | `src/model/sensorFov.ts`, `src/model/liveState.ts`, `src/App.tsx` | DEC-018, DEC-046, DEC-047 | TC-UI-047 |
+| IMP-UI-062 | 데이터 소스: `truth/event/**` 구독(다운샘플 없음)·TruthEvent 해석, `DataHandlers.event` | `src/data/source.ts`, `src/data/busSource.ts` | DEC-046, DEC-027 | TC-UI-050 |
+| IMP-UI-063 | 목 이벤트 각본(60 s 주기): 원형·다각형(상한 없음) 재밍 구역 켜고 끄기, 미사일 launch+spawn→impact(30 m)+kill, FPV spawn→kill(ground), 발사체를 truth/state에 싣고 종료 프레임에 alive=false 한 번, uav-001 cam0 SensorActivity 1 s 주기(τ 30–35 s 꺼짐). `MockSource({events:false})`로 끈다 | `src/data/mockEvents.ts`, `src/data/mockSource.ts` | DEC-046 | TC-UI-049 |
+| IMP-UI-064 | 이벤트 전시 명세(순수 함수): 구역 진영색 반투명 기둥(꺼짐 회색·옅게, 상한 없음은 8000 m까지·라벨 표기), 궤적 꼬리(미사일 주황·FPV 자홍, 종료 후 회색), 생성 흰 점·라벨(발사 기체→표적), 종료 회색 점·원인 라벨, impact 살상반경 원(빨강), kill 마커, FOV 모서리 4선·외곽선(지면이면 굵게) | `src/model/eventOverlay.ts` | DEC-046, DEC-003 | TC-UI-048 |
+| IMP-UI-065 | Cesium 이벤트 층: 구역·살상반경 원은 Entity(extruded ellipse·polygon, 도형 서명이 같으면 유지), 궤적·마커·FOV는 프리미티브 모음을 버전 변경 때 다시 채움. 2D·2.5D·3D 공통. MapView 렌더 루프에 연결 | `src/cesium/eventLayer.ts`, `src/components/MapView.tsx` | DEC-003, DEC-046 | TC-UI-051 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -107,9 +113,16 @@
 | TC-UI-040 | `unsupported task route` 거부 사유 표시, flocking 안내 표시·전송 비차단 (2건) | `src/components/panels.test.tsx` | IMP-UI-056 | 통과 |
 | TC-UI-041 | 버스 스레드에서 `3×DRAIN_BATCH+7`건을 두 키로 쏟아도 순서대로 빠짐없이 전달, 드롭 0 (1건) | `bridge/tests/test_bridge.py` | IMP-UI-057 | 통과 |
 | TC-UI-025 | 수동(브라우저, 목 소스): 기체 선택 → 우클릭 임무 창 4종 전송, Ctrl+우클릭 항로 편집·끌기·전송·재전송, 지도 표시·진행 | 브라우저 확인, 화면: `docs/screenshots/tc-ui-025-*.jpg`. 정찰·선회 대기는 자동 시험(TC-UI-024)과 메뉴 미리보기로 확인 | IMP-UI-037~041 | 통과 |
+| TC-UI-046 | truth 이벤트 보관소: zoneShape(원·다각형·legacy·무효), 구역 끄기·진영, launch+spawn 시작·궤적·impact 종료·살상반경, dead·gone·kill 원인 교체, kill 마커, 보관 만료·시각 역행, 궤적 간격·최대 점 (7건) | `ui/src/model/truthEvents.test.ts` | IMP-UI-060 | 통과 |
+| TC-UI-047 | 센서 시야: 카메라 축 직교·수평, offsetNed, 수직 아래 풋프린트 = 높이×tan(fov/2), 지면 고도·거리 제한·수평 시야, SensorStore rx 해석·최신값·꺼짐·만료·역행 (6건) | `ui/src/model/sensorFov.test.ts` | IMP-UI-061 | 통과 |
+| TC-UI-048 | 전시 명세: 구역 색·투명도·라벨·상한 없음, 궤적 색·회색 처리·생성/종료 라벨·살상반경 원, kill 마커·반경 0 무시, FOV 선 수·굵기·지면 고도 호출 (4건) | `ui/src/model/eventOverlay.test.ts` | IMP-UI-064 | 통과 |
+| TC-UI-049 | 목 각본(MockSource): 60 s 이벤트 키·순서, 발사체 truth 포함·alive=false 한 번·보관소 종료 원인, SensorActivity rx/ms 1 s 주기·τ 30–35 s 꺼짐, events=false·Reset 후 재현 (4건) | `ui/src/data/mockEvents.test.ts` | IMP-UI-063, IMP-UI-060 | 통과 |
+| TC-UI-050 | BusSource: `truth/event/**` 구독 키(다운샘플 없음)·TruthEvent 해석·해석 오류 보고 (1건, 구독 키 목록 시험 갱신) | `ui/src/data/busSource.test.ts` | IMP-UI-062 | 통과 |
+| TC-UI-051 | 수동(브라우저, 목 소스): 2D·3D에서 재밍 구역 기둥·꺼짐, 발사체 꼬리·생성/종료 마커·살상반경 원, FOV 원뿔·풋프린트 | 브라우저 확인 | IMP-UI-065 | 미실시 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
 - 2차 자동 시험: `npm test` 10개 파일 56건 통과. `npm run build` 통과.
 - 3차 자동 시험(계약 0.4.0 지도 임무): `npm test` 12개 파일 81건 통과.
+- truth 이벤트 시각화(기준 `wp0-contracts` 9979e84, 계약 0.10.0): `npm test` 20개 파일 145건 통과. `npm run build` 통과.
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.

@@ -116,7 +116,11 @@ export function App() {
       truth: (f) => live.onTruth(f),
       frameSeq: (n) => live.onFrameSeq(n),
       status: (s) => live.onStatus(s),
-      rx: (k, env) => tasks.received(k, env),
+      rx: (k, env) => {
+        tasks.received(k, env);
+        live.onRx(k, env);
+      },
+      event: (_k, ev) => live.onEvent(ev),
       params: (p) => params.onParams(p),
     });
     source

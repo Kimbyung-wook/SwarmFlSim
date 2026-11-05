@@ -1,12 +1,13 @@
 // IMP-UI-011: 버스 데이터 소스 (DEC-002, DEC-027). 전송 계층은 BusTransport, 브라우저에서는 BridgeTransport(WebSocket 브리지)
 // 키: truth/state(TruthFrame), sim/ctrl/status(SimStatus), swarm/<gcs>/rx/**(LinkEnvelope) 구독,
 //     sim/ctrl/cmd(SimCommand), swarm/<gcs>/tx/c2/<msg>(LinkEnvelope) 발행 (docs/10_contracts.md §3.2)
+// IMP-UI-062: truth/event/**(TruthEvent) 구독. 이벤트는 드물고 놓치면 안 되므로 다운샘플하지 않는다 (DEC-046)
 // IMP-UI-046: sim/param/**(EntityParams) 구독, set_params는 sim/ctrl/cmd로 보낸다 (DEC-035)
 import { fromBinary, toBinary } from "@bufbuild/protobuf";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import type { SimCommand } from "../gen/swarm/v1/sim_pb";
 import { EntityParamsSchema, SimCommandSchema, SimStatusSchema } from "../gen/swarm/v1/sim_pb";
-import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
+import { TruthEventSchema, TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
 import type { OutgoingC2 } from "../model/commands";
 import { ENVELOPE_ENCODING } from "../model/commands";
 import { peekFrameNumber } from "../model/frameGap";
@@ -16,6 +17,7 @@ import { HandlerSet } from "./source";
 export const KEY_TRUTH_STATE = "truth/state";
 export const KEY_SIM_STATUS = "sim/ctrl/status";
 export const KEY_SIM_PARAMS = "sim/param/**";
+export const KEY_TRUTH_EVENTS = "truth/event/**";
 export const KEY_SIM_CMD = "sim/ctrl/cmd";
 export const SIM_CMD_ENCODING = `application/protobuf;${SimCommandSchema.typeName}`;
 
@@ -81,6 +83,7 @@ export class BusSource implements DataSource {
       t.subscribe(KEY_TRUTH_STATE, (p, k) => this.decode(k, () => this.onTruthPayload(p))),
       t.subscribe(KEY_SIM_STATUS, (p, k) => this.decode(k, () => this.handlers.status(fromBinary(SimStatusSchema, p)))),
       t.subscribe(KEY_SIM_PARAMS, (p, k) => this.decode(k, () => this.handlers.params(fromBinary(EntityParamsSchema, p)))),
+      t.subscribe(KEY_TRUTH_EVENTS, (p, k) => this.decode(k, () => this.handlers.event(k, fromBinary(TruthEventSchema, p)))),
     ];
     if (this.gcs) {
       this.unsubs.push(
