@@ -401,16 +401,16 @@ bool SimCore::poll(Clock::time_point now) {
         publish_scenario();
         last_params_wall_ = now;
       }
-      log_waiting(now, true);
       update_waiting(now, true);
+      log_waiting(now, true);
       return false;
     }
     clear_waiting(now);
     publish_frame();
   }
   if (mode_ == v1::RUN_MODE_LOCKSTEP && !barrier_ok()) {
-    log_waiting(now, false);
     update_waiting(now, false);
+    log_waiting(now, false);
     return false;
   }
   clear_waiting(now);
@@ -441,9 +441,12 @@ bool SimCore::poll(Clock::time_point now) {
   return true;
 }
 
-// IMP-CORE-018: 참여자를 오래 기다리면 5초마다 누구를 기다리는지 로그로 남긴다 (QA-004)
+// IMP-CORE-018, IMP-CORE-021: 같은 대기가 5초 넘게 이어질 때만, 이후 5초마다 누구를 기다리는지 로그로 남긴다 (QA-004, D-14).
+// 프레임마다 생기는 짧은 장벽 대기는 기록하지 않는다. update_waiting이 먼저 불려 wait_since_가 잡혀 있어야 한다
 void SimCore::log_waiting(Clock::time_point now, bool ready_phase) {
-  if (now - last_wait_log_ < std::chrono::seconds(5)) return;
+  if (!blocked_) return;
+  const auto ref = std::max(wait_since_, last_wait_log_);
+  if (now - ref < std::chrono::seconds(5)) return;
   last_wait_log_ = now;
   std::string names;
   for (const auto& [p, next] : done_) {
