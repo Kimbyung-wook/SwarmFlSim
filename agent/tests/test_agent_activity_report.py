@@ -1,13 +1,13 @@
-"""TC-AGT-051~054: 임무장비 상태 자동 보고 (IMP-AGT-029, DEC-051, DEC-044)"""
+"""TC-AGT-051~058: 임무장비 상태 자동 보고와 최대 빈도 (IMP-AGT-029, IMP-AGT-030, DEC-051, DEC-056, DEC-044)"""
 
-from swarm.v1 import ms_pb2, sim_pb2
+from swarm.v1 import link_pb2, ms_pb2, sim_pb2
 from swarm_agent.testing import Harness, make_scenario
 from swarm_api import keys
 from swarm_api.bus import protobuf_encoding
 
 
-def put_sensor(h: Harness, active: bool, eid: str = "uav-001") -> None:
-    m = ms_pb2.SensorActivity(payload_id="eo-1", active=active, hfov_deg=30.0)
+def put_sensor(h: Harness, active: bool, eid: str = "uav-001", hfov: float = 30.0) -> None:
+    m = ms_pb2.SensorActivity(payload_id="eo-1", active=active, hfov_deg=hfov)
     m.header.source = eid
     m.header.frame = h.core.frame  # 헤더만 다른 값은 변화가 아니다
     h.bus.put(keys.onboard(eid, "SensorActivity"), m.SerializeToString(), protobuf_encoding(m.DESCRIPTOR.full_name))
@@ -28,7 +28,7 @@ def test_tc_agt_051_reports_change_immediately():
     h.core.step(1)
     assert len(reports(h)) == 1
     put_sensor(h, False)
-    h.core.step(1)
+    h.core.step(5)                     # 최대 빈도(기본 10 Hz) 간격이 지난 뒤 보낸다 (DEC-056)
     assert [m.active for m in reports(h)] == [True, False]
 
 
@@ -60,3 +60,82 @@ def test_tc_agt_054_lost_when_gcs_link_down():
     h.run_s(2.0)
     assert reports(h) == []            # Datalink에서 손실되어 GCS에 닿지 않는다
     assert h.datalink.dropped >= 3
+
+
+def report_times(h: Harness) -> list[tuple[int, float]]:
+    """GCS가 받은 SensorActivity의 (송신 모의 시각, hfov)"""
+    out: list[tuple[int, float]] = []
+
+    def on(s):
+        env = link_pb2.LinkEnvelope.FromString(s.payload)
+        if env.msg_type == "swarm.v1.SensorActivity":
+            out.append((env.header.sim_time_us, ms_pb2.SensorActivity.FromString(env.payload).hfov_deg))
+    h.bus.subscribe(keys.rx("gcs-01", keys.Iface.MS, "SensorActivity"), on)
+    return out
+
+
+def change_every_tick(h: Harness, frames: int) -> None:
+    for i in range(frames):
+        put_sensor(h, True, hfov=10.0 + h.core.frame)   # 매 틱 연속값 변화
+        h.core.step(1)
+
+
+def change_gaps_us(times: list[tuple[int, float]]) -> list[int]:
+    """1 s 경계(전체 보고) 틱을 뺀 변화 보고 간격"""
+    ts = [t for t, _ in times if t % 1_000_000 >= 20_000]
+    return [b - a for a, b in zip(ts, ts[1:])]
+
+
+def test_tc_agt_055_default_10hz_min_gap():
+    h = Harness(make_scenario(1, "hold"))
+    times = report_times(h)
+    h.core.step(55)                    # 1.1 s: 첫 1 s 경계를 지난다
+    change_every_tick(h, 40)           # 0.8 s 동안 매 틱 변화
+    gaps = change_gaps_us(times)
+    assert gaps and min(gaps) >= 100_000
+    assert len(times) <= 9             # 50 Hz가 아니라 10 Hz 수준
+
+
+def test_tc_agt_056_deferred_change_sent_with_latest_value():
+    h = Harness(make_scenario(1, "hold"))
+    times = report_times(h)
+    h.core.step(55)
+    put_sensor(h, True, hfov=1.0)
+    h.core.step(1)                     # 즉시 보고
+    put_sensor(h, True, hfov=2.0)
+    h.core.step(1)                     # 미룸
+    put_sensor(h, True, hfov=3.0)
+    h.core.step(1)                     # 미룸, 최신 값 갱신
+    assert [v for _, v in times] == [1.0]
+    h.core.step(5)
+    assert [v for _, v in times] == [1.0, 3.0]   # 2.0은 건너뛰고 최신 값만 보낸다
+    assert times[1][0] - times[0][0] == 100_000
+
+
+def test_tc_agt_057_max_hz_setting():
+    h = Harness(make_scenario(1, "hold"))
+    h.rt.config.activity_max_hz = 0    # 0 이하: 제한 없음
+    times = report_times(h)
+    h.core.step(55)
+    change_every_tick(h, 10)
+    assert len(times) == 10
+    h2 = Harness(make_scenario(1, "hold"))
+    h2.rt.config.activity_max_hz = 2.0
+    times2 = report_times(h2)
+    h2.core.step(55)
+    change_every_tick(h2, 40)
+    assert min(change_gaps_us(times2)) >= 500_000
+    from swarm_agent.cli import parse_args
+    assert parse_args([]).activity_max_hz == 10.0
+    assert parse_args(["--activity-max-hz", "5"]).activity_max_hz == 5.0
+
+
+def test_tc_agt_058_full_report_every_second_kept():
+    h = Harness(make_scenario(1, "hold"))
+    h.rt.config.activity_max_hz = 0.5  # 변화 보고 간격 2 s
+    times = report_times(h)
+    h.core.step(5)
+    put_sensor(h, True)
+    h.core.step(1)
+    h.run_s(3.0)
+    assert len(times) == 4             # 첫 보고 + 1 s·2 s·3 s 전체 보고

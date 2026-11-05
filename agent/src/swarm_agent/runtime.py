@@ -53,6 +53,7 @@ class RuntimeConfig:
     participant: str = "agent-0"
     entities: set[str] | None = None  # None이면 AutonomySpec이 있는 기체
     strict: bool = False              # 플러그인 예외를 다시 던진다 (시험용)
+    activity_max_hz: float = 10.0     # 임무장비 상태 변화 보고의 (메시지, payload_id)별 최대 빈도. 0 이하면 제한 없음 (DEC-056)
 
 
 @dataclass
@@ -124,6 +125,7 @@ class AgentRuntime:
         self._activity: dict[str, dict[tuple[str, str], tuple[bytes, Message]]] = {}
         self._activity_dirty: dict[str, set[tuple[str, str]]] = {}
         self._activity_period: dict[str, int] = {}
+        self._activity_sent: dict[str, dict[tuple[str, str], int]] = {}  # 기체 → 키 → 마지막 보고 모의 시각
         self._gcs: dict[str, str] = {}
         self._ticks_seen = 0
         self._prev_tick_us: int | None = None
@@ -321,6 +323,7 @@ class AgentRuntime:
         self._activity = {}
         self._activity_dirty = {}
         self._activity_period = {}
+        self._activity_sent = {}
         self._gcs = {}
         self._ticks_seen = 0
         self._prev_tick_us = None
@@ -375,19 +378,27 @@ class AgentRuntime:
             self._activity_dirty.setdefault(v.entity_id, set()).add(k)
 
     def _report_activity(self, sim_time_us: int) -> None:
-        """바뀐 임무장비 상태는 이번 틱에, 전체는 모의 시간 1 s마다 GCS로 보낸다 (DEC-051)"""
+        """바뀐 임무장비 상태는 이번 틱에, 전체는 모의 시간 1 s마다 GCS로 보낸다 (DEC-051).
+        변화 보고는 키별 최소 간격(activity_max_hz)을 지키고, 미룬 변화는 다음 허용 틱에 그때 최신 값으로 보낸다 (DEC-056)"""
         period = sim_time_us // ACTIVITY_PERIOD_US
+        hz = self.config.activity_max_hz
+        min_gap_us = round(1e6 / hz) if hz > 0 else 0
         for v in self._order:
             state = self._activity.get(v.entity_id)
             gcs = self._gcs.get(v.entity_id)
             if not state or not gcs:
                 continue
-            dirty = self._activity_dirty.pop(v.entity_id, set())
+            dirty = self._activity_dirty.get(v.entity_id, set())
+            sent = self._activity_sent.setdefault(v.entity_id, {})
             if self._activity_period.get(v.entity_id) != period:
                 self._activity_period[v.entity_id] = period
-                dirty = set(state)
-            for k in sorted(dirty):
+                due = set(state)
+            else:
+                due = {k for k in dirty if k not in sent or sim_time_us - sent[k] >= min_gap_us}
+            for k in sorted(due):
                 self.send_link(v, "ms", state[k][1], [gcs])
+                sent[k] = sim_time_us
+            dirty -= due
 
     def _on_rx(self, key: str, payload: bytes) -> None:
         parts = key.split("/")

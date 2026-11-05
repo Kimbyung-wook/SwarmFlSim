@@ -62,6 +62,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                    help="맡을 기체 ID, 쉼표 구분·반복 가능. 없으면 AutonomySpec이 있는 기체 전부")
     p.add_argument("--scenario", default="", help="시작할 때 읽을 시나리오 파일")
     p.add_argument("--frames", type=int, default=0, help="n 틱 처리 후 종료")
+    p.add_argument("--activity-max-hz", type=float, default=10.0,
+                   help="임무장비 상태 변화 보고의 (메시지, payload_id)별 최대 빈도(Hz, 모의 시간). 0 이하면 제한 없음. "
+                        "1 Hz 전체 보고는 이와 별개 (DEC-056)")
     p.add_argument("--list-plugins", action="store_true", help="등록된 MA/FA 플러그인 이름을 출력하고 종료")
     p.add_argument("-v", "--verbose", action="store_true")
     add_bus_args(p)
@@ -79,7 +82,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     entities = {e for arg in a.entities for e in arg.split(",") if e} or None
     bus = open_bus(bus_config(a))
-    rt = AgentRuntime(bus, RuntimeConfig(participant=a.participant, entities=entities), registry, threaded=True)
+    rt = AgentRuntime(bus, RuntimeConfig(participant=a.participant, entities=entities,
+                                         activity_max_hz=a.activity_max_hz), registry, threaded=True)
     if a.scenario:
         rt.load(read_scenario(a.scenario))
 
