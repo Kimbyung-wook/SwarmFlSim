@@ -582,3 +582,194 @@ IMP-CORE-021로 해결로 판정한다. 같은 실행(sim 00:17까지 진행)의
 | 탭 배경·재연결·장시간 창에서 QA-018 | 60 s 창 하나만 실시했다 |
 | 스위트 전체 회귀 | 이번 요청 범위 밖이라 TC-QA-026만 실시했다 |
 | release 빌드 | debug만 실시 |
+
+## 14. 6차 시험: P5 종단 시험 (2026-11-05)
+
+wp0-contracts 9ffbb9f(IMP-CORE-022, IMP-UI-060~065, IMP-SCN-010)를 fast-forward로 병합하고 debug를 다시 빌드했다. 시나리오는 `scenario/examples/p5_payload_demo_5.json`(시드 20261105, 50 Hz)이다. Zenoh 실버스에서 Core·Datalink·Agent·Bridge·UI를 실제 프로세스로 띄웠다. 근거 결정은 DEC-046·047·009·012·018이다.
+
+### 14.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 구동기 | `qa/p5_e2e.py`. `qa/harness.py`의 Stack·Observer를 확장했다. 관찰자가 truth·`truth/event/**`·`onboard/*/Detection|SensorActivity|StrikeActivity`·link 결과를 모은다 |
+| Agent | `qa/p5_probe_agent.py`. 실제 `swarm_agent.cli`를 띄우되 flocking_basic을 QA 관찰용 MA로 바꾼다. flocking 동작은 그대로다. MS 포트(`ms.detections()`·`activities()`)로 받은 것을 세고, 지상 표적을 처음 탐지한 무장 기체가 MS 포트로 StrikeCommand를 낸다 |
+| SENSOR 고장 | 탐지가 이어지는 기체 하나에 `sim/ctrl/cmd`로 SENSOR 고장을 주고 10 s(500 프레임) 뒤 해제한다 |
+| lockstep | 같은 시드로 3회. l1은 고장 주입, d1·d2는 고장 없음. base_port 48300·48320·48340. 실효 배속 6.5~8.1배 |
+| realtime | `qa/scenarios/qa_p5_near.json`. 예제를 그대로 쓰되 기체 출발점만 재밍 구역 남서 약 4 km로 옮겼다. 1배속, 고장 주입, Bridge와 UI(45173)를 붙이고 앱 내장 브라우저로 봤다. base_port 48360 |
+| 재현 | `uv run python qa/p5_e2e.py --mode lockstep --out qa/out/p5/d1 --base-port 48320` (고장은 `--fault`, UI는 `--mode realtime --scenario qa/scenarios/qa_p5_near.json --bridge --ui`). 비교는 `--compare <A> <B> --upto <프레임>` |
+
+```mermaid
+flowchart LR
+  C[Core<br/>Payload 판정] -- onboard/id/Detection --> A[Agent<br/>MS 포트]
+  A -- onboard/id/StrikeCommand --> C
+  C -- truth/event/** --> D[Datalink<br/>재밍 구역]
+  C -- truth/** --> B[Bridge] --> U[UI]
+  C -- truth/event/** --> O[QA 관찰자]
+  D -- link 결과 --> O
+  O -- sim/ctrl/cmd SENSOR 고장 --> C
+```
+
+### 14.2 결과 요약
+
+| TC | 확인 항목 | lockstep | realtime | 판정 |
+|---|---|---|---|---|
+| TC-QA-031 | Detection이 Agent MS 포트에 도착 | 버스 11쌍과 MS 포트 11쌍의 건수가 모두 같다 | 통과. 10쌍 중 8쌍 같고 2쌍은 MS 포트가 12건 많다(관찰자가 시작 직후 12 프레임을 놓침) | 통과 |
+| TC-QA-032 | SENSOR 고장 → Detection 중지·`active=false`, 해제 → 재개 | 통과 | 통과 (uav-002, 프레임 71~570) | 통과 |
+| TC-QA-033 | StrikeCommand → Launch/Spawn → 이동 → Impact/Kill → alive=false | 1건 통과. 평지에서만 | 1건 통과 (27,575 발사 → 28,040 impact, 2,367 m) | 부분 통과 (실제 DEM 미확인, QA-022) |
+| TC-QA-034 | JamZone → Datalink 구역 → 구역 안 링크 손실 | 통과. 구역 안 수신 27,121건이 모두 JAMMED | JAMMED 26,942건. 관찰자가 jam_zone 이벤트를 놓쳐 구역별 분류는 못 했다(QA-021) | 통과 |
+| TC-QA-035 | 같은 시드 lockstep 2회의 truth·이벤트 동일 | 3회 중 2회는 같고 1회가 어긋남 | 해당 없음 | 불합격 (QA-019) |
+| TC-QA-036 | UI 구역·궤적·영향 반경·센서 FOV 표시 (TC-UI-051) | 해당 없음 | 구역은 표시되나 발사 순간 렌더링이 멈춘다(QA-023). FOV 없음(QA-020) | 불합격 (QA-023, QA-020) |
+
+### 14.3 TC-QA-031 탐지 → MS 포트
+
+l1(고장 주입) 기준이다. 관찰자가 버스에서 본 Detection 건수와 관찰용 MA가 `ms.detections()`로 받은 건수가 (기체, 표적) 11쌍 모두 같다. d1·d2도 같다.
+
+| 탐지 쌍 | 건수 | 최소 거리 (m) | 센서 |
+|---|---|---|---|
+| uav-001 > jam-site-01 | 4,381 | 1,425 | eo_wide 3 km |
+| uav-002 > jam-site-01 | 7,974 | 1,424 | eo_wide 재정의 4.5 km |
+| uav-003 > jam-site-01 | 6,978 | 1,849 | ir_generic 5 km |
+| uav-004 > jam-site-01 | 3,972 | 2,622 | eo_narrow 8 km |
+| uav-005 > jam-site-01 | 4,396 | 1,412 | eo_wide 3 km |
+| uav-001·002·003·005 > tgt-003 | 252·149·110·251 | 2,452~2,604 | |
+| uav-001·002 > wpn-uav-001-01 | 269·82 | 126·213 | 같은 편 생성 엔티티 |
+
+- 최소 거리가 모두 각 센서의 최대 거리 안이다.
+- 같은 편 기체끼리는 탐지가 없다. 모두 1,500 m 같은 고도이고 카메라가 아래를 향하므로 FOV 밖이다. 판정 코드는 같은 편을 거르지 않는다. 발사한 기체가 자기 생성 엔티티를 탐지한다(관찰 O-1).
+- tgt-001·002와 air-001은 탐지되지 않았다. 표적 각본은 약 380 s 안에 끝나고, 군집은 sim 약 1,480 s에 목표점에 닿는다. 그때 표적이 FOV 밖에 있다. 시나리오 배치의 문제로 보며 결함으로 올리지 않았다.
+- 지형 가림 판정: Core가 `--terrain-dem`을 지원하지 않아(QA-022) 평지(타원체)에서만 돌렸다. 가림이 생기는 경우를 확인하지 못했다.
+
+### 14.4 TC-QA-032 SENSOR 고장
+
+l1에서 uav-003이 jam-site-01을 탐지하는 중에 고장을 주었다.
+
+| 구간 | 프레임 | 버스 Detection | SensorActivity | MS 포트 탐지 구간 |
+|---|---|---|---|---|
+| 주입 전 | ~52,468 | 220 | active=true | 52,250~52,469 |
+| 고장 중 | 52,469~52,999 | 0 | active=false 531건 (매 프레임) | 없음 |
+| 해제 후 | 53,000~ | 6,868 | active=true | 53,001~59,758 |
+
+- 주입 다음 프레임부터 `active=false`이고 Detection이 0건이다. 해제한 프레임부터 다시 나온다. DEC-047 그대로다.
+- MS 포트는 버스보다 한 프레임 늦게 받는다. 프레임 경계의 정상 지연이다.
+- realtime에서는 시작 직후 uav-002에 고장을 주었다(프레임 71~570). 고장 중 500 프레임 모두 `active=false`이고 Detection 0건, 571부터 재개(6,047건)로 lockstep과 같다.
+- realtime의 MS 포트 탐지 구간에는 1 프레임 빈틈이 몇 번 있다(예 3,554→3,556). 버스에는 빈틈이 없다. 실시간 프레임 묶음에서 Agent가 한 프레임을 건너뛴 것으로 보며 확인하지 못했다(관찰 O-3).
+
+### 14.5 TC-QA-033 엔티티 수명 주기
+
+lockstep 세 실행 모두 같은 순서였다.
+
+| 프레임 | 사건 | 내용 |
+|---|---|---|
+| 82,543 | StrikeCommand | 관찰용 MA가 uav-001 sta1(agm_generic)로 tgt-003을 지정 |
+| 82,543 | truth/event/launch, spawn | wpn-uav-001-01 생성. StrikeActivity LAUNCHED |
+| 82,544~83,033 | 이동 | truth에 490 프레임 동안 있고 경로 2,501 m, 고도 1,500 → 287 m |
+| 83,032 | truth/event/impact | 영향 반경 15 m, killed=[tgt-003]. StrikeActivity IMPACT(proximity) |
+| 83,032 | truth/event/kill | tgt-003, cause=impact |
+| 종료 | alive | tgt-003=false, wpn-uav-001-01=false, 나머지 true |
+
+- 발사 기체는 25 m/s로 비행 중이었다. 명령을 낸 프레임에 바로 발사되었다(재시도 없음).
+- 명령 거부 사유(out_of_range·lock_failed 등)는 이번 실행에서 나오지 않았다.
+- 실제 DEM 지형에서는 확인하지 못했다(QA-022). 평지에서만 확인했다.
+- AAM(공중 표적)과 FPV는 탐지가 없어 발사하지 않았다. realtime에서도 같은 순서였다(27,575 launch·spawn → 466 프레임 이동 2,367 m → 28,040 impact·kill, tgt-003 alive=false).
+- 시나리오의 `require_approval` 승인 흐름은 확인하지 못했다. StrikeCommand를 내는 MA가 저장소에 없다(관찰 O-2).
+
+### 14.6 TC-QA-034 재밍 구역과 Datalink
+
+d2 기준이다. 관찰자가 frame 0의 `truth/event/jam_zone`(jam-site-01, 37.55/128.617, 반경 3,000 m, 고도 제한 없음)을 받았다. 링크 결과를 수신 기체가 그 프레임에 구역 안에 있었는지로 나눴다(수평 거리 기준).
+
+| 분류 | DELIVERED | BURST_LOSS | JAMMED |
+|---|---|---|---|
+| 수신 기체가 구역 안 | 0 | 0 | 27,121 |
+| 송신 기체만 구역 안 | 6,965 | 140 | 15 |
+| 둘 다 구역 밖 | 172,435 | 3,463 | 17 |
+
+- 구역 안 수신은 모두 JAMMED이다. 송신 기체만 구역 안이면 정상 전달된다. DEC-028(수신 측 판정)과 DEC-009 그대로다.
+- 구역 밖으로 분류된 JAMMED 32건(0.12%)은 구역 경계를 지나는 프레임으로 추정한다. 관찰자 위치와 Datalink 판정 시각이 한 프레임 안에서 어긋날 수 있다. 확인하지 못했다.
+- d1의 분류 결과는 d2와 같다. 기체마다 구역 안 프레임이 약 13,550이다.
+- l1의 관찰자는 Core보다 먼저 붙였는데도 jam_zone 이벤트를 받지 못했다. JamZone이 상태가 바뀔 때만 한 번 나와서 늦게 붙은 구독자는 구역을 모른다(QA-021).
+- realtime 실행은 JAMMED 26,942건이 났다. 그러나 관찰자가 jam_zone 이벤트를 받지 못해 구역별로 나누지 못했다. 같은 실행의 UI는 구역을 받았다(Core 시작 전 연결).
+
+### 14.7 TC-QA-035 lockstep 결정성
+
+| 비교 | 공통 표본 (프레임 이전) | 불일치 | 최대 차이 | 처음 어긋난 프레임 |
+|---|---|---|---|---|
+| l1 대 d1 (고장 주입 전, 52,000까지) | 570,988 | 0 | 0 | 없음 |
+| l1 대 d2 (52,000까지) | 570,988 | 202,845 | 0.0002 m | 11,427 (uav-001) |
+| d1 대 d2 (84,000까지) | 약 1,000,000 | 363,335 | 0.0020 m | 11,427 (uav-001) |
+
+- 이벤트 종류와 프레임(launch·impact 82,543·83,032)은 세 실행이 같다. spawn 이벤트의 바이트가 d1과 d2에서 다르다. 생성 위치가 mm 단위로 다르기 때문이다.
+- 프레임 11,427(sim 228 s)은 탐지·명령이 하나도 없던 때다. 그때까지 Payload가 낸 것은 SensorActivity뿐이다. 어긋남이 Payload 경로에서 생겼다고 볼 근거가 없다(QA-019).
+
+### 14.8 TC-QA-036 UI 표시 (TC-UI-051)
+
+realtime 실행에 앱 내장 브라우저(`http://localhost:45173/?source=bus&bridge=ws://127.0.0.1:48765/bus`)를 붙였다. 브라우저를 Core 시작 전에 연결했다.
+
+| 표시 | 결과 |
+|---|---|
+| 재밍 구역 | 표시된다. jam-site-01 위치에 반투명 붉은 원과 "재밍 jam-site-01 · 0 m~상한 없음" 표지. 기체가 원 안에 있다 |
+| 생성 엔티티 궤적·영향 반경 | 확인하지 못했다. 발사 순간(sim 551 s) "An error occurred while rendering. Rendering has stopped." 대화 상자가 뜨고 지도가 멈췄다(QA-023) |
+| 새로 고침 뒤 | 렌더링은 돌아오지만 재밍 구역 원이 사라진다(QA-021). 생성 엔티티는 이미 없어졌고 tgt-003이 회색으로 표시된다 |
+| 센서 FOV | 표시되지 않는다. UI는 `swarm/<gcs>/rx/ms/SensorActivity`를 읽는데 이 키를 내는 프로세스가 없다(QA-020) |
+
+### 14.9 새 결함
+
+#### QA-019 — P5 시나리오 lockstep 같은 시드 궤적이 mm 단위로 달라진다
+- 담당 WP1 Core 또는 WP4 Datalink (원인 미확인) / 보통 / TC-QA-035
+- 재현: `p5_payload_demo_5`를 lockstep으로 같은 시드에서 3회 실행하고 `--compare`로 비교.
+- 기대: DEC-005·DEC-044의 결정성. 4차(§11.2)에서 flocking·P2P 포함 시나리오는 완전히 같았다.
+- 실제: 3회 중 d2만 프레임 11,427부터 다섯 기체가 차례로(11,427~11,434) 어긋난다. 차이는 끝까지 커져 최대 2 mm이다. 이벤트 순서·프레임은 같다.
+- 비고: 이 시나리오는 4차 시나리오와 달리 Payload(매 프레임 SensorActivity 5건)와 BURST_LOSS가 함께 있다. 어긋나기 시작한 프레임 주변의 링크 결과를 저장하지 않아 원인을 좁히지 못했다.
+
+#### QA-020 — UI 센서 FOV의 입력 키를 내는 곳이 없다
+- 담당 WP0 계약(키·중계 경로) / 보통 / TC-QA-036
+- 재현: P5 시나리오를 realtime으로 돌리고 UI를 Bridge로 연결.
+- 기대: TC-UI-051의 센서 FOV 표시.
+- 실제: Core는 `onboard/<id>/SensorActivity`를 낸다. Agent는 이를 MS 포트로만 받는다. UI는 `swarm/<gcs>/rx/ms/SensorActivity`(Datalink를 거친 GCS 수신)를 읽는다. 둘을 잇는 중계가 없다. 목 소스에서만 FOV가 나온다.
+- 비고: WP5 쪽지의 요청 1과 같은 내용이다. 누가 보낼지(MA가 MS로 보고, Agent가 자동 중계, UI가 onboard 직접 구독)는 결정이 필요하다(D-16).
+
+#### QA-021 — 늦게 붙은 구독자는 재밍 구역을 받지 못한다
+- 담당 WP0 계약 / WP1 Core(Payload) / 보통 / TC-QA-034
+- 재현: Core 시작 뒤 관찰자나 UI를 연결. 또는 Core 시작 직전에 연결.
+- 기대: 구역이 있는 동안 새 구독자(UI, Monitor, 다시 시작한 Datalink)도 구역을 안다.
+- 실제: JamZone은 상태가 바뀔 때만 한 번 나온다. l1의 관찰자는 Core보다 먼저 붙였는데도 Zenoh 탐색이 끝나기 전에 frame 0 이벤트가 지나가 받지 못했다. d1·d2는 받았다. realtime에서는 Core 시작 전에 연결한 UI는 받았지만 관찰자는 받지 못했다. UI를 새로 고치면 구역 원이 사라진다.
+- 비고: Datalink가 재시작하면 구역 안 링크가 손실되지 않을 것으로 보인다. 확인하지 못했다. WP5 쪽지 요청 2와 같다.
+
+#### QA-022 — Core에 DEM 지형 로더가 없다
+- 담당 WP1 Core / 높음 / TC-QA-031·033
+- 재현: `sim_core --terrain-dem <파일>`.
+- 기대: DEC-016 한반도 저해상도 지형을 써서 지형 가림(DEC-018)과 지형 위 충돌을 판정.
+- 실제: "--terrain-dem: DEM loader not implemented yet" 예외로 시작하지 못한다(`core/src/main.cpp:88`). `--terrain-flat`(기본 0 m)만 된다.
+- 비고: PM 요청의 "실제 DEM 지형에서 확인"과 지형 가림 판정은 이 결함 때문에 하지 못했다.
+
+#### QA-023 — 생성 엔티티가 나오면 UI 렌더링이 멈춘다
+- 담당 WP5 UI / 높음 / TC-QA-036
+- 재현: P5 시나리오 realtime에 UI를 Bridge로 연결하고 StrikeCommand로 발사.
+- 기대: 생성 엔티티 궤적과 impact 영향 반경 원 표시(TC-UI-051).
+- 실제: 발사 직후 Cesium이 "Rendering has stopped"를 띄우고 지도가 멈춘다. 콘솔: `DeveloperError: This object was destroyed` (`Material.throwOnDestroyed` ← `PolylineCollection.update`).
+- 원인 추정: `ui/src/cesium/eventLayer.ts`가 색별 `Material`을 캐시해 여러 polyline에 같이 쓴다. `update()`의 `lines.removeAll()`이 각 polyline을 지우면서 그 Material도 destroy한다(Cesium `Polyline._destroy`). 다음 `update()`에서 지워진 Material을 다시 쓴다. 이벤트 선이 두 번 이상 갱신되면 항상 생긴다. 목 소스 단위 시험은 렌더링을 하지 않아 잡히지 않은 것으로 보인다.
+- 비고: 새로 고치면 다시 그려지지만 다음 선이 생기면 같은 일이 생길 것이다. 재밍 구역도 사라진다(QA-021).
+
+#### 관찰
+- O-1: 발사한 기체(uav-001)와 이웃(uav-002)이 같은 편 생성 엔티티 wpn-uav-001-01을 탐지한다. Detection에 side가 있어 MA가 거를 수 있다. DEC-018 범위 안으로 보고 결함으로 올리지 않았다.
+- O-2: StrikeCommand를 내는 MA가 저장소에 없다. 그래서 `require_approval` 승인 흐름(임무 계획의 strike task → 승인 → 명령)을 확인할 수 없다. 담당 WP3(알고리즘).
+- O-3: realtime에서 Agent MS 포트 탐지 구간에 1 프레임 빈틈이 있다(버스에는 없음). 담당 WP3 Agent. 확인하지 못했다.
+
+### 14.10 결정 확인 항목
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-16 | 확인 필요 | QA-020. SensorActivity를 GCS로 누가 보내는가(MA 보고, Agent 중계, UI의 onboard 구독). onboard 직접 구독은 DEC-013 경계(UI는 L1 포트 수신만)와 맞는지 |
+| D-17 | 확인 필요 | QA-021. JamZone 같은 상태형 이벤트의 재발행 규약(주기 발행 또는 최신값 조회) |
+| D-11 | 확인 필요 유지 | QA-019. Payload가 있는 시나리오도 같은 시드 완전 동일을 요구하는지 |
+
+### 14.11 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 실제 DEM 지형, 지형 가림 | QA-022 |
+| 승인 흐름, MA의 실제 타격 판단 | 타격 MA 없음(O-2). QA 관찰용 MA로 대신 |
+| AAM·FPV 수명 주기 | 이번 배치에서 공중 표적·다른 지상 표적이 탐지되지 않았다 |
+| 명령 거부 사유 | 거부가 나오는 조건을 만들지 않았다 |
+| Datalink 재시작 뒤 재밍 구역 | QA-021로 예상만 했다 |
+| UI의 생성 엔티티 궤적·영향 반경 원 | QA-023으로 렌더링이 멈춰 보지 못했다 |
+| release 빌드 | debug만 실시 |
