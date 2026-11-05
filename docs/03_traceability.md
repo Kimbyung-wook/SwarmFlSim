@@ -138,6 +138,12 @@
 | TC-QA-028 | lockstep 중 Datalink 이탈·재기동 | `uv run --with psutil python qa/run_qa.py --only 028` | DEC-038 |
 | TC-QA-029 | QA-008 재생 전달 판별 | `uv run --with mcap python qa/qa008_replay.py <rec.mcap>` | DEC-009 |
 | TC-QA-030 | lockstep 참여자 이탈 시 `SimStatus.waiting_participants` | `uv run --with psutil python qa/run_qa.py --only 030` | DEC-041 |
+| TC-QA-031 | P5: 센서 판정 Detection이 Agent MS 포트에 도착(버스 건수 = MS 포트 건수) | `uv run python qa/p5_e2e.py --mode lockstep` | DEC-046, DEC-018 |
+| TC-QA-032 | P5: SENSOR 고장 중 Detection 0·`SensorActivity.active=false`, 해제 뒤 재개 | `qa/p5_e2e.py --fault` | DEC-047, DEC-012 |
+| TC-QA-033 | P5: StrikeCommand → launch·spawn → 생성 엔티티 이동 → impact·kill → 대상 alive=false | `qa/p5_e2e.py` + `qa/p5_probe_agent.py` | DEC-046, DEC-019 |
+| TC-QA-034 | P5: jam_zone 이벤트가 Datalink 구역에 반영되어 구역 안 수신이 JAMMED | `qa/p5_e2e.py` | DEC-009, DEC-028 |
+| TC-QA-035 | P5: 같은 시드 lockstep 반복의 truth·이벤트 동일 | `qa/p5_e2e.py --compare <A> <B>` | DEC-005, DEC-044 |
+| TC-QA-036 | P5: UI 구역·궤적·영향 반경·센서 FOV 표시(TC-UI-051, 실버스) | `qa/p5_e2e.py --mode realtime --bridge --ui` + 앱 내장 브라우저 | DEC-003, DEC-046 |
 
 ## 시험 결과
 
@@ -191,6 +197,12 @@
 | TC-QA-028 | 통과 | 2026-11-05 | 4차: 이탈 시 정지·Core 대기 로그, Reset+Start 복구. waiting_participants 필드는 미확인 |
 | TC-QA-029 | 해석 | 2026-11-05 | 4차: 20배속 수신기 1358/관찰자 1082, 설계 한계 |
 | TC-QA-030 | 통과 | 2026-11-05 | 5.5 s 뒤 agent-0 표시, Reset 뒤 비움. UI 경고·재생 누락 프레임 표시도 브라우저로 확인(§12) |
+| TC-QA-031 | 통과 | 2026-11-05 | 6차 P5: 버스 Detection 건수 = MS 포트 건수(lockstep 11쌍). 지형 가림은 DEM 없음(QA-022)으로 미확인 |
+| TC-QA-032 | 통과 | 2026-11-05 | 고장 중 Detection 0·active=false, 해제 프레임부터 재개(lockstep·realtime) |
+| TC-QA-033 | 부분 통과 | 2026-11-05 | AGM 1건 launch→spawn→2,501 m→impact·kill→alive=false. 평지만(QA-022), 승인 흐름·AAM·FPV 미확인 |
+| TC-QA-034 | 통과 | 2026-11-05 | 구역 안 수신 27,121건 모두 JAMMED. 늦은 구독자는 구역을 못 받음(QA-021) |
+| TC-QA-035 | 불합격 | 2026-11-05 | 3회 중 1회가 프레임 11,427부터 최대 2 mm 어긋남(QA-019) |
+| TC-QA-036 | 불합격 | 2026-11-05 | 구역 표시됨. 발사 순간 렌더링 중지(QA-023), FOV 입력 없음(QA-020) |
 
 ## 프로세스 결정
 
