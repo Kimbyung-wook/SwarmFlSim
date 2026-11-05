@@ -182,3 +182,19 @@ WP6 Traffic Monitor를 ui/monitor/에 별도 Vite 앱(자체 package.json)으로
 
 완료 기준: npm test·build 통과, 목 소스로 화면 동작, ui/monitor/TRACE.md, 커밋.
 ```
+
+## WP8 Payload — `payload/`
+
+```text
+WP8 Payload를 payload/에 C++20 정적 라이브러리(swarm_payload)로 구현한다 (DEC-046, PRP-PAY-001, REQ-PAY-001~005, REQ-SIM-001). 모듈 코드 PAY. core/를 포함한 다른 WP 디렉터리는 수정하지 않는다. Core 통합은 WP1이 나중에 한다.
+
+1. 인터페이스: Core가 프레임마다 한 번 호출하는 순수 계산기로 만든다. 입력은 프레임 번호·sim 시각·dt, 엔티티 상태(ID, 종류, 진영, 위치·속도·자세, alive, 활성 고장), 시나리오의 PayloadSpec, 이번 프레임에 받은 SensorCommand·JammerCommand·StrikeCommand, 가시선 판정 콜백(swarm/dyn/terrain.hpp 지면 모델 사용)이다. 출력은 기체별 Detection·SensorActivity·JammerActivity·StrikeActivity·StoreLoadout, 생성할 무장 엔티티(spawn), 무장 엔티티의 다음 상태, Launch·Impact·Kill·JamZone 이벤트다. 벽시계와 난수를 쓰지 않고, 같은 입력이면 같은 출력을 낸다(lockstep 결정성). 출력 순서는 엔티티 ID 순으로 고정한다.
+2. 센서(PO, DEC-018): 카메라 FOV(hfov·vfov, 짐벌 지향 GimbalPointing), 최대 거리, DEM 가시선만으로 판정한다. 확률은 넣지 않는다. SENSOR 고장 중에는 Detection을 만들지 않고 active=false로 보고한다(DEC-047).
+3. 재머(EA, DEC-009): 기체 탑재 재머(JammerCommand enable·radius)와 jammer_site 엔티티가 재밍 구역(Area)을 만든다. 구역이 바뀔 때만 JamZone 이벤트를 낸다(owner, active, area). Datalink가 이 이벤트로 JAMMED를 판정한다.
+4. 무장(Strike·Store, DEC-012, DEC-019, PRP-DYN-003): aam_short·agm_short는 질점 + 비례항법, 탐색기 FOV·락온 거리, 추력·연소 시간. fpv는 소형 3-DoF + 종말 유도. StrikeCommand를 받으면 잔량·락온을 확인해 LAUNCHED 또는 REJECTED(reason)를 낸다. 발사체 ID는 wpn-<발사기체>-<순번>. 근접 신관 거리 안에 들거나 지면과 교차하면(교차 시점 보정, DEC-005) 탄착하고, 살상반경 안의 대상을 즉시 파괴한다(DEC-012). 연소·비행 시간이 끝나면 MISSED.
+5. 프로파일(DEC-019): 공개 문헌의 일반값으로 payload/profiles/*.json에 camera·jammer·aam_short·agm_short·fpv 기본 프로파일을 둔다. 실제 체계 제원은 넣지 않는다. PayloadSpec.overrides가 프로파일 값을 덮어쓴다.
+6. 표적: ground_target·air_target은 Core의 스크립트 이동(DEC-017)을 그대로 쓰고, 이 라이브러리는 탐지·피격 대상으로만 다룬다.
+7. 시험: ctest에 등록한다. FOV 경계·거리·가시선 차폐, SENSOR 고장, 재밍 구역 on/off 이벤트, 잔량 0 거부, 락온 실패 거부, PN 명중·빗나감, 지면 탄착, 살상반경 다중 파괴, 같은 입력 2회 동일 출력.
+
+완료 기준: msvc-debug 빌드·ctest 통과, payload/TRACE.md, 커밋. 최종 보고에 WP1 통합을 위한 호출 순서(입력·출력 표)와 계약 변경 요청(키·proto 필드가 부족하면)을 적는다.
+```
