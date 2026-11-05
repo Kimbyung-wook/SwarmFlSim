@@ -114,6 +114,10 @@ class AgentRuntime:
         self._lockstep = False
         self._dl_names: tuple[str, ...] = ()
         self._dl_done: dict[str, int] = {}          # 참여자 → 처리해도 되는 다음 틱 번호
+        # 송신 개수 장벽 (DEC-044): 기체별 swarm/<e>/tx/** 누적 발행 수와 swarm/<e>/rx/** 누적 수신 수
+        self._tx_count: dict[str, int] = {}
+        self._rx_count: dict[str, int] = {}
+        self._dl_sent: dict[str, dict[int, dict[str, int]]] = {}  # 참여자 → 프레임 → FrameDone.sent_count
         self._ticks_seen = 0
         self._prev_tick_us: int | None = None
         self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
@@ -168,6 +172,8 @@ class AgentRuntime:
             self._on_onboard(key, s.payload)
         elif key.startswith("swarm/"):
             self._on_rx(key, s.payload)
+            if self._pending_tick is not None:  # 개수가 채워지면 보류한 틱을 푼다 (DEC-044)
+                self._try_release()
 
     def run(self, max_frames: int = 0, should_stop: Callable[[], bool] | None = None) -> None:
         """threaded 모드 처리 루프. Shutdown, max_frames, should_stop()로 끝난다"""
@@ -297,6 +303,9 @@ class AgentRuntime:
         self._lockstep = False
         self._dl_names = ()
         self._dl_done = {}
+        self._tx_count = {}
+        self._rx_count = {}
+        self._dl_sent = {}
         self._ticks_seen = 0
         self._prev_tick_us = None
         self._rx_hold = {}
@@ -342,6 +351,7 @@ class AgentRuntime:
         v = self.vehicles.get(parts[1])
         if v is None:
             return
+        self._rx_count[v.entity_id] = self._rx_count.get(v.entity_id, 0) + 1
         env = link_pb2.LinkEnvelope.FromString(payload)
         if env.header.source == v.entity_id:
             return
@@ -377,13 +387,24 @@ class AgentRuntime:
         return True
 
     def _dl_ready(self, frame: int) -> bool:
-        """틱 frame을 처리하려면 Datalink의 FrameDone(frame-1)이 와 있어야 한다 (DEC-040)"""
-        return all(self._dl_done.get(n, 0) >= frame for n in self._dl_names)
+        """틱 frame을 처리하려면 Datalink의 FrameDone(frame-1)이 와 있고, 그 sent_count만큼 rx가 도착해 있어야 한다
+        (DEC-040, DEC-044)"""
+        for n in self._dl_names:
+            if self._dl_done.get(n, 0) < frame:
+                return False
+            sent = self._dl_sent.get(n, {}).get(frame - 1)
+            if sent and any(c > self._rx_count.get(e, 0) for e, c in sent.items() if e in self.vehicles):
+                return False
+        return True
 
     def _on_done(self, d: sim_pb2.FrameDone) -> None:
         if d.participant not in self._dl_names or self._ticks_seen == 0:  # 첫 틱 전의 frame 0은 준비 신호다
             return
         self._dl_done[d.participant] = max(self._dl_done.get(d.participant, 0), d.frame + 1)
+        sent = self._dl_sent.setdefault(d.participant, {})
+        sent[d.frame] = dict(d.sent_count)
+        for f in [f for f in sent if f < d.frame - 1]:
+            del sent[f]
         self._try_release()
 
     def _try_release(self) -> None:
@@ -427,6 +448,7 @@ class AgentRuntime:
 
     def _send_done(self, frame: int) -> None:
         done = sim_pb2.FrameDone(participant=self.config.participant, frame=frame)
+        done.sent_count.update(self._tx_count)
         self.bus.put(keys.clock_done(self.config.participant), done.SerializeToString(), encoding(done))
 
     def _process_tick(self, tick: sim_pb2.ClockTick) -> None:
@@ -541,6 +563,7 @@ class AgentRuntime:
         key = keys.tx(v.entity_id, Iface(iface), short_name(msg))
         seq = self._tx_seq.get(key, 0)
         self._tx_seq[key] = seq + 1
+        self._tx_count[v.entity_id] = self._tx_count.get(v.entity_id, 0) + 1
         env = link_pb2.LinkEnvelope(dst=list(dst), iface=L1_ENUM[iface], msg_type=full_name(msg),
                                     payload=msg.SerializeToString(), priority=_PRIORITY.get(iface, 1))
         env.header.source = v.entity_id
