@@ -9,6 +9,7 @@ import type { SimStatus } from "../gen/swarm/v1/sim_pb";
 import { Aggregator } from "./aggregator";
 import type { BusEvent, Direction } from "./decode";
 import { decodeBusFrame } from "./decode";
+import { FrameGapCounter, peekFrameNumber, waitingWarning } from "./frameGap";
 import { IFACE_KEY, shortType } from "./labels";
 import { Ring } from "./ring";
 
@@ -49,6 +50,8 @@ export interface StoreOptions {
   rewindUs?: number;
   /** 성능 측정(performance.now)을 끈다. 부하 측정 기준선용 */
   noTiming?: boolean;
+  /** truth/state 해석 최소 간격(ms, 벽시계). 프레임 번호는 매번 읽는다. 기본 1000 */
+  truthDecodeMs?: number;
 }
 
 export function txKeyOf(o: LinkOutcome): string {
@@ -73,9 +76,9 @@ export class MonitorStore {
   /** 배지로 바꾼 표시. SimStatus.replay 값이 바뀌면 지운다 */
   private viewManual: RunView | undefined;
   rewinds = 0;
-  /** truth/state 프레임 번호 공백으로 센 누락 프레임 수. 재생 한계(DEC-042). 통계 초기화·되감기에서 0 */
-  missedFrames = 0;
-  private lastFrameNo = 0;
+  readonly gaps = new FrameGapCounter();
+  private readonly truthDecodeMs: number;
+  private lastTruthDecodeMs = Number.NEGATIVE_INFINITY;
   /** 시계 출처(sim/ctrl/status, truth/state)의 최신 시각(µs). 되감기 판정 기준 */
   clockUs = 0;
   /** 가장 최근 outcome을 받은 순간의 (시계 − outcome tx 시각)(µs)와 그때의 시계 */
@@ -98,13 +101,36 @@ export class MonitorStore {
     this.txRing = new Ring(opts.txCapacity ?? 20_000);
     this.rewindUs = opts.rewindUs ?? 5_000_000;
     this.timing = !opts.noTiming;
+    this.truthDecodeMs = opts.truthDecodeMs ?? 1000;
   }
 
   handleFrame(f: BusFrame): void {
     const t0 = this.timing ? now() : 0;
     this.frames++;
+    if (f.key === "truth/state") {
+      const n = peekFrameNumber(f.payload);
+      if (n !== null) this.gaps.feed(n, this.status?.replay === true);
+      // 엔티티 목록은 느리게 변하므로 해석은 truthDecodeMs마다 한 번만 한다
+      const t = Date.now();
+      if (t - this.lastTruthDecodeMs < this.truthDecodeMs) {
+        this.version++;
+        if (this.timing) this.busyMs += now() - t0;
+        return;
+      }
+      this.lastTruthDecodeMs = t;
+    }
     this.handleEvent(decodeBusFrame(f));
     if (this.timing) this.busyMs += now() - t0;
+  }
+
+  /** DEC-042: 재생 중 빠진 truth/state 프레임 수 */
+  get missedFrames(): number {
+    return this.status?.replay === true ? this.gaps.missed : 0;
+  }
+
+  /** DEC-041: 응답 없는 참여자 경고 문구. 없으면 null */
+  get waitingWarning(): string | null {
+    return waitingWarning(this.status?.waitingParticipants);
   }
 
   handleEvent(ev: BusEvent): void {
@@ -127,10 +153,7 @@ export class MonitorStore {
           if (cur && cur.fromTruth && cur.kind === e.kind && cur.side === e.side && cur.alive === e.alive) continue;
           this.entities.set(e.id, { id: e.id, kind: e.kind, side: e.side, alive: e.alive, fromTruth: true });
         }
-        if (ev.frame.header) {
-          this.onClock(Number(ev.frame.header.simTimeUs));
-          this.onFrameNo(Number(ev.frame.header.frame));
-        }
+        if (ev.frame.header) this.onClock(Number(ev.frame.header.simTimeUs));
         return;
       case "truthEvent": {
         const e = ev.event.event;
@@ -235,16 +258,6 @@ export class MonitorStore {
     return this.lagSampleUs > 0 && this.clockUs - this.lagAtUs <= this.staleUs ? this.lagSampleUs : 0;
   }
 
-  private onFrameNo(n: number): void {
-    if (n > this.lastFrameNo) {
-      if (this.lastFrameNo > 0) this.missedFrames += n - this.lastFrameNo - 1;
-      this.lastFrameNo = n;
-    } else if (n > 0 && n < this.lastFrameNo) {
-      // 번호가 줄면 재생을 처음부터 다시 시작한 것이다. 기준만 새로 잡는다
-      this.lastFrameNo = n;
-    }
-  }
-
   /** 되감기는 시계 출처로만 판정한다. outcome·엔벨로프는 데이터링크가 밀리면 늦게 오므로 쓰지 않는다 */
   private onClock(tUs: number): void {
     if (this.clockUs > 0 && tUs > 0 && tUs + this.rewindUs < this.clockUs) {
@@ -260,8 +273,6 @@ export class MonitorStore {
 
   /** 집계·타임라인·echo를 지운다. 엔티티 목록과 링크 상태는 둔다 */
   clearStats(): void {
-    this.missedFrames = 0;
-    this.lastFrameNo = 0;
     this.agg.clear();
     this.timeline.clear();
     this.echo.clear();

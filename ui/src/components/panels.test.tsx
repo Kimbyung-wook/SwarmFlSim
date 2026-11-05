@@ -238,3 +238,37 @@ describe("TC-UI-040 Route 거부 사유와 flocking 안내 (D-10, DEC-039)", () 
     expect(render([])).not.toContain("route-flock-note");
   });
 });
+
+describe("TC-UI-042 참여자 응답 없음 경고와 재생 누락 프레임 (DEC-041, DEC-042)", () => {
+  const st = (init: Parameters<typeof create<typeof SimStatusSchema>>[1]) =>
+    create(SimStatusSchema, { state: SimRunState.RUNNING, mode: RunMode.REALTIME, rateTarget: 1, ...init });
+  const bar = (live: LiveState) =>
+    renderToStaticMarkup(
+      <Toolbar
+        source="bus" onSource={() => {}} conn={{ state: "open", detail: "" }} gcs="gcs-01"
+        status={live.status} waitingWarning={live.waitingWarning()} missedFrames={live.missedFrames}
+        simTimeUs={0n} frame={0n} entityCount={0} mapStatus={null} viewMode="3d" onViewMode={() => {}}
+        onStart={() => {}} onPause={() => {}} onResume={() => {}} onStep={() => {}} onReset={() => {}} onRate={() => {}} onFit={() => {}}
+      />,
+    );
+
+  it("waiting_participants가 있으면 이름과 복구 안내를 보이고, 비면 지운다", () => {
+    const live = new LiveState();
+    live.onStatus(st({ waitingParticipants: ["guidance-1", "gcs-01"] }));
+    expect(bar(live)).toContain("참여자 응답 없음: guidance-1, gcs-01 — Reset 후 Start로 복구");
+    live.onStatus(st({ waitingParticipants: [] }));
+    expect(bar(live)).not.toContain("참여자 응답 없음");
+  });
+
+  it("재생 중에만 프레임 번호 공백을 센다. 재생이 아니면 표시하지 않는다", () => {
+    const live = new LiveState();
+    live.onStatus(st({ replay: true }));
+    for (const n of [1n, 2n, 5n, 6n, 10n]) live.onFrameSeq(n);
+    expect(live.missedFrames).toBe(5);
+    expect(bar(live)).toContain("누락 프레임 5");
+    live.onStatus(st({ replay: false }));
+    live.onFrameSeq(20n);
+    expect(live.missedFrames).toBe(0);
+    expect(bar(live)).not.toContain("누락 프레임");
+  });
+});

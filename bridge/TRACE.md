@@ -24,6 +24,7 @@
 | TC-UI-015 | 다중 클라이언트(control 2 + observer 1): 구독 분리, 다른 GCS 키 발행 거부, 모니터가 tx 수신, 종료 정리. CLI 버스 옵션 파싱 (2건) | `tests/test_bridge.py` | IMP-UI-021, IMP-UI-022, DEC-020 | 통과 |
 | TC-UI-016 | Zenoh 백엔드(peer 2개, 127.0.0.1 tcp, 멀티캐스트 끔): Zenoh 스레드 콜백 → WebSocket 전달, WebSocket 발행 → Zenoh 구독자 수신·encoding 유지 (1건) | `tests/test_bridge.py` | IMP-UI-021, DEC-026 | 통과 |
 | TC-UI-028 | `sim/param/**` 구독 전달(동역학·FA·MA 3키, 구독 밖 키 제외)과 control 클라이언트의 `set_params`(`sim/ctrl/cmd`) 발행이 버스에 그대로 전달 (1건, 코드 변경 없음) | `tests/test_bridge.py` | IMP-UI-046, DEC-035 | 통과 |
+| TC-UI-041 | 버스 스레드 폭주 입력(3×DRAIN_BATCH+7건, 두 키)이 순서대로 빠짐없이 전달, 드롭 0 (1건) | `tests/test_bridge.py` | IMP-UI-057 | 통과 |
 
 - 자동 시험: `uv run pytest` 전체 119건 통과(bridge 32건 포함, websockets 17.4, eclipse-zenoh 1.10).
 - 수동 확인은 `ui/TRACE.md` TC-UI-019.

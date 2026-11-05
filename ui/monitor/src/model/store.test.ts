@@ -139,24 +139,34 @@ describe("MonitorStore", () => {
     s.handleFrame(status(452_000_000));
     expect(s.linkLagUs).toBe(0);
   });
+});
 
-  // TC-MON-015: truth/state 프레임 번호 공백으로 누락 프레임을 센다 (IMP-MON-027, DEC-042)
-  it("프레임 번호 공백을 누락으로 세고, 번호가 줄면 기준만 새로 잡는다", () => {
-    const s = new MonitorStore();
-    const truth = (f: number) => frameOf("truth/state", TruthFrameSchema, { header: { frame: BigInt(f), simTimeUs: BigInt(f * 20_000) } });
-    for (const f of [1, 2, 3, 7, 8, 12]) s.handleFrame(truth(f));
+describe("TC-UI-044 참여자 응답 없음·재생 누락 프레임 (DEC-041, DEC-042)", () => {
+  const truth = (frame: number) => frameOf("truth/state", TruthFrameSchema, { header: { frame: BigInt(frame), simTimeUs: BigInt(frame * 20_000) } });
+  const status = (init: Parameters<typeof frameOf<typeof SimStatusSchema>>[2]) => frameOf("sim/ctrl/status", SimStatusSchema, init);
+
+  it("waiting_participants 경고 문구를 만들고 비면 지운다", () => {
+    const s = new MonitorStore({ noTiming: true });
+    expect(s.waitingWarning).toBeNull();
+    s.handleFrame(status({ waitingParticipants: ["guidance-1"] }));
+    expect(s.waitingWarning).toBe("참여자 응답 없음: guidance-1 — Reset 후 Start로 복구");
+    s.handleFrame(status({ waitingParticipants: [] }));
+    expect(s.waitingWarning).toBeNull();
+  });
+
+  it("재생 중 truth/state 프레임 번호 공백을 센다. 해석을 줄여도 번호는 매번 읽는다", () => {
+    const s = new MonitorStore({ noTiming: true, truthDecodeMs: 1_000_000 });
+    s.handleFrame(status({ replay: true }));
+    for (const n of [1, 2, 3, 7, 8, 12]) s.handleFrame(truth(n));
     expect(s.missedFrames).toBe(3 + 3);
-    s.handleFrame(truth(1));
-    s.handleFrame(truth(2));
-    expect(s.missedFrames).toBe(6);
-    s.handleFrame(truth(4));
-    expect(s.missedFrames).toBe(7);
-    s.clearStats();
+    s.handleFrame(status({ replay: false }));
     expect(s.missedFrames).toBe(0);
   });
-  it("SimStatus.waiting_participants를 보관한다 (DEC-041)", () => {
-    const s = new MonitorStore();
-    s.handleFrame(frameOf("sim/ctrl/status", SimStatusSchema, { waitingParticipants: ["datalink"] }));
-    expect(s.status!.waitingParticipants).toEqual(["datalink"]);
+
+  it("실시간에서는 공백이 있어도 표시하지 않는다", () => {
+    const s = new MonitorStore({ noTiming: true });
+    s.handleFrame(truth(1));
+    s.handleFrame(truth(50));
+    expect(s.missedFrames).toBe(0);
   });
 });

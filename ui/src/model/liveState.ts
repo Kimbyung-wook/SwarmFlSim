@@ -2,6 +2,7 @@
 // 지도는 렌더 루프에서, 패널은 낮은 주기로 읽는다 (REQ-UI-001)
 import type { SimStatus } from "../gen/swarm/v1/sim_pb";
 import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
+import { FrameGapCounter, waitingWarning } from "./frameGap";
 import type { FrameView } from "./entityView";
 import { toFrameView } from "./entityView";
 import type { TrailOptions } from "./trails";
@@ -26,6 +27,8 @@ export class LiveState {
   version = 0;
   /** 마지막으로 truth 또는 status를 받은 벽시계 시각(ms) */
   lastRxMs: number | null = null;
+  /** DEC-042: 재생 중 빠진 프레임 수 */
+  readonly gaps = new FrameGapCounter();
   private byId = new Map<string, FrameView["entities"][number]>();
 
   constructor(trail?: TrailOptions) {
@@ -43,6 +46,20 @@ export class LiveState {
   onStatus(s: SimStatus, nowMs = Date.now()): void {
     this.lastRxMs = nowMs;
     this.status = s;
+  }
+
+  /** truth/state 프레임 번호(다운샘플 전). 재생 중에만 공백을 센다 */
+  onFrameSeq(frame: bigint): void {
+    this.gaps.feed(frame, this.status?.replay === true);
+  }
+
+  get missedFrames(): number {
+    return this.status?.replay === true ? this.gaps.missed : 0;
+  }
+
+  /** DEC-041: 응답 없는 참여자 경고. 없으면 null */
+  waitingWarning(): string | null {
+    return waitingWarning(this.status?.waitingParticipants);
   }
 
   stalled(nowMs = Date.now()): boolean {

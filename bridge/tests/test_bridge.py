@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import threading
 from collections.abc import Awaitable, Callable
 
 import pytest
@@ -9,6 +10,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from swarm_api import CONTRACT_VERSION, InMemoryBus, Sample
+from swarm_bridge.server import DRAIN_BATCH
 from swarm_bridge import BridgeOptions, BridgeServer, FrameError, decode_frame, encode_frame, publish_allowed
 from swarm_bridge.cli import bus_config, main
 
@@ -262,6 +264,34 @@ def test_queue_overflow_drops_oldest():
             assert [decode_frame(m)[2] for m in frames] == [str(i).encode() for i in range(12, 20)]
 
     run(t, BridgeOptions(queue_limit=8))
+
+
+# TC-UI-041: 버스 스레드의 폭주 입력이 묶음 전달(DRAIN_BATCH)을 넘어서도 순서대로 빠짐없이 나간다 (IMP-UI-057, QA-017)
+def test_burst_from_bus_thread_keeps_order_across_batches():
+    n = 3 * DRAIN_BATCH + 7
+
+    async def t(server, bus):
+        async with connect(url(server)) as ws:
+            await hello(ws)
+            await ws.send(json.dumps({"op": "sub", "id": 1, "key": "link/outcome/**"}))
+            await ws.send(json.dumps({"op": "sub", "id": 2, "key": "truth/state"}))
+            await settle()
+
+            def produce():
+                for i in range(n):
+                    bus.put("link/outcome/a" if i % 2 else "truth/state", str(i).encode(), ENC)
+
+            th = threading.Thread(target=produce)
+            th.start()
+            frames: list[bytes] = []
+            while len(frames) < n:
+                frames.append(decode_frame(await asyncio.wait_for(ws.recv(), 5))[2])
+            th.join()
+            assert frames == [str(i).encode() for i in range(n)]
+            (client,) = server.clients
+            assert client.dropped == 0
+
+    run(t, BridgeOptions(queue_limit=n + 1))
 
 
 # TC-UI-028: 기체별 매개변수 (DEC-035) ----------------------------------------
