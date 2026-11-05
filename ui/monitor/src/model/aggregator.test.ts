@@ -112,3 +112,35 @@ describe("손실률 분모 (DEC-032)", () => {
     expect(a.entity("uav-003").rx.lossRate([DropReason.OUT_OF_RANGE])).toBe(0);
   });
 });
+
+// TC-MON-016: Monitor 누적 손실률·평균 지연은 같은 outcome 열의 독립 집계(qa/link_count.py 방식)와 같다 (IMP-MON-028, QA-018)
+describe("독립 집계와의 일치", () => {
+  it("송신자별 손실률·평균 지연이 단순 계수와 같고 사이에 낀 상태 갱신에 영향받지 않는다", () => {
+    const a = new Aggregator();
+    const ref = new Map<string, { n: number; drop: number; lat: number; ok: number }>();
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let i = 0; i < 20000; i++) {
+      const src = `uav-${String(1 + (i % 7)).padStart(3, "0")}`;
+      const t = 1_000_000 + i * 2000;
+      const drop = rnd() < 0.02;
+      const lat = Math.round(15_000 + rnd() * 10_000);
+      a.addOutcome(outcome({ src, dst: `uav-${String(1 + ((i * 3) % 9)).padStart(3, "0")}`, seq: i, t, lat, reason: drop ? DropReason.BURST_LOSS : undefined }));
+      a.advance(t + 1000); // SimStatus 도착(창 이동)이 누적값을 바꾸면 안 된다
+      const r = ref.get(src) ?? { n: 0, drop: 0, lat: 0, ok: 0 };
+      r.n++;
+      if (drop) r.drop++;
+      else {
+        r.ok++;
+        r.lat += lat;
+      }
+      ref.set(src, r);
+    }
+    for (const [src, r] of ref) {
+      const s = a.entity(src).tx;
+      expect(s.total).toBe(r.n);
+      expect(s.lossRate()).toBeCloseTo(r.drop / r.n, 12);
+      expect(s.latMeanUs()).toBeCloseTo(r.lat / r.ok, 6);
+    }
+  });
+});
