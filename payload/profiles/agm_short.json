@@ -1,0 +1,23 @@
+{
+  "type": "agm_short",
+  "default": "agm_generic",
+  "note": "단거리 공대지 미사일 일반값 (DEC-019, PRP-DYN-003). 표적 지정 시 PN, 조준점만 주면 좌표 유도. seeker_el_deg는 발사 전 락온 판정 축의 기체 기준 고각",
+  "profiles": {
+    "agm_generic": {
+      "max_range_m": 6000.0,
+      "lock_range_m": 6000.0,
+      "seeker_fov_deg": 90.0,
+      "seeker_el_deg": -30.0,
+      "launch_speed_mps": 20.0,
+      "thrust_accel_mps2": 80.0,
+      "burn_time_s": 4.0,
+      "drag_k_per_m": 0.00005,
+      "max_g": 15.0,
+      "nav_gain": 3.0,
+      "max_flight_time_s": 60.0,
+      "arm_time_s": 1.0,
+      "proximity_m": 3.0,
+      "lethal_radius_m": 15.0
+    }
+  }
+}

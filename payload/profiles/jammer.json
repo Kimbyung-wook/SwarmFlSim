@@ -1,0 +1,23 @@
+{
+  "type": "jammer",
+  "default": "ea_generic",
+  "note": "공개 문헌 수준의 일반값 (DEC-019). 재밍 영역 안의 수신단은 100% 손실 (DEC-009, DEC-028). update_distance_m은 이동 재머의 JamZone 갱신 거리",
+  "profiles": {
+    "ea_generic": {
+      "radius_m": 2000.0,
+      "max_radius_m": 5000.0,
+      "min_alt_m": 0.0,
+      "max_alt_m": 0.0,
+      "update_distance_m": 50.0,
+      "default_enabled": false
+    },
+    "site_generic": {
+      "radius_m": 3000.0,
+      "max_radius_m": 8000.0,
+      "min_alt_m": 0.0,
+      "max_alt_m": 0.0,
+      "update_distance_m": 50.0,
+      "default_enabled": true
+    }
+  }
+}

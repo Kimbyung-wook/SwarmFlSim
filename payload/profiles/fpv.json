@@ -1,0 +1,21 @@
+{
+  "type": "fpv",
+  "default": "fpv_generic",
+  "note": "FPV 자폭 드론 일반값 (DEC-019, PRP-DYN-003). 소형 멀티콥터 3-DoF, 선행 추적 종말 유도. seeker_fov_deg 360은 각도 판정 없음",
+  "profiles": {
+    "fpv_generic": {
+      "max_range_m": 5000.0,
+      "lock_range_m": 3000.0,
+      "seeker_fov_deg": 360.0,
+      "seeker_el_deg": 0.0,
+      "launch_speed_mps": 0.0,
+      "max_speed_mps": 30.0,
+      "max_accel_mps2": 15.0,
+      "tau_s": 0.5,
+      "max_flight_time_s": 600.0,
+      "arm_time_s": 1.0,
+      "proximity_m": 2.0,
+      "lethal_radius_m": 5.0
+    }
+  }
+}
