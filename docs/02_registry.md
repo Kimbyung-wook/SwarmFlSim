@@ -167,6 +167,9 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-038 | 무장 자체 종료(빗나감·비행 시간 초과) 표현. `KillEvent.cause`에 해당 값이 없어 WP8은 무장 KillEvent를 내지 않고 마지막 상태를 alive=false로 한 번 더 낸다(StrikeActivity MISSED 동반). 선택: (A) 현행 유지, 계약 변경 없음 (B) cause에 `expired` 추가. 제안: A. 근거: 종료 사유는 StrikeActivity·ImpactEvent에 이미 있다 | Open |
 | OPN-039 | 한 엔티티의 재머 복수 탑재. `JamZoneEvent.owner`는 엔티티 ID이고 Datalink가 owner로 구역을 키잉하므로 WP8은 엔티티당 재머 1개만 허용(2개 이상은 시나리오 오류). 선택: (A) 엔티티당 1개로 계약에 명시 (B) owner를 `<id>/<payload_id>`로 확장. 제안: A. 근거: 현 시나리오 요구에 복수 재머가 없고 B는 Datalink·UI 변경을 부른다 | Open |
 | OPN-040 | 무장 엔티티 ID 길이. `wpn-<shooter>-NN`은 발사 기체 ID가 25자를 넘으면 엔티티 ID 상한 32자(§2)를 넘는다. 선택: (A) 엔티티 ID 상한을 48자로 늘림 (B) 시나리오 엔티티 ID를 25자 이하로 제한 (C) 무장 ID를 전역 순번 `wpn-NNNN`으로 변경. 제안: B. 근거: 계약 문자열 규칙만 바뀌고 발사 기체가 ID에 남는다 | Open |
+| OPN-041 | 센서 활동 상태(SensorActivity)의 GCS 전달 경로(QA-020). Core는 `onboard/<id>/SensorActivity`만 내고 UI는 `swarm/<gcs>/rx/ms/SensorActivity`를 읽어 이어지는 경로가 없다. 선택: (A) Agent 런타임이 *Activity를 변화 시와 1 Hz로 GCS에 자동 보고(Datalink 경유) (B) MA가 MS 포트로 직접 보고 (C) UI가 `onboard/**`를 직접 구독. 제안: A. 근거: 지상 표시가 링크 상태를 반영하고(DEC-008), MA 구현과 무관하며, onboard 채널을 UI에 열지 않는다 | Open |
+| OPN-042 | 상태형 truth 이벤트(JamZone)의 늦은 구독자 처리(QA-021). 변화 시 한 번만 발행되어 늦게 붙은 UI·관찰자·재시작한 Datalink가 구역을 모른다. 선택: (A) Core가 활성 구역을 변화 시와 1 s 주기로 다시 발행(수신 측은 owner 기준 멱등) (B) Zenoh queryable로 최신 구역 조회 (C) TruthFrame에 활성 구역 목록 포함. 제안: A. 근거: 키·메시지 변경이 없고 Datalink는 이미 owner로 키잉한다 | Open |
+| OPN-043 | 한반도 저해상도 DEM 자료 출처와 저장소 형식(DEC-016, QA-022). 선택: (A) Copernicus GLO-90 공개 DEM을 내려받아 약 1 km 격자로 줄여 저장소 밖(`data/`, Git 미포함)에 두고 변환 스크립트만 커밋 (B) SRTM 3″ 같은 방식 (C) 합성 지형만 사용. 제안: A. 근거: 공개 라이선스, 한반도 전역 포함, 저해상도 변환으로 수 MB 이하 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
