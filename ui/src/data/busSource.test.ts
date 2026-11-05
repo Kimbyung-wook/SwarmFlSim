@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 import { EntityKind, Side } from "../gen/swarm/v1/entity_pb";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import { SimCommandSchema } from "../gen/swarm/v1/sim_pb";
-import { TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
+import { TruthEventSchema, TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
 import { C2Commander, ENVELOPE_ENCODING } from "../model/commands";
 import { iconSvg, iconUrl, isDirectional, sideColor } from "../model/symbology";
 import type { BusTransport, SubscribeOptions, TransportCallback } from "./busSource";
-import { BusSource, KEY_SIM_CMD, KEY_SIM_PARAMS, KEY_SIM_STATUS, KEY_TRUTH_STATE } from "./busSource";
+import { BusSource, KEY_SIM_CMD, KEY_SIM_PARAMS, KEY_SIM_STATUS, KEY_TRUTH_EVENTS, KEY_TRUTH_STATE } from "./busSource";
 
 class FakeTransport implements BusTransport {
   subs = new Map<string, { cb: TransportCallback; opts?: SubscribeOptions }>();
@@ -50,7 +50,7 @@ describe("BusSource", () => {
   it("구독 키와 truth 다운샘플 주기, GCS가 없으면 rx를 구독하지 않는다", async () => {
     const a = new FakeTransport();
     await new BusSource(a, { gcs: "gcs-01", truthMaxHz: 20 }).connect();
-    expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE].sort());
+    expect([...a.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, "swarm/gcs-01/rx/**", KEY_TRUTH_STATE, KEY_TRUTH_EVENTS].sort());
     // 브리지 다운샘플은 걸지 않는다 (프레임 번호 공백 계산, DEC-042)
     expect(a.subs.get(KEY_TRUTH_STATE)!.opts?.maxHz).toBeUndefined();
     expect(a.opened).toBe(true);
@@ -58,7 +58,7 @@ describe("BusSource", () => {
     const b = new FakeTransport();
     const src = new BusSource(b);
     await src.connect();
-    expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, KEY_TRUTH_STATE].sort());
+    expect([...b.subs.keys()].sort()).toEqual([KEY_SIM_STATUS, KEY_SIM_PARAMS, KEY_TRUTH_STATE, KEY_TRUTH_EVENTS].sort());
     const out = new C2Commander("gcs-01", "ui-x").task("hold", ["uav-001"]);
     expect(() => src.sendC2(out)).toThrow(/GCS/);
   });
@@ -79,6 +79,23 @@ describe("BusSource", () => {
     expect(seq).toHaveLength(25);
     expect(seq[24]).toBe(25n);
     expect(truths).toBe(5); // 100 ms마다 한 번
+  });
+
+  it("TC-UI-050 truth/event/**를 다운샘플 없이 구독해 TruthEvent로 해석한다 (IMP-UI-062, DEC-046)", async () => {
+    const t = new FakeTransport();
+    const errs: string[] = [];
+    const src = new BusSource(t, { truthMaxHz: 1, onDecodeError: (k) => errs.push(k) });
+    const got: string[] = [];
+    src.subscribe({ event: (k, ev) => got.push(`${k}|${ev.event.case}`) });
+    await src.connect();
+    const sub = t.subs.get(KEY_TRUTH_EVENTS)!;
+    expect(sub.opts?.maxHz).toBeUndefined();
+    const ev = create(TruthEventSchema, { event: { case: "kill", value: { entityId: "wpn-uav-001-01", cause: "impact" } } });
+    sub.cb(toBinary(TruthEventSchema, ev), "truth/event/kill", "");
+    sub.cb(toBinary(TruthEventSchema, ev), "truth/event/kill", "");
+    sub.cb(new Uint8Array([0xff, 0xff, 0xff]), "truth/event/bad", "");
+    expect(got).toEqual(["truth/event/kill|kill", "truth/event/kill|kill"]);
+    expect(errs).toEqual(["truth/event/bad"]);
   });
 
   it("rx LinkEnvelope를 해석하고 C2를 자기 GCS tx 키로만 보낸다", async () => {

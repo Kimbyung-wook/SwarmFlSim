@@ -1,12 +1,16 @@
 // IMP-UI-015: 수신 상태 보관소. 프레임마다 React를 다시 그리지 않도록 최신 프레임·궤적을 여기에 두고
 // 지도는 렌더 루프에서, 패널은 낮은 주기로 읽는다 (REQ-UI-001)
+// IMP-UI-062: truth 이벤트(TruthEventStore)·센서 시야(SensorStore)도 여기서 받는다 (DEC-046)
 import type { SimStatus } from "../gen/swarm/v1/sim_pb";
-import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
+import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
+import type { TruthEvent, TruthFrame } from "../gen/swarm/v1/truth_pb";
 import { FrameGapCounter, waitingWarning } from "./frameGap";
 import type { FrameView } from "./entityView";
 import { toFrameView } from "./entityView";
 import type { TrailOptions } from "./trails";
 import { TrailStore } from "./trails";
+import { SensorStore } from "./sensorFov";
+import { TruthEventStore } from "./truthEvents";
 
 /** Core가 이 시간 넘게 truth·status를 모두 보내지 않으면 정지로 본다 (IMP-UI-055, QA-015) */
 export const STALL_MS = 3000;
@@ -29,6 +33,10 @@ export class LiveState {
   lastRxMs: number | null = null;
   /** DEC-042: 재생 중 빠진 프레임 수 */
   readonly gaps = new FrameGapCounter();
+  /** truth/event/** 재밍 구역·생성 엔티티·impact·kill */
+  readonly events = new TruthEventStore();
+  /** GCS가 받은 SensorActivity */
+  readonly sensors = new SensorStore();
   private byId = new Map<string, FrameView["entities"][number]>();
 
   constructor(trail?: TrailOptions) {
@@ -40,7 +48,18 @@ export class LiveState {
     this.frame = toFrameView(f);
     this.byId = new Map(this.frame.entities.map((e) => [e.id, e]));
     this.trails.update(this.frame);
+    this.events.onFrame(this.frame);
+    this.sensors.tick(this.frame.simTimeUs);
     this.version++;
+  }
+
+  onEvent(ev: TruthEvent): void {
+    this.events.onEvent(ev);
+  }
+
+  /** swarm/<gcs>/rx/**. SensorActivity만 쓴다 */
+  onRx(key: string, env: LinkEnvelope): void {
+    this.sensors.onRx(key, env);
   }
 
   onStatus(s: SimStatus, nowMs = Date.now()): void {

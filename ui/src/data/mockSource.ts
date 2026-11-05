@@ -2,6 +2,7 @@
 // sim/ctrl/cmd 중 Start·Pause·Resume·StepFrames·SetRate·Reset을 처리한다.
 // IMP-UI-029: C2 TaskCommand에는 대상 기체마다 TaskStatus(ACCEPTED)를 rx로 돌려준다.
 // IMP-UI-046: UAV마다 동역학·FA·MA 매개변수(EntityParams)를 sim/param으로 내고, set_params를 검사해 적용·거부한다 (DEC-035).
+// IMP-UI-063: truth/event/<kind>와 SensorActivity(rx/ms)를 각본(MockEvents)으로 낸다. 발사체는 truth/state에 함께 싣는다 (DEC-046).
 // IMP-UI-041: 대상 UAV는 임무대로 비행하고(MockScenario.command), 구간 진행·완료를 TaskStatus(EXECUTING·COMPLETED)로 보낸다.
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
@@ -17,6 +18,7 @@ import { HandlerSet } from "./source";
 import type { MockScenarioOptions } from "./mockScenario";
 import { MockScenario } from "./mockScenario";
 import { MOCK_OWNERS, MockParams } from "./mockParams";
+import { MockEvents } from "./mockEvents";
 
 export interface MockClock {
   now(): number; // ms
@@ -39,9 +41,11 @@ export interface MockSourceOptions {
   /** 한 번의 타이머 호출에서 따라잡을 최대 프레임 수 (탭 비활성 후 폭주 방지) */
   maxCatchUp: number;
   scenario?: MockScenarioOptions;
+  /** 각본 truth 이벤트·센서 시야를 낸다 */
+  events: boolean;
 }
 
-const DEFAULTS: MockSourceOptions = { frameHz: 50, rate: 1, autoStart: true, mode: RunMode.LOCKSTEP, maxCatchUp: 25 };
+const DEFAULTS: MockSourceOptions = { frameHz: 50, rate: 1, autoStart: true, mode: RunMode.LOCKSTEP, maxCatchUp: 25, events: true };
 
 export class MockSource implements DataSource {
   readonly name = "mock";
@@ -58,12 +62,16 @@ export class MockSource implements DataSource {
   private lastMs = 0;
   private carry = 0; // 다음 호출로 넘기는 프레임 소수부
   private rateActual = 0;
+  private readonly events: MockEvents | null;
+  /** 마지막으로 발행한 프레임의 sim 시각(s). 이벤트 구간 (prev, now] 계산용 */
+  private lastPubS = -1;
 
   constructor(opts: Partial<MockSourceOptions> = {}, private readonly clock: MockClock = browserClock) {
     this.opts = { ...DEFAULTS, ...opts };
     this.rate = this.opts.rate;
     this.mode = this.opts.mode;
     this.scenario = new MockScenario(this.opts.scenario);
+    this.events = this.opts.events ? new MockEvents(this.gcs) : null;
   }
 
   get entityCount(): number {
@@ -118,6 +126,8 @@ export class MockSource implements DataSource {
         this.frame = 0n;
         this.state = SimRunState.LOADED;
         this.params = new MockParams();
+        this.events?.reset();
+        this.lastPubS = -1;
         this.publish();
         this.publishParams();
         break;
@@ -229,7 +239,19 @@ export class MockSource implements DataSource {
   }
 
   private publish(): void {
-    this.handlers.truth(this.scenario.frameAt(this.frame, this.opts.frameHz));
+    const f = this.scenario.frameAt(this.frame, this.opts.frameHz);
+    const nowS = Number(this.simTimeUs()) / 1e6;
+    const evs = this.events && nowS > this.lastPubS ? this.events.step(this.lastPubS, nowS, f) : [];
+    this.handlers.truth(f);
+    for (const e of evs) this.handlers.event(`truth/event/${eventKind(e.event.case)}`, e);
+    const act = this.events?.sensor(nowS, f);
+    if (act) this.handlers.rx(`swarm/${this.gcs}/rx/ms/SensorActivity`, act);
+    this.lastPubS = nowS;
     for (const r of this.scenario.takeReports()) this.reply(r.entityId, r.taskId, r.state, r.progress, r.reason);
   }
+}
+
+/** TruthEvent oneof → 키 끝 (docs/10_contracts.md §3.2) */
+function eventKind(c: string | undefined): string {
+  return c === "jamZone" ? "jam_zone" : (c ?? "unknown");
 }
