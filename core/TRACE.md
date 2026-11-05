@@ -57,6 +57,7 @@ flowchart LR
 | IMP-CORE-019 | msvc 프리셋의 vcpkg 의존성을 C++20으로 빌드: 오버레이 트리플렛 `triplets/x64-windows-cxx20.cmake` (QA-007, protobuf ABI 불일치로 msvc-release 링크 실패). 계약 §7.1에 안내 | `../triplets/x64-windows-cxx20.cmake`, `../CMakePresets.json` | DEC-022, QA-007 | 처음부터 빌드한 msvc-debug·msvc-release ctest 35/35 (2026-11-02) |
 | IMP-CORE-020 | lockstep 응답 없는 참여자 표시 (DEC-041): 준비·프레임 완료 대기가 벽시계 5 s를 넘으면 해당 참여자를 `SimStatus.waiting_participants`에 싣고 기다리는 동안 status를 1초마다 발행한다. 응답·Reset·정지하면 비운다. 재합류는 지원하지 않는다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-041, DEC-038 | TC-CORE-032 |
 | IMP-CORE-021 | 대기 로그 오탐 수정 (D-14): `log_waiting`은 같은 대기가 5 s 넘게 이어질 때만 남기고 이후 5 s마다 반복한다. 정상 진행 중 프레임마다 생기는 짧은 장벽 대기는 기록하지 않는다 (IMP-CORE-018 갱신) | `src/sim_core.cpp` | DEC-038, DEC-041 | TC-CORE-031, TC-CORE-033 |
+| IMP-CORE-022 | WP8 Payload 통합 (DEC-046, DEC-047): 적재 때 `PayloadSystem` 생성(프로파일·재정의 오류는 적재 거부), Reset 때 `reset()`. 프레임마다 프레임 시작 상태와 SENSOR 고장·`onboard/<id>/{Sensor,Jammer,Strike}Command`(엔티티 ID 순 정렬)로 `step()`을 한 번 부르고, onboard 출력(Detection·*Activity·StoreLoadout)을 키별 seq로, 이벤트를 `truth/event/<kind>`로 발행한다. 무장 엔티티는 TruthFrame에 덧붙이고(Core는 적분하지 않는다), `killed`는 적분 뒤 alive=false로 한다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp`, `CMakeLists.txt` | DEC-046, DEC-047, DEC-044, REQ-PAY-002~004 | TC-CORE-034, TC-CORE-035 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -96,6 +97,8 @@ flowchart LR
 | TC-CORE-031 | 대기 참여자 로그: 준비·프레임 완료 대기 시 5초마다 대기 중 참여자 이름 출력 | `tests/test_core.cpp` | IMP-CORE-018 | 통과 (msvc-debug, 2026-11-02) |
 | TC-CORE-032 | 응답 없는 참여자 표시: 5 s 전에는 비어 있고 5 s 넘으면 이름이 status에 나타나며 대기 중 status가 계속 발행된다. 응답하면 비고, Reset하면 비며, 다시 시작해 멈추면 또 나타난다 | `tests/test_core.cpp` | IMP-CORE-020 | 통과 (msvc-debug, 2026-11-03) |
 | TC-CORE-033 | 정상 lockstep 진행 12 s(매 프레임 짧은 대기) 동안 대기 로그와 `waiting_participants`가 나타나지 않는다 | `tests/test_core.cpp` | IMP-CORE-021 | 통과 (msvc-debug, 2026-11-05; 수정 전 코드에서는 실패 확인) |
+| TC-CORE-034 | 시나리오 통합: 카메라 탐지 발행 → StrikeCommand → Launch·Spawn → 무장 엔티티가 TruthFrame에 나타나고 종료 시 alive=false → Impact·Kill → 표적 alive=false, 이벤트 seq 연속 | `tests/test_core.cpp` | IMP-CORE-022 | 통과 (msvc-debug, 2026-11-05) |
+| TC-CORE-035 | 재머 부지 → `truth/event/jam_zone`(owner=jam-01), 같은 시드 두 번 실행의 truth 바이트와 이벤트 순서가 같다 | `tests/test_core.cpp` | IMP-CORE-022 | 통과 (msvc-debug, 2026-11-05) |
 
 ## 제약과 후속
 

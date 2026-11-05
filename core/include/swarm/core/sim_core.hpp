@@ -28,6 +28,7 @@
 #include "swarm/core/dynamics_provider.hpp"
 #include "swarm/core/entity_store.hpp"
 #include "swarm/core/scenario.hpp"
+#include "swarm/payload/payload.hpp"
 #include "swarm/v1/fa.pb.h"
 #include "swarm/v1/sim.pb.h"
 #include "swarm/v1/vi.pb.h"
@@ -89,6 +90,10 @@ class SimCore {
     std::vector<v1::SimCommand> commands;
     std::map<std::string, v1::ControlOutput> controls;  // 엔티티별 최신값
     std::vector<v1::FrameDone> dones;
+    // IMP-CORE-022: 임무장비 명령 (onboard/<id>/{Sensor,Jammer,Strike}Command). 프레임 적분 때 payload에 넘긴다
+    std::vector<payload::Addressed<v1::SensorCommand>> sensor_cmds;
+    std::vector<payload::Addressed<v1::JammerCommand>> jammer_cmds;
+    std::vector<payload::Addressed<v1::StrikeCommand>> strike_cmds;
   };
 
   void handle(const v1::SimCommand& cmd, Clock::time_point now);
@@ -107,6 +112,9 @@ class SimCore {
   bool barrier_ok() const;
   bool paced() const;
   void integrate_frame();
+  std::vector<std::string> step_payload(std::vector<payload::Addressed<v1::SensorCommand>> sensor,
+                                        std::vector<payload::Addressed<v1::JammerCommand>> jammer,
+                                        std::vector<payload::Addressed<v1::StrikeCommand>> strike);
   void publish_frame();
   void publish_truth();
   void publish_status(Clock::time_point now);
@@ -139,6 +147,10 @@ class SimCore {
   std::vector<std::string> nav_keys_;
   std::vector<std::uint32_t> nav_seq_;
   std::vector<std::string> participants_;
+  // IMP-CORE-022: 임무장비·무장 계산기 (WP8, DEC-046). 시나리오를 적재할 때 만든다
+  std::unique_ptr<payload::PayloadSystem> payload_;
+  std::vector<v1::EntityState> weapons_;  // 무장 엔티티의 현재 상태. TruthFrame에 덧붙인다
+  std::map<std::string, std::uint32_t> onboard_seq_;  // 임무장비 출력 키별 순번
 
   // 실행 상태
   v1::SimRunState state_ = v1::SIM_RUN_STATE_IDLE;

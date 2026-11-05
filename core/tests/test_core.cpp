@@ -1480,6 +1480,118 @@ void test_waiting_participants() {
   CHECK(last_waiting().empty());
 }
 
+// IMP-CORE-022: WP8 Payload 통합 시나리오. 정적 사수(카메라 + 공대지 1발)와 지상 표적 + 재머 부지
+core::Scenario payload_scenario() {
+  core::Scenario sc;
+  sc.name = "payload";
+  sc.seed = 7;
+  auto add = [&](const char* id, v1::EntityKind kind, v1::Side side, double lat, double alt) {
+    v1::EntitySpec e;
+    e.set_id(id);
+    e.set_kind(kind);
+    e.set_side(side);
+    e.set_dynamics(v1::DYNAMICS_KIND_STATIC);
+    e.mutable_initial()->mutable_position()->set_lat_deg(lat);
+    e.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+    e.mutable_initial()->mutable_position()->set_alt_m(alt);
+    e.mutable_initial()->mutable_attitude()->set_w(1.0);  // 기수 북쪽
+    sc.entities.push_back(e);
+    return &sc.entities.back();
+  };
+  auto* shooter = add("uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 37.0, 500.0);
+  auto* cam = shooter->add_payloads();
+  cam->set_id("cam0");
+  cam->set_type("camera");
+  auto* agm = shooter->add_payloads();
+  agm->set_id("agm1");
+  agm->set_type("agm_short");
+  agm->set_count(1);
+  add("tgt-01", v1::ENTITY_KIND_GROUND_TARGET, v1::SIDE_RED, 37.018, 0.0);  // 북쪽 약 2 km
+  add("jam-01", v1::ENTITY_KIND_JAMMER_SITE, v1::SIDE_RED, 37.05, 0.0);
+  return sc;
+}
+
+struct PayloadRun {
+  std::vector<std::string> truth_bytes;
+  std::vector<std::string> kinds;           // 이벤트 종류, 도착 순
+  std::vector<v1::Detection> detections;
+  std::vector<v1::StrikeActivity> strikes;
+  std::vector<v1::TruthFrame> truths;
+  std::vector<v1::TruthEvent> events;
+};
+
+PayloadRun run_payload(int frames) {
+  PayloadRun r;
+  InMemoryBus bus;
+  std::vector<std::unique_ptr<Subscription>> subs;
+  subs.push_back(bus.subscribe("onboard/*/Detection", [&](const Sample& s) { r.detections.push_back(decode<v1::Detection>(s)); }));
+  subs.push_back(bus.subscribe("onboard/*/StrikeActivity", [&](const Sample& s) { r.strikes.push_back(decode<v1::StrikeActivity>(s)); }));
+  subs.push_back(bus.subscribe(keys::kTruthState, [&](const Sample& s) {
+    r.truth_bytes.emplace_back(s.payload.begin(), s.payload.end());
+    r.truths.push_back(decode<v1::TruthFrame>(s));
+  }));
+  subs.push_back(bus.subscribe("truth/event/*", [&](const Sample& s) {
+    r.events.push_back(decode<v1::TruthEvent>(s));
+    r.kinds.push_back(s.key);
+  }));
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  CHECK(sim.load(payload_scenario()));
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  auto t = Clock::now();
+  sim.poll(t);
+  v1::StrikeCommand sc;
+  sc.set_payload_id("agm1");
+  sc.set_target_id("tgt-01");
+  put(bus, "onboard/uav-001/StrikeCommand", sc);
+  for (int f = 0; f < frames; ++f) sim.poll(t += 1ms);
+  return r;
+}
+
+bool has_kind(const PayloadRun& r, const char* kind) {
+  for (const auto& k : r.kinds)
+    if (k == std::string("truth/event/") + kind) return true;
+  return false;
+}
+
+// TC-CORE-034: 탐지 발행 → Strike 명령 → Launch → 무장 엔티티 → Impact·Kill → 표적 alive=false (IMP-CORE-022)
+void test_payload_strike() {
+  const auto r = run_payload(1500);
+  CHECK(!r.detections.empty() && r.detections.front().target_id() == "tgt-01");
+  CHECK(has_kind(r, "launch") && has_kind(r, "spawn") && has_kind(r, "impact") && has_kind(r, "kill"));
+  bool launched = false;
+  for (const auto& a : r.strikes) launched = launched || a.state() == v1::STRIKE_STATE_LAUNCHED;
+  CHECK(launched);
+
+  bool weapon_seen = false, weapon_ended = false;
+  for (const auto& tf : r.truths)
+    for (const auto& e : tf.entities())
+      if (e.kind() == v1::ENTITY_KIND_MISSILE) {
+        weapon_seen = true;
+        weapon_ended = weapon_ended || !e.alive();
+      }
+  CHECK(weapon_seen && weapon_ended);
+  const auto& last = r.truths.back();
+  bool target_dead = false;
+  for (const auto& e : last.entities())
+    if (e.id() == "tgt-01") target_dead = !e.alive();
+  CHECK(target_dead);
+  for (std::size_t i = 1; i < r.events.size(); ++i)  // seq는 Core가 채운다
+    CHECK(r.events[i].header().seq() == r.events[i - 1].header().seq() + 1);
+}
+
+// TC-CORE-035: 재머 부지 → JamZone 이벤트, 같은 시드 두 번의 truth가 바이트 단위로 같다 (IMP-CORE-022, DEC-044)
+void test_payload_jam_determinism() {
+  const auto a = run_payload(1500);
+  const auto b = run_payload(1500);
+  CHECK(has_kind(a, "jam_zone"));
+  bool zone = false;
+  for (const auto& ev : a.events)
+    if (ev.has_jam_zone()) zone = zone || ev.jam_zone().owner() == "jam-01";
+  CHECK(zone);
+  CHECK(a.truth_bytes.size() > 100 && a.truth_bytes == b.truth_bytes);
+  CHECK(a.kinds == b.kinds);
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1511,6 +1623,8 @@ int main() {
   test_waiting_log();
   test_short_wait_no_log();
   test_waiting_participants();
+  test_payload_strike();
+  test_payload_jam_determinism();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
