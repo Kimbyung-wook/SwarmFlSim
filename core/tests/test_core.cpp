@@ -1373,12 +1373,12 @@ void test_waiting_log() {
     return n;
   };
   sim.poll(t0);
-  CHECK(waiting("waiting for ready") == 1 && waiting("agent-host-2") >= 1);
+  CHECK(waiting("waiting for ready") == 0);  // 5초 전에는 남기지 않는다 (D-14)
   sim.poll(t0 + 3s);
-  CHECK(waiting("waiting for ready") == 1);
+  CHECK(waiting("waiting for ready") == 0);
   ready(bus, "agent-host-1");
   sim.poll(t0 + 6s);
-  CHECK(waiting("waiting for ready") == 2);
+  CHECK(waiting("waiting for ready") == 1 && waiting("agent-host-2") >= 1);
   CHECK(lines.back().find("agent-host-1") == std::string::npos && lines.back().find("agent-host-2") != std::string::npos);
 
   // 준비가 끝나면 프레임 완료를 기다리는 참여자를 말한다
@@ -1392,6 +1392,35 @@ void test_waiting_log() {
   sim.poll(t0 + 13s);
   CHECK(waiting("waiting for frame done") == 1);
   CHECK(lines.back().find("agent-host-2") != std::string::npos && lines.back().find("agent-host-1") == std::string::npos);
+}
+
+// TC-CORE-033: 프레임마다 생기는 짧은 장벽 대기는 로그와 waiting_participants에 남기지 않는다 (D-14, IMP-CORE-021)
+void test_short_wait_no_log() {
+  std::vector<std::string> lines;
+  core::CoreConfig cfg = quiet({"agent-host-1"});
+  cfg.log = [&](const std::string& m) { lines.push_back(m); };
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::mock::provider(), cfg);
+  CHECK(sim.load(one_uav()));
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  auto t = Clock::now();
+  ready(bus, "agent-host-1");
+  sim.poll(t);
+  // 20 ms마다 한 프레임: 폴링은 응답보다 약간 먼저 와서 매 프레임 잠깐 기다린다. 12 s 동안 반복
+  for (std::uint64_t f = 0; f < 600; ++f) {
+    t += 10ms;
+    sim.poll(t);  // 장벽에서 대기
+    v1::FrameDone d;
+    d.set_participant("agent-host-1");
+    d.set_frame(f);
+    put(bus, keys::clock_done("agent-host-1"), d);
+    t += 10ms;
+    sim.poll(t);
+  }
+  CHECK(sim.frame() >= 500);
+  for (const auto& l : lines) CHECK(l.find("waiting for") == std::string::npos);
+  for (const auto& s : rec.statuses) CHECK(s.waiting_participants_size() == 0);
 }
 
 // TC-CORE-032: lockstep에서 5 s 넘게 FrameDone이 없는 참여자를 SimStatus.waiting_participants에 싣는다 (DEC-041)
@@ -1480,6 +1509,7 @@ int main() {
   test_unsupported_dof();
   test_rate_validation();
   test_waiting_log();
+  test_short_wait_no_log();
   test_waiting_participants();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
