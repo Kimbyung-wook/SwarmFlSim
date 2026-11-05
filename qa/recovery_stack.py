@@ -28,7 +28,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     cmdf = out / "cmd.txt"
     cmdf.write_text("", encoding="utf-8")
-    st = h.Stack(out / "stack", Path(a.scenario), base_port=a.base_port, record=True, bridge=True)
+    st = h.Stack(out / "stack", Path(a.scenario), base_port=a.base_port, record=True, bridge=True, lockstep=True, rate=2.0)
     st.bridge_port = 48765
     web = []
     try:
