@@ -191,4 +191,7 @@ message FrameDone {
 
   string participant = 1;
   uint64 frame = 2;
+  // lockstep 송신 개수 장벽 (DEC-044). 키 = 엔티티 ID e, 값 = 이 참여자가 Start(또는 Reset) 이후
+  // 이 FrameDone을 보내기 전까지 swarm/<e>/** 키에 발행한 샘플의 누적 수. swarm/**에 발행하지 않으면 비운다
+  map<string, uint64> sent_count = 3;
 }
