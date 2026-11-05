@@ -22,18 +22,18 @@ ROOT = Path(__file__).resolve().parent.parent
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenario", default=str(ROOT / "qa/scenarios/qa_s3_link.json"))
-    ap.add_argument("--base-port", type=int, default=18200)
+    ap.add_argument("--base-port", type=int, default=48280)
     a = ap.parse_args()
     out = ROOT / "qa/out/recov"
     out.mkdir(parents=True, exist_ok=True)
     cmdf = out / "cmd.txt"
     cmdf.write_text("", encoding="utf-8")
     st = h.Stack(out / "stack", Path(a.scenario), base_port=a.base_port, record=True, bridge=True)
-    st.bridge_port = 8765
+    st.bridge_port = 48765
     web = []
     try:
         st.up()
-        for name, port in (("ui", 5173), ("ui/monitor", 5174)):
+        for name, port in (("ui", 45173), ("ui/monitor", 45174)):
             web.append(subprocess.Popen(["npm.cmd", "run", "dev", "--", "--port", str(port), "--strictPort"],
                                         cwd=str(ROOT / name), stdout=open(out / f"{name.split('/')[-1]}.log", "w"),
                                         stderr=subprocess.STDOUT))

@@ -34,7 +34,7 @@ def main() -> None:
     out = Path(__file__).parent / "out" / "qa008"
     out.mkdir(parents=True, exist_ok=True)
     from swarm_api import BusConfig, open_bus
-    port = 17970
+    port = 48050
     for rate in [float(x) for x in a.rates.split(",")]:
         port += 1
         mesh_ep = f"tcp/127.0.0.1:{port}"

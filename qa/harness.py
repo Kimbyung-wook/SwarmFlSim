@@ -23,7 +23,7 @@ _spec.loader.exec_module(p0)
 
 GCS = "gcs-01"
 BUILD = Path(__file__).resolve().parent.parent / "build" / "msvc-debug"
-BASE_PORT = 17900
+BASE_PORT = 47980
 M_PER_DEG = 111_320.0
 CT = "application/protobuf;swarm.v1."
 
@@ -39,7 +39,7 @@ class Stack:
     registry: list["Stack"] = []
 
     def __init__(self, out: Path, scenario: Path, base_port: int = BASE_PORT, lockstep: bool = False,
-                 rate: float = 1.0, record: bool = True, bridge: bool = False, bridge_port: int = 8765,
+                 rate: float = 1.0, record: bool = True, bridge: bool = False, bridge_port: int = 48765,
                  core_extra: list[str] | None = None, mode: str | None = None, autostart: bool = True,
                  settle: float = 2.0, hz: int | None = None):
         self.out = out
