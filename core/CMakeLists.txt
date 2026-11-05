@@ -11,7 +11,7 @@ add_library(swarm_core_lib STATIC
   src/wp2_dynamics.cpp
 )
 target_include_directories(swarm_core_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(swarm_core_lib PUBLIC swarm_api swarm_dynamics swarm_datalink_lib)
+target_link_libraries(swarm_core_lib PUBLIC swarm_api swarm_dynamics swarm_datalink_lib swarm_payload)
 
 add_executable(swarm_core src/main.cpp)
 target_link_libraries(swarm_core PRIVATE swarm_core_lib swarm_bus)

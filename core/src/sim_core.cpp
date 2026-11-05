@@ -49,6 +49,18 @@ SimCore::SimCore(Bus& bus, DynamicsProvider provider, CoreConfig cfg)
       inbox_.controls[onboard_entity(s.key)] = std::move(c);
     }
   }));
+  auto sub_cmd = [this](const char* pattern, auto member, auto tag) {
+    using M = decltype(tag);
+    subs_.push_back(bus_.subscribe(pattern, [this, member](const Sample& s) {
+      M m;
+      if (!parse(s, m)) return;
+      std::lock_guard lock(inbox_mu_);
+      (inbox_.*member).push_back({onboard_entity(s.key), std::move(m)});
+    }));
+  };
+  sub_cmd("onboard/*/SensorCommand", &Inbox::sensor_cmds, v1::SensorCommand{});
+  sub_cmd("onboard/*/JammerCommand", &Inbox::jammer_cmds, v1::JammerCommand{});
+  sub_cmd("onboard/*/StrikeCommand", &Inbox::strike_cmds, v1::StrikeCommand{});
   subs_.push_back(bus_.subscribe("sim/clock/done/*", [this](const Sample& s) {
     v1::FrameDone d;
     if (!parse(s, d)) return;
@@ -91,6 +103,7 @@ bool SimCore::load(const Scenario& sc) {
     return false;
   }
   EntityStore store;
+  std::unique_ptr<payload::PayloadSystem> pay;
   std::set<std::string> parts(cfg_.participants.begin(), cfg_.participants.end());
   try {
     // IMP-CORE-017: 검증에 실패하면 기존 상태(시나리오·상태)를 그대로 두고 거부한다 (DEC-038)
@@ -100,6 +113,10 @@ bool SimCore::load(const Scenario& sc) {
         if (!e.airframe().empty() && !provider_.known_airframe(e.airframe()))
           throw std::invalid_argument("unknown airframe for " + e.id() + ": " + e.airframe());
     store.build(sc.entities, provider_);
+    // IMP-CORE-022: 프로파일·재정의 오류는 적재 거부로 처리한다
+    pay = std::make_unique<payload::PayloadSystem>(
+        payload::ProfileLibrary::builtin(), sc.entities,
+        provider_.terrain ? payload::make_terrain_los(*provider_.terrain) : payload::LosFn{}, provider_.terrain.get());
     parts.insert(sc.participants.begin(), sc.participants.end());
     for (const auto& p : parts) keys::check_entity_id(p);
   } catch (const std::exception& e) {
@@ -109,6 +126,7 @@ bool SimCore::load(const Scenario& sc) {
 
   scenario_ = sc;
   store_ = std::move(store);
+  payload_ = std::move(pay);
   participants_.assign(parts.begin(), parts.end());
   nav_keys_.clear();
   for (std::size_t i = 0; i < store_.size(); ++i) nav_keys_.push_back(keys::onboard(store_.id(i), "NavigationReport"));
@@ -152,9 +170,15 @@ void SimCore::reset_run_state() {
   waiting_.clear();
   overruns_ = 0;
   rng_.seed(seed_);
+  if (payload_) payload_->reset();
+  weapons_.clear();
+  onboard_seq_.clear();
   std::lock_guard lock(inbox_mu_);
   inbox_.controls.clear();
   inbox_.dones.clear();
+  inbox_.sensor_cmds.clear();
+  inbox_.jammer_cmds.clear();
+  inbox_.strike_cmds.clear();
 }
 
 bool SimCore::paced() const { return mode_ == v1::RUN_MODE_REALTIME || rate_ > 0.0; }
@@ -483,9 +507,15 @@ void SimCore::clear_waiting(Clock::time_point now) {
 
 void SimCore::integrate_frame() {
   std::map<std::string, v1::ControlOutput> controls;
+  std::vector<payload::Addressed<v1::SensorCommand>> sensor_cmds;
+  std::vector<payload::Addressed<v1::JammerCommand>> jammer_cmds;
+  std::vector<payload::Addressed<v1::StrikeCommand>> strike_cmds;
   {
     std::lock_guard lock(inbox_mu_);
     controls.swap(inbox_.controls);
+    sensor_cmds.swap(inbox_.sensor_cmds);
+    jammer_cmds.swap(inbox_.jammer_cmds);
+    strike_cmds.swap(inbox_.strike_cmds);
   }
   for (const auto& [id, c] : controls) {
     const auto idx = store_.find(id);
@@ -495,6 +525,9 @@ void SimCore::integrate_frame() {
   }
 
   const double t0 = static_cast<double>(sim_time_us_) * 1e-6, dt = dt_us_ * 1e-6;
+  // 임무장비는 프레임 시작 상태로 계산한다. 살상 결과는 적분 뒤에 반영한다 (IMP-CORE-022)
+  const std::vector<std::string> killed =
+      step_payload(std::move(sensor_cmds), std::move(jammer_cmds), std::move(strike_cmds));
   for (std::size_t i = 0; i < store_.size(); ++i) {
     const auto* model = store_.model(i);
     if (!model || !store_.alive(i)) continue;
@@ -512,6 +545,52 @@ void SimCore::integrate_frame() {
     // 교차 시점 상태에서 멈춘다. 이벤트 프레임은 엔티티가 죽은 채 처음 발행되는 프레임(N+1)이다
     if (r.event) kill(i, "ground", static_cast<std::uint64_t>(std::llround(r.t_end * 1e6)), frame_ + 1);
   }
+  for (const auto& id : killed)
+    if (const auto idx = store_.find(id)) store_.set_alive(*idx, false);  // KillEvent는 payload가 냈다
+}
+
+// IMP-CORE-022: 임무장비·무장 한 프레임. 명령은 엔티티 ID 순으로 정렬해 도착 순서와 무관하게 한다 (DEC-044, DEC-045)
+std::vector<std::string> SimCore::step_payload(std::vector<payload::Addressed<v1::SensorCommand>> sensor,
+                                               std::vector<payload::Addressed<v1::JammerCommand>> jammer,
+                                               std::vector<payload::Addressed<v1::StrikeCommand>> strike) {
+  if (!payload_) return {};
+  auto by_entity = [](const auto& a, const auto& b) { return a.entity < b.entity; };
+  std::stable_sort(sensor.begin(), sensor.end(), by_entity);
+  std::stable_sort(jammer.begin(), jammer.end(), by_entity);
+  std::stable_sort(strike.begin(), strike.end(), by_entity);
+
+  payload::FrameInput in;
+  in.frame = frame_;
+  in.t_us = sim_time_us_;
+  in.dt_s = dt_us_ * 1e-6;
+  in.entities.resize(store_.size());
+  for (std::size_t i = 0; i < store_.size(); ++i) {
+    store_.fill_state(i, in.entities[i].state);
+    in.entities[i].sensor_fault = fault_active(i, v1::FAULT_KIND_SENSOR);
+  }
+  in.sensor_cmds = std::move(sensor);
+  in.jammer_cmds = std::move(jammer);
+  in.strike_cmds = std::move(strike);
+  auto out = payload_->step(in);
+
+  auto put_onboard = [&](const std::string& entity, const char* msg, auto& m) {
+    const std::string key = keys::onboard(entity, msg);
+    m.mutable_header()->set_seq(onboard_seq_[key]++);
+    publish(key, m);
+  };
+  for (auto& ob : out.onboard) {
+    for (auto& m : ob.detections) put_onboard(ob.entity, "Detection", m);
+    for (auto& m : ob.sensor_activity) put_onboard(ob.entity, "SensorActivity", m);
+    for (auto& m : ob.jammer_activity) put_onboard(ob.entity, "JammerActivity", m);
+    for (auto& m : ob.strike_activity) put_onboard(ob.entity, "StrikeActivity", m);
+    if (ob.loadout) put_onboard(ob.entity, "StoreLoadout", *ob.loadout);
+  }
+  for (auto& ev : out.events) {
+    ev.mutable_header()->set_seq(seq_event_++);
+    publish(keys::truth_event(payload::event_kind(ev)), ev);
+  }
+  weapons_ = std::move(out.weapons);  // spawned는 weapons에 이번 프레임 끝 상태로 이미 들어 있다
+  return std::move(out.killed);
 }
 
 void SimCore::publish_truth() {
@@ -522,6 +601,7 @@ void SimCore::publish_truth() {
   h->set_source(cfg_.participant_id);
   h->set_seq(seq_truth_++);
   for (std::size_t i = 0; i < store_.size(); ++i) store_.fill_state(i, *tf.add_entities());
+  for (const auto& w : weapons_) *tf.add_entities() = w;  // 무장 엔티티는 시나리오 엔티티 뒤에 ID 순 (IMP-CORE-022)
   publish(std::string(keys::kTruthState), tf);
 }
 
