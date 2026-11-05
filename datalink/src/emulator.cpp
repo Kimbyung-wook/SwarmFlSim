@@ -346,6 +346,7 @@ void Datalink::run_tick() {
     has_waiting_ = false;
     ++ticks_seen_;
     now_us_ = tick.sim_time_us();
+    lockstep_ = tick.mode() == v1::RUN_MODE_LOCKSTEP;
     frame_ = tick.frame();
     std::erase_if(faults_, [&](const Fault& f) { return f.until_us != 0 && now_us_ >= f.until_us; });
 
@@ -665,10 +666,13 @@ void Datalink::deliver_locked(std::vector<Out>& out) {
       outcome_locked(f.src, f.dst, *f.env, f.size, reason, f.tx_time_us, 0, out);
       continue;
     }
+    // DEC-054: lockstep에서 틱 k가 내는 rx는 rx_time >= T_k다. 지연 0, 틱 사이 도착, 처리량 상한 이월이 모두 이 한 곳을
+    // 지난다. realtime·free-run은 표본 도착 시각을 그대로 쓴다
+    const std::uint64_t rx_us = lockstep_ ? std::max(f.arrive_us, now_us_) : f.arrive_us;
     v1::LinkEnvelope env = *f.env;
-    env.set_rx_time_us(f.arrive_us);
+    env.set_rx_time_us(rx_us);
     out.push_back(Out{"swarm/" + f.dst + "/rx/" + f.suffix, env.SerializeAsString(), encoding_of<v1::LinkEnvelope>()});
-    outcome_locked(f.src, f.dst, *f.env, f.size, v1::DROP_REASON_NONE, f.tx_time_us, f.arrive_us, out);
+    outcome_locked(f.src, f.dst, *f.env, f.size, v1::DROP_REASON_NONE, f.tx_time_us, rx_us, out);
   }
 }
 
