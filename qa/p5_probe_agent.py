@@ -6,6 +6,8 @@
 명령 재시도는 프레임 번호로만 정해 lockstep 결정성을 해치지 않는다.
 
 P5_PROBE_OUT 환경 변수의 경로에 JSON으로 집계를 남긴다.
+P5_PROBE_IO가 있으면 그 경로에 프레임·기체별 MA 입력(항법 보고 프레임·신선도·위치 비트, P2P·C2 수신함의
+송신자·seq·sim_time 순서)을 한 줄씩 남긴다 (QA-019 원인 조사용).
 """
 from __future__ import annotations
 
@@ -34,6 +36,27 @@ S = {
     "last_frame": 0,
 }
 _last_try: dict[tuple[str, str], int] = {}
+_IO_PATH = os.environ.get("P5_PROBE_IO")
+_IO = open(_IO_PATH, "w", encoding="utf-8", buffering=1 << 16) if _IO_PATH else None
+
+
+def _msgs(port) -> str:  # noqa: ANN001
+    buf = getattr(port, "buffer", None)
+    if buf is None:
+        return "?"
+    return ",".join(f"{m.header.source}:{m.header.seq}:{m.header.sim_time_us}" for m in buf.peek())
+
+
+def _io_record(ctxs, nav) -> None:  # noqa: ANN001
+    """MA가 이번 프레임에 받는 입력을 그대로 적는다. 위치·속도는 float.hex로 비트까지 비교한다"""
+    for i, c in enumerate(ctxs):
+        n = c.ports.vi.nav()
+        nf = n.header.frame if n is not None else -1
+        lla = ",".join(float(x).hex() for x in (*nav.lat_lon_alt[i], *nav.velocity_ned[i]))
+        _IO.write(f"{c.frame} {c.entity_id} nav={nf} fresh={int(bool(nav.valid[i]))} x={lla} "
+                  f"p2p=[{_msgs(c.ports.p2p)}] c2=[{_msgs(c.ports.c2)}]\n")
+    if ctxs and ctxs[0].frame % 50 == 0:
+        _IO.flush()
 _launched: set[str] = set()
 
 
@@ -50,6 +73,8 @@ def _dump() -> None:
 
 class ProbeFlocking(Flocking):
     def on_step_batch(self, ctxs, nav) -> None:  # noqa: ANN001
+        if _IO is not None:
+            _io_record(ctxs, nav)
         for c in ctxs:
             S["last_frame"] = max(S["last_frame"], c.frame)
             dets = c.ports.ms.detections()
@@ -104,4 +129,6 @@ if __name__ == "__main__":
         rc = cli.main(sys.argv[1:])
     finally:
         _dump()
+        if _IO is not None:
+            _IO.close()
     sys.exit(rc)
