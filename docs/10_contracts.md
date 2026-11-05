@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.11.0
+- 계약 버전: 0.12.0
+  - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056)
   - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
   - 0.10.0: `FrameDone.sent_count`(lockstep 송신 개수 장벽) (DEC-044)
   - 0.9.0: `SimStatus.waiting_participants`(lockstep 참여자 응답 없음 표시) (DEC-041)
@@ -100,6 +101,7 @@ flowchart LR
   - Core는 시나리오를 적재한 직후(`LoadScenario` 또는 `--scenario`)와 적재 상태와 lockstep 준비 대기 중(첫 틱 전)에 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행한다. CLI의 실행 모드·배속 재정의(`--mode`, `--rate`)는 발행하는 `Scenario.run`에 반영한다. 그래서 준비 대기 중에 늦게 켠 참여자도 시나리오와 실행 모드를 받는다. 다른 참여자는 `LoadScenario`를 받지 못했어도 이 키에서 시나리오를 얻는다.
   - lockstep 참여자는 시나리오를 적재해 준비되면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}`을 보낸다. Core는 `RunSpec.participants` 전원의 준비 신호를 받은 뒤에 첫 틱을 낸다. 이후 늦게 붙는 참여자는 시작 후에는 허용하지 않는다. 실행 중 이탈한 참여자의 재합류도 지원하지 않는다(Reset+Start로 복구, DEC-038).
   - lockstep 수신 결정성(DEC-040): Datalink는 틱 f의 rx를 모두 발행한 뒤 `FrameDone{f}`를 보낸다. Agent는 틱 f+1 처리 전에 Datalink의 `FrameDone{f}`를 받아야 하며(Datalink가 `participants`에 있을 때), 틱 f에서는 `rx_time_us <= sim_time_us(틱 f-1)`인 rx만 (rx_time_us, source, seq) 순으로 소비한다(틱 0은 소비 없음, DEC-045). 기체 간 메시지는 모델 지연에 더해 최소 1틱 늦게 소비된다. realtime과 free-run에는 적용하지 않는다.
+  - rx 불변식(DEC-054): lockstep에서 Datalink가 틱 k에서 내는 rx는 `rx_time_us >= sim_time_us(틱 k)`이다. 표본 지연이 0이거나 처리량 상한으로 이월된 송신도 도착 시각을 이 값 아래로 두지 않는다. 그래서 Agent가 틱 f에서 소비하는 rx(`rx_time_us <= T(f-1)`)는 모두 Datalink 틱 f-1 이하에서 나와 `FrameDone{f-1}` 장벽 안에 든다.
   - 송신 개수 장벽(DEC-044): lockstep에서 `swarm/**`에 발행하는 참여자(Agent·Datalink)는 `FrameDone{f}`의 `sent_count[e]`에 Start(또는 Reset) 이후 그때까지 `swarm/<e>/**`에 발행한 샘플의 누적 수를 싣는다. Datalink가 모의 손실로 버린 메시지는 발행하지 않았으므로 세지 않는다.
     - 수신 측은 다른 참여자가 발행한 `swarm/<e>/**`에서 프레임 f까지의 메시지를 쓰기 전에 그 참여자의 `FrameDone{f}`를 받고, e별 누적 수신 수가 `sent_count[e]` 이상이 될 때까지 기다린다. 대상 e는 그 `FrameDone`에 실린 키 중 수신 측이 구독하는 것이다.
     - Datalink: 틱 f+1을 처리하기 전에 Agent 참여자 전원의 `FrameDone{f}`와 `swarm/<e>/tx/**` 개수를 확인한다. Agent: 틱 f+1을 처리하기 전에 Datalink의 `FrameDone{f}`와 자기 기체의 `swarm/<e>/rx/**` 개수를 확인한다.
@@ -122,12 +124,13 @@ flowchart LR
   - 지원하지 않는 작업을 받은 MA는 `TaskStatus` REJECTED로 답한다.
 - 임무장비 상태 보고 (DEC-051)
   - Agent 런타임은 자기 기체의 `onboard/<id>/{SensorActivity,JammerActivity,StrikeActivity}`를 받아 값이 바뀔 때와 1 Hz(모의 시간)로 GCS에 `swarm/<id>/tx/ms/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
+  - 변화 보고는 (메시지, payload_id)별 최대 빈도를 둔다. 기본 10 Hz이고 Agent 런타임 설정(CLI `--activity-max-hz`)으로 바꾼다. 제한으로 미룬 변화는 다음 허용 시점에 최신 값으로 보낸다. 1 Hz 전체 보고는 제한과 별개다 (DEC-056).
   - Datalink를 거치므로 GCS 링크가 끊기면 지상 표시에도 반영된다. UI는 `swarm/<gcs>/rx/ms/<Msg>`만 읽고 `onboard/**`를 구독하지 않는다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
   - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
 - 데이터링크 판정
-  - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
+  - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. 송신자 위치는 보지 않는다(DEC-055). `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
   - 브로드캐스트(`dst` 비움): 같은 편 무전기 엔티티 전원이 수신 대상이다. 닿지 않는 수신자마다 사유를 담은 `LinkOutcome`을 낸다 (DEC-032).
   - 링크 프로파일: `EntitySpec.link_profile`이 내장 프로파일 또는 시나리오 `link_profiles`의 이름을 참조한다. 시나리오 항목은 `base`(비우면 같은 이름의 내장, 없으면 `default`)를 복사한 뒤 값이 있는 필드만 덮어쓴다 (DEC-029).
 
