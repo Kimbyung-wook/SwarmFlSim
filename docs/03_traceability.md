@@ -28,7 +28,7 @@
 | REQ-DYN-002 | PRP-DYN-001 | DEC-007 | WP2 | IMP-DYN-001~002, 007 | TC-DYN-001~003, 009, 011, 013 | 구현중 |
 | REQ-DYN-003 | PRP-DYN-002, PRP-SIM-002 | DEC-005 | WP1, WP2 | IMP-API-006, IMP-CORE-002, 017, 020, 021, IMP-DYN-004 | TC-CORE-001~006, 009~010, 028~030, 032, 033, TC-DYN-001, 005~008 | 검증완료 |
 | REQ-DYN-004 | PRP-DYN-002 | DEC-005 | WP2 | IMP-API-006, IMP-CORE-008, IMP-DYN-003~004, 006 | TC-CORE-013, 017, TC-DYN-001, 004~008, 012 | 검증완료 |
-| REQ-DYN-005 | PRP-DYN-003 | DEC-012 | WP2, WP8 | | | - |
+| REQ-DYN-005 | PRP-DYN-003 | DEC-012 | WP2, WP8 | IMP-PAY-005 | TC-PAY-008~010, 014 | 구현중 |
 | REQ-GNC-001 | PRP-GNC-001, PRP-BHV-001 | DEC-013, DEC-034 | WP3 | IMP-API-011, IMP-AGT-004, 006~007, 019 | TC-AGT-001~005, 019~023 | 구현중 |
 | REQ-BHV-001 | PRP-BHV-001, PRP-SIM-003 | DEC-008, DEC-013 | WP3 | IMP-AGT-002~006, 008~009, 011, 013, IMP-INT-003 | TC-AGT-006~013, 015, TC-INT-002~003 | 구현중 |
 | REQ-BHV-002 | PRP-BHV-001, PRP-BHV-003 | DEC-013, DEC-033, DEC-034 | WP3 | IMP-API-010~011, IMP-AGT-011, 013, 016~020, IMP-UI-042~044 | TC-AGT-015~023, TC-UI-026~027 | 구현중 |
@@ -44,11 +44,11 @@
 | REQ-CFG-001 | PRP-CFG-001 | DEC-029 | WP5, WP7 | IMP-API-008~010, IMP-CORE-006~007, IMP-SCN-001, 003, 006~008 | TC-CORE-009, 011~012, TC-SCN-001~002, 004~010 | 구현중 |
 | REQ-CFG-002 | PRP-CFG-001 |  | WP7 | IMP-SCN-001~004 | TC-SCN-001~007 | 구현중 |
 | REQ-CFG-003 | PRP-CFG-001 | DEC-035, DEC-036 | WP1, WP3, WP5, WP7 | IMP-API-012~013, IMP-SCN-009, IMP-CORE-013, IMP-DYN-008, IMP-AGT-021~022, IMP-UI-045~051 | TC-API-006~007, TC-SCN-011, TC-DYN-014, TC-CORE-019~023, TC-AGT-029~034, TC-UI-028~031 | 구현중 |
-| REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | | WP8 | | | - |
-| REQ-PAY-002 | PRP-PAY-001 | DEC-018 | WP8 | | | - |
-| REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009 | WP8, WP4 | | | - |
-| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012 | WP8 | | | - |
-| REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | | | - |
+| REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | DEC-046 | WP8 | IMP-PAY-002 | TC-PAY-013 | 구현중 |
+| REQ-PAY-002 | PRP-PAY-001 | DEC-018, DEC-047 | WP8 | IMP-PAY-001, 003 | TC-PAY-001~004 | 구현중 |
+| REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009 | WP8, WP4 | IMP-PAY-004 | TC-PAY-005 | 구현중 |
+| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012 | WP8 | IMP-PAY-005~006 | TC-PAY-006~011 | 구현중 |
+| REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | IMP-PAY-002, 006 | TC-PAY-006, 009, 013 | 구현중 |
 | REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005 | WP1 | IMP-CORE-002, 007, IMP-SCN-006 | TC-CORE-001~006, 009~010, 012, TC-SCN-008 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016 | WP5, WP2 | IMP-CORE-009, IMP-DYN-005, IMP-SCN-002, 005, IMP-UI-002, 013 | TC-CORE-014, TC-DYN-008, 010, TC-SCN-001~003, TC-UI-009 | 구현중 |
@@ -57,7 +57,7 @@
 
 ## 구현·시험 항목
 
-- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
+- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`, `payload/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
 - `검증완료`는 그 REQ의 범위를 구현했고 연결된 TC가 모두 통과한 경우다. 일부만 구현했으면 TC가 통과해도 `구현중`으로 둔다.
 - 아래 첫 표는 WP0(`API`) 항목, 둘째 표는 통합(`INT`) 항목이다. 통합 실행 방법과 확인 화면은 [20_p0_demo.md](20_p0_demo.md)에 있다.
 
