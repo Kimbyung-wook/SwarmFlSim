@@ -145,6 +145,9 @@
 | TC-QA-035 | P5: 같은 시드 lockstep 반복의 truth·이벤트 동일 | `qa/p5_e2e.py --compare <A> <B>` | DEC-005, DEC-044 |
 | TC-QA-036 | P5: UI 구역·궤적·영향 반경·센서 FOV 표시(TC-UI-051, 실버스) | `qa/p5_e2e.py --mode realtime --bridge --ui` + 앱 내장 브라우저 | DEC-003, DEC-046 |
 | TC-QA-037 | QA-019 원인 좁히기: 같은 시드 P5 lockstep 6회×4변형(base·nosensor·nopayload·noloss), 프레임별 LinkOutcome·Agent 입력·ControlOutput 비교 | `qa/p5_e2e.py --trace-io`, `qa/qa019_batch.sh`, `qa/qa019_summary.py` | DEC-045, DEC-044, DEC-005 |
+| TC-QA-038 | DEC-051: GCS가 `swarm/<gcs>/rx/ms/SensorActivity`를 받고 UI에 센서 FOV 표시(실버스, QA-020 재시험) | `qa/p5_e2e.py --mode realtime --bridge --ui` + 앱 내장 브라우저, `gcs_act.pkl.gz` | DEC-051, DEC-046, DEC-003 |
+| TC-QA-039 | DEC-051: GCS 링크 두절(GCS_LINK_CUT 고장, 거리 초과) 동안 그 기체 Activity 미수신, 복구 뒤 1 s 안 재수신 | `qa/p5_e2e.py --link-cut`, `qa/scenarios/qa_p5_range.json` | DEC-051, DEC-009, DEC-028 |
+| TC-QA-040 | DEC-051: 같은 시드 lockstep 6회에서 GCS 수신 Activity의 순서·프레임 동일 | `qa/qa019_batch.sh`(PREFIX=a40), `qa/act_det.py` | DEC-051, DEC-045, DEC-005 |
 
 ## 시험 결과
 
@@ -205,6 +208,9 @@
 | TC-QA-035 | 불합격 | 2026-11-05 | 3회 중 1회가 프레임 11,427부터 최대 2 mm 어긋남(QA-019) |
 | TC-QA-036 | 불합격 | 2026-11-05 | 구역 표시됨. 발사 순간 렌더링 중지(QA-023), FOV 입력 없음(QA-020) |
 | TC-QA-037 | 원인 확인 | 2026-11-06 | 0 지연 전달(rx_time = T(k-1))을 Datalink가 틱 k에 내어 Agent 소비 프레임이 벽시계에 따라 갈린다. WP4 Datalink, 계약 보완 WP0 (QA-019, D-18) |
+| TC-QA-038 | 통과 | 2026-11-06 | GCS가 SensorActivity 147,976건·StrikeActivity 53건 수신. UI FOV 표시, 발사 뒤 렌더링 유지. QA-020 해소, QA-023 수정 확인 |
+| TC-QA-039 | 통과 | 2026-11-06 | 고장 두절 13.3 s 동안 수신 0, 해제 뒤 0.02 s에 재수신. 거리 초과 뒤 수신 0. 재밍은 수신자 기준이라 업링크는 안 끊김(D-19) |
+| TC-QA-040 | 통과 | 2026-11-06 | 6회 모두 수신 순서·프레임·본문 동일. 송신 프레임 - onboard 프레임 = 1 |
 
 ## 프로세스 결정
 

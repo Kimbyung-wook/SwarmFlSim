@@ -727,6 +727,7 @@ realtime 실행에 앱 내장 브라우저(`http://localhost:45173/?source=bus&b
 - 기대: TC-UI-051의 센서 FOV 표시.
 - 실제: Core는 `onboard/<id>/SensorActivity`를 낸다. Agent는 이를 MS 포트로만 받는다. UI는 `swarm/<gcs>/rx/ms/SensorActivity`(Datalink를 거친 GCS 수신)를 읽는다. 둘을 잇는 중계가 없다. 목 소스에서만 FOV가 나온다.
 - 비고: WP5 쪽지의 요청 1과 같은 내용이다. 누가 보낼지(MA가 MS로 보고, Agent가 자동 중계, UI가 onboard 직접 구독)는 결정이 필요하다(D-16).
+- 상태: 해소 (DEC-051, IMP-AGT-029). §16.3 TC-QA-038
 
 #### QA-021 — 늦게 붙은 구독자는 재밍 구역을 받지 못한다
 - 담당 WP0 계약 / WP1 Core(Payload) / 보통 / TC-QA-034
@@ -749,6 +750,7 @@ realtime 실행에 앱 내장 브라우저(`http://localhost:45173/?source=bus&b
 - 실제: 발사 직후 Cesium이 "Rendering has stopped"를 띄우고 지도가 멈춘다. 콘솔: `DeveloperError: This object was destroyed` (`Material.throwOnDestroyed` ← `PolylineCollection.update`).
 - 원인 추정: `ui/src/cesium/eventLayer.ts`가 색별 `Material`을 캐시해 여러 polyline에 같이 쓴다. `update()`의 `lines.removeAll()`이 각 polyline을 지우면서 그 Material도 destroy한다(Cesium `Polyline._destroy`). 다음 `update()`에서 지워진 Material을 다시 쓴다. 이벤트 선이 두 번 이상 갱신되면 항상 생긴다. 목 소스 단위 시험은 렌더링을 하지 않아 잡히지 않은 것으로 보인다.
 - 비고: 새로 고치면 다시 그려지지만 다음 선이 생기면 같은 일이 생길 것이다. 재밍 구역도 사라진다(QA-021).
+- 상태: 수정 확인 (IMP-UI-066). §16.3 TC-QA-038
 
 #### 관찰
 - O-1: 발사한 기체(uav-001)와 이웃(uav-002)이 같은 편 생성 엔티티 wpn-uav-001-01을 탐지한다. Detection에 side가 있어 MA가 거를 수 있다. DEC-018 범위 안으로 보고 결함으로 올리지 않았다.
@@ -886,3 +888,116 @@ sequenceDiagram
 | 0 지연 이외의 rx_time = T(k-1) 경로 | 토큰 버킷 지연이 있으면 rx_time이 T(k-1)보다 커지므로 생기지 않는다고 봤다. 실측하지 않았다 |
 | 지상국(gcs-01) 쪽 0 지연 수신 | noloss의 uav-001→gcs-01 seq 487. GCS Agent 입력은 기록하지 않았다 |
 | base 실행 1·2와 noloss 실행 1~3의 ControlOutput | 이 기록을 넣기 전에 시작한 실행이다 |
+
+## 16. 8차 시험: 임무장비 상태 자동 보고 (2026-11-06)
+
+wp0-contracts 9c77bd0(계약 0.11.0)을 병합하고 시험했다. 이 커밋에 WP3의 임무장비 상태 자동 보고(DEC-051, IMP-AGT-029)와 UI의 QA-023 수정(IMP-UI-066)이 들어 있다. 코드는 고치지 않았다.
+
+PM 요청 1은 "TC-QA-035 재시험"으로 적혀 있었다. 내용(GCS의 SensorActivity 수신과 UI 센서 FOV, QA-020)은 TC-QA-036에 해당한다. 그래서 새 번호 TC-QA-038로 시험하고 TC-QA-036의 FOV 항목을 다시 판정했다.
+
+### 16.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 기록 | `qa/p5_e2e.py`가 `swarm/*/rx/ms/*Activity`를 구독해 `gcs_act.pkl.gz`에 남긴다. 행마다 수신 엔티티, 메시지, 송신 기체(envelope source), seq, envelope 프레임(송신 틱), rx_time, 본문 프레임(Core onboard 발행 프레임), payload_id, 헤더를 뺀 본문의 해시를 적는다. `*Activity`의 LinkOutcome도 함께 남긴다 |
+| 링크 두절 (고장) | `--link-cut <기체> --cut-at-s <초> --cut-s <초>`. 관찰자가 `sim/ctrl/cmd`로 `FAULT_KIND_GCS_LINK_CUT`을 주고, 지정한 시간 뒤 `clear`로 해제한다 |
+| 링크 두절 (거리) | `qa/scenarios/qa_p5_range.json`. 예제에서 `gcs_default`의 `max_range_m`만 12 km로 바꿨다(`qa/make_p5_variants.py`). 기체가 GCS에서 12 km 넘게 멀어지면 끊긴다 |
+| 결정성 | `PREFIX=a40 qa/qa019_batch.sh 48400 14490 6 base`(같은 시드 lockstep 6회, `--trace-io`). `qa/act_det.py`로 GCS 수신 Activity를 실행 1과 비교한다 |
+| UI | realtime 1배속, `qa_p5_near`, Bridge 48765, UI 45173. 앱 내장 브라우저를 Core 시작 전에 연결했다. base_port 48420 |
+
+### 16.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-038 | GCS가 `rx/ms/SensorActivity`를 받는가. UI에 센서 FOV가 보이는가 (QA-020) | 통과 |
+| TC-QA-039 | GCS 링크가 끊긴 동안 그 기체의 Activity가 GCS에 오지 않는가. 복구 뒤 1 s 안에 다시 오는가 | 통과 |
+| TC-QA-040 | 같은 시드 lockstep 반복에서 GCS가 받은 Activity의 순서·프레임이 같은가 | 통과 |
+
+### 16.3 TC-QA-038 GCS 수신과 UI 센서 FOV
+
+| 항목 | 결과 |
+|---|---|
+| 버스 수신 (realtime, 30,164 프레임) | gcs-01이 SensorActivity 147,976건(기체마다 약 29,500건)과 StrikeActivity 53건을 받았다. 첫 수신은 프레임 1이다 |
+| 수신 간격 | 기체별 수신 프레임 사이 최대 간격은 7~11 프레임이다. 이 간격은 BURST_LOSS(기체마다 약 2 %) 때문이다 |
+| UI 수신 목록 | "수신" 창에 다섯 기체의 SensorActivity가 계속 들어온다(89 B) |
+| UI 센서 FOV | 기체마다 FOV 지면 풋프린트(하늘색 사각형)가 그려지고 기체 자세에 따라 움직인다 |
+| QA-023 (발사 뒤 렌더링) | sim 551 s에 발사했다. 이후 명중(영향 반경 15 m 표시)과 표적 파괴까지 렌더링이 멈추지 않았다. 콘솔 오류는 지도 타일 404 4건뿐이다 |
+| 로그 | 모든 프로세스 로그에 경고·오류가 없다 |
+
+- QA-020은 해소되었다. TC-QA-036의 FOV 항목은 통과다.
+- QA-023은 수정을 확인했다(IMP-UI-066). TC-QA-036은 이제 통과다. 단 QA-021(늦게 연결한 구독자는 재밍 구역을 받지 못함)은 이번에 다시 시험하지 않았다.
+
+### 16.4 TC-QA-039 GCS 링크 두절과 복구
+
+고장 주입 (`qa/out/p5/cut1`, lockstep, 예제 시나리오, uav-004, sim 120 s에 두절):
+
+| 항목 | 값 |
+|---|---|
+| FAULT_INJECTED로 버린 uav-004 → gcs-01 Activity | 663건, 송신 프레임 6,125~6,787 (관찰자가 낸 해제 명령까지 13.3 s) |
+| 두절 중 gcs-01이 받은 uav-004 Activity | 0건. 같은 구간에 전달된 것도 0건 |
+| 두절 전 마지막 수신 | 프레임 6,124 |
+| 복구 뒤 첫 수신 | 프레임 6,788 (rx_time 기준). 마지막 버림 뒤 0.02 s |
+| 다른 기체 | 두절 중에도 계속 받았다. uav-004의 최대 수신 간격은 664 프레임, 다른 기체는 6~8 프레임이다 |
+
+거리 초과 (`qa/out/p5/range1`, lockstep, `qa_p5_range`, 32,000 프레임):
+
+| 기체 | 첫 OUT_OF_RANGE 송신 프레임 | 그 뒤 전달 | 그 뒤 GCS 수신 |
+|---|---|---|---|
+| uav-001 | 25,923 | 0 | 0 |
+| uav-002 | 25,750 | 0 | 0 |
+| uav-003 | 25,854 | 0 | 0 |
+| uav-004 | 25,578 | 0 | 0 |
+| uav-005 | 25,679 | 0 | 0 |
+
+- 이 시나리오에서 기체는 GCS에서 멀어지기만 하므로 거리 초과에서는 복구를 볼 수 없다. 복구는 고장 주입으로만 확인했다.
+- 복구가 0.02 s로 빠른 것은 SensorActivity의 boresight가 매 프레임 바뀌어 Agent가 매 틱 보내기 때문이다(관찰 O-4). 상태가 바뀌지 않는 장비는 DEC-051의 1 s 주기 전체 보고로 복구되므로 최대 1 s가 걸릴 것이다. 이 경우는 따로 만들지 않았다.
+
+재밍 구역:
+
+- Datalink는 수신자가 구역 안에 있을 때만 JAMMED로 판정한다(DEC-009, DEC-028). 송신자 위치는 보지 않는다.
+- realtime 실행(§16.3)에서 기체는 각각 약 13,000 프레임 동안 구역 안에 있었다. GCS는 구역 밖이므로 그동안 기체 → GCS Activity는 하나도 JAMMED가 되지 않았다(BURST_LOSS만 있음).
+- 따라서 재밍 구역으로는 기체 → GCS 상태 보고를 끊을 수 없다. GCS가 구역 안에 있을 때만 끊긴다. 이것이 의도한 동작인지 확인이 필요하다(D-19).
+
+### 16.5 TC-QA-040 GCS 수신 Activity의 결정성
+
+같은 시드 lockstep 6회(14,490 프레임)를 `qa/act_det.py`로 실행 1과 비교했다. 비교 범위는 공통 수신 프레임 끝에서 2 프레임 앞까지다(실행 5는 14,896, 나머지는 14,964).
+
+| 실행 | 수신 건수(비교 범위) | 수신 순서 첫 차이 | 프레임별 집합 차이 | 순서만 다른 프레임 | LinkOutcome 집합 차이 |
+|---|---|---|---|---|---|
+| a40_base_2 | 73,343 / 73,343 | 없음 | 0 | 0 | 0 |
+| a40_base_3 | 73,343 / 73,343 | 없음 | 0 | 0 | 0 |
+| a40_base_4 | 73,343 / 73,343 | 없음 | 0 | 0 | 0 |
+| a40_base_5 | 73,010 / 73,010 | 없음 | 0 | 0 | 0 |
+| a40_base_6 | 73,343 / 73,343 | 없음 | 0 | 0 | 0 |
+
+- 수신 순서, rx 프레임, payload_id, 본문 프레임, 본문 해시가 모두 같다.
+- 송신 프레임(envelope 프레임)에서 본문 프레임을 빼면 모든 실행·모든 건에서 1이다. Agent는 틱 f+1에서 Core가 프레임 f에 낸 onboard 상태를 보낸다. onboard 도착이 늦어 한 틱 밀린 경우는 없었다.
+- 근거: Core는 프레임 f의 onboard Activity를 낸 다음 프레임 f+1의 NavigationReport를 낸다. 같은 발행자이므로 Agent는 항법을 기다리는 동안 Activity를 먼저 받는다.
+- 기체 → GCS Activity 가운데 0 지연 전달(tx_time = rx_time)이 실행마다 2건 있다(uav-003 T5257, uav-004 T10388). 모든 실행에서 같았다. GCS 쪽에는 lockstep으로 이를 소비하는 Agent가 없으므로 QA-019 같은 소비 경쟁은 생기지 않는다.
+- 이 6회에서는 QA-019(실행 사이 궤적 차이)도 나타나지 않았다(`qa/qa019_diff.py`: 궤적·MA 입력·ControlOutput·LinkOutcome 모두 같음). §15에서는 6회 중 1회였다. 경쟁이 벽시계에 달려 있어 재현되지 않은 것으로 본다. QA-019의 상태는 바꾸지 않는다.
+
+### 16.6 결함 상태 갱신
+
+- QA-020: 해소 (DEC-051, IMP-AGT-029). TC-QA-038.
+- QA-023: 수정 확인 (IMP-UI-066). TC-QA-038.
+- QA-019: 바뀌지 않음 (D-18 대기).
+
+### 16.7 관찰
+
+- O-4: SensorActivity의 boresight가 기체 자세에 따라 매 프레임 바뀐다. DEC-051은 바뀐 상태를 이번 틱에 보내므로 카메라를 단 기체마다 50 Hz로 GCS에 보고한다. 5기에서 GCS 수신은 초당 약 250건, 약 22 kB/s다. 기체 수가 늘면 GCS 링크 대역(토큰 버킷)과 Bridge·UI 부하가 커진다. 담당 WP3 Agent(보고 기준) 또는 WP0 계약. 결함으로 올리지 않았다.
+
+### 16.8 결정 확인 항목
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-19 | 확인 필요 | 재밍 구역 안의 기체가 구역 밖 GCS로 보내는 메시지(상태 보고 포함)는 JAMMED가 되지 않는다(수신자 위치만 판정, DEC-028). 송신자 쪽 재밍(업링크 방해)도 판정할지 |
+
+### 16.9 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 거리 초과 뒤 복구 | 예제 경로에서 기체가 GCS 쪽으로 돌아오지 않는다 |
+| 상태가 바뀌지 않는 장비의 복구 시간(1 s 주기 보고) | 시나리오의 Activity가 매 프레임 바뀌는 SensorActivity뿐이다. StrikeActivity는 발사 뒤에만 나온다 |
+| JammerActivity의 GCS 보고 | 아군 기체에 재머가 없다. 적 재머 기지는 Agent가 없다 |
+| 재밍 구역 안 GCS | 시나리오를 만들지 않았다 |
+| QA-021 재시험 | 이번 요청 범위 밖이다 |

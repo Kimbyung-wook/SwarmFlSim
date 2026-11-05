@@ -7,6 +7,9 @@ uv run python qa/p5_e2e.py --mode lockstep --out qa/out/p5/l1 --fault
 uv run python qa/p5_e2e.py --mode lockstep --out qa/out/p5/d1 --frames 80000   (결정성용, 고장 주입 없음)
 uv run python qa/p5_e2e.py --mode realtime --scenario qa/scenarios/qa_p5_near.json --out qa/out/p5/rt --fault --ui
 uv run python qa/p5_e2e.py --compare qa/out/p5/d1 qa/out/p5/d2
+uv run python qa/p5_e2e.py --mode lockstep --out qa/out/p5/cut --link-cut uav-004 --cut-at-s 120 --cut-s 10   (TC-QA-039)
+
+GCS가 받은 임무장비 상태(swarm/<gcs>/rx/ms/*Activity, DEC-051)는 항상 gcs_act.pkl.gz에 남는다 (TC-QA-038~040).
 """
 from __future__ import annotations
 
@@ -59,11 +62,36 @@ class P5Observer(h.Observer):
         self.lo: list[tuple[int, str, str, str, str]] = []  # (frame, src, dst, kind, reason)
         self.lo_full: list[tuple] | None = None  # --trace-io: LinkOutcome 전체 필드, 수신 순서 그대로
         self.ctrl: list[tuple[int, str, bytes]] | None = None  # --trace-io: Agent가 낸 ControlOutput (frame, id, 바이트)
+        # GCS 수신 Activity: (관측 프레임, dst, msg, src, seq, env 프레임, rx_us, 본문 프레임, payload_id, 본문 해시)
+        self.gact: list[tuple] = []
+        # *Activity LinkOutcome: (tx 프레임, src, dst, msg, kind, reason, tx_us, rx_us, seq)
+        self.act_lo: list[tuple] = []
         self.subs += [
             self.bus.subscribe("onboard/*/Detection", self._det),
             self.bus.subscribe("onboard/*/SensorActivity", self._sact),
             self.bus.subscribe("onboard/*/StrikeActivity", self._stk),
+            self.bus.subscribe("swarm/*/rx/ms/*", self._gact),
         ]
+
+    def _gact(self, s) -> None:  # noqa: ANN001
+        import hashlib
+        sim, truth, link, *_ = self.m
+        name = s.key.split("/")[-1]
+        if not name.endswith("Activity"):
+            return
+        env = link.LinkEnvelope.FromString(s.payload)
+        cls = getattr(self.ms, env.msg_type.rsplit(".", 1)[-1], None)
+        inner = cls.FromString(env.payload) if cls else None
+        body = b""
+        if inner is not None:
+            c = type(inner)()
+            c.CopyFrom(inner)
+            c.ClearField("header")
+            body = c.SerializeToString(deterministic=True)
+        with self.lock:
+            self.gact.append((self.last_frame or 0, s.key.split("/")[1], name, env.header.source, env.header.seq,
+                              env.header.frame, env.rx_time_us, inner.header.frame if inner else -1,
+                              inner.payload_id if inner else "", hashlib.sha1(body).hexdigest()[:10]))
 
     def _det(self, s) -> None:  # noqa: ANN001
         d = self.ms.Detection.FromString(s.payload)
@@ -99,6 +127,9 @@ class P5Observer(h.Observer):
         reason = link.DropReason.Name(o.reason).removeprefix("DROP_REASON_") if kind == "DROPPED" else ""
         with self.lock:
             self.lo.append((o.tx_time_us // 20000, o.src, o.dst, kind, reason))
+            if o.msg_type.endswith("Activity"):
+                self.act_lo.append((o.tx_time_us // 20000, o.src, o.dst, o.msg_type.rsplit(".", 1)[-1], kind, reason,
+                                    o.tx_time_us, o.rx_time_us, o.seq))
             if self.lo_full is not None:
                 self.lo_full.append((o.tx_time_us // 20000, o.src, o.dst, o.seq, int(o.iface),
                                      o.msg_type, o.size_bytes, kind, reason, o.tx_time_us, o.rx_time_us))
@@ -122,7 +153,7 @@ def inside(zone: dict, lat: float, lon: float) -> bool:
     return h.dist_m((lat, lon), (zone["lat"], zone["lon"])) <= zone["r"]
 
 
-def analyse(ob: P5Observer, probe: dict, fault: dict | None, dt_us: int) -> dict:
+def analyse(ob: P5Observer, probe: dict, fault: dict | None, dt_us: int, cut: dict | None = None) -> dict:
     sim, truth, link, *_ = ob.m
     evs = ob.parsed_events()
     r: dict = {"snapshot": ob.snapshot()}
@@ -209,7 +240,54 @@ def analyse(ob: P5Observer, probe: dict, fault: dict | None, dt_us: int) -> dict
             if k.startswith("uav"):
                 frames_in[k] = sum(1 for la, lo in v.values() if inside(z, la, lo))
         r["jam"]["uav_frames_in_zone"] = dict(frames_in)
+    r["gcs_activity"] = gcs_activity(ob, cut)
     return r
+
+
+def gcs_activity(ob: P5Observer, cut: dict | None) -> dict:
+    """GCS 수신 Activity 요약 (TC-QA-038), 링크 두절 전후 (TC-QA-039)"""
+    with ob.lock:
+        g, lo = list(ob.gact), list(ob.act_lo)
+
+    def rx_fr(r: tuple) -> int:
+        return r[6] // 20000
+
+    out: dict = {"n": len(g), "by_src_msg": dict(Counter(f"{r[3]}:{r[2]}" for r in g)),
+                 "first": g[:3], "outcomes": dict(Counter(f"{r[1]}:{r[4]}:{r[5]}" for r in lo))}
+    gaps = {}
+    for src in sorted({r[3] for r in g}):
+        fr = sorted({rx_fr(r) for r in g if r[3] == src})
+        d = [b - a for a, b in zip(fr, fr[1:])]
+        gaps[src] = {"frames": len(fr), "first": fr[0], "last": fr[-1], "max_gap_frames": max(d) if d else None}
+    out["gaps"] = gaps
+    if cut:
+        e = cut["entity"]
+        fd = sorted(r[0] for r in lo if r[1] == e and r[5] == "FAULT_INJECTED")
+        c = dict(cut)
+        if fd:
+            c["fault_drop_first"], c["fault_drop_last"], c["fault_drops"] = fd[0], fd[-1], len(fd)
+            c["rx_during"] = sum(1 for r in g if r[3] == e and fd[0] <= rx_fr(r) <= fd[-1])
+            c["delivered_during"] = sum(1 for r in lo if r[1] == e and fd[0] <= r[0] <= fd[-1] and r[4] != "DROPPED")
+            after = sorted(rx_fr(r) for r in g if r[3] == e and rx_fr(r) > fd[-1])
+            before = sorted(rx_fr(r) for r in g if r[3] == e and rx_fr(r) < fd[0])
+            c["last_rx_before"] = before[-1] if before else None
+            c["first_rx_after"] = after[0] if after else None
+            c["recover_s_after_last_drop"] = round((after[0] - fd[-1]) * 0.02, 2) if after else None
+            if "clear_frame_obs" in cut and after:
+                c["recover_s_after_clear_obs"] = round((after[0] - cut["clear_frame_obs"]) * 0.02, 2)
+            c["rx_after_first5"] = [r for r in g if r[3] == e and rx_fr(r) > fd[-1]][:5]
+        out["cut"] = c
+    rng_src = sorted({r[1] for r in lo if r[5] == "OUT_OF_RANGE"})
+    if rng_src:
+        out["out_of_range"] = {}
+        for src in rng_src:
+            f = sorted(r[0] for r in lo if r[1] == src and r[5] == "OUT_OF_RANGE")
+            rx_after = sorted({rx_fr(r) for r in g if r[3] == src and rx_fr(r) > f[0]})
+            out["out_of_range"][src] = {"first": f[0], "last": f[-1], "n": len(f),
+                                       "delivered_after_first_drop": sum(1 for r in lo if r[1] == src and r[0] > f[0]
+                                                                         and r[4] != "DROPPED"),
+                                       "rx_frames_after_first_drop": len(rx_after), "rx_after_frames": rx_after[:5]}
+    return out
 
 
 def run(a: argparse.Namespace) -> None:
@@ -223,6 +301,7 @@ def run(a: argparse.Namespace) -> None:
     web = []
     t0 = time.monotonic()
     fault = None
+    cut = None
     try:
         # JamZone은 첫 프레임에 한 번만 나오므로 Core보다 먼저 관측자를 붙인다
         if st.record:
@@ -271,6 +350,15 @@ def run(a: argparse.Namespace) -> None:
                 ob.fault(fault["entity"], "SENSOR", clear=True)
                 fault["clear_frame_obs"] = lf
                 print(f"clear SENSOR {fault['entity']} at obs frame {lf}", flush=True)
+            # GCS 링크 두절: a.cut_at_s(모의 초)에 GCS_LINK_CUT, a.cut_s 뒤 해제 (TC-QA-039)
+            if a.link_cut and cut is None and sim_s >= a.cut_at_s:
+                cut = {"entity": a.link_cut, "inject_frame_obs": lf}
+                ob.fault(a.link_cut, "GCS_LINK_CUT")
+                print(f"GCS_LINK_CUT {a.link_cut} at obs frame {lf}", flush=True)
+            elif cut and "clear_frame_obs" not in cut and lf - cut["inject_frame_obs"] >= a.cut_s * 50:
+                ob.fault(a.link_cut, "GCS_LINK_CUT", clear=True)
+                cut["clear_frame_obs"] = lf
+                print(f"clear GCS_LINK_CUT {a.link_cut} at obs frame {lf}", flush=True)
             if nlaunch and launch_seen_at is None:
                 launch_seen_at = sim_s
             if time.monotonic() - last_print > 15:
@@ -291,13 +379,16 @@ def run(a: argparse.Namespace) -> None:
                 break
         time.sleep(1.0)
         probe = json.loads(probe_out.read_text(encoding="utf-8")) if probe_out.exists() else {}
-        res = analyse(ob, probe, fault, 20000)
+        res = analyse(ob, probe, fault, 20000, cut)
         res["mode"], res["scenario"], res["wall_s"] = a.mode, str(sc), round(time.monotonic() - t0, 1)
         res["log_issues"] = h.scan_logs(st)
         (out / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
         with gzip.open(out / "trace.pkl.gz", "wb") as f:
             with ob.lock:
                 pickle.dump({"traj": dict(ob.traj), "events": [(k, p) for k, p in ob.events]}, f)
+        with gzip.open(out / "gcs_act.pkl.gz", "wb") as f:
+            with ob.lock:
+                pickle.dump({"rx": list(ob.gact), "outcome": list(ob.act_lo)}, f)
         if a.trace_io:
             with gzip.open(out / "link_io.pkl.gz", "wb") as f:
                 with ob.lock:
@@ -367,6 +458,9 @@ def main() -> None:
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--trace-io", action="store_true",
                     help="프레임별 LinkOutcome 전체(link_io.pkl.gz)와 Agent MA 입력(agent_io.txt)을 남긴다 (QA-019)")
+    ap.add_argument("--link-cut", help="이 기체에 GCS_LINK_CUT 고장을 준다 (TC-QA-039)")
+    ap.add_argument("--cut-at-s", type=float, default=120.0)
+    ap.add_argument("--cut-s", type=float, default=10.0)
     ap.add_argument("--compare", nargs=2)
     ap.add_argument("--upto", type=int, default=10**9)
     a = ap.parse_args()

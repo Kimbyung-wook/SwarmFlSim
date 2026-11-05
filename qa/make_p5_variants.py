@@ -3,6 +3,7 @@
 - qa_p5_nosensor.json : 모든 UAV의 camera 페이로드 제거 (무장·재머는 유지)
 - qa_p5_nopayload.json: 모든 엔티티의 payloads 제거 (camera·무장·재머 모두 없음)
 - qa_p5_noloss.json   : uav_default·gcs_default 링크 프로파일의 Gilbert-Elliott 손실을 0으로 재정의 (DEC-029)
+- qa_p5_range.json    : gcs_default 최대 거리를 12 km로 재정의, 기체가 GCS에서 멀어지면 GCS 링크가 끊긴다 (TC-QA-039)
 """
 from __future__ import annotations
 
@@ -31,6 +32,9 @@ def main() -> None:
     d = copy.deepcopy(base)
     d["link_profiles"] = [{"name": n, "ge": NO_GE} for n in ("uav_default", "gcs_default")]
     v["qa_p5_noloss"] = d
+    d = copy.deepcopy(base)
+    d["link_profiles"] = [{"name": "gcs_default", "max_range_m": 12000.0}]
+    v["qa_p5_range"] = d
     for name, doc in v.items():
         doc["name"] = name
         doc["description"] = f"QA-019 변형: {name} (원본 {SRC.name})"
