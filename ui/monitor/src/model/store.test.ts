@@ -139,4 +139,24 @@ describe("MonitorStore", () => {
     s.handleFrame(status(452_000_000));
     expect(s.linkLagUs).toBe(0);
   });
+
+  // TC-MON-015: truth/state 프레임 번호 공백으로 누락 프레임을 센다 (IMP-MON-027, DEC-042)
+  it("프레임 번호 공백을 누락으로 세고, 번호가 줄면 기준만 새로 잡는다", () => {
+    const s = new MonitorStore();
+    const truth = (f: number) => frameOf("truth/state", TruthFrameSchema, { header: { frame: BigInt(f), simTimeUs: BigInt(f * 20_000) } });
+    for (const f of [1, 2, 3, 7, 8, 12]) s.handleFrame(truth(f));
+    expect(s.missedFrames).toBe(3 + 3);
+    s.handleFrame(truth(1));
+    s.handleFrame(truth(2));
+    expect(s.missedFrames).toBe(6);
+    s.handleFrame(truth(4));
+    expect(s.missedFrames).toBe(7);
+    s.clearStats();
+    expect(s.missedFrames).toBe(0);
+  });
+  it("SimStatus.waiting_participants를 보관한다 (DEC-041)", () => {
+    const s = new MonitorStore();
+    s.handleFrame(frameOf("sim/ctrl/status", SimStatusSchema, { waitingParticipants: ["datalink"] }));
+    expect(s.status!.waitingParticipants).toEqual(["datalink"]);
+  });
 });

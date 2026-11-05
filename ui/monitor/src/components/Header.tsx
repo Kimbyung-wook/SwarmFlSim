@@ -71,6 +71,16 @@ export function Header(props: {
         </span>
       )}
       {store.rewinds > 0 && <span className="kv warn">되감기 {store.rewinds}회</span>}
+      {store.missedFrames > 0 && (
+        <span className="kv warn" title="truth/state 프레임 번호의 공백. MCAP 재생은 배압이 없어 고배속에서 프레임 누락을 허용한다(DEC-042)">
+          프레임 누락 {store.missedFrames}
+        </span>
+      )}
+      {st && st.waitingParticipants.length > 0 && (
+        <span className="kv warn" title="lockstep에서 FrameDone이 5 s 넘게 없는 참여자(DEC-041)">
+          응답 없음 {st.waitingParticipants.join(", ")}
+        </span>
+      )}
       {store.linkLagUs > 1_000_000 && (
         <span className="kv warn" title="outcome을 받은 순간의 (sim 시각 − 그 outcome의 tx 시각). 둘 다 sim 시각이라 재생 배속과 무관하다. outcome이 없는 구간은 지연으로 보지 않는다">
           링크 지연 {(store.linkLagUs / 1e6).toFixed(1)} s
