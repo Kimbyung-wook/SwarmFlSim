@@ -76,3 +76,60 @@ def test_tc_agt_046_realtime_is_not_gated():
     assert routes(h) == ["far"]
     tick(h, 5, mode=sim_pb2.RUN_MODE_REALTIME)  # FrameDone 없이 처리
     assert h.rt.stats.ticks == 1
+
+
+def done_sent(h: Harness, who: str, frame: int, sent: dict[str, int]) -> None:
+    d = sim_pb2.FrameDone(participant=who, frame=frame)
+    d.sent_count.update(sent)
+    h.bus.put(keys.clock_done(who), d.SerializeToString(), protobuf_encoding(d.DESCRIPTOR.full_name))
+
+
+def test_tc_agt_047_waits_for_sent_count():
+    sc = make_scenario(1, "hold")
+    sc.run.participants.append("datalink-0")
+    h = Harness(sc, load=True)
+    out = agent_done(h)
+    tick(h, 0)
+    tick(h, 1)
+    done_sent(h, "datalink-0", 0, {"uav-001": 2})
+    assert out == [0]              # 개수 부족(0/2): 대기
+    put_route(h, "a", 0)
+    assert out == [0]              # 1/2
+    put_route(h, "b", 0)
+    assert out == [0, 1]           # 2/2: 보류한 틱을 처리했다
+
+
+def test_tc_agt_048_sent_count_other_entities_and_empty_do_not_block():
+    sc = make_scenario(1, "hold")
+    sc.run.participants.append("datalink-0")
+    h = Harness(sc, load=True)
+    out = agent_done(h)
+    tick(h, 0)
+    tick(h, 1)
+    done_sent(h, "datalink-0", 0, {"uav-999": 5})   # 이 Agent의 기체가 아니면 기다리지 않는다
+    assert out == [0, 1]
+    tick(h, 2)
+    done_sent(h, "datalink-0", 1, {})               # 비어 있으면 기다리지 않는다
+    assert out == [0, 1, 2]
+
+
+def test_tc_agt_049_done_carries_own_tx_count():
+    h = Harness(make_scenario(1, "hold"), load=True)
+    got: list[dict] = []
+    h.bus.subscribe(keys.clock_done("agent-0"), lambda s: got.append(dict(sim_pb2.FrameDone.FromString(s.payload).sent_count)))
+    v = h.rt.vehicles["uav-001"]
+    tick(h, 0)
+    h.rt.send_link(v, "c2", mp_pb2.RoutePlan(route_id="x", entity_id="uav-001"), ["gcs-01"])
+    h.rt.send_link(v, "c2", mp_pb2.RoutePlan(route_id="y", entity_id="uav-001"), ["gcs-01"])
+    tick(h, 1)
+    assert got[0] == {} and got[1] == {"uav-001": 2}
+
+
+def test_tc_agt_050_realtime_ignores_sent_count():
+    sc = make_scenario(1, "hold")
+    sc.run.mode = sim_pb2.RUN_MODE_REALTIME
+    sc.run.participants.append("datalink-0")
+    h = Harness(sc, load=True)
+    done_sent(h, "datalink-0", 0, {"uav-001": 9})
+    tick(h, 5, mode=sim_pb2.RUN_MODE_REALTIME)
+    assert h.rt.stats.ticks == 1
