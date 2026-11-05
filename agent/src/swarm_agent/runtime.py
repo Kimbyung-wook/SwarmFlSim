@@ -115,6 +115,7 @@ class AgentRuntime:
         self._dl_names: tuple[str, ...] = ()
         self._dl_done: dict[str, int] = {}          # 참여자 → 처리해도 되는 다음 틱 번호
         self._ticks_seen = 0
+        self._prev_tick_us: int | None = None
         self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
         self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample),
@@ -297,6 +298,7 @@ class AgentRuntime:
         self._dl_names = ()
         self._dl_done = {}
         self._ticks_seen = 0
+        self._prev_tick_us = None
         self._rx_hold = {}
         self._pending_params = []
         if self._initialized:
@@ -398,7 +400,9 @@ class AgentRuntime:
         self._nav_timeout = False
         self._process_tick(tick)
 
-    def _release_rx(self, sim_time_us: int) -> None:
+    def _release_rx(self, sim_time_us: int | None) -> None:
+        if sim_time_us is None:
+            return
         for v in self._order:
             held = self._rx_hold.get(v.entity_id)
             if not held:
@@ -444,7 +448,9 @@ class AgentRuntime:
     def _step(self, tick: sim_pb2.ClockTick) -> None:
         dt = tick.dt_us * 1e-6
         if self._lockstep:
-            self._release_rx(tick.sim_time_us)
+            # 이번 틱의 rx는 Datalink가 지금 내고 있을 수 있다. FrameDone이 보장된 이전 틱 시각까지만 소비한다
+            self._release_rx(self._prev_tick_us)
+            self._prev_tick_us = tick.sim_time_us
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
         if not self._initialized:
