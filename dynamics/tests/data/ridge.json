@@ -1,0 +1,17 @@
+{
+  "format": "swarm-dem-grid",
+  "version": 1,
+  "data_file": "ridge.bin",
+  "sample_type": "int16",
+  "byte_order": "little",
+  "row_order": "south_to_north",
+  "rows": 101,
+  "cols": 101,
+  "lat0_deg": 36.9,
+  "lon0_deg": 126.9,
+  "dlat_deg": 0.002,
+  "dlon_deg": 0.002,
+  "units": "m",
+  "nodata": -32768,
+  "source": "synthetic (dynamics/tests/data/gen_test_dem.py)"
+}

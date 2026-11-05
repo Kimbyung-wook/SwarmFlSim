@@ -1,5 +1,7 @@
 // IMP-CORE-006: 최소 시나리오 파싱과 내장 시나리오
+// IMP-CORE-025: 엔티티 ID 25자 이하, 엔티티당 재머 1개 적재 검증 (DEC-050, DEC-049)
 #include "swarm/core/scenario.hpp"
+#include "swarm/api/keys.hpp"
 #include "swarm/lnk/profile.hpp"
 
 #include <cmath>
@@ -83,6 +85,15 @@ void validate_scenario(const Scenario& sc) {
 
   if (sc.source) check_finite(*sc.source, "scenario");
   for (const auto& e : sc.entities) {
+    // IMP-CORE-025: 무장 ID wpn-<id>-NN이 엔티티 ID 상한 32자 안에 들게 한다 (DEC-050)
+    if (e.id().size() > kMaxScenarioEntityId)
+      throw std::invalid_argument("entity id longer than " + std::to_string(kMaxScenarioEntityId) +
+                                  " chars: " + e.id());
+    keys::check_entity_id(e.id());
+    // JamZoneEvent.owner는 엔티티 ID다. 엔티티당 재머 1개 (DEC-049)
+    int jammers = 0;
+    for (const auto& p : e.payloads()) jammers += p.type() == "jammer";
+    if (jammers > 1) throw std::invalid_argument("entity " + e.id() + " has " + std::to_string(jammers) + " jammers (max 1)");
     check_finite(e, "entity " + e.id());
     if (e.has_initial() && e.initial().has_position()) check_geodetic(e.initial().position(), e.id() + ".initial");
     for (const auto& g : e.script_path()) check_geodetic(g, e.id() + ".script_path");

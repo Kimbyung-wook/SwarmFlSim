@@ -1,6 +1,7 @@
 // TC-CORE-002~012: SimCore 단위 시험 (InMemoryBus, 목 동역학)
 // TC-CORE-013~017: WP2 동역학 통합, 지면 충돌, 스크립트 경로, 고장 주입
 // TC-CORE-019~023: 동역학 매개변수 (DEC-035)
+// TC-CORE-036~039: DEM 지형 충돌·가시선, JamZone 재발행, ID·재머 적재 검증 (DEC-053, DEC-052, DEC-050, DEC-049)
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -18,6 +19,7 @@
 #include "swarm/core/scenario.hpp"
 #include "swarm/core/sim_core.hpp"
 #include "swarm/core/wp2_dynamics.hpp"
+#include "swarm/dyn/terrain.hpp"
 #include "swarm/v1/truth.pb.h"
 
 namespace {
@@ -1592,6 +1594,232 @@ void test_payload_jam_determinism() {
   CHECK(a.kinds == b.kinds);
 }
 
+// ---------------------------------------------------------------- DEM 지형 (IMP-CORE-023, DEC-053)
+
+// 합성 능선 DEM(dynamics/tests/data/ridge.json): 위도 37.004~37.012에 동서 능선, 정점 37.008에서 1200 m
+std::shared_ptr<const dyn::GridTerrain> ridge_dem() { return dyn::RawDemLoader{}.load(SWARM_TEST_DEM); }
+
+core::Wp2DynamicsOptions dem_opt() {
+  core::Wp2DynamicsOptions o;
+  o.terrain = ridge_dem();
+  return o;
+}
+
+// TC-CORE-036: DEM 지형으로 지면 충돌. 고도 800 m로 북진하는 기체가 능선 남사면(위도 약 37.00667)에서
+// kill(cause=ground). 평지 0 m에서는 살아 있다. 같은 입력 두 번의 truth가 바이트 단위로 같다
+void test_dem_ground_kill() {
+  const auto dem = ridge_dem();
+  auto scenario = [] {
+    core::Scenario sc;
+    sc.name = "dem-ground";
+    v1::EntitySpec u;
+    u.set_id("uav-001");
+    u.set_kind(v1::ENTITY_KIND_UAV);
+    u.set_dynamics(v1::DYNAMICS_KIND_DOF2);
+    u.mutable_initial()->mutable_position()->set_lat_deg(37.0);
+    u.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+    u.mutable_initial()->mutable_position()->set_alt_m(800.0);
+    u.mutable_initial()->mutable_velocity_ned_mps()->set_x(25.0);
+    sc.entities.push_back(u);
+    return sc;
+  };
+  InMemoryBus bus_a, bus_b, bus_f;
+  auto run = [&](core::Wp2DynamicsOptions opt, InMemoryBus& bus, std::unique_ptr<Recorder>& rec) {
+    rec = std::make_unique<Recorder>(bus);
+    core::SimCore sim(bus, core::wp2_provider(std::move(opt)), quiet());
+    CHECK(sim.load(scenario()));
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+    run_frames(sim, 2000);  // 40 s
+    return sim.entities().alive(0);
+  };
+  std::unique_ptr<Recorder> ra, rb, rf;
+  const bool alive_a = run(dem_opt(), bus_a, ra);
+  const bool alive_b = run(dem_opt(), bus_b, rb);
+  const bool alive_f = run(flat(0.0), bus_f, rf);
+  CHECK(!alive_a && !alive_b && alive_f);
+  CHECK(ra->events.size() == 1 && rf->events.empty());
+  if (ra->events.size() == 1) {
+    CHECK(ra->events[0].kill().entity_id() == "uav-001" && ra->events[0].kill().cause() == "ground");
+    const auto& dead = entity(ra->truths.back(), "uav-001");
+    const auto& p = dead.kinematics().position();
+    // 고도 800 m 등고선: 37.004 + 0.004 × 800/1200 = 37.00667
+    CHECK(std::abs(p.lat_deg() - 37.006667) < 5e-5);
+    CHECK(std::abs(p.alt_m() - dem->elevation_m(p.lat_deg(), p.lon_deg())) < 0.5);
+    // 등속 25 m/s: 약 740 m / 25 m/s ≈ 29.6 s
+    const double t = static_cast<double>(ra->events[0].header().sim_time_us()) * 1e-6;
+    CHECK(t > 28.5 && t < 30.5);
+  }
+  CHECK(!ra->truth_bytes.empty() && ra->truth_bytes == rb->truth_bytes);
+}
+
+// TC-CORE-037: DEM 지형으로 가시선. 능선 남쪽 고도 500 m 카메라는 능선 북쪽 지상 표적을 탐지하지 못하고,
+// 같은 배치를 평지에서 돌리면 탐지한다 (DEC-018, DEC-053)
+void test_dem_line_of_sight() {
+  auto scenario = [] {
+    core::Scenario sc;
+    sc.name = "dem-los";
+    auto add = [&](const char* id, v1::EntityKind kind, double lat, double alt) {
+      v1::EntitySpec e;
+      e.set_id(id);
+      e.set_kind(kind);
+      e.set_side(kind == v1::ENTITY_KIND_UAV ? v1::SIDE_BLUE : v1::SIDE_RED);
+      e.set_dynamics(v1::DYNAMICS_KIND_STATIC);
+      e.mutable_initial()->mutable_position()->set_lat_deg(lat);
+      e.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+      e.mutable_initial()->mutable_position()->set_alt_m(alt);
+      e.mutable_initial()->mutable_attitude()->set_w(1.0);  // 기수 북쪽
+      sc.entities.push_back(e);
+      return &sc.entities.back();
+    };
+    auto* cam = add("uav-001", v1::ENTITY_KIND_UAV, 37.0, 500.0)->add_payloads();
+    cam->set_id("cam0");
+    cam->set_type("camera");
+    add("tgt-01", v1::ENTITY_KIND_GROUND_TARGET, 37.018, 0.0);  // 능선(37.008) 너머 약 2 km
+    return sc;
+  };
+  auto detections = [&](core::Wp2DynamicsOptions opt) {
+    InMemoryBus bus;
+    std::size_t n = 0;
+    auto sub = bus.subscribe("onboard/*/Detection", [&](const Sample& s) {
+      n += decode<v1::Detection>(s).target_id() == "tgt-01";
+    });
+    core::SimCore sim(bus, core::wp2_provider(std::move(opt)), quiet());
+    CHECK(sim.load(scenario()));
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+    run_frames(sim, 100);
+    return n;
+  };
+  const auto flat_n = detections(flat(0.0));
+  const auto dem_n = detections(dem_opt());
+  if (flat_n == 0 || dem_n != 0) std::fprintf(stderr, "los: flat %zu, dem %zu\n", flat_n, dem_n);
+  CHECK(flat_n > 0);
+  CHECK(dem_n == 0);
+}
+
+// ---------------------------------------------------------------- JamZone 재발행 (IMP-CORE-024, DEC-052)
+
+struct ZoneRec {
+  std::uint64_t frame;
+  std::string owner;
+  bool active;
+};
+
+// jam-01(재머 부지, 처음부터 켬)과 uav-002(재머 탑재, 프레임 30에 켬). 프레임 120에 jam-01을 끈다
+std::vector<ZoneRec> run_zones(std::string& bytes) {
+  core::Scenario sc;
+  sc.name = "zones";
+  auto add = [&](const char* id, v1::EntityKind kind, double lat) {
+    v1::EntitySpec e;
+    e.set_id(id);
+    e.set_kind(kind);
+    e.set_side(v1::SIDE_RED);
+    e.set_dynamics(v1::DYNAMICS_KIND_STATIC);
+    e.mutable_initial()->mutable_position()->set_lat_deg(lat);
+    e.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+    e.mutable_initial()->mutable_position()->set_alt_m(lat > 37.02 ? 0.0 : 500.0);
+    sc.entities.push_back(e);
+    return &sc.entities.back();
+  };
+  add("jam-01", v1::ENTITY_KIND_JAMMER_SITE, 37.05);
+  auto* ea = add("uav-002", v1::ENTITY_KIND_UAV, 37.0)->add_payloads();
+  ea->set_id("ea0");
+  ea->set_type("jammer");
+
+  InMemoryBus bus;
+  std::vector<ZoneRec> out;
+  bytes.clear();
+  auto sub = bus.subscribe("truth/event/jam_zone", [&](const Sample& s) {
+    const auto ev = decode<v1::TruthEvent>(s);
+    out.push_back({ev.header().frame(), ev.jam_zone().owner(), ev.jam_zone().active()});
+    bytes.append(s.payload.begin(), s.payload.end());
+  });
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  CHECK(sim.load(sc));
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  auto t = Clock::now();
+  auto jam = [&](const char* entity, const char* payload, bool on) {
+    v1::JammerCommand c;
+    c.set_payload_id(payload);
+    c.set_enable(on);
+    put(bus, keys::onboard(entity, "JammerCommand"), c);
+  };
+  bool on_sent = false, off_sent = false;
+  for (int i = 0; i < 2000 && sim.frame() < 260; ++i) {
+    if (!on_sent && sim.frame() >= 30) on_sent = (jam("uav-002", "ea0", true), true);
+    if (!off_sent && sim.frame() >= 120) off_sent = (jam("jam-01", "jam0", false), true);
+    sim.poll(t += 1ms);
+  }
+  CHECK(sim.frame() == 260);
+  return out;
+}
+
+// TC-CORE-038: 활성 재밍 구역은 변화 시와 모의 시간 1 s(50 Hz에서 50프레임)마다 다시 발행한다.
+// 꺼진 구역은 다시 내지 않는다. 같은 입력 두 번의 이벤트가 바이트 단위로 같다 (IMP-CORE-024, DEC-052)
+void test_jam_zone_republish() {
+  std::string bytes_a, bytes_b;
+  const auto a = run_zones(bytes_a);
+  const auto b = run_zones(bytes_b);
+  CHECK(!bytes_a.empty() && bytes_a == bytes_b);
+
+  std::vector<std::uint64_t> site_on, site_off, uav_on;
+  for (const auto& z : a) {
+    if (z.owner == "jam-01") (z.active ? site_on : site_off).push_back(z.frame);
+    if (z.owner == "uav-002" && z.active) uav_on.push_back(z.frame);
+  }
+  // jam-01: 프레임 0(변화), 50·100(주기), 꺼짐 1회. 그 뒤로는 없다
+  CHECK((site_on == std::vector<std::uint64_t>{0, 50, 100}));
+  CHECK(site_off.size() == 1 && site_off[0] >= 120 && site_off[0] < 125);
+  // uav-002: 켜진 프레임(변화) 다음 1 s 경계마다 한 번
+  CHECK(uav_on.size() == 6);
+  if (uav_on.size() == 6) {
+    CHECK(uav_on[0] >= 30 && uav_on[0] < 35);
+    CHECK((std::vector<std::uint64_t>(uav_on.begin() + 1, uav_on.end()) ==
+           std::vector<std::uint64_t>{50, 100, 150, 200, 250}));
+  }
+}
+
+// ---------------------------------------------------------------- 적재 검증 (IMP-CORE-025, DEC-049, DEC-050)
+
+// TC-CORE-039: 엔티티 ID 25자 초과, 엔티티당 재머 2개 이상은 적재를 거부하고 Core는 이전 시나리오로 계속 산다
+void test_load_validation_ids_jammers() {
+  InMemoryBus bus;
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  CHECK(sim.load(one_uav()));
+
+  auto with_id = [](const std::string& id) {
+    core::Scenario sc = one_uav();
+    sc.name = "id";
+    sc.entities[0].set_id(id);
+    return sc;
+  };
+  const std::string id25 = "uav-" + std::string(21, 'a');  // 25자
+  CHECK(id25.size() == 25 && sim.load(with_id(id25)));
+  CHECK(sim.status().scenario_name() == "id");
+  CHECK(sim.load(one_uav()));
+  CHECK(!sim.load(with_id(id25 + "b")));  // 26자
+  CHECK(!sim.load(with_id("UAV-001")));    // 형식 오류
+  CHECK(sim.status().scenario_name() == "one" && sim.state() == v1::SIM_RUN_STATE_LOADED);
+
+  auto with_jammers = [](int n, v1::EntityKind kind) {
+    core::Scenario sc = one_uav();
+    sc.name = "jam";
+    sc.entities[0].set_kind(kind);
+    sc.entities[0].set_dynamics(v1::DYNAMICS_KIND_STATIC);
+    for (int i = 0; i < n; ++i) {
+      auto* p = sc.entities[0].add_payloads();
+      p->set_id("ea" + std::to_string(i));
+      p->set_type("jammer");
+    }
+    return sc;
+  };
+  CHECK(!sim.load(with_jammers(2, v1::ENTITY_KIND_UAV)));
+  CHECK(!sim.load(with_jammers(2, v1::ENTITY_KIND_JAMMER_SITE)));
+  CHECK(sim.status().scenario_name() == "one");
+  CHECK(sim.load(with_jammers(1, v1::ENTITY_KIND_UAV)));
+  CHECK(sim.load(with_jammers(1, v1::ENTITY_KIND_JAMMER_SITE)));  // 명시한 재머 1개면 기본 재머를 더하지 않는다
+  CHECK(sim.status().scenario_name() == "jam");
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1625,6 +1853,10 @@ int main() {
   test_waiting_participants();
   test_payload_strike();
   test_payload_jam_determinism();
+  test_dem_ground_kill();
+  test_dem_line_of_sight();
+  test_jam_zone_republish();
+  test_load_validation_ids_jammers();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

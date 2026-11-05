@@ -1,6 +1,7 @@
 // IMP-CORE-006: 실행 파일 swarm_core
 // IMP-CORE-012: WP2 동역학(--integrator), 평지 지형(--terrain-flat)
 // IMP-CORE-014: Windows Ctrl+Break(SIGBREAK) 정상 종료
+// IMP-CORE-023: --terrain-dem DEM 지형 적재 (DEC-053, DEC-004)
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include "swarm/bus/open_bus.hpp"
 #include "swarm/core/sim_core.hpp"
 #include "swarm/core/wp2_dynamics.hpp"
+#include "swarm/dyn/terrain.hpp"
 
 namespace {
 
@@ -30,7 +32,8 @@ constexpr const char* kUsage = R"(usage: swarm_core [options]
   --frames <n>             n 프레임 진행 후 종료
   --integrator <name>      rk4 | rk45 (기본 rk45)
   --terrain-flat <m>       평지 지형 고도 (기본 0). 지면 아래로 내려가면 kill(cause=ground)
-  --terrain-dem <file>     DEM 지형 (자리만 있음, DEC-016)
+  --terrain-dem <json>     DEM 지형 머리글(scripts/fetch_dem.py가 만든 data/dem/korea_glo90.json, DEC-053).
+                           --terrain-flat 대신 쓴다. 격자 밖은 0 m
 )";
 
 swarm::core::SimCore* g_core = nullptr;
@@ -84,8 +87,18 @@ int main(int argc, char** argv) {
   }
 
   try {
-    // DEM 로더(dyn::DemLoader)는 WP2에 인터페이스만 있다. 구현되면 dyn_opt.terrain에 넣는다
-    if (!dem_file.empty()) throw std::runtime_error("--terrain-dem: DEM loader not implemented yet");
+    // DEM은 동역학 지면 이벤트와 탑재체 가시선이 함께 쓴다 (IMP-CORE-023)
+    std::string terrain_desc = "flat " + std::to_string(dyn_opt.terrain_flat_m) + " m";
+    if (!dem_file.empty()) {
+      std::shared_ptr<const dyn::GridTerrain> dem = dyn::RawDemLoader{}.load(dem_file);
+      const auto& g = dem->spec();
+      char buf[200];
+      std::snprintf(buf, sizeof buf, "dem %zux%zu lat %.4f..%.4f lon %.4f..%.4f", g.rows, g.cols, g.lat0_deg,
+                    g.lat0_deg + static_cast<double>(g.rows - 1) * g.dlat_deg, g.lon0_deg,
+                    g.lon0_deg + static_cast<double>(g.cols - 1) * g.dlon_deg);
+      terrain_desc = buf;
+      dyn_opt.terrain = std::move(dem);
+    }
     core::DynamicsProvider provider = core::wp2_provider(dyn_opt);
 
     const std::string bus_kind = bus_cfg.backend.empty() ? bus::default_backend() : bus_cfg.backend;
@@ -118,8 +131,8 @@ int main(int argc, char** argv) {
       sim.submit(cmd);
     }
 
-    std::fprintf(stderr, "[swarm_core] bus=%s, integrator=%s, terrain-flat=%.1f m, waiting for %s\n",
-                 bus_kind.c_str(), dyn_opt.integrator.c_str(), dyn_opt.terrain_flat_m,
+    std::fprintf(stderr, "[swarm_core] bus=%s, integrator=%s, terrain=%s, waiting for %s\n",
+                 bus_kind.c_str(), dyn_opt.integrator.c_str(), terrain_desc.c_str(),
                  autostart ? "frames" : "sim/ctrl/cmd");
     sim.run();
     std::fprintf(stderr, "[swarm_core] stopped at frame %llu, sim_time %.3f s, overruns %llu\n",

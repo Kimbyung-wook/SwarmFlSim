@@ -1,5 +1,6 @@
 // IMP-CORE-002, IMP-CORE-004: 프레임 스케줄러, 실행 모드, onboard 입출력
 // IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입, IMP-CORE-013: 동역학 매개변수
+// IMP-CORE-024: 활성 재밍 구역 1 s 재발행 (DEC-052)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -16,6 +17,8 @@
 namespace swarm::core {
 
 namespace {
+
+constexpr std::uint64_t kZonePeriodUs = 1'000'000;  // JamZone 재발행 주기 (DEC-052)
 
 template <class T>
 bool parse(const Sample& s, T& msg) {
@@ -173,6 +176,8 @@ void SimCore::reset_run_state() {
   if (payload_) payload_->reset();
   weapons_.clear();
   onboard_seq_.clear();
+  active_zones_.clear();
+  next_zone_us_ = kZonePeriodUs;
   std::lock_guard lock(inbox_mu_);
   inbox_.controls.clear();
   inbox_.dones.clear();
@@ -585,9 +590,31 @@ std::vector<std::string> SimCore::step_payload(std::vector<payload::Addressed<v1
     for (auto& m : ob.strike_activity) put_onboard(ob.entity, "StrikeActivity", m);
     if (ob.loadout) put_onboard(ob.entity, "StoreLoadout", *ob.loadout);
   }
+  std::set<std::string> zone_sent;  // 이번 프레임에 변화로 이미 낸 owner
   for (auto& ev : out.events) {
     ev.mutable_header()->set_seq(seq_event_++);
     publish(keys::truth_event(payload::event_kind(ev)), ev);
+    if (ev.has_jam_zone()) {
+      const auto& owner = ev.jam_zone().owner();
+      zone_sent.insert(owner);
+      if (ev.jam_zone().active())
+        active_zones_[owner] = ev;
+      else
+        active_zones_.erase(owner);
+    }
+  }
+  // IMP-CORE-024: 모의 시간 1 s 경계를 지난 프레임에서 활성 구역을 owner 순으로 다시 낸다.
+  // 벽시계가 아니라 프레임으로 정하므로 lockstep 결과가 실행마다 같다 (DEC-052, DEC-005)
+  if (sim_time_us_ >= next_zone_us_) {
+    while (next_zone_us_ <= sim_time_us_) next_zone_us_ += kZonePeriodUs;
+    for (auto& [owner, ev] : active_zones_) {
+      if (zone_sent.count(owner)) continue;
+      auto* h = ev.mutable_header();
+      h->set_sim_time_us(sim_time_us_);
+      h->set_frame(frame_);
+      h->set_seq(seq_event_++);
+      publish(keys::truth_event("jam_zone"), ev);
+    }
   }
   weapons_ = std::move(out.weapons);  // spawned는 weapons에 이번 프레임 끝 상태로 이미 들어 있다
   return std::move(out.killed);

@@ -42,6 +42,8 @@ bool valid_rate(double rate);
 
 // IMP-CORE-017: 적재 전 입력 검증 (DEC-038). 비유한 값, 범위 밖 위경도, 빈 엔티티, frame_hz·배속 범위,
 // 없는 링크 프로파일을 std::invalid_argument로 거부한다. 중복 ID·동역학 지원 여부는 EntityStore가 본다
+// IMP-CORE-025: 엔티티 ID 형식·25자 초과(DEC-050), 엔티티당 재머 2개 이상(DEC-049)도 거부한다
+constexpr std::size_t kMaxScenarioEntityId = 25;
 void validate_scenario(const Scenario& sc);
 
 // CLI 실행 재정의. 빈 문자열은 재정의 없음. 모드가 틀리면 std::invalid_argument

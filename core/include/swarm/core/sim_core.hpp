@@ -151,6 +151,9 @@ class SimCore {
   std::unique_ptr<payload::PayloadSystem> payload_;
   std::vector<v1::EntityState> weapons_;  // 무장 엔티티의 현재 상태. TruthFrame에 덧붙인다
   std::map<std::string, std::uint32_t> onboard_seq_;  // 임무장비 출력 키별 순번
+  // IMP-CORE-024: 활성 재밍 구역 owner → 마지막 JamZone 이벤트. 1 s 모의 시간마다 다시 발행한다 (DEC-052)
+  std::map<std::string, v1::TruthEvent> active_zones_;
+  std::uint64_t next_zone_us_ = 0;  // 다음 주기 재발행 시각(모의 µs)
 
   // 실행 상태
   v1::SimRunState state_ = v1::SIM_RUN_STATE_IDLE;

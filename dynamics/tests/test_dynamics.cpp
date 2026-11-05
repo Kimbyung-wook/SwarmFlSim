@@ -1,10 +1,14 @@
-// TC-DYN-001~014: 동역학 모델·적분기·지형 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
+// TC-DYN-001~015: 동역학 모델·적분기·지형 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <sstream>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -463,11 +467,109 @@ struct Case {
   void (*fn)();
 };
 
+// TC-DYN-015: 원시 격자 + JSON 머리글 DEM 로더 (IMP-DYN-009, DEC-053). 합성 능선, nodata, 경계, 형식 오류
+void tc015() {
+  namespace fs = std::filesystem;
+  const fs::path data = SWARM_DYN_TEST_DATA;
+  const RawDemLoader ld(-1.0, 5.0);
+  auto g = ld.load(data / "ridge.json");
+  check(g->spec().rows == 101 && g->spec().cols == 101, "tc015 dims");
+  check_near(g->elevation_m(37.008, 127.0), 1200.0, 1e-6, "tc015 ridge crest");
+  check_near(g->elevation_m(37.006, 127.05), 600.0, 1e-6, "tc015 ridge flank node");
+  check_near(g->elevation_m(37.007, 127.0), 900.0, 1e-6, "tc015 bilinear between rows");
+  check_near(g->elevation_m(36.95, 127.0), 0.0, 0.0, "tc015 flat south");
+  check_near(g->elevation_m(36.9, 126.9), 5.0, 1e-9, "tc015 nodata -> fill (south-west node, row 0 = south)");
+  check_near(g->elevation_m(36.9, 126.902), 0.0, 1e-9, "tc015 neighbour of nodata");
+  check_near(g->elevation_m(36.899, 127.0), -1.0, 0.0, "tc015 outside south -> outside_m");
+  check_near(g->elevation_m(37.0, 127.1001), -1.0, 0.0, "tc015 outside east -> outside_m");
+  check(g->contains(37.0999, 127.0999) && !g->contains(37.1001, 127.0), "tc015 contains boundary");
+
+  // 형식 오류: 머리글을 바꿔 임시 디렉터리에 쓴다
+  const fs::path tmp = fs::temp_directory_path() / "swarm_tc_dyn_015";
+  fs::create_directories(tmp);
+  fs::copy_file(data / "ridge.bin", tmp / "ridge.bin", fs::copy_options::overwrite_existing);
+  std::string base;
+  {
+    std::ifstream f(data / "ridge.json", std::ios::binary);
+    std::ostringstream s;
+    s << f.rdbuf();
+    base = s.str();
+  }
+  auto variant = [&](const std::string& from, const std::string& to) {
+    std::string t = base;
+    const auto p = t.find(from);
+    if (p == std::string::npos) {
+      std::fprintf(stderr, "FAIL: tc015 fixture lacks '%s'\n", from.c_str());
+      ++g_failures;
+      return t;
+    }
+    return t.replace(p, from.size(), to);
+  };
+  auto expect_throw = [&](const std::string& json, bool runtime, const char* what) {
+    {
+      std::ofstream f(tmp / "h.json", std::ios::binary | std::ios::trunc);
+      f << json;
+    }
+    bool ok = false;
+    try {
+      ld.load(tmp / "h.json");
+    } catch (const std::invalid_argument&) {
+      ok = !runtime;
+    } catch (const std::runtime_error&) {
+      ok = runtime;
+    }
+    if (!ok) {
+      std::fprintf(stderr, "FAIL: tc015 expected %s: %s\n", runtime ? "runtime_error" : "invalid_argument", what);
+      ++g_failures;
+    }
+  };
+  {
+    std::ofstream f(tmp / "h.json", std::ios::binary | std::ios::trunc);
+    f << base;
+  }
+  check(ld.load(tmp / "h.json")->spec().rows == 101, "tc015 copied header loads");
+  expect_throw("{ not json", false, "bad json");
+  expect_throw(variant("\"swarm-dem-grid\"", "\"other\""), false, "format");
+  expect_throw(variant("\"version\": 1", "\"version\": 2"), false, "version");
+  expect_throw(variant("\"int16\"", "\"float32\""), false, "sample_type");
+  expect_throw(variant("\"little\"", "\"big\""), false, "byte_order");
+  expect_throw(variant("\"south_to_north\"", "\"north_to_south\""), false, "row_order");
+  expect_throw(variant("\"rows\": 101", "\"rows\": 100"), false, "size mismatch");
+  expect_throw(variant("\"rows\": 101", "\"rows\": 1"), false, "rows < 2");
+  expect_throw(variant("\"rows\": 101", "\"rows\": 100.5"), false, "fractional rows");
+  expect_throw(variant("\"rows\": 101,", ""), false, "missing rows");
+  expect_throw(variant("\"dlat_deg\": 0.002", "\"dlat_deg\": 0"), false, "zero spacing");
+  expect_throw(variant("\"lat0_deg\": 36.9", "\"lat0_deg\": 89.9"), false, "beyond lat 90");
+  expect_throw(variant("\"units\": \"m\"", "\"units\": \"ft\""), false, "units");
+  expect_throw(variant("\"nodata\": -32768", "\"nodata\": 40000"), false, "nodata range");
+  expect_throw(variant("\"ridge.bin\"", "\"missing.bin\""), true, "missing data file");
+  bool rt = false;
+  try {
+    ld.load(tmp / "no_such.json");
+  } catch (const std::runtime_error&) {
+    rt = true;
+  }
+  check(rt, "tc015 missing header -> runtime_error");
+  fs::remove_all(tmp);
+
+  // int16 격자 생성자 크기 검사
+  bool thrown = false;
+  try {
+    GridTerrain(kInt16Heights, GridSpec{0, 0, 1, 1, 2, 2}, std::vector<std::int16_t>(3));
+  } catch (const std::invalid_argument&) {
+    thrown = true;
+  }
+  check(thrown, "tc015 int16 size mismatch");
+  check_near(GridTerrain(kInt16Heights, GridSpec{0, 0, 1, 1, 2, 2}, std::vector<std::int16_t>{0, 10, 20, 30})
+                 .elevation_m(0.5, 0.5),
+             15.0, 1e-12, "tc015 int16 bilinear");
+}
+
 const Case kCases[] = {
     {"TC-DYN-001", tc001}, {"TC-DYN-002", tc002}, {"TC-DYN-003", tc003}, {"TC-DYN-004", tc004},
     {"TC-DYN-005", tc005}, {"TC-DYN-006", tc006}, {"TC-DYN-007", tc007}, {"TC-DYN-008", tc008},
     {"TC-DYN-009", tc009}, {"TC-DYN-010", tc010}, {"TC-DYN-011", tc011}, {"TC-DYN-012", tc012}, {"TC-DYN-013", tc013},
-    {"TC-DYN-014", tc014},
+    {"TC-DYN-014", tc014}, {"TC-DYN-015", tc015},
 };
 
 }  // namespace
