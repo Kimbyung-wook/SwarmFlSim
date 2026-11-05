@@ -153,7 +153,7 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 |---|---|---|
 | lockstep: Core만 `--scenario`, 나머지는 `sim/ctrl/scenario`로 수신 | 통과 (조건 있음) | 시나리오 `run.mode=lockstep`일 때 정상 시작. 데모 시나리오는 realtime이라 Core `--mode lockstep`만 주면 참여자가 준비 신호(`FrameDone{0}`)를 보내지 않아 틱이 영영 나가지 않는다. 담당: WP1 Core·WP3 Agent·WP4 Datalink(CLI 재정의를 `Scenario`에 반영하거나, 참여자가 Core의 실행 모드를 받도록) |
 | lockstep 지각 참여자 | **불합격** | Core는 LOADED에서만 `Scenario`를 다시 내보내 RUNNING(준비 대기) 중 늦게 켠 Agent는 시나리오를 받지 못한다. 담당: WP1 Core(첫 틱 전까지 재발행) |
-| lockstep에서 hold·racetrack·route·params probe | 미확인 | 디버그 빌드에서 `rate=2`가 따라가지 못하고(overruns) probe의 벽시계 판정 창과 맞지 않아 realtime으로 확인 |
+| lockstep에서 hold·racetrack·route·params probe | 통과 | `--lockstep --rate 1`로 4종 모두 통과. `rate=2`는 디버그 빌드가 따라가지 못해(overruns) probe의 벽시계 판정 창과 맞지 않았다 |
 | probe move·hold·racetrack·route·params (realtime) | 통과 | route는 1회 항로점 2/3 도달(불합격) 후 재시도 3/3 통과. 판정 창 문제로 추정 |
 | `racetrack_guidance="foo"` | 통과 | `choice`로 거부, 기존 값 유지 (WP3 Agent) |
 | UI `전송` 버튼 가림 (12대) | 통과 | 최상위 요소, 패널 맨 위로 이동 (WP5) |
