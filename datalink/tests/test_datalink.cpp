@@ -1,4 +1,4 @@
-// TC-LNK-001~022: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~023: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -162,11 +162,12 @@ struct Rig {
   }
 
   void tx(const std::string& src, std::vector<std::string> dst, std::size_t payload = 32,
-          keys::Iface iface = keys::Iface::P2P, const std::string& msg = "PeerStatus") {
+          keys::Iface iface = keys::Iface::P2P, const std::string& msg = "PeerStatus", std::uint64_t sim_time_us = 0) {
     v1::LinkEnvelope env;
     auto* h = env.mutable_header();
     h->set_source(src);
     h->set_frame(frame);
+    h->set_sim_time_us(sim_time_us);
     const std::string key = keys::tx(src, iface, msg);
     h->set_seq(seq[key]++);
     for (auto& d : dst) env.add_dst(d);
@@ -177,13 +178,13 @@ struct Rig {
   }
 
   // Core 순서와 같게 truth를 먼저, tick을 나중에 보낸다
-  void tick() {
+  void tick(v1::RunMode mode = v1::RUN_MODE_LOCKSTEP) {
     truth();
     v1::ClockTick t;
     t.set_frame(frame);
     t.set_sim_time_us(frame * dt_us);
     t.set_dt_us(dt_us);
-    t.set_mode(v1::RUN_MODE_LOCKSTEP);
+    t.set_mode(mode);
     put(bus, std::string(keys::kClockTick), t);
     ++frame;
   }
@@ -377,7 +378,8 @@ void tc005() {
   for (int i = 0; i < 10000; ++i) nonneg = nonneg && sample_delay_us(p, rng) < (1ULL << 62);
   check(nonneg, "delay truncated at 0");
 
-  // 버스: 지연 50 ms, 프레임 20 ms. t=20 ms 송신 → 도착 70 ms → t=80 ms tick에서 전달
+  // 버스: 지연 50 ms, 프레임 20 ms. t=20 ms 송신 → 도착 70 ms → t=80 ms tick에서 전달.
+  // lockstep이므로 rx_time은 전달 틱 시각 아래로 내려가지 않는다 (DEC-054). realtime 값은 TC-LNK-023에서 본다
   DatalinkConfig cfg;
   LinkProfile fixed = clean_profile();
   fixed.latency_ms = 50.0;
@@ -394,8 +396,8 @@ void tc005() {
   check(r.dl->in_flight() == 1, "one message in flight");
   r.tick();  // t=80: 전달
   check(r.rx.size() == 1, "delivered at first tick after arrival");
-  if (!r.rx.empty()) check(r.rx[0].second.rx_time_us() == 70000, "rx_time = tx + latency");
-  check(r.outcomes.size() == 1 && r.outcomes[0].tx_time_us() == 20000 && r.outcomes[0].rx_time_us() == 70000,
+  if (!r.rx.empty()) check(r.rx[0].second.rx_time_us() == 80000, "rx_time = max(tx + latency, T_k)");
+  check(r.outcomes.size() == 1 && r.outcomes[0].tx_time_us() == 20000 && r.outcomes[0].rx_time_us() == 80000,
         "outcome tx/rx time");
 }
 
@@ -525,7 +527,7 @@ void tc009() {
     check(r.rx[0].first == "swarm/uav-001/rx/c2/TaskCommand", "rx key");
     check(r.rx[0].second.header().source() == "gcs-01", "source preserved");
     check(r.rx[0].second.payload() == std::string(40, 'x'), "payload preserved");
-    check(r.rx[0].second.rx_time_us() == 0, "rx_time on zero-latency link = tx time");
+    check(r.rx[0].second.rx_time_us() == 20000, "lockstep zero latency: rx_time = T_k (DEC-054)");
   }
   check(r.outcomes.size() == 1 && r.outcomes[0].outcome() == v1::LINK_OUTCOME_KIND_DELIVERED &&
             r.outcomes[0].iface() == v1::L1_INTERFACE_C2 && r.outcomes[0].msg_type() == "swarm.v1.TaskCommand",
@@ -1303,6 +1305,59 @@ void tc022() {
   }
 }
 
+// ---- TC-LNK-023: lockstep rx 불변식 rx_time >= T_k (DEC-054, QA-019) ----
+// 틱 k에서 나온 rx를 모두 모아 rx_time_us >= T_k인지 본다. 지연 0, 틱 사이 도착(5 ms), 처리량 상한 이월을 함께 시험한다
+struct RxBound {
+  std::size_t rx = 0, violations = 0, outcome_violations = 0;
+  std::uint64_t min_rx = UINT64_MAX;
+};
+
+RxBound run_rx_bound(double latency_ms, std::size_t max_routes, int burst, v1::RunMode mode) {
+  DatalinkConfig cfg;
+  LinkProfile p = clean_profile();
+  p.latency_ms = latency_ms;
+  cfg.profiles["clean"] = p;
+  cfg.max_routes_per_tick = max_routes;
+  Rig r({{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0}}, cfg);
+  RxBound b;
+  for (int k = 0; k < 12; ++k) {
+    const std::uint64_t t_k = r.frame * r.dt_us;
+    const std::size_t rx0 = r.rx.size(), o0 = r.outcomes.size();
+    r.tick(mode);
+    for (std::size_t i = rx0; i < r.rx.size(); ++i) {
+      ++b.rx;
+      b.min_rx = std::min<std::uint64_t>(b.min_rx, r.rx[i].second.rx_time_us());
+      if (r.rx[i].second.rx_time_us() < t_k) ++b.violations;
+    }
+    for (std::size_t i = o0; i < r.outcomes.size(); ++i)
+      if (r.outcomes[i].reason() == v1::DROP_REASON_NONE && r.outcomes[i].rx_time_us() < t_k) ++b.outcome_violations;
+    // 에이전트처럼 방금 처리한 틱 시각으로 보낸다
+    if (k < 3)
+      for (int i = 0; i < burst; ++i) r.tx("uav-001", {"uav-002"}, 32, keys::Iface::P2P, "PeerStatus", t_k);
+  }
+  return b;
+}
+
+void tc023() {
+  // 지연 0: 틱 k에 송신 시각 T(k-1)로 처리되지만 rx_time은 T_k 이상이다
+  const RxBound z = run_rx_bound(0.0, 4096, 3, v1::RUN_MODE_LOCKSTEP);
+  check(z.rx == 9, "zero delay: all delivered");
+  check(z.violations == 0, "zero delay: rx_time >= T_k");
+  check(z.outcome_violations == 0, "zero delay: outcome rx_time >= T_k");
+  // 틱 사이 도착(5 ms < dt)
+  const RxBound s = run_rx_bound(5.0, 4096, 3, v1::RUN_MODE_LOCKSTEP);
+  check(s.rx == 9 && s.violations == 0 && s.outcome_violations == 0, "sub-tick delay: rx_time >= T_k");
+  // 처리량 상한 이월: 틱당 2쌍, 틱마다 5건이면 대부분 다음 틱 이후로 넘어간다
+  const RxBound c = run_rx_bound(0.0, 2, 5, v1::RUN_MODE_LOCKSTEP);
+  check(c.rx == 15, "carry-over: all delivered eventually");
+  check(c.violations == 0 && c.outcome_violations == 0, "carry-over: rx_time >= T_k");
+  // realtime은 바뀌지 않는다: 표본 도착 시각(송신 시각 + 지연)을 그대로 쓴다
+  const RxBound rt = run_rx_bound(0.0, 4096, 3, v1::RUN_MODE_REALTIME);
+  check(rt.rx == 9, "realtime: all delivered");
+  check(rt.violations > 0, "realtime: rx_time not clamped to tick time");
+  check(rt.min_rx == 0, "realtime: zero delay keeps tx time");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1315,6 +1370,7 @@ const Case kCases[] = {
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
+    {"TC-LNK-023", tc023},
 };
 
 }  // namespace

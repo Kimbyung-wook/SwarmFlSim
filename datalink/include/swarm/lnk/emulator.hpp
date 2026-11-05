@@ -188,6 +188,7 @@ class Datalink {
   std::string loaded_name_;  // 마지막으로 적재한 시나리오 이름. sim/ctrl/scenario 중복 판정 (DEC-037)
   bool loaded_ = false;
   std::uint64_t now_us_ = 0;
+  bool lockstep_ = false;  // 처리 중인 틱의 모드 (DEC-054 rx 하한)
   std::uint64_t frame_ = 0;
   std::uint64_t arrival_ = 0;
   // lockstep 대기 (DEC-039): 다른 참여자의 FrameDone을 받은 뒤에 틱을 처리한다
