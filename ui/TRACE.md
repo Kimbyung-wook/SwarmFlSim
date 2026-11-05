@@ -76,6 +76,7 @@
 | IMP-UI-063 | 목 이벤트 각본(60 s 주기): 원형·다각형(상한 없음) 재밍 구역 켜고 끄기, 미사일 launch+spawn→impact(30 m)+kill, FPV spawn→kill(ground), 발사체를 truth/state에 싣고 종료 프레임에 alive=false 한 번, uav-001 cam0 SensorActivity 1 s 주기(τ 30–35 s 꺼짐). `MockSource({events:false})`로 끈다 | `src/data/mockEvents.ts`, `src/data/mockSource.ts` | DEC-046 | TC-UI-049 |
 | IMP-UI-064 | 이벤트 전시 명세(순수 함수): 구역 진영색 반투명 기둥(꺼짐 회색·옅게, 상한 없음은 8000 m까지·라벨 표기), 궤적 꼬리(미사일 주황·FPV 자홍, 종료 후 회색), 생성 흰 점·라벨(발사 기체→표적), 종료 회색 점·원인 라벨, impact 살상반경 원(빨강), kill 마커, FOV 모서리 4선·외곽선(지면이면 굵게) | `src/model/eventOverlay.ts` | DEC-046, DEC-003 | TC-UI-048 |
 | IMP-UI-065 | Cesium 이벤트 층: 구역·살상반경 원은 Entity(extruded ellipse·polygon, 도형 서명이 같으면 유지), 궤적·마커·FOV는 프리미티브 모음을 버전 변경 때 다시 채움. 2D·2.5D·3D 공통. MapView 렌더 루프에 연결 | `src/cesium/eventLayer.ts`, `src/components/MapView.tsx` | DEC-003, DEC-046 | TC-UI-051 |
+| IMP-UI-066 | QA-023 수정: 이벤트 층 polyline이 색별 Material 하나를 나눠 쓰다가 `removeAll`이 그 Material을 파괴해 다음 갱신에서 "This object was destroyed"로 렌더링이 멈춤. polyline 풀을 두고 polyline마다 자기 Material을 가지며 색은 `uniforms.color`로 바꾸고 남는 것은 `show=false`로 숨긴다. 점검: `entityLayer` 궤적은 polyline마다 Material(문제 없음), `missionLayer`는 Entity API(문제 없음), effectsLayer는 없음 | `src/cesium/eventLayer.ts` | DEC-046, DEC-003 | TC-UI-052, TC-UI-053 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -118,11 +119,14 @@
 | TC-UI-048 | 전시 명세: 구역 색·투명도·라벨·상한 없음, 궤적 색·회색 처리·생성/종료 라벨·살상반경 원, kill 마커·반경 0 무시, FOV 선 수·굵기·지면 고도 호출 (4건) | `ui/src/model/eventOverlay.test.ts` | IMP-UI-064 | 통과 |
 | TC-UI-049 | 목 각본(MockSource): 60 s 이벤트 키·순서, 발사체 truth 포함·alive=false 한 번·보관소 종료 원인, SensorActivity rx/ms 1 s 주기·τ 30–35 s 꺼짐, events=false·Reset 후 재현 (4건) | `ui/src/data/mockEvents.test.ts` | IMP-UI-063, IMP-UI-060 | 통과 |
 | TC-UI-050 | BusSource: `truth/event/**` 구독 키(다운샘플 없음)·TruthEvent 해석·해석 오류 보고 (1건, 구독 키 목록 시험 갱신) | `ui/src/data/busSource.test.ts` | IMP-UI-062 | 통과 |
-| TC-UI-051 | 수동(브라우저, 목 소스): 2D·3D에서 재밍 구역 기둥·꺼짐, 발사체 꼬리·생성/종료 마커·살상반경 원, FOV 원뿔·풋프린트 | 브라우저 확인 | IMP-UI-065 | 미실시 |
+| TC-UI-051 | 수동(브라우저, 목 소스): 2D·3D에서 재밍 구역 기둥·꺼짐, 발사체 꼬리·생성/종료 마커·살상반경 원, FOV 원뿔·풋프린트 | 브라우저 확인 | IMP-UI-065 | TC-UI-053로 실시 |
+| TC-UI-052 | Cesium 객체 수명(실제 PolylineCollection·Material, 가짜 viewer): 5회 갱신 뒤 파괴된 Material 없음·polyline 유지·Material 고유, 선 수 감소 시 숨김·색 uniform 갱신, 증가 시 풀 확장, destroy 정리 (수정 전 코드에서 실패 확인) (2건) | `ui/src/cesium/eventLayer.test.ts` | IMP-UI-066 | 통과 |
+| TC-UI-053 | 수동(브라우저, 목 소스): 3D와 2D에서 τ 10·15 s 발사 → 22·27 s 종료를 넘겨 각 주기 2회 이상 갱신, 두 번째 주기(τ 70 s 발사, T 81 s)까지 궤적·종료 마커(명중·지면 충돌)·살상반경 원·재밍 구역·FOV 계속 렌더링, 콘솔에 destroyed·DeveloperError 없음 | 브라우저 확인 | IMP-UI-065, IMP-UI-066 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
 - 2차 자동 시험: `npm test` 10개 파일 56건 통과. `npm run build` 통과.
 - 3차 자동 시험(계약 0.4.0 지도 임무): `npm test` 12개 파일 81건 통과.
 - truth 이벤트 시각화(기준 `wp0-contracts` 9979e84, 계약 0.10.0): `npm test` 20개 파일 145건 통과. `npm run build` 통과.
+- QA-023 수정(기준 `wp0-contracts` 37ba3a7): `npm test` 21개 파일 146건 통과. `npm run build` 통과.
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.
