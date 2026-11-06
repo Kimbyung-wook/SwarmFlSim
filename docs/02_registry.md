@@ -132,7 +132,8 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-055 | 재밍 판정은 수신단 기준만 쓴다(DEC-028 유지). 구역 안 송신자가 구역 밖 수신자에게 보내는 메시지는 손실되지 않는다. 구역 안 기체는 GCS 명령을 받지 못하고 상태 보고는 GCS에 도착한다 | OPN-045, DEC-028, 사용자 답변: "현행 유지" | Confirmed |
 | DEC-056 | 임무장비 상태 변화 보고(DEC-051)는 (메시지, payload_id)별로 최대 빈도를 둔다. 기본 10 Hz이며 Agent 런타임 설정으로 바꿀 수 있다. 1 Hz 전체 보고는 유지한다. 제한으로 미룬 변화는 다음 허용 시점에 최신 값으로 보낸다 | OPN-046, QA O-4, DEC-051, 사용자 답변: "10Hz 으로 하고, 이는 변경할 수 있도록 해줘." | Confirmed |
 | DEC-057 | UI 지도는 오프라인 고해상도로 한다. 영상은 EOX Sentinel-2 cloudless 최신판(10 m, CC BY-NC-SA 4.0, 비상업 연구용, 출처 표기)을 한반도 전역(33–43°N, 124–131°E) z13(약 19 m/px)까지 받는다. 지형은 DEC-053의 GLO-90을 Cesium 지형 타일로 변환한다. 자료는 `data/tiles/`(Git 미포함)에 두고 받기·변환 스크립트만 커밋한다 | OPN-047, DEC-004, DEC-053, 사용자 답변: "지도 해상도를 고해상도로 변경", "Sentinel-2 cloudless 최신", "z13, 약 19 m/px" | Confirmed (영상 출처는 Superseded by DEC-058) |
-| DEC-058 | UI 지도 영상 출처는 Copernicus Data Space Ecosystem의 Sentinel-2 분기 cloudless 모자이크(10 m, B04/B03/B02)로 한다. 한반도 전역(33–43°N, 124–131°E)을 z13 타일로 만들어 `data/tiles/imagery`에 둔다. 출처 표기는 Copernicus Sentinel 데이터 법적 고지를 따른다. 범위·확대 수준·지형은 DEC-057을 유지한다 | OPN-048, DEC-057, 사용자 답변: "Copernicus 공개 모자이크" | Confirmed |
+| DEC-058 | UI 지도 영상 출처는 Copernicus Data Space Ecosystem의 Sentinel-2 분기 cloudless 모자이크(10 m, B04/B03/B02)로 한다. 한반도 전역(33–43°N, 124–131°E)을 z13 타일로 만들어 `data/tiles/imagery`에 둔다. 출처 표기는 Copernicus Sentinel 데이터 법적 고지를 따른다. 범위·확대 수준·지형은 DEC-057을 유지한다 | OPN-048, DEC-057, 사용자 답변: "Copernicus 공개 모자이크" | Superseded by DEC-059 |
+| DEC-059 | UI 지도 영상은 계정 없이 받을 수 있는 AWS 공개 Sentinel-2 L2A 장면(B04/B03/B02, COG)에서 구름이 적은 화소를 골라 자체 합성한다. 같은 Copernicus Sentinel 데이터이므로 출처 표기는 Copernicus 법적 고지를 따른다. 범위·z13·지형은 DEC-057을 유지한다 | OPN-049, DEC-058, 사용자 답변: "공개 AWS L2A로 자체 모자이크" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -186,6 +187,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-046 | 임무장비 상태 보고 빈도(QA O-4). DEC-051의 "변화 시 보고"로 SensorActivity 지향각이 매 프레임 바뀌어 기체마다 50 Hz로 GCS에 보고한다(5기 약 22 kB/s). 선택: (A) 변화 보고를 (메시지, payload_id)별 최대 5 Hz로 제한, 1 Hz 전체 보고는 유지 (B) 지향각 같은 연속값은 변화 판정에서 빼고 1 Hz로만 보고 (C) 현행 유지. 제안: A. 근거: 지도 FOV 표시에 5 Hz면 충분하고 기체 수가 늘어도 GCS 대역이 예측 가능하다 | Resolved by DEC-056 |
 | OPN-047 | UI 오프라인 지도 영상의 출처와 확대 수준. 현재 로컬 타일이 없어 내장 저해상도 영상과 타원체로 표시된다. 선택: 출처 (A) Sentinel-2 cloudless 2016(CC BY 4.0) (B) 최신판(CC BY-NC-SA 4.0) (C) NASA Blue Marble(500 m). 수준 z12 / z13 / z14 | Resolved by DEC-057 |
 | OPN-048 | DEC-057의 EOX Sentinel-2 cloudless는 일괄 오프라인 사용에 유료 상품 또는 서면 허가가 필요하다. 선택: (A) Copernicus 공개 분기 모자이크 (B) EOX 서면 허가 (C) EOX 상품 구매 (D) 내장 영상 유지 | Resolved by DEC-058 |
+| OPN-049 | DEC-058의 CDSE 모자이크 COG는 계정과 S3 키가 있어야 받을 수 있다(익명 401/403). 선택: (A) 사용자가 가입·키 발급 (B) AWS 공개 L2A로 자체 합성 (C) 보류 | Resolved by DEC-059 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
