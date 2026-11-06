@@ -152,6 +152,14 @@
 | TC-QA-041 | DEC-054: 같은 시드 lockstep 4변형 × 6회에서 궤적·이벤트·LinkOutcome·MA 입력 동일, 0 지연 전달 없음(QA-019 재시험) | `qa/qa019_batch.sh`(PREFIX=r9), `qa/qa019_summary.py --prefix r9` | DEC-054, DEC-045, DEC-005 |
 | TC-QA-042 | DEC-052: 늦게 붙은 구독자·UI가 1 s 안에 활성 재밍 구역 수신, 꺼진 구역 재발행 없음(QA-021 재시험) | `qa/jam_late.py` (+ `--bridge --ui`, 앱 내장 브라우저) | DEC-052, DEC-028 |
 | TC-QA-043 | DEC-056: 기본 10 Hz 제한에서 기체당 Activity 보고 빈도·대역 | `qa/act_rate.py` | DEC-056, DEC-051 |
+| TC-QA-044 | DEC-053: DEM 지형에서 지면 충돌 프레임·고도가 DEM 보간값과 일치, 격자 밖 0 m(QA-022 재시험) | `qa/dem_check.py --case mtn|north [--flat]` | DEC-053, DEC-016, DEC-004 |
+| TC-QA-045 | DEC-053: `--terrain-flat`과 `--terrain-dem` 함께 쓰기 거부, 없는 DEM 파일 오류 | `swarm_core` 직접 실행 | DEC-053 |
+| TC-QA-046 | DEC-054: 발사·생성·명중이 있는 84,000 프레임 lockstep 3회 결정성, 0 지연 전달 없음, 자원 추이 | `qa/qa019_batch.sh`(PREFIX=r10L), `qa/qa019_summary.py --prefix r10L` | DEC-054, DEC-045, DEC-005 |
+| TC-QA-047 | DEC-051·056: StrikeActivity 변경·1 s 주기 보고, (메시지, payload_id)별 10 Hz 상한 | `link_io.pkl.gz`·`gcs_act.pkl.gz` 분석 | DEC-051, DEC-056 |
+| TC-QA-048 | DEC-056: `--activity-max-hz` 2·50·0 실측 | `qa/qa019_batch.sh`(AGENT_ARGS), `qa/act_rate.py` | DEC-056 |
+| TC-QA-049 | DEC-052·055: Datalink 재시작 뒤 구역 재발행으로 구역 안 링크 재두절, 수신단 판정 유지 | `qa/dl_restart_jam.py` | DEC-052, DEC-055 |
+| TC-QA-050 | O-5: frame 0 단발 이벤트 누락 영향 정리 | r9·r10 trace 분석, 코드 확인 | DEC-052 |
+| TC-QA-051 | DEC-057·059: UI 지도 영상·지형 동시 사용 FPS, 콘솔 오류, 출처 표기 | `qa/ui_map_fps.py` (Playwright, 시스템 Chrome) | DEC-057, DEC-059 |
 
 ## 시험 결과
 
@@ -218,6 +226,14 @@
 | TC-QA-041 | 통과 | 2026-11-06 | 24회 모두 궤적 한 무리, MA 입력·LinkOutcome·이벤트(seq 맞춤) 차이 0. 0 지연 전달 0, 최소 지연 20 ms. QA-019 해소 |
 | TC-QA-042 | 통과 | 2026-11-06 | 늦은 구독자 지연 0.22~0.96 s, 주기 1.0 s. KILL 뒤 꺼짐 1건, 그 뒤 붙은 구독자·UI 새로 고침에는 구역 없음. QA-021 해소 |
 | TC-QA-043 | 통과 | 2026-11-06 | 기체당 SensorActivity 10.0 msg/s(간격 0.1 s), 약 1.47 kB/s. 변경 전 50 msg/s, 7.36 kB/s |
+| TC-QA-044 | 부분 통과 | 2026-11-06 | 설악·한라 kill 프레임 3건이 DEM 기대값과 같다(차이 0.00 m). 격자 밖 0 m. DEM 아래 시작 기체는 판정 없음(QA-024). QA-022 해소 |
+| TC-QA-045 | 불합격 | 2026-11-06 | 함께 주면 거부 없이 DEM 사용(QA-025). 없는 파일은 rc 1 |
+| TC-QA-046 | 통과 | 2026-11-06 | 3회 궤적·MA 입력·LinkOutcome·이벤트(seq 맞춤, spawn 포함) 차이 0. 0 지연 전달 0. Core·Datalink RSS 증가 없음, Agent 뒤 절반 +1 MB 미만 |
+| TC-QA-047 | 통과 | 2026-11-06 | 변경 보고 2건(발사·명중) + 1 s 주기. 최소 간격 0.12 s. 상한이 막는 경우는 만들지 못함 |
+| TC-QA-048 | 통과 | 2026-11-06 | 2 Hz 간격 0.5 s, 50 Hz·0 간격 0.02 s(매 틱), 기본 10 Hz 간격 0.1 s |
+| TC-QA-049 | 통과 | 2026-11-06 | 재시작 뒤 0.80~0.88 s 안에 재두절, 그 뒤 구역 안 전달 0. 재시작 직후 전달 48·80건(O-6) |
+| TC-QA-050 | 정리 | 2026-11-06 | frame 0 단발 truth 이벤트는 jam_zone뿐(재발행). 현재 영향 없음 |
+| TC-QA-051 | 통과 | 2026-11-06 | 내장 GPU headless 38~86 FPS, 실패 요청 0, 콘솔 404 1건(favicon 추정). 출처 표기 2건 확인 |
 
 ## 프로세스 결정
 

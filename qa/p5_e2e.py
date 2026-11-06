@@ -33,10 +33,12 @@ EXAMPLE = ROOT / "scenario/examples/p5_payload_demo_5.json"
 
 
 class P5Stack(h.Stack):
-    def __init__(self, *a, probe_out: Path, probe_io: Path | None = None, **k) -> None:  # noqa: ANN002, ANN003
+    def __init__(self, *a, probe_out: Path, probe_io: Path | None = None, agent_extra: list[str] | None = None,
+                 **k) -> None:  # noqa: ANN002, ANN003
         super().__init__(*a, **k)
         self.probe_out = probe_out
         self.probe_io = probe_io
+        self.agent_extra = agent_extra or []
 
     def _cmd(self, name: str) -> list[str]:
         c = super()._cmd(name)
@@ -46,7 +48,7 @@ class P5Stack(h.Stack):
                 os.environ["P5_PROBE_IO"] = str(self.probe_io)
             else:
                 os.environ.pop("P5_PROBE_IO", None)
-            c = [sys.executable, str(Path(__file__).parent / "p5_probe_agent.py"), *c[3:]]
+            c = [sys.executable, str(Path(__file__).parent / "p5_probe_agent.py"), *c[3:], *self.agent_extra]
         return c
 
 
@@ -297,7 +299,8 @@ def run(a: argparse.Namespace) -> None:
     probe_out = out / "probe.json"
     st = P5Stack(out / "stack", sc, base_port=a.base_port, lockstep=(a.mode == "lockstep"), rate=a.rate,
                  record=a.record, bridge=a.bridge, probe_out=probe_out,
-                 probe_io=(out / "agent_io.txt") if a.trace_io else None)
+                 probe_io=(out / "agent_io.txt") if a.trace_io else None,
+                 agent_extra=[x for arg in a.agent_arg for x in arg.split()])
     web = []
     t0 = time.monotonic()
     fault = None
@@ -328,6 +331,10 @@ def run(a: argparse.Namespace) -> None:
         time.sleep(st.settle + 1.0)
         st.start_one("core")
         t0 = time.monotonic()
+        # 프로세스별 CPU·RSS와 진행(벽시계 대 프레임) 표본 (TC-QA-046)
+        rs = h.ResourceSampler(st, period=5.0)
+        rs.start()
+        progress: list[tuple[float, int, float]] = []
         print(f"ready endpoint {st.endpoint()} bridge {st.bridge_port if a.bridge else '-'}", flush=True)
         last_print = 0.0
         launch_seen_at = None
@@ -363,6 +370,8 @@ def run(a: argparse.Namespace) -> None:
                 launch_seen_at = sim_s
             if time.monotonic() - last_print > 15:
                 last_print = time.monotonic()
+                import psutil
+                progress.append((round(last_print - t0, 1), lf, round(psutil.Process().memory_info().rss / 1e6, 1)))
                 print(f"{time.monotonic() - t0:6.0f}s frame {lf} sim {sim_s:.0f}s det {dict(ndet)} "
                       f"launch {nlaunch} impact {nimpact} dead {st.dead()}", flush=True)
             if a.frames and lf >= a.frames:
@@ -382,6 +391,10 @@ def run(a: argparse.Namespace) -> None:
         res = analyse(ob, probe, fault, 20000, cut)
         res["mode"], res["scenario"], res["wall_s"] = a.mode, str(sc), round(time.monotonic() - t0, 1)
         res["log_issues"] = h.scan_logs(st)
+        res["resources"] = rs.stop()
+        res["resources_samples"] = [(round(t - t0, 1), {n: (round(c, 1), round(m, 1)) for n, (c, m) in r.items()})
+                                    for t, r in rs.samples]
+        res["progress_wall_frame_obs_rss"] = progress
         (out / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
         with gzip.open(out / "trace.pkl.gz", "wb") as f:
             with ob.lock:
@@ -461,6 +474,8 @@ def main() -> None:
     ap.add_argument("--link-cut", help="이 기체에 GCS_LINK_CUT 고장을 준다 (TC-QA-039)")
     ap.add_argument("--cut-at-s", type=float, default=120.0)
     ap.add_argument("--cut-s", type=float, default=10.0)
+    ap.add_argument("--agent-arg", action="append", default=[],
+                    help="Agent 명령행에 덧붙일 인자. 공백으로 나눈다 (예: --agent-arg '--activity-max-hz 2', TC-QA-048)")
     ap.add_argument("--compare", nargs=2)
     ap.add_argument("--upto", type=int, default=10**9)
     a = ap.parse_args()

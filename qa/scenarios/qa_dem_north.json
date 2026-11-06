@@ -1,0 +1,217 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-dem-north",
+ "description": "TC-QA-044 DEM 지형 (QA-022)",
+ "map": {
+  "origin": {
+   "lat_deg": 42.98,
+   "lon_deg": 127.5,
+   "alt_m": 826.0
+  },
+  "extent": {
+   "south_deg": 42.8,
+   "north_deg": 43.1,
+   "west_deg": 127.3,
+   "east_deg": 127.7
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261106,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 42.949999999999996,
+     "lon_deg": 127.5,
+     "alt_m": 826.0
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "uav-001",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "dof2",
+   "airframe": "skywalker_x8",
+   "initial": {
+    "position": {
+     "lat_deg": 43.03,
+     "lon_deg": 127.5,
+     "alt_m": 400.0
+    },
+    "velocity_ned_mps": {
+     "x": 0.0,
+     "y": 20.0,
+     "z": 0.0
+    }
+   },
+   "autonomy": {
+    "ma_plugin": "waypoint",
+    "ma_params": {
+     "hold_radius_m": 300,
+     "acceptance_m": 80
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-003",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "dof2",
+   "airframe": "skywalker_x8",
+   "initial": {
+    "position": {
+     "lat_deg": 43.03,
+     "lon_deg": 127.5,
+     "alt_m": 30.0
+    },
+    "velocity_ned_mps": {
+     "x": 0.0,
+     "y": 20.0,
+     "z": 0.0
+    }
+   },
+   "autonomy": {
+    "ma_plugin": "waypoint",
+    "ma_params": {
+     "hold_radius_m": 300,
+     "acceptance_m": 80
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-004",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "dof2",
+   "airframe": "skywalker_x8",
+   "initial": {
+    "position": {
+     "lat_deg": 42.985,
+     "lon_deg": 127.5,
+     "alt_m": 400.0
+    },
+    "velocity_ned_mps": {
+     "x": 0.0,
+     "y": 20.0,
+     "z": 0.0
+    }
+   },
+   "autonomy": {
+    "ma_plugin": "waypoint",
+    "ma_params": {
+     "hold_radius_m": 300,
+     "acceptance_m": 80
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-002",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "dof2",
+   "airframe": "skywalker_x8",
+   "initial": {
+    "position": {
+     "lat_deg": 43.006,
+     "lon_deg": 127.52,
+     "alt_m": 400.0
+    },
+    "velocity_ned_mps": {
+     "x": -20.0,
+     "y": 0.0,
+     "z": 0.0
+    }
+   },
+   "autonomy": {
+    "ma_plugin": "waypoint",
+    "ma_params": {
+     "hold_radius_m": 300,
+     "acceptance_m": 80
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-dem",
+  "tasks": [
+   {
+    "task_id": "t-uav-001",
+    "assignees": [
+     "uav-001"
+    ],
+    "hold": {
+     "center": {
+      "lat_deg": 43.03,
+      "lon_deg": 127.504,
+      "alt_m": 400.0
+     },
+     "radius_m": 300.0,
+     "direction": "cw"
+    }
+   },
+   {
+    "task_id": "t-uav-003",
+    "assignees": [
+     "uav-003"
+    ],
+    "hold": {
+     "center": {
+      "lat_deg": 43.03,
+      "lon_deg": 127.504,
+      "alt_m": 30.0
+     },
+     "radius_m": 300.0,
+     "direction": "cw"
+    }
+   },
+   {
+    "task_id": "t-uav-004",
+    "assignees": [
+     "uav-004"
+    ],
+    "hold": {
+     "center": {
+      "lat_deg": 42.985,
+      "lon_deg": 127.504,
+      "alt_m": 400.0
+     },
+     "radius_m": 300.0,
+     "direction": "cw"
+    }
+   },
+   {
+    "task_id": "t-uav-002",
+    "assignees": [
+     "uav-002"
+    ],
+    "move_to": {
+     "destination": {
+      "lat_deg": 42.98,
+      "lon_deg": 127.52,
+      "alt_m": 400.0
+     },
+     "speed_mps": 20.0
+    }
+   }
+  ]
+ }
+}
