@@ -160,6 +160,11 @@
 | TC-QA-049 | DEC-052·055: Datalink 재시작 뒤 구역 재발행으로 구역 안 링크 재두절, 수신단 판정 유지 | `qa/dl_restart_jam.py` | DEC-052, DEC-055 |
 | TC-QA-050 | O-5: frame 0 단발 이벤트 누락 영향 정리 | r9·r10 trace 분석, 코드 확인 | DEC-052 |
 | TC-QA-051 | DEC-057·059: UI 지도 영상·지형 동시 사용 FPS, 콘솔 오류, 출처 표기 | `qa/ui_map_fps.py` (Playwright, 시스템 Chrome) | DEC-057, DEC-059 |
+| TC-QA-052 | DEC-018: DEM 지형에서 산릉이 가리면 FOV·거리 안이어도 Detection 없음, 고도를 높이거나 위치를 옮기면 Detection (Python DEM 단면 대조) | `qa/los_check.py --out qa/out/los/dem` | DEC-018, DEC-053 |
+| TC-QA-053 | DEC-018: 같은 배치 `--terrain-flat 0` 대조에서 가림 없음 | `qa/los_check.py --out qa/out/los/flat --flat` | DEC-018 |
+| TC-QA-054 | DEC-018: 가시선 판정 경계(50 m 표본, 끝점 0.5 m 허용), 경계 고도 ±1 m 판정과 세밀 표본 비교 | `qa/los_check.py --design` | DEC-018 |
+| TC-QA-055 | DEC-051·056: 0.1 s 안 StrikeActivity 연속 변경에서 10 Hz 상한의 합침·지연, 마지막 상태 전달 | `qa/strike_burst.py --hz 10 --impact-from …` + `qa/strike_burst_agent.py` | DEC-051, DEC-056 |
+| TC-QA-056 | DEC-051·056: `--activity-max-hz 0` 대조, 같은 프레임 안 두 변경의 보고 | `qa/strike_burst.py --hz 0 --impact-from …` | DEC-051, DEC-056 |
 
 ## 시험 결과
 
@@ -234,6 +239,11 @@
 | TC-QA-049 | 통과 | 2026-11-06 | 재시작 뒤 0.80~0.88 s 안에 재두절, 그 뒤 구역 안 전달 0. 재시작 직후 전달 48·80건(O-6) |
 | TC-QA-050 | 정리 | 2026-11-06 | frame 0 단발 truth 이벤트는 jam_zone뿐(재발행). 현재 영향 없음 |
 | TC-QA-051 | 통과 | 2026-11-06 | 내장 GPU headless 38~86 FPS, 실패 요청 0, 콘솔 404 1건(favicon 추정). 출처 표기 2건 확인 |
+| TC-QA-052 | 통과 | 2026-11-06 | 설악·한라 정상부 차폐 센서 각 2기 Detection 0(여유 −45.4·−0.29, −58.9·−0.41 m), 고도 상향·이동 센서 각 3기 300/300. 14쌍 Python 기대와 일치 |
+| TC-QA-053 | 통과 | 2026-11-06 | 평지 0 m에서 14쌍 모두 300/300, 거리 Core = Python |
+| TC-QA-054 | 통과 | 2026-11-06 | 50 m 표본 경계 고도 ±1 m 판정이 Python과 같다. 경계가 5 m 표본보다 1.23·2.98 m 낮다(O-8). 끝점 허용은 판정에 관여하지 않음 |
+| TC-QA-055 | 통과 | 2026-11-06 | 20 ms 간격 4변경 중 2건 합쳐짐, 최대 지연 120 ms(0 Hz 대비 +60~100 ms). 마지막 상태 전달, 1 s 주기 유지, 손실 0 |
+| TC-QA-056 | 부분 통과 | 2026-11-06 | 0 Hz는 합침 없음(지연 20~60 ms). 같은 프레임 LAUNCHED w04 + IMPACT w01에서 LAUNCHED가 두 모드 모두 빠짐(QA-026, D-23). 마지막 상태 전달 |
 
 ## 프로세스 결정
 
