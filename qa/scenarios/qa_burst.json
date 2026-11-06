@@ -1,0 +1,178 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-burst",
+ "description": "TC-QA-055~056 StrikeActivity 10 Hz 상한",
+ "map": {
+  "origin": {
+   "lat_deg": 37.5,
+   "lon_deg": 128.0,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 37.4,
+   "north_deg": 37.6,
+   "west_deg": 127.9,
+   "east_deg": 128.1
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261106,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "link_profiles": [
+  {
+   "name": "uav_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  },
+  {
+   "name": "gcs_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  }
+ ],
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.4820338,
+     "lon_deg": 128.0,
+     "alt_m": 30.0
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "uav-001",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 128.0,
+     "alt_m": 500.0
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "count": 6
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "count": 2
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "tgt-a",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5089831,
+     "lon_deg": 128.0,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "tgt-b",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5089831,
+     "lon_deg": 128.0006794,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "tgt-c",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5107797,
+     "lon_deg": 127.9977354,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "tgt-d",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5134747,
+     "lon_deg": 128.0033969,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "tgt-e",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5134747,
+     "lon_deg": 127.9966031,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "tgt-far",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5628818,
+     "lon_deg": 128.0,
+     "alt_m": 0.0
+    }
+   }
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-burst",
+  "tasks": []
+ }
+}
