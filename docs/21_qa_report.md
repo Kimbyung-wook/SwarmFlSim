@@ -1129,8 +1129,8 @@ wp0-contracts 96c32c8(계약 0.12.0)을 병합하고 시험했다. 이 커밋에
 
 | TC | 내용 | 결과 |
 |---|---|---|
-| TC-QA-044 | DEM 지형에서 지면 충돌 프레임·고도가 DEM 보간값과 맞는가. 격자 밖은 0 m인가 (QA-022) | 부분 통과 (QA-024) |
-| TC-QA-045 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 거부하는가 | 불합격 (QA-025) |
+| TC-QA-044 | DEM 지형에서 지면 충돌 프레임·고도가 DEM 보간값과 맞는가. 격자 밖은 0 m인가 (QA-022) | 부분 통과 (QA-024) → 재시험 통과 (18.16) |
+| TC-QA-045 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 거부하는가 | 불합격 (QA-025) → 재시험 통과 (DEC-061, 18.16) |
 | TC-QA-046 | 발사·생성·명중이 있는 84,000 프레임 lockstep 3회의 결정성, rx 불변식, 자원 추이 | 통과 |
 | TC-QA-047 | StrikeActivity 변경 보고·1 s 주기 보고·(메시지, payload_id)별 10 Hz 상한 | 통과 (상한은 부하 없음) |
 | TC-QA-048 | `--activity-max-hz` 2, 50, 0 실측 | 통과 |
@@ -1161,9 +1161,10 @@ wp0-contracts 96c32c8(계약 0.12.0)을 병합하고 시험했다. 이 커밋에
 | uav-001 | 격자 밖 43.03°N, 400 m 선회 | kill 없음 |
 | uav-003 | 격자 밖 43.03°N, 30 m 선회 | kill 없음 (격자 밖 0 m 위) |
 | uav-002 | 격자 밖 400 m에서 남쪽으로 들어온다(격자 안 지형 약 978 m) | 경계를 넘은 프레임 1,667에 kill. 그때 DEM 978.0 m, 기대 프레임과 같다 |
-| uav-004 | 격자 안, DEM 979.9 m 위치에서 400 m로 시작 | kill 없음. 3,000 프레임 내내 지면 아래 약 580 m를 난다 (QA-024) |
+| uav-004 | 격자 안 42.985°N 127.5°E, DEM 820.0 m 위치에서 400 m로 시작(지면 아래 420 m) | kill 없음. 북쪽으로 날며 지형이 최고 979.9 m까지 올라가 3,000 프레임 끝에는 지면 아래 579.9 m였다 (QA-024) |
 
 - 격자 밖은 0 m로 처리된다. 격자 안으로 들어오는 순간 DEM이 적용된다.
+- 정정(2026-11-06): 처음 보고에는 uav-004 시작 지형을 979.9 m로 적었다. 이 값은 `dem_check.py` 결과의 `max_terrain_m`(궤적 전체의 최고 지형)이었고 시작점 값이 아니다. 시작점 DEM은 820.0 m다(Python 쌍선형 보간과 Core 적재 경고 값이 같다). 지면 아래 약 580 m도 궤적 끝의 최대 깊이다. 시작 고도가 지형보다 낮아 kill이 나와야 한다는 판정(QA-024)은 바뀌지 않는다. 다시 헷갈리지 않도록 `dem_check.py`에 `start_dem_m`·`start_clearance_m`을 더했다.
 - 지면 아래에서 시작한 기체는 지면 이벤트를 걸지 않는다(`core/src/sim_core.cpp:546` 주석 "지면 아래 시작은 제외"). 지상 엔티티를 위한 설계로 보인다. 하지만 공중 기체가 DEM 아래에서 시작해도 경고·거부·kill이 없다. 시나리오 작성자가 DEM을 모르고 낮은 고도로 두면 지면 아래를 계속 난다(QA-024).
 - 지형 가림(DEC-018)은 이번에 확인하지 않았다(18.10).
 
@@ -1280,11 +1281,11 @@ r10L_base_1 (uav-001 → gcs-01, 송신 48건):
 
 #### QA-024 — DEM 아래에서 시작한 공중 기체가 지면 충돌 판정을 받지 않는다
 - 담당 WP1 Core(또는 WP0 시나리오 검증) / 보통 / TC-QA-044
-- 재현: `qa/scenarios/qa_dem_north.json`의 uav-004(42.985°N 127.5°E, DEM 979.9 m, 고도 400 m), `swarm_core --terrain-dem data/dem/korea_glo90.json`.
+- 재현: `qa/scenarios/qa_dem_north.json`의 uav-004(42.985°N 127.5°E, DEM 820.0 m, 고도 400 m). `swarm-scenario export --out north.pb qa/scenarios/qa_dem_north.json` 뒤 `swarm_core --scenario north.pb --terrain-dem data/dem/korea_glo90.json`(또는 `qa/dem_check.py --case north`).
 - 기대: 시나리오 적재 때 거부·경고하거나 시작 프레임에 kill(cause=ground).
-- 실제: 경고 없이 시작하고 3,000 프레임 동안 지면 아래 약 580 m를 난다. `core/src/sim_core.cpp:546`이 시작 때 지면 아래인 엔티티는 지면 이벤트를 걸지 않는다.
+- 실제: 경고 없이 시작하고 3,000 프레임 동안 지면 아래(시작 420 m, 끝 579.9 m)를 난다. `core/src/sim_core.cpp:546`이 시작 때 지면 아래인 엔티티는 지면 이벤트를 걸지 않는다.
 - 비고: 지상 엔티티(지면 고도 0 근처 시작)를 위한 제외로 보인다. 평지 0 m에서는 생기지 않던 경우가 DEM에서는 시나리오 작성 실수로 쉽게 생긴다. D-20.
-- 상태: 신규
+- 상태: 해소 (DEC-060, b591329). 18.16 재시험
 
 #### QA-025 — `--terrain-flat`과 `--terrain-dem`을 함께 주어도 거부하지 않는다
 - 담당 WP1 Core / 낮음 / TC-QA-045
@@ -1292,7 +1293,7 @@ r10L_base_1 (uav-001 → gcs-01, 송신 48건):
 - 기대: 계약 "함께 쓰지 않는다"에 따라 시작 때 오류로 끝난다.
 - 실제: 시작하고 DEM을 쓴다. 평지 값은 경고 없이 무시된다.
 - 비고: 계약 문장이 Core의 거부를 요구하는지는 분명하지 않다. D-22.
-- 상태: 신규
+- 상태: 해소 (DEC-061: 거부하지 않고 DEM을 쓰며 경고를 남긴다, b591329). 18.16 재시험
 
 ### 18.12 결함 상태 갱신
 
@@ -1302,9 +1303,9 @@ r10L_base_1 (uav-001 → gcs-01, 송신 48건):
 
 | # | 상태 | 비고 |
 |---|---|---|
-| D-20 | 확인 필요 | QA-024. 지면 아래에서 시작한 공중 엔티티를 시나리오 검증에서 거부할지, 시작 프레임에 kill할지, 지금처럼 둘지 |
+| D-20 | 결정 (DEC-060) | QA-024. 지면 아래에서 시작한 공중 엔티티를 시나리오 검증에서 거부할지, 시작 프레임에 kill할지, 지금처럼 둘지 |
 | D-21 | 확인 필요 | O-6. Datalink 재시작 직후 다음 재발행까지(최대 1 s) 구역 안 전달을 허용할지. 막으려면 Datalink가 시작 때 구역을 조회하거나 Core가 새 참여자에게 즉시 발행해야 한다 |
-| D-22 | 확인 필요 | QA-025. "함께 쓰지 않는다"가 Core의 거부를 뜻하는지 |
+| D-22 | 결정 (DEC-061) | QA-025. "함께 쓰지 않는다"가 Core의 거부를 뜻하는지 |
 
 ### 18.14 관찰
 
@@ -1321,3 +1322,50 @@ r10L_base_1 (uav-001 → gcs-01, 송신 48건):
 | Agent 재시작 뒤 StoreLoadout 수량 | 코드 확인만 했다 |
 | 실제 GPU·창 모드 FPS | headless Chrome, 내장 GPU로만 쟀다 |
 | 실버스(source=bus) UI 지도 | 모의 원본으로만 쟀다 |
+
+### 18.16 재시험과 정정 (wp0-contracts 1decbcb, 2026-11-06)
+
+wp0-contracts 1decbcb(QA-024·025 수정 b591329, DEC-060·061)를 병합하고 msvc-debug로 다시 빌드했다. WP1-2가 지적한 두 가지를 확인하고 TC-QA-044·045를 다시 돌렸다.
+
+**uav-004 시작 지형 값 정정**
+
+| 값 | 출처 | 뜻 |
+|---|---|---|
+| 820.0 m | DEM 42.985°N 127.5°E 쌍선형 보간(행 11,982, 열 4,200 격자점), Core 적재 경고 "terrain 820.0 m" | 시작점 지형 |
+| 979.9 m | 처음 실행 `qa/out/dem/north/result.json`의 `max_terrain_m` | 3,000 프레임 궤적 전체의 최고 지형 |
+| −579.9 m | 같은 파일 `min_clearance_m`(프레임 3,000) | 궤적 끝의 최대 깊이 |
+
+18.3 표와 QA-024 재현 문장을 고쳤다. 판정(DEM 아래 시작 기체가 kill되지 않음 = 결함)은 그대로다.
+
+**QA 시나리오 enum 표기**
+
+- `swarm_core --scenario`에 시나리오 JSON을 직접 주면 "scenario proto json: unknown enum value: 'lockstep'"으로 끝난다. QA 시나리오만이 아니라 저장소 예제 `scenario/examples/p5_payload_demo_5.json`도 같다.
+- 계약(`docs/10_contracts.md` 시나리오 항목)은 `Scenario`의 필드 구성이 `scenario/` JSON Schema와 같고 "`swarm_core --scenario`에 줄 파일은 `swarm-scenario export`로 만든다"고 한다. 스키마의 enum은 소문자다(`RunMode: realtime, lockstep, freerun`). Core 도움말도 "(.pb 또는 proto JSON, swarm-scenario export로 만든다)"이다.
+- `qa/scenarios/` 15개 모두 `swarm-scenario validate`에서 OK다. export하면 `.pb`와 `RUN_MODE_LOCKSTEP` 형식의 proto JSON이 나오고 Core가 읽는다. QA 도구(`qa/harness.py`)는 처음부터 export한 `.pb`를 Core에 준다.
+- 그래서 시나리오 파일은 계약 표기(작성 형식)에 맞으므로 바꾸지 않았다. 대문자 proto enum으로 바꾸면 스키마 검증과 QA 도구가 깨진다. 문제는 재현 문장이 export 단계를 빠뜨린 것이라 QA-024 재현 문장을 고쳤다. 결함으로 등록하지 않았다.
+
+**TC-QA-044 재시험** (`qa/out/dem11/mtn`, `qa/out/dem11/north`, 각 7,000 프레임)
+
+| 기체 | 시작 고도 / 시작 DEM | Core kill(ground) | 기대 |
+|---|---|---|---|
+| mtn uav-001 (설악) | 1,500 / 1,452.8 m | 178 | 178 |
+| mtn uav-002 (설악) | 1,650 / 1,452.8 m | 2,430 | 2,430 |
+| mtn uav-004 (한라) | 1,800 / 1,710.2 m | 1,144 | 1,144 |
+| mtn uav-003·005 | 1,850·2,050 m | 없음 (최소 여유 156.2·129.1 m) | 없음 |
+| north uav-004 | 400 / 820.0 m | 1 (sim_time 0) | 시작 프레임 (DEC-060) |
+| north uav-002 | 400 / 0 m (격자 밖) | 1,667 (DEM 978.0 m) | 1,667 |
+| north uav-001·003 | 400·30 m, 격자 밖 | 없음 | 없음 |
+
+- Core는 적재 때 "warning: uav-004 starts below DEM terrain: alt 400.0 m < terrain 820.0 m; it will be killed (cause=ground) at the start frame (DEC-060)"을 남긴다.
+- kill 이벤트 머리는 frame 1, sim_time 0이다. Core 단위 시험(TC-CORE-041)이 "시작 프레임"으로 확인하는 값과 같다.
+- 산악 kill 3건과 격자 밖 0 m 결과는 10차와 같다. 판정: 통과.
+
+**TC-QA-045 재시험** (`qa/out/dem11/flagtest.log`)
+
+| 인자 | 결과 |
+|---|---|
+| `--terrain-flat 500 --terrain-dem …` | "warning: both --terrain-flat and --terrain-dem given; using DEM, flat value 500 m ignored (DEC-061)" 뒤 DEM으로 적재 |
+| 순서 반대 | 같다 |
+| 없는 DEM 파일 | rc 1, "RawDemLoader: cannot open data/dem/nope.json" |
+
+- DEC-061이 "거부하지 않고 DEM 우선 + 경고"로 정했으므로 그 기준으로 통과다.
