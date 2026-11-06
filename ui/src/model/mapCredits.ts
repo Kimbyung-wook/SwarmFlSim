@@ -1,9 +1,11 @@
 // IMP-UI-071: 로컬 지도 자료 출처 표기 (DEC-057, REQ-SIM-003)
-// 영상: EOxCloudless(Sentinel-2 cloudless) CC BY-NC-SA 4.0 — EOX가 요구하는 표기. 연도판이 바뀌면 VITE_IMAGERY_CREDIT로 바꾼다.
+// IMP-UI-073: 영상은 AWS 공개 Copernicus Sentinel-2 L2A 장면을 자체 합성한 타일(DEC-059, scripts/make_s2_composite_tiles.py).
+//   표기는 Copernicus Sentinel 데이터 법적 고지(EU Reg. 1159/2013)의 수정본 문구 "Contains modified Copernicus Sentinel data [Year]".
+//   연도는 합성에 쓴 장면 연도(data/tiles/imagery/source.json의 credit). 다시 만들어 연도가 바뀌면 VITE_IMAGERY_CREDIT로 바꾼다.
 // 지형: Copernicus DEM GLO-90 — 라이선스가 요구하는 저작권 문구.
 
 export const IMAGERY_CREDIT =
-  "Sentinel-2 cloudless by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)";
+  "Contains modified Copernicus Sentinel data 2025-2026 (Sentinel-2 L2A composite)";
 
 export const TERRAIN_CREDIT =
   "Copernicus DEM GLO-90 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 " +
