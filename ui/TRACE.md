@@ -23,7 +23,7 @@
 | IMP-UI-010 | 목 데이터 소스(실시간 진행, Start/Pause/Resume/Step/SetRate/Reset) | `src/data/mockSource.ts` | REQ-UI-001, DEC-005, DEC-014 | TC-UI-006 |
 | IMP-UI-011 | 버스 데이터 소스(BusTransport 인터페이스, 키·인코딩). 2차: 구독 주기 옵션, truth/state 30 Hz 다운샘플 요청, swarm/&lt;gcs&gt;/rx/** LinkEnvelope 해석, C2 송신 키 검사. `UnimplementedTransport` 삭제 | `src/data/busSource.ts` | DEC-002, DEC-027, REQ-NET-001 | TC-UI-008 |
 | IMP-UI-012 | 종류·진영별 SVG 아이콘(선택 링, 파괴 표시) | `src/model/symbology.ts` | REQ-UI-001 | TC-UI-008 |
-| IMP-UI-013 | 오프라인 Viewer(로컬 TMS·quantized-mesh 판정, 없으면 Natural Earth II·타원체), RTS 카메라 입력 | `src/cesium/viewer.ts` | DEC-003, DEC-004, DEC-016, REQ-SIM-003 | TC-UI-009 |
+| IMP-UI-013 | 오프라인 Viewer(로컬 TMS·Cesium 지형(layer.json) 판정, 없으면 Natural Earth II·타원체), RTS 카메라 입력 | `src/cesium/viewer.ts` | DEC-003, DEC-004, DEC-016, REQ-SIM-003 | TC-UI-009 |
 | IMP-UI-014 | 엔티티 전시 레이어(Billboard 진행 방향, Polyline 궤적, Label, 화면 투영, 카메라 추종) | `src/cesium/entityLayer.ts` | REQ-UI-001, REQ-UI-007 | TC-UI-009 |
 | IMP-UI-015 | 수신 상태 보관소(최신 프레임·궤적, React 재렌더 분리) | `src/model/liveState.ts` | REQ-UI-001 | TC-UI-009 |
 | IMP-UI-016 | 지도 뷰(렌더 루프 갱신, 클릭·드래그 박스 입력, 2D/2.5D/3D 전환) | `src/components/MapView.tsx` | REQ-UI-001, REQ-UI-002 | TC-UI-009 |
@@ -79,6 +79,9 @@
 | IMP-UI-066 | QA-023 수정: 이벤트 층 polyline이 색별 Material 하나를 나눠 쓰다가 `removeAll`이 그 Material을 파괴해 다음 갱신에서 "This object was destroyed"로 렌더링이 멈춤. polyline 풀을 두고 polyline마다 자기 Material을 가지며 색은 `uniforms.color`로 바꾸고 남는 것은 `show=false`로 숨긴다. 점검: `entityLayer` 궤적은 polyline마다 Material(문제 없음), `missionLayer`는 Entity API(문제 없음), effectsLayer는 없음 | `src/cesium/eventLayer.ts` | DEC-046, DEC-003 | TC-UI-052, TC-UI-053 |
 | IMP-UI-067 | 지도 모드(2D·2.5D·3D) 전환 시 현재 위치 유지: 전환 직전 화면 중심(지면 교차점, 하늘을 보면 카메라 바로 아래)과 가로로 보이는 폭을 기억했다가 전환 직후 새 모드에서 같은 중심·폭으로 수직 내려다보게 놓는다(2D는 정사영 폭, 3D·2.5D는 시야각으로 높이 환산). 모핑 애니메이션은 지구 전체 뷰를 거치므로 즉시 전환(0 s) | `src/model/viewKeep.ts`, `src/cesium/cameraView.ts`, `src/components/MapView.tsx` | REQ-UI-001, DEC-003 | TC-UI-054, TC-UI-056 |
 | IMP-UI-068 | 맞춤 뷰: 엔티티 전체 범위 + 변마다 15 % 여백, 엔티티 1개면 최소 5 km, 위치 (0,0)·NaN 제외. 첫 엔티티 수신 때 한 번, `SimStatus.scenario_name`이 바뀌면(새 적재) 다시 한 번 맞추고 그 밖의 갱신·리셋은 카메라를 건드리지 않는다. "전체" 버튼도 같은 함수 | `src/model/viewKeep.ts`, `src/cesium/cameraView.ts`, `src/cesium/entityLayer.ts`, `src/components/MapView.tsx` | REQ-UI-001, DEC-003 | TC-UI-055, TC-UI-056 |
+| IMP-UI-069 | 영상 타일 받기 스크립트: 범위(33~43°N, 124~131°E)·줌(0~13) XYZ 타일 → 로컬 TMS(`{z}/{x}/{y}.jpg`, 남쪽 0행) + `tilemapresource.xml`(gdal2tiles `mercator` 프로파일, 위경도 BoundingBox). 요청 속도 상한(기본 2/s, 서버 신호 시 간격 증가), 재시도(지수 백오프, Retry-After), 이미지가 아닌 응답은 실패, 있는 타일 건너뛰어 이어받기, 실패 목록 `fetch_state.json`. EOX 원본은 `--eox-permission` 없으면 받지 않는다(약관상 일괄 받기 불명확, DEC-057 보고) | `../scripts/fetch_imagery.py` | REQ-SIM-003, DEC-057 | TC-UI-058 |
+| IMP-UI-070 | 지형 타일 변환 스크립트: GLO-90 격자(계약 §6) → Cesium heightmap-1.0(EPSG:4326, TMS, 65×65, `(h+1000)×5`, 자식 마스크, gzip) + `layer.json`(레벨별 `available`). 레벨 0~12(77 m), DEM보다 거친 레벨은 2배 평균 피라미드에서 쌍선형 표본. 높이는 DEM 정표고 그대로(동역학 지형과 일치). numpy만 사용 | `../scripts/make_terrain_tiles.py` | REQ-SIM-003, DEC-057, DEC-053 | TC-UI-058 |
+| IMP-UI-071 | 지도 자료 표기·겹침: 바탕은 늘 내장 Natural Earth II, 로컬 영상은 그 위 레이어(범위 밖이 비지 않음, 최대 줌 13). 로컬 영상이면 EOX Sentinel-2 cloudless 표기(`VITE_IMAGERY_CREDIT`로 변경), 로컬 지형이면 Copernicus DEM 표기를 화면 출처에 고정 | `src/model/mapCredits.ts`, `src/cesium/viewer.ts` | REQ-SIM-003, DEC-057 | TC-UI-057, TC-UI-058 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -127,6 +130,8 @@
 | TC-UI-054 | 모드 전환 폭 유지 계산: 원근 거리→폭→높이 왕복, 2D 높이 = 폭, 상·하한·NaN (2건) | `ui/src/model/viewKeep.test.ts` | IMP-UI-067 | 통과 |
 | TC-UI-055 | 맞춤 뷰: 범위·여백, 엔티티 1개 최소 5 km·(0,0)·NaN 제외·없으면 null, FitGate 첫 엔티티 1회·이름 처음 알게 됨은 교체 아님·시나리오 교체 시 엔티티 기다려 1회·rearm (5건) | `ui/src/model/viewKeep.test.ts` | IMP-UI-068 | 통과 |
 | TC-UI-056 | 수동(브라우저, 목 소스, 개발 서버의 `window.__swarmViewer`로 화면 중심 읽기): 시작 시 맞춤(36.66°N 127.51°E, 높이 40 km). 3D 기울임(-40°) 중심 37.3410/127.0965 → 2D 중심 동일·폭 26.9 km(예상 2·23.3 km·tan 30°). 2D → 2.5D 중심 36.6482/127.5153 동일. 2.5D 기울임 → 3D 중심 36.8369/127.5153 동일. 3D 하늘 방향(+6°) → 2D는 카메라 아래 37.0/127.3. 2D → 3D 동일. 전환 중 지구 전체 뷰 없음. "전체" 버튼 맞춤, 카메라 옮긴 뒤 리셋은 카메라 불변. 콘솔 오류 없음 | 브라우저 확인 | IMP-UI-067, IMP-UI-068 | 통과 |
+| TC-UI-057 | 출처 표기: 로컬 영상·지형일 때만 각각, 필수 문구(EOX·Copernicus Sentinel·Copernicus DEM·EU/ESA), 영상 표기 덮어쓰기·빈 문자열 (3건) | `ui/src/model/mapCredits.test.ts` | IMP-UI-071 | 통과 |
+| TC-UI-058 | 수동: `fetch_dem.py`(206 MB, 4분 33초) → `make_terrain_tiles.py`(0~12레벨 49,215장, gzip 150.7 MB) 뒤 `npm run dev`에서 지형 공급자 CesiumTerrainProvider, 툴바 "지도 내장 · 지형 DEM", 타일 높이 대청봉 1688 m(DEM 1694)·한라산 1841·동해 0, 속초 앞바다 저각 시점에서 설악 능선 윤곽 보임, Copernicus DEM 출처 표기. 물 마스크 바이트 누락 시 렌더 정지 → 1바이트 추가로 해소. 영상 경로는 합성 타일(z0~9, EOX 아님)로 확인: 툴바 "지도 로컬 · 지형 DEM", 영상 층 2(NaturalEarthII 위 로컬), 범위 124~131°E·33~43°N 안만 덮음, maximumLevel 13, EOX·DEM 출처 둘 다 표기. EOX 실영상은 약관 불명확으로 받지 않음 | 브라우저 확인 | IMP-UI-069~071 | 통과(영상은 합성 타일) |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -135,4 +140,5 @@
 - truth 이벤트 시각화(기준 `wp0-contracts` 9979e84, 계약 0.10.0): `npm test` 20개 파일 145건 통과. `npm run build` 통과.
 - QA-023 수정(기준 `wp0-contracts` 37ba3a7): `npm test` 21개 파일 146건 통과. `npm run build` 통과.
 - 지도 카메라 유지·맞춤 뷰(기준 `wp0-contracts` e622ada, 계약 0.11.0): `npm test` 22개 파일 153건 통과. `npm run build` 통과. DEC-051(Agent의 `*Activity` GCS 자동 보고)은 UI가 이미 `swarm/<gcs>/rx/ms/SensorActivity`만 읽으므로 변경 없음.
+- 지도 고해상도(DEC-057, 기준 `wp0-contracts` 57c69e6): `npm test` 23파일 156건 통과, `npm run build` 통과. DEM 206 MB(4분 33초), 지형 타일 49,215장 150.7 MB(40~90초). EOX 영상 일괄 받기(z0~13 62,214장)는 약관상 허용이 불명확해 받지 않음 — `fetch_imagery.py`는 `--eox-permission`(서면 허가 후) 또는 `--template` 없이는 타일 수만 계산
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.
