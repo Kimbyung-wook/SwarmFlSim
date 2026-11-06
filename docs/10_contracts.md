@@ -412,6 +412,19 @@ swarm_core --terrain-dem data/dem/korea_glo90.json
 
 - 내려받은 파일은 `data/dem/`에 두고 저장소에 커밋하지 않는다(gitignore). `--terrain-dem`과 `--terrain-flat`은 함께 쓰지 않는다.
 
+#### UI 지도 타일 (DEC-057)
+
+```bash
+uv run scripts/make_terrain_tiles.py
+```
+
+```bash
+uv run scripts/fetch_imagery.py --count
+```
+
+- 지형 타일은 `data/dem/korea_glo90.json`에서 만들어 `data/tiles/terrain`(layer.json, 0~12레벨)에 둔다. 영상은 `data/tiles/imagery`에 둔다. UI 개발 서버는 저장소 루트 `data/`를 `/data`로 제공한다(`SWARM_DATA_DIR`로 바꿈).
+- 영상 일괄 받기는 출처의 허가가 확인된 경우에만 실행한다. 없으면 UI는 내장 영상을 쓴다.
+
 ### 7.4 툴체인별 제약
 
 - Python 확장 모듈(WP3의 pybind11/nanobind 바인딩)은 그 모듈을 불러올 Python과 같은 툴체인으로 빌드해야 한다.
