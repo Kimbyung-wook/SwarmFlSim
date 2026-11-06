@@ -109,6 +109,7 @@ def analyse(traj: dict, kills: list, dem: Dem) -> dict:
         live = [c for c in clr if k is None or c[0] < k["frame"]]
         mn = min(live, key=lambda c: c[1]) if live else None
         d = {"frames": [rows[0][0], rows[-1][0]], "start_alt": round(rows[0][3], 1),
+             "start_dem_m": round(rows[0][3] - clr[0][1], 1), "start_clearance_m": round(clr[0][1], 1),
              "min_clearance_m": round(mn[1], 2) if mn else None,
              "min_clearance_frame": mn[0] if mn else None,
              "max_terrain_m": round(max(dem.el(la, lo) for _, la, lo, _ in rows), 1),
@@ -163,7 +164,7 @@ def main() -> None:
         res["last_frame"] = ob.last_frame
         res["kills"] = kills
         res["uav"] = analyse(dict(ob.traj), kills, dem)
-        res["core_log_head"] = [ln for ln in st.log_text().get("core", "").splitlines() if "terrain" in ln][:3]
+        res["core_log_head"] = [ln for ln in st.log_text().get("core", "").splitlines() if any(w in ln.lower() for w in ("terrain", "dem", "warn", "경고"))][:8]
         res["log_issues"] = h.scan_logs(st)
         ob.bus.close()
     finally:
