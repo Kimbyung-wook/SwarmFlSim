@@ -134,6 +134,9 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-057 | UI 지도는 오프라인 고해상도로 한다. 영상은 EOX Sentinel-2 cloudless 최신판(10 m, CC BY-NC-SA 4.0, 비상업 연구용, 출처 표기)을 한반도 전역(33–43°N, 124–131°E) z13(약 19 m/px)까지 받는다. 지형은 DEC-053의 GLO-90을 Cesium 지형 타일로 변환한다. 자료는 `data/tiles/`(Git 미포함)에 두고 받기·변환 스크립트만 커밋한다 | OPN-047, DEC-004, DEC-053, 사용자 답변: "지도 해상도를 고해상도로 변경", "Sentinel-2 cloudless 최신", "z13, 약 19 m/px" | Confirmed (영상 출처는 Superseded by DEC-058) |
 | DEC-058 | UI 지도 영상 출처는 Copernicus Data Space Ecosystem의 Sentinel-2 분기 cloudless 모자이크(10 m, B04/B03/B02)로 한다. 한반도 전역(33–43°N, 124–131°E)을 z13 타일로 만들어 `data/tiles/imagery`에 둔다. 출처 표기는 Copernicus Sentinel 데이터 법적 고지를 따른다. 범위·확대 수준·지형은 DEC-057을 유지한다 | OPN-048, DEC-057, 사용자 답변: "Copernicus 공개 모자이크" | Superseded by DEC-059 |
 | DEC-059 | UI 지도 영상은 계정 없이 받을 수 있는 AWS 공개 Sentinel-2 L2A 장면(B04/B03/B02, COG)에서 구름이 적은 화소를 골라 자체 합성한다. 같은 Copernicus Sentinel 데이터이므로 출처 표기는 Copernicus 법적 고지를 따른다. 범위·z13·지형은 DEC-057을 유지한다 | OPN-049, DEC-058, 사용자 답변: "공개 AWS L2A로 자체 모자이크" | Confirmed |
+| DEC-060 | DEM 지형에서 공중 엔티티의 시작 고도가 그 위치 지형보다 낮으면 Core는 시나리오 적재 때 엔티티·고도·지형 높이를 경고로 남기고, 실행을 계속하면 시작 프레임에 kill(cause=ground)로 처리한다. 지상 엔티티는 제외한다 | OPN-050, DEC-053, QA-024, 사용자 답변: "시나리오 적재 때 경고 메시지를 띄우고 그래도 시작하겠다면 시작 프레임에 kill 으로 처리하자." | Confirmed |
+| DEC-061 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 Core는 DEM을 쓰고 평지 값을 무시한다는 경고를 남긴다(거부하지 않는다) | OPN-051, DEC-053, QA-025, 사용자 답변: "DEM 우선 + 경고" | Confirmed |
+| DEC-062 | Datalink 재시작 직후 다음 재밍 구역 재발행까지(DEC-052, 최대 1 s) 구역 안 수신이 전달되는 것을 허용한다 | OPN-052, DEC-052, O-6, 사용자 답변: "현행 유지" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -188,6 +191,9 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-047 | UI 오프라인 지도 영상의 출처와 확대 수준. 현재 로컬 타일이 없어 내장 저해상도 영상과 타원체로 표시된다. 선택: 출처 (A) Sentinel-2 cloudless 2016(CC BY 4.0) (B) 최신판(CC BY-NC-SA 4.0) (C) NASA Blue Marble(500 m). 수준 z12 / z13 / z14 | Resolved by DEC-057 |
 | OPN-048 | DEC-057의 EOX Sentinel-2 cloudless는 일괄 오프라인 사용에 유료 상품 또는 서면 허가가 필요하다. 선택: (A) Copernicus 공개 분기 모자이크 (B) EOX 서면 허가 (C) EOX 상품 구매 (D) 내장 영상 유지 | Resolved by DEC-058 |
 | OPN-049 | DEC-058의 CDSE 모자이크 COG는 계정과 S3 키가 있어야 받을 수 있다(익명 401/403). 선택: (A) 사용자가 가입·키 발급 (B) AWS 공개 L2A로 자체 합성 (C) 보류 | Resolved by DEC-059 |
+| OPN-050 | DEM 아래에서 시작한 공중 엔티티가 지면 판정 없이 비행한다(QA-024, D-20). 선택: 적재 때 거부 / 시작 프레임 kill / 경고만 | Resolved by DEC-060 |
+| OPN-051 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 평지 값이 조용히 무시된다(QA-025, D-22). 선택: 시작 때 거부 / DEM 우선 + 경고 | Resolved by DEC-061 |
+| OPN-052 | Datalink 재시작 직후 최대 1 s 동안 구역 안 수신이 전달된다(O-6, D-21). 선택: 현행 유지 / 시작 때 구역 조회 또는 전달 보류 | Resolved by DEC-062 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

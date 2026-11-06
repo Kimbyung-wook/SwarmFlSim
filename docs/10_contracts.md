@@ -410,7 +410,7 @@ uv run scripts/fetch_dem.py
 swarm_core --terrain-dem data/dem/korea_glo90.json
 ```
 
-- 내려받은 파일은 `data/dem/`에 두고 저장소에 커밋하지 않는다(gitignore). `--terrain-dem`과 `--terrain-flat`은 함께 쓰지 않는다.
+- 내려받은 파일은 `data/dem/`에 두고 저장소에 커밋하지 않는다(gitignore). `--terrain-dem`과 `--terrain-flat`을 함께 주면 DEM을 쓰고 경고를 남긴다(DEC-061). 공중 엔티티의 시작 고도가 DEM 지형보다 낮으면 적재 때 경고하고 시작 프레임에 kill(cause=ground)한다(DEC-060).
 
 #### UI 지도 타일 (DEC-057, DEC-059)
 
