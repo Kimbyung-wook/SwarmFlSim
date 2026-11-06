@@ -6,7 +6,7 @@
 
 자료: Earth Search(Element 84) STAC 컬렉션 sentinel-2-c1-l2a — AWS 공개 버킷의 Copernicus Sentinel-2
   L2A COG. 계정·키 없이 HTTPS로 읽는다. 밴드 B04/B03/B02(10 m)와 SCL(장면 분류, 20 m)만 쓴다.
-  화소값 = 반사율 / scale - offset (STAC raster:bands의 scale·offset을 그대로 적용).
+  반사율 = 화소값(DN) × scale + offset (STAC raster:bands의 scale·offset을 그대로 적용).
 이용 조건: Copernicus Sentinel 데이터 법적 고지(Regulation (EU) No 1159/2013) — 자유·완전·공개 이용,
   수정본을 배포하면 "Contains modified Copernicus Sentinel data [Year]". UI 표기는 mapCredits.ts.
 
