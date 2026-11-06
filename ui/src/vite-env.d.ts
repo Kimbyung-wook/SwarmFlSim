@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_IMAGERY_URL?: string;
+  readonly VITE_IMAGERY_CREDIT?: string;
   readonly VITE_TERRAIN_URL?: string;
   /** 브리지 주소 (기본 ws://<페이지 호스트>:8765/bus) */
   readonly VITE_BRIDGE_URL?: string;

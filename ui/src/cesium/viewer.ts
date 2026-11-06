@@ -1,10 +1,12 @@
 // IMP-UI-013: 오프라인 Cesium Viewer (DEC-003, DEC-004, DEC-016, REQ-SIM-003)
+// IMP-UI-071: 바탕은 늘 내장 영상, 로컬 고해상도 영상(z13)은 그 위에 겹치고 로컬 자료 출처를 표기한다 (DEC-057)
 // Cesium ion 등 외부 서비스를 쓰지 않는다. 로컬 이미지 타일·quantized-mesh 지형을 찾고, 없으면
 // Cesium 내장 Natural Earth II 저해상도 영상과 기본 타원체로 동작한다.
 import {
   buildModuleUrl,
   CameraEventType,
   CesiumTerrainProvider,
+  Credit,
   EllipsoidTerrainProvider,
   ImageryLayer,
   Ion,
@@ -14,17 +16,24 @@ import {
   Viewer,
 } from "cesium";
 import type { ImageryProvider, TerrainProvider } from "cesium";
+import { IMAGERY_CREDIT, mapCredits } from "../model/mapCredits";
 
 export interface MapDataConfig {
   /** TMS 디렉터리(tilemapresource.xml 포함) 또는 {z}/{x}/{y} 템플릿 URL */
   imageryUrl: string;
   /** quantized-mesh 지형 디렉터리(layer.json 포함) */
   terrainUrl: string;
+  /** 로컬 영상 출처 표기 (연도판·출처가 다르면 바꾼다) */
+  imageryCredit: string;
 }
+
+/** 로컬 영상 최대 줌 (DEC-057: Sentinel-2 cloudless z13 ≈ 19 m/px) */
+export const IMAGERY_MAX_LEVEL = 13;
 
 export const defaultMapConfig: MapDataConfig = {
   imageryUrl: import.meta.env.VITE_IMAGERY_URL ?? "/data/tiles/imagery",
   terrainUrl: import.meta.env.VITE_TERRAIN_URL ?? "/data/tiles/terrain",
+  imageryCredit: import.meta.env.VITE_IMAGERY_CREDIT ?? IMAGERY_CREDIT,
 };
 
 export interface MapDataStatus {
@@ -42,14 +51,16 @@ async function exists(url: string): Promise<boolean> {
   }
 }
 
-async function imageryProvider(cfg: MapDataConfig): Promise<[ImageryProvider, MapDataStatus["imagery"]]> {
+/** 로컬 영상. 없으면 null (바탕 내장 영상만 쓴다) */
+async function localImagery(cfg: MapDataConfig): Promise<ImageryProvider | null> {
   if (cfg.imageryUrl.includes("{z}")) {
-    return [new UrlTemplateImageryProvider({ url: cfg.imageryUrl, maximumLevel: 12 }), "local"];
+    return new UrlTemplateImageryProvider({ url: cfg.imageryUrl, maximumLevel: IMAGERY_MAX_LEVEL });
   }
   if (await exists(`${cfg.imageryUrl}/tilemapresource.xml`)) {
-    return [await TileMapServiceImageryProvider.fromUrl(cfg.imageryUrl), "local"];
+    // 범위(BoundingBox)는 tilemapresource.xml에서 읽는다. 범위 밖은 바탕 영상이 보인다
+    return TileMapServiceImageryProvider.fromUrl(cfg.imageryUrl, { maximumLevel: IMAGERY_MAX_LEVEL });
   }
-  return [await TileMapServiceImageryProvider.fromUrl(buildModuleUrl("Assets/Textures/NaturalEarthII")), "builtin"];
+  return null;
 }
 
 async function terrainProvider(cfg: MapDataConfig): Promise<[TerrainProvider, MapDataStatus["terrain"]]> {
@@ -81,9 +92,13 @@ export async function createViewer(
   cfg: MapDataConfig = defaultMapConfig,
 ): Promise<{ viewer: Viewer; status: MapDataStatus }> {
   Ion.defaultAccessToken = "";
-  const [[imagery, imageryKind], [terrain, terrainKind]] = await Promise.all([imageryProvider(cfg), terrainProvider(cfg)]);
+  const [base, local, [terrain, terrainKind]] = await Promise.all([
+    TileMapServiceImageryProvider.fromUrl(buildModuleUrl("Assets/Textures/NaturalEarthII")),
+    localImagery(cfg),
+    terrainProvider(cfg),
+  ]);
   const viewer = new Viewer(container, {
-    baseLayer: new ImageryLayer(imagery),
+    baseLayer: new ImageryLayer(base),
     terrainProvider: terrain,
     baseLayerPicker: false,
     geocoder: false,
@@ -98,6 +113,11 @@ export async function createViewer(
     requestRenderMode: false,
   });
   viewer.scene.globe.depthTestAgainstTerrain = false;
+  if (local) viewer.imageryLayers.addImageryProvider(local);
+  const status: MapDataStatus = { imagery: local ? "local" : "builtin", terrain: terrainKind };
+  for (const text of mapCredits(status, cfg.imageryCredit)) {
+    viewer.creditDisplay.addStaticCredit(new Credit(text, true));
+  }
   configureCameraInput(viewer);
-  return { viewer, status: { imagery: imageryKind, terrain: terrainKind } };
+  return { viewer, status };
 }
