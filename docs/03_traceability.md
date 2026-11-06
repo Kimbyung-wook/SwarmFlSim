@@ -149,6 +149,9 @@
 | TC-QA-038 | DEC-051: GCS가 `swarm/<gcs>/rx/ms/SensorActivity`를 받고 UI에 센서 FOV 표시(실버스, QA-020 재시험) | `qa/p5_e2e.py --mode realtime --bridge --ui` + 앱 내장 브라우저, `gcs_act.pkl.gz` | DEC-051, DEC-046, DEC-003 |
 | TC-QA-039 | DEC-051: GCS 링크 두절(GCS_LINK_CUT 고장, 거리 초과) 동안 그 기체 Activity 미수신, 복구 뒤 1 s 안 재수신 | `qa/p5_e2e.py --link-cut`, `qa/scenarios/qa_p5_range.json` | DEC-051, DEC-009, DEC-028 |
 | TC-QA-040 | DEC-051: 같은 시드 lockstep 6회에서 GCS 수신 Activity의 순서·프레임 동일 | `qa/qa019_batch.sh`(PREFIX=a40), `qa/act_det.py` | DEC-051, DEC-045, DEC-005 |
+| TC-QA-041 | DEC-054: 같은 시드 lockstep 4변형 × 6회에서 궤적·이벤트·LinkOutcome·MA 입력 동일, 0 지연 전달 없음(QA-019 재시험) | `qa/qa019_batch.sh`(PREFIX=r9), `qa/qa019_summary.py --prefix r9` | DEC-054, DEC-045, DEC-005 |
+| TC-QA-042 | DEC-052: 늦게 붙은 구독자·UI가 1 s 안에 활성 재밍 구역 수신, 꺼진 구역 재발행 없음(QA-021 재시험) | `qa/jam_late.py` (+ `--bridge --ui`, 앱 내장 브라우저) | DEC-052, DEC-028 |
+| TC-QA-043 | DEC-056: 기본 10 Hz 제한에서 기체당 Activity 보고 빈도·대역 | `qa/act_rate.py` | DEC-056, DEC-051 |
 
 ## 시험 결과
 
@@ -212,6 +215,9 @@
 | TC-QA-038 | 통과 | 2026-11-06 | GCS가 SensorActivity 147,976건·StrikeActivity 53건 수신. UI FOV 표시, 발사 뒤 렌더링 유지. QA-020 해소, QA-023 수정 확인 |
 | TC-QA-039 | 통과 | 2026-11-06 | 고장 두절 13.3 s 동안 수신 0, 해제 뒤 0.02 s에 재수신. 거리 초과 뒤 수신 0. 재밍은 수신자 기준이라 업링크는 안 끊김(D-19) |
 | TC-QA-040 | 통과 | 2026-11-06 | 6회 모두 수신 순서·프레임·본문 동일. 송신 프레임 - onboard 프레임 = 1 |
+| TC-QA-041 | 통과 | 2026-11-06 | 24회 모두 궤적 한 무리, MA 입력·LinkOutcome·이벤트(seq 맞춤) 차이 0. 0 지연 전달 0, 최소 지연 20 ms. QA-019 해소 |
+| TC-QA-042 | 통과 | 2026-11-06 | 늦은 구독자 지연 0.22~0.96 s, 주기 1.0 s. KILL 뒤 꺼짐 1건, 그 뒤 붙은 구독자·UI 새로 고침에는 구역 없음. QA-021 해소 |
+| TC-QA-043 | 통과 | 2026-11-06 | 기체당 SensorActivity 10.0 msg/s(간격 0.1 s), 약 1.47 kB/s. 변경 전 50 msg/s, 7.36 kB/s |
 
 ## 프로세스 결정
 
