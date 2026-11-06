@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.12.0
+- 계약 버전: 0.13.0
+  - 0.13.0: `StrikeActivity` 변화 보고 키를 무장별 (메시지, payload_id, weapon_entity)로 분리(DEC-063)
   - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056), DEM 파일 형식과 받기 절차(DEC-053)
   - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
   - 0.10.0: `FrameDone.sent_count`(lockstep 송신 개수 장벽) (DEC-044)
@@ -125,6 +126,7 @@ flowchart LR
 - 임무장비 상태 보고 (DEC-051)
   - Agent 런타임은 자기 기체의 `onboard/<id>/{SensorActivity,JammerActivity,StrikeActivity}`를 받아 값이 바뀔 때와 1 Hz(모의 시간)로 GCS에 `swarm/<id>/tx/ms/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
   - 변화 보고는 (메시지, payload_id)별 최대 빈도를 둔다. 기본 10 Hz이고 Agent 런타임 설정(CLI `--activity-max-hz`)으로 바꾼다. 제한으로 미룬 변화는 다음 허용 시점에 최신 값으로 보낸다. 1 Hz 전체 보고는 제한과 별개다 (DEC-056).
+  - `StrikeActivity`는 키를 (메시지, payload_id, weapon_entity)로 한다. 무장마다 상태를 따로 두므로 같은 스테이션의 다른 무장 변화가 서로 덮지 않는다. `weapon_entity`가 비어 있는 보고(발사 전 REJECTED 등)는 (메시지, payload_id, "") 키를 쓴다. 종료 상태(IMPACT, MISSED, REJECTED)를 한 번 보낸 무장 키는 1 Hz 전체 보고에서 뺀다 (DEC-063).
   - Datalink를 거치므로 GCS 링크가 끊기면 지상 표시에도 반영된다. UI는 `swarm/<gcs>/rx/ms/<Msg>`만 읽고 `onboard/**`를 구독하지 않는다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.

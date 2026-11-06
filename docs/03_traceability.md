@@ -83,6 +83,7 @@
 | IMP-API-018 | lockstep rx 소비 시점 문구를 틱 f-1 기준으로 정정 | `docs/10_contracts.md` §3.3 | DEC-045 |
 | IMP-API-019 | P5 착수: WP8 Payload 지시문, SENSOR 고장 효과 정의 | `docs/11_wp_briefs.md` WP8 | DEC-046, DEC-047 |
 | IMP-API-020 | 계약 0.12.0: rx 불변식 `rx_time_us >= T_k`, 재밍 수신단 기준 명시, 상태 변화 보고 최대 빈도, DEM 파일 형식 | `docs/10_contracts.md` §3.3·§6·§7 | DEC-054, DEC-055, DEC-056, DEC-053 |
+| IMP-API-021 | 계약 0.13.0: `StrikeActivity` 무장별 보고 키, 종료 무장 키의 전체 보고 제외 | `docs/10_contracts.md` §3 임무장비 상태 보고 | DEC-063 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |

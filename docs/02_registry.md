@@ -137,6 +137,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-060 | DEM 지형에서 공중 엔티티의 시작 고도가 그 위치 지형보다 낮으면 Core는 시나리오 적재 때 엔티티·고도·지형 높이를 경고로 남기고, 실행을 계속하면 시작 프레임에 kill(cause=ground)로 처리한다. 지상 엔티티는 제외한다 | OPN-050, DEC-053, QA-024, 사용자 답변: "시나리오 적재 때 경고 메시지를 띄우고 그래도 시작하겠다면 시작 프레임에 kill 으로 처리하자." | Confirmed |
 | DEC-061 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 Core는 DEM을 쓰고 평지 값을 무시한다는 경고를 남긴다(거부하지 않는다) | OPN-051, DEC-053, QA-025, 사용자 답변: "DEM 우선 + 경고" | Confirmed |
 | DEC-062 | Datalink 재시작 직후 다음 재밍 구역 재발행까지(DEC-052, 최대 1 s) 구역 안 수신이 전달되는 것을 허용한다 | OPN-052, DEC-052, O-6, 사용자 답변: "현행 유지" | Confirmed |
+| DEC-063 | `StrikeActivity` 변화 보고(DEC-051·056)의 키를 (메시지, payload_id, weapon_entity)로 나눈다. 빈 `weapon_entity`는 그대로 한 키로 쓴다. 종료 상태(IMPACT·MISSED·REJECTED)를 한 번 보낸 무장 키는 1 Hz 전체 보고에서 뺀다. 근거: 메시지가 무장 단위(`weapon_entity`)라 스테이션 단위 키는 같은 프레임·상한 안의 다른 무장 상태를 덮는다(QA-026). 종료 키 제거로 전체 보고 크기가 비행 중 무장 수로 묶인다 | OPN-053, QA-026, D-23, DEC-051, DEC-056, 사용자 답변: "무장별 키로 분리" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -194,6 +195,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-050 | DEM 아래에서 시작한 공중 엔티티가 지면 판정 없이 비행한다(QA-024, D-20). 선택: 적재 때 거부 / 시작 프레임 kill / 경고만 | Resolved by DEC-060 |
 | OPN-051 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 평지 값이 조용히 무시된다(QA-025, D-22). 선택: 시작 때 거부 / DEM 우선 + 경고 | Resolved by DEC-061 |
 | OPN-052 | Datalink 재시작 직후 최대 1 s 동안 구역 안 수신이 전달된다(O-6, D-21). 선택: 현행 유지 / 시작 때 구역 조회 또는 전달 보류 | Resolved by DEC-062 |
+| OPN-053 | 같은 스테이션의 무장 변화가 한 프레임 또는 상한 간격 안에 겹치면 앞 변화가 GCS에 보고되지 않는다(QA-026, D-23). 선택: (A) 현행 유지·계약 명시 (B) 키 안 변화 순차 전송 (C) 무장별 키 분리. 제안: C | Resolved by DEC-063 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
