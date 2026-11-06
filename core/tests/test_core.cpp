@@ -2,6 +2,7 @@
 // TC-CORE-013~017: WP2 동역학 통합, 지면 충돌, 스크립트 경로, 고장 주입
 // TC-CORE-019~023: 동역학 매개변수 (DEC-035)
 // TC-CORE-036~039: DEM 지형 충돌·가시선, JamZone 재발행, ID·재머 적재 검증 (DEC-053, DEC-052, DEC-050, DEC-049)
+// TC-CORE-041: DEM 아래 시작 공중 엔티티 적재 경고·시작 프레임 kill (DEC-060)
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -1820,6 +1821,82 @@ void test_load_validation_ids_jammers() {
   CHECK(sim.status().scenario_name() == "jam");
 }
 
+// TC-CORE-041: DEM 아래에서 시작하는 공중 엔티티(능선 정점 1200 m 위치의 고도 500·300 m)는 적재 때 ID·고도·
+// 지형 높이를 모두 경고로 남기고, 실행하면 시작 프레임에 kill(cause=ground)한다. 지형 위 공중 엔티티와
+// 지형 아래 지상 표적은 대상이 아니다. reset 뒤 다시 시작해도 같다 (DEC-060)
+void test_dem_below_start() {
+  core::Scenario sc;
+  sc.name = "dem-below";
+  auto add = [&](const char* id, v1::EntityKind kind, double lat, double alt) {
+    v1::EntitySpec e;
+    e.set_id(id);
+    e.set_kind(kind);
+    e.set_dynamics(v1::DYNAMICS_KIND_DOF2);
+    e.mutable_initial()->mutable_position()->set_lat_deg(lat);
+    e.mutable_initial()->mutable_position()->set_lon_deg(127.0);
+    e.mutable_initial()->mutable_position()->set_alt_m(alt);
+    e.mutable_initial()->mutable_velocity_ned_mps()->set_x(20.0);
+    sc.entities.push_back(e);
+  };
+  add("uav-001", v1::ENTITY_KIND_UAV, 37.0, 800.0);              // 지형 위: 살아 있다
+  add("uav-002", v1::ENTITY_KIND_UAV, 37.008, 500.0);            // 지형 1200 m 아래
+  add("air-001", v1::ENTITY_KIND_AIR_TARGET, 37.008, 300.0);     // 지형 아래, 공중 표적
+  add("tgt-001", v1::ENTITY_KIND_GROUND_TARGET, 37.008, 0.0);    // 지형 아래 지상 표적: 제외
+
+  InMemoryBus bus;
+  Recorder rec(bus);
+  std::vector<std::string> logs;
+  core::CoreConfig cfg = quiet();
+  cfg.log = [&](const std::string& m) { logs.push_back(m); };
+  core::SimCore sim(bus, core::wp2_provider(dem_opt()), cfg);
+  CHECK(sim.load(sc));
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED);
+
+  std::vector<std::string> warnings;
+  for (const auto& m : logs)
+    if (m.find("starts below DEM terrain") != std::string::npos) warnings.push_back(m);
+  CHECK(warnings.size() == 2);
+  if (warnings.size() == 2) {
+    CHECK(warnings[0].rfind("warning: uav-002 starts below DEM terrain: alt 500.0 m < terrain 1200.0 m", 0) == 0);
+    CHECK(warnings[1].rfind("warning: air-001 starts below DEM terrain: alt 300.0 m < terrain 1200.0 m", 0) == 0);
+    CHECK(warnings[0].find("cause=ground") != std::string::npos && warnings[0].find("DEC-060") != std::string::npos);
+  }
+  CHECK(rec.events.empty());  // 적재만으로는 kill하지 않는다
+  CHECK(sim.entities().alive(1) && sim.entities().alive(2));
+
+  for (int pass = 0; pass < 2; ++pass) {
+    rec.events.clear();
+    rec.truths.clear();
+    if (pass == 1) {
+      sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+      sim.poll(Clock::now());
+      CHECK(sim.entities().alive(1) && sim.entities().alive(2));
+      rec.truths.clear();
+    }
+    sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+    run_frames(sim, 10);
+    CHECK(sim.entities().alive(0) && !sim.entities().alive(1) && !sim.entities().alive(2) && sim.entities().alive(3));
+    CHECK(rec.events.size() == 2);
+    if (rec.events.size() == 2) {
+      CHECK(rec.events[0].kill().entity_id() == "uav-002" && rec.events[1].kill().entity_id() == "air-001");
+      for (const auto& ev : rec.events) {
+        CHECK(ev.kill().cause() == "ground");
+        CHECK(ev.header().sim_time_us() == 0 && ev.header().frame() == 1);  // 시작 프레임
+      }
+    }
+    // 처음 발행되는 프레임 1부터 죽은 채이고, 움직이지 않는다
+    bool seen = false;
+    for (const auto& t : rec.truths) {
+      if (t.header().frame() != 1) continue;
+      seen = true;
+      const auto& d = entity(t, "uav-002");
+      CHECK(!d.alive() && std::abs(d.kinematics().position().lat_deg() - 37.008) < 1e-9);
+      CHECK(!entity(t, "air-001").alive() && entity(t, "tgt-001").alive() && entity(t, "uav-001").alive());
+    }
+    CHECK(seen);
+  }
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1857,6 +1934,7 @@ int main() {
   test_dem_line_of_sight();
   test_jam_zone_republish();
   test_load_validation_ids_jammers();
+  test_dem_below_start();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

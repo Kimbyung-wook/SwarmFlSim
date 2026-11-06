@@ -108,6 +108,8 @@ class SimCore {
   void publish_scenario();
   bool fault_active(std::size_t i, v1::FaultKind kind) const;
   void kill(std::size_t i, const char* cause, std::uint64_t sim_time_us, std::uint64_t frame);
+  // IMP-CORE-026: DEM 지형보다 낮게 시작하는 공중 엔티티를 찾는다 (DEC-060)
+  void find_below_terrain_starts();
   void reset_run_state();
   bool barrier_ok() const;
   bool paced() const;
@@ -143,6 +145,12 @@ class SimCore {
   EntityStore store_;
   std::vector<std::unique_ptr<dyn::Integrator>> integrators_;
   std::vector<dyn::EventFn> ground_events_;  // 비어 있으면 이벤트 없음
+  // IMP-CORE-026: 시작 프레임에 kill(cause=ground)할 엔티티 (DEC-060)
+  struct BelowStart {
+    std::size_t index;
+    double alt_m, terrain_m;
+  };
+  std::vector<BelowStart> below_start_;
   std::vector<double> u_scratch_;
   std::vector<std::string> nav_keys_;
   std::vector<std::uint32_t> nav_seq_;

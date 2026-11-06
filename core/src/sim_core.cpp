@@ -1,6 +1,7 @@
 // IMP-CORE-002, IMP-CORE-004: 프레임 스케줄러, 실행 모드, onboard 입출력
 // IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입, IMP-CORE-013: 동역학 매개변수
 // IMP-CORE-024: 활성 재밍 구역 1 s 재발행 (DEC-052)
+// IMP-CORE-026: DEM 아래 시작 공중 엔티티 경고·시작 프레임 kill (DEC-060)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -12,6 +13,7 @@
 #include <thread>
 
 #include "swarm/api/keys.hpp"
+#include "swarm/dyn/terrain.hpp"
 #include "swarm/v1/truth.pb.h"
 
 namespace swarm::core {
@@ -19,6 +21,12 @@ namespace swarm::core {
 namespace {
 
 constexpr std::uint64_t kZonePeriodUs = 1'000'000;  // JamZone 재발행 주기 (DEC-052)
+
+// 지면 판정 대상인 공중 엔티티 (DEC-060). 지상 엔티티(GCS·지상 표적·재머 기지)는 지형 높이에 둔다
+bool airborne(v1::EntityKind k) {
+  return k == v1::ENTITY_KIND_UAV || k == v1::ENTITY_KIND_AIR_TARGET || k == v1::ENTITY_KIND_MISSILE ||
+         k == v1::ENTITY_KIND_FPV;
+}
 
 template <class T>
 bool parse(const Sample& s, T& msg) {
@@ -148,7 +156,29 @@ bool SimCore::load(const Scenario& sc) {
   last_params_wall_ = now;
   set_state(v1::SIM_RUN_STATE_LOADED, now);
   log("loaded scenario '" + sc.name + "', " + std::to_string(store_.size()) + " entities");
+  // IMP-CORE-026: 적재는 계속하고 경고만 남긴다. 실행하면 시작 프레임에 kill한다 (DEC-060)
+  for (const auto& b : below_start_) {
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "alt %.1f m < terrain %.1f m", b.alt_m, b.terrain_m);
+    log("warning: " + store_.id(b.index) + " starts below DEM terrain: " + buf +
+        "; it will be killed (cause=ground) at the start frame (DEC-060)");
+  }
   return true;
+}
+
+void SimCore::find_below_terrain_starts() {
+  below_start_.clear();
+  // 평지는 대상이 아니다(DEC-060은 DEM 지형 규칙)
+  const auto* terrain = provider_.terrain.get();
+  if (!terrain || dynamic_cast<const dyn::FlatTerrain*>(terrain)) return;
+  for (std::size_t i = 0; i < store_.size(); ++i) {
+    const auto* model = store_.model(i);
+    if (!model || !airborne(store_.kind(i))) continue;
+    dyn::KinematicSample k;
+    model->to_kinematic(store_.x(i), dyn::Environment{}, k);  // 위치만 쓴다
+    const double h = terrain->elevation_m(k.lat_deg, k.lon_deg);
+    if (k.alt_m < h) below_start_.push_back({i, k.alt_m, h});
+  }
 }
 
 void SimCore::reset_run_state() {
@@ -167,6 +197,7 @@ void SimCore::reset_run_state() {
   sim_time_us_ = 0;
   frame_published_ = false;
   step_budget_ = 0;
+  find_below_terrain_starts();
   done_.clear();
   for (const auto& p : participants_) done_[p] = 0;
   blocked_ = false;
@@ -530,6 +561,11 @@ void SimCore::integrate_frame() {
   }
 
   const double t0 = static_cast<double>(sim_time_us_) * 1e-6, dt = dt_us_ * 1e-6;
+  // IMP-CORE-026: DEM 아래에서 시작한 공중 엔티티는 시작 프레임에 움직이기 전에 kill한다 (DEC-060).
+  // 시각은 0, 이벤트 프레임은 지면 충돌과 같이 처음 죽은 채 발행되는 프레임(1)이다
+  if (frame_ == 0)
+    for (const auto& b : below_start_)
+      if (store_.alive(b.index)) kill(b.index, "ground", sim_time_us_, frame_ + 1);
   // 임무장비는 프레임 시작 상태로 계산한다. 살상 결과는 적분 뒤에 반영한다 (IMP-CORE-022)
   const std::vector<std::string> killed =
       step_payload(std::move(sensor_cmds), std::move(jammer_cmds), std::move(strike_cmds));
@@ -543,7 +579,8 @@ void SimCore::integrate_frame() {
       provider_.engine_out(*model, u_scratch_);
       u = u_scratch_;
     }
-    // 프레임 시작에 지면 위에 있을 때만 이벤트를 건다(지상 엔티티, 지면 아래 시작은 제외)
+    // 프레임 시작에 지면 위에 있을 때만 이벤트를 건다. 지상 엔티티는 지형 높이에 있어 제외되고,
+    // DEM 아래에서 시작한 공중 엔티티는 위에서 이미 kill했다 (DEC-060). 평지 아래 시작은 제외로 남는다
     const auto& ground = ground_events_[i];
     const dyn::EventFn* event = ground && ground(t0, store_.x(i)) > 0.0 ? &ground : nullptr;
     const auto r = integrators_[i]->step(*model, t0, dt, store_.x(i), u, provider_.env, event);

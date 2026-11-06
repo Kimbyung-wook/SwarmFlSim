@@ -2,6 +2,7 @@
 // IMP-CORE-012: WP2 동역학(--integrator), 평지 지형(--terrain-flat)
 // IMP-CORE-014: Windows Ctrl+Break(SIGBREAK) 정상 종료
 // IMP-CORE-023: --terrain-dem DEM 지형 적재 (DEC-053, DEC-004)
+// IMP-CORE-027: --terrain-flat과 --terrain-dem을 함께 주면 순서와 무관하게 DEM을 쓰고 경고한다 (DEC-061)
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -56,6 +57,7 @@ int main(int argc, char** argv) {
   core::CoreConfig cfg;
   core::Wp2DynamicsOptions dyn_opt;
   std::string dem_file;
+  bool flat_given = false;
   bus::BusConfig bus_cfg;
 
   for (int i = 1; i < argc; ++i) {
@@ -77,7 +79,10 @@ int main(int argc, char** argv) {
     else if (a == "--participant") cfg.participants.push_back(next());
     else if (a == "--frames") cfg.stop_after_frames = std::stoull(next());
     else if (a == "--integrator") dyn_opt.integrator = next();
-    else if (a == "--terrain-flat") dyn_opt.terrain_flat_m = std::stod(next());
+    else if (a == "--terrain-flat") {
+      dyn_opt.terrain_flat_m = std::stod(next());
+      flat_given = true;
+    }
     else if (a == "--terrain-dem") dem_file = next();
     else if (bus::parse_bus_arg(bus_cfg, a, next)) continue;
     else {
@@ -90,6 +95,11 @@ int main(int argc, char** argv) {
     // DEM은 동역학 지면 이벤트와 탑재체 가시선이 함께 쓴다 (IMP-CORE-023)
     std::string terrain_desc = "flat " + std::to_string(dyn_opt.terrain_flat_m) + " m";
     if (!dem_file.empty()) {
+      if (flat_given)
+        std::fprintf(stderr,
+                     "[swarm_core] warning: both --terrain-flat and --terrain-dem given; using DEM, flat value %g m "
+                     "ignored (DEC-061)\n",
+                     dyn_opt.terrain_flat_m);
       std::shared_ptr<const dyn::GridTerrain> dem = dyn::RawDemLoader{}.load(dem_file);
       const auto& g = dem->spec();
       char buf[200];

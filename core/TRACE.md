@@ -61,6 +61,8 @@ flowchart LR
 | IMP-CORE-023 | `--terrain-dem <json>`: `dyn::RawDemLoader`로 DEM을 적재해 `Wp2DynamicsOptions::terrain`에 넣는다(격자 밖 0 m). 지면 충돌과 Payload 가시선이 같은 지형을 쓴다. 시작 메시지에 `terrain=dem RxC lat .. lon ..`을 찍고 적재 실패는 종료 코드 1 (IMP-CORE-012의 자리 표시 대체) | `src/main.cpp`, `CMakeLists.txt` | DEC-053, DEC-004, DEC-016, IMP-DYN-009, QA-022 | TC-CORE-036, TC-CORE-037, TC-CORE-040 |
 | IMP-CORE-024 | JamZone 재발행 (DEC-052): 활성 재밍 구역을 소유자별로 기억하고, 변화 시 발행에 더해 모의 시간 1 s마다(프레임 기준, `sim_time ≥ 다음 경계`) `truth/event/jam_zone`에 다시 발행한다. 같은 프레임에 변화로 이미 낸 소유자는 건너뛰고, 소유자 ID 순, 헤더 시각·프레임·seq는 재발행 시점 값. 꺼진 구역은 지우고 다시 내지 않는다. Reset·적재 때 비운다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-052, DEC-044, QA-021, IMP-CORE-022 | TC-CORE-038 |
 | IMP-CORE-025 | 적재 검증 추가: 엔티티 ID 형식(`keys::check_entity_id`)과 25자 초과(DEC-050), 엔티티당 `type=jammer` 탑재물 2개 이상(DEC-049)을 `validate_scenario`에서 거부한다. 거부 시 Core는 이전 시나리오로 계속 동작한다(IMP-CORE-017) | `src/scenario.cpp`, `include/swarm/core/scenario.hpp` | DEC-049, DEC-050, DEC-038 | TC-CORE-039 |
+| IMP-CORE-026 | DEM 지형(평지 제외)에서 공중 엔티티(UAV·공중 표적·미사일·FPV)의 시작 고도가 그 위치 지형보다 낮으면 적재 때 엔티티마다 `warning: <id> starts below DEM terrain: alt A m < terrain H m ...`를 남기고(적재는 계속), 실행하면 시작 프레임 적분 전에 kill(cause=ground, sim_time 0, frame 1)한다. reset 때 다시 계산한다. 지상 엔티티는 제외(기존 지면 위 판정 유지) | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-060, IMP-CORE-009, IMP-CORE-023, QA-024 | TC-CORE-041 |
+| IMP-CORE-027 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 거부하지 않고 DEM을 쓰며 `warning: both --terrain-flat and --terrain-dem given; using DEM, flat value X m ignored (DEC-061)`을 남긴다. 인자 순서와 무관하다 | `src/main.cpp`, `CMakeLists.txt` | DEC-061, IMP-CORE-023, QA-025 | TC-CORE-042 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -107,6 +109,8 @@ flowchart LR
 | TC-CORE-038 | JamZone 재발행: 재머 부지는 프레임 0(변화)·50·100(1 s 주기) 뒤 끄면 꺼짐 1회 이후 없음. 프레임 30 무렵 켠 탑재 재머는 변화 1회 + 50·100·150·200·250. 두 번 실행의 이벤트 바이트 동일 | `tests/test_core.cpp` | IMP-CORE-024 | 통과 (msvc-debug, 2026-11-06) |
 | TC-CORE-039 | 적재 검증: ID 25자 수락, 26자·형식 오류 거부, 재머 2개(UAV·재머 부지) 거부, 재머 1개 수락, 거부 뒤 이전 시나리오·LOADED 유지 | `tests/test_core.cpp` | IMP-CORE-025 | 통과 (msvc-debug, 2026-11-06) |
 | TC-CORE-040 | 실행 파일: `swarm_core --terrain-dem ridge.json`이 `terrain=dem 101x101`을 출력하고 20 프레임 진행, 없는 경로는 0이 아닌 종료 코드 (ctest `core.TC-CORE-040.*`) | `CMakeLists.txt` | IMP-CORE-023 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-041 | 능선 DEM 정점(1200 m) 위치의 UAV 500 m·공중 표적 300 m: 적재 경고 2건(ID·고도·지형 높이), 적재만으로는 kill 없음, 시작 후 kill(cause=ground) 2건(sim_time 0, frame 1), 프레임 1부터 죽은 채 제자리. 지형 위 UAV·지형 아래 지상 표적은 살아 있음. reset 뒤 재시작도 같음 | `tests/test_core.cpp` | IMP-CORE-026 | 통과 (msvc-debug, 2026-11-06) |
+| TC-CORE-042 | 실행 파일: `--terrain-flat 30 --terrain-dem ridge.json`과 반대 순서 둘 다 DEC-061 경고와 `terrain=dem 101x101`을 출력하고 20 프레임 진행 (ctest `core.TC-CORE-042.flat_first`, `.dem_first`) | `CMakeLists.txt` | IMP-CORE-027 | 통과 (msvc-debug, 2026-11-06) |
 
 ## 제약과 후속
 
