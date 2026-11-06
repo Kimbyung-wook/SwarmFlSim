@@ -31,6 +31,18 @@ if(SWARM_BUILD_TESTS)
   add_test(NAME core.TC-CORE-040.dem_missing
            COMMAND swarm_core --bus memory --autostart --frames 1 --terrain-dem "${CMAKE_CURRENT_BINARY_DIR}/no_such_dem.json")
   set_tests_properties(core.TC-CORE-040.dem_missing PROPERTIES WILL_FAIL TRUE)
+  # TC-CORE-042: --terrain-flat과 --terrain-dem을 함께 주면 순서와 무관하게 DEM을 쓰고 경고한다 (IMP-CORE-027, DEC-061)
+  foreach(order flat_first dem_first)
+    if(order STREQUAL "flat_first")
+      set(_terrain_args --terrain-flat 30 --terrain-dem "${SWARM_TEST_DEM}")
+    else()
+      set(_terrain_args --terrain-dem "${SWARM_TEST_DEM}" --terrain-flat 30)
+    endif()
+    add_test(NAME core.TC-CORE-042.${order}
+             COMMAND swarm_core --bus memory --autostart --mode freerun --rate 0 --frames 20 ${_terrain_args})
+    set_tests_properties(core.TC-CORE-042.${order} PROPERTIES PASS_REGULAR_EXPRESSION
+      "warning: both --terrain-flat and --terrain-dem given; using DEM, flat value 30 m ignored .DEC-061..*terrain=dem 101x101")
+  endforeach()
 
   if(SWARM_BUS_WITH_ZENOH)
     add_executable(swarm_core_zenoh_tests tests/test_zenoh_bus.cpp)
