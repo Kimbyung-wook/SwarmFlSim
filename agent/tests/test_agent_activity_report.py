@@ -1,4 +1,4 @@
-"""TC-AGT-051~058: 임무장비 상태 자동 보고와 최대 빈도 (IMP-AGT-029, IMP-AGT-030, DEC-051, DEC-056, DEC-044)"""
+"""TC-AGT-051~062: 임무장비 상태 자동 보고, 최대 빈도, 무장별 키 (IMP-AGT-029~031, DEC-051, DEC-056, DEC-063, DEC-044)"""
 
 from swarm.v1 import link_pb2, ms_pb2, sim_pb2
 from swarm_agent.testing import Harness, make_scenario
@@ -139,3 +139,69 @@ def test_tc_agt_058_full_report_every_second_kept():
     h.core.step(1)
     h.run_s(3.0)
     assert len(times) == 4             # 첫 보고 + 1 s·2 s·3 s 전체 보고
+
+
+S = ms_pb2
+
+
+def put_strikes(h: Harness, items: list[tuple[str, int]], eid: str = "uav-001") -> None:
+    """같은 프레임에 같은 스테이션(wpn-1)의 무장 여러 개 상태를 낸다"""
+    for weapon, state in items:
+        m = S.StrikeActivity(payload_id="wpn-1", weapon_entity=weapon, state=state)
+        m.header.source = eid
+        m.header.frame = h.core.frame
+        h.bus.put(keys.onboard(eid, "StrikeActivity"), m.SerializeToString(), protobuf_encoding(m.DESCRIPTOR.full_name))
+
+
+def strikes(h: Harness) -> list[tuple[str, int]]:
+    return [(m.weapon_entity, m.state) for m in h.gcs_rx if isinstance(m, S.StrikeActivity)]
+
+
+def test_tc_agt_059_same_frame_weapons_all_reported():
+    for hz in (0, 10.0):
+        h = Harness(make_scenario(1, "hold"))
+        h.rt.config.activity_max_hz = hz
+        h.core.step(5)
+        put_strikes(h, [("w01", S.STRIKE_STATE_IMPACT), ("w04", S.STRIKE_STATE_LAUNCHED)])
+        h.core.step(1)
+        assert sorted(strikes(h)) == [("w01", S.STRIKE_STATE_IMPACT), ("w04", S.STRIKE_STATE_LAUNCHED)], hz
+
+
+def test_tc_agt_060_terminal_weapon_dropped_from_full_report():
+    h = Harness(make_scenario(1, "hold"))
+    h.core.step(5)
+    put_strikes(h, [("w01", S.STRIKE_STATE_LAUNCHED), ("w02", S.STRIKE_STATE_LAUNCHED)])
+    h.core.step(10)
+    put_strikes(h, [("w01", S.STRIKE_STATE_IMPACT), ("w02", S.STRIKE_STATE_MISSED), ("", S.STRIKE_STATE_REJECTED)])
+    h.core.step(1)
+    n = len(strikes(h))
+    assert n == 5
+    h.run_s(2.0)                       # 1 s·2 s 전체 보고: 종료 키는 빠지고 남은 키가 없다
+    assert len(strikes(h)) == n
+    keys_left = h.rt._activity.get("uav-001", {})
+    assert not any(k[0] == "StrikeActivity" for k in keys_left)
+    assert not h.rt._activity_sent.get("uav-001")       # 송신 시각도 정리된다
+
+
+def test_tc_agt_061_full_report_keeps_live_weapon_only():
+    h = Harness(make_scenario(1, "hold"))
+    h.core.step(5)
+    put_strikes(h, [("w01", S.STRIKE_STATE_LAUNCHED), ("w02", S.STRIKE_STATE_LAUNCHED)])
+    h.core.step(10)
+    put_strikes(h, [("w01", S.STRIKE_STATE_IMPACT)])
+    h.core.step(1)
+    before = len(strikes(h))
+    h.run_s(1.0)                       # 1 s 경계: 아직 비행 중인 w02만 다시 보낸다
+    assert strikes(h)[before:] == [("w02", S.STRIKE_STATE_LAUNCHED)]
+
+
+def test_tc_agt_062_rate_limit_per_weapon_key():
+    h = Harness(make_scenario(1, "hold"))
+    h.core.step(55)
+    put_strikes(h, [("w01", S.STRIKE_STATE_LAUNCHED)])
+    h.core.step(1)                     # w01 보고
+    put_strikes(h, [("w01", S.STRIKE_STATE_IMPACT), ("w02", S.STRIKE_STATE_LAUNCHED)])
+    h.core.step(1)                     # w02는 새 키라 바로, w01은 0.1 s 상한으로 미룸
+    assert strikes(h) == [("w01", S.STRIKE_STATE_LAUNCHED), ("w02", S.STRIKE_STATE_LAUNCHED)]
+    h.core.step(4)
+    assert strikes(h)[-1] == ("w01", S.STRIKE_STATE_IMPACT)
