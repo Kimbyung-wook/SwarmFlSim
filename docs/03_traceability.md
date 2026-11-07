@@ -47,7 +47,7 @@
 | REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | DEC-046 | WP8, WP7 | IMP-PAY-002, IMP-SCN-010 | TC-PAY-013, TC-SCN-012~013 | 구현중 |
 | REQ-PAY-002 | PRP-PAY-001 | DEC-018, DEC-047, DEC-051, DEC-056, DEC-063 | WP8, WP3 | IMP-PAY-001, 003, IMP-CORE-022, IMP-AGT-029~031 | TC-PAY-001~004, TC-CORE-034, TC-AGT-051~062 | 구현중 |
 | REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009, DEC-049, DEC-052 | WP8, WP4 | IMP-PAY-004, IMP-CORE-022, 024~025 | TC-PAY-005, TC-CORE-035, 038~039 | 구현중 |
-| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064 | WP8 | IMP-PAY-005~006, 008, IMP-CORE-022 | TC-PAY-006~011, 015~017, TC-CORE-034 | 구현중 |
+| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064 | WP8 | IMP-PAY-005~006, 008, IMP-CORE-022 | TC-PAY-006~011, 015~017, TC-CORE-034, TC-QA-065~068 | 구현중 |
 | REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | IMP-PAY-002, 006 | TC-PAY-006, 009, 013 | 구현중 |
 | REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-054 | WP1, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023 | 검증완료 |
@@ -174,6 +174,10 @@
 | TC-QA-062 | SensorActivity·JammerActivity 변화 보고 상한(10 Hz, 0 Hz, realtime) | `qa/strike_cases.py --case cases` | DEC-051, DEC-056 |
 | TC-QA-063 | DEM 끝점 0.5 m 허용이 판정을 가르는 배치(지면 표적, 표적 앞 언덕) | `qa/los_edge.py --terrain dem` | DEC-018 |
 | TC-QA-064 | 평지 곡률 처짐으로 끝점 표본 하나만 가리는 배치 | `qa/los_edge.py --terrain flat` | DEC-018 |
+| TC-QA-065 | DEC-064: 합성 언덕 DEM에서 비행 중 유도 객체의 락 해제·좌표 유도 전환 프레임이 Python 가시선과 같음 | `qa/los_synth.py run --case hill` + `analyse` | DEC-064, DEC-018 |
+| TC-QA-066 | DEC-064: 가시선 회복 시 재획득, 연속 전환에서 고정점 갱신 | `qa/los_synth.py run --case hill·edge` + `analyse` | DEC-064 |
+| TC-QA-067 | DEC-064: 평지(`--terrain-flat 0`)와 조준점 좌표 유도의 회귀 없음 | `qa/los_synth.py run --case flat·coord` + `analyse` | DEC-064, DEC-019 |
+| TC-QA-068 | DEC-064: 같은 시드 2회 실행의 궤적·이벤트·StrikeActivity 결정성 | `qa/los_synth.py same` | DEC-064, DEC-004 |
 
 ## 시험 결과
 
@@ -261,6 +265,10 @@
 | TC-QA-062 | 통과 | 2026-11-07 | 1 s 창 51변화: 10 Hz·realtime 100 ms 간격 11건, 0 Hz 20 ms 51건. 마지막 상태 전달 |
 | TC-QA-063 | 통과 | 2026-11-07 | 9쌍 모두 허용 0.5 m 기대와 일치, 허용 0과 다른 4쌍(A1·A2·A3 AGL 0, B1 AGL 0.6) 보임 |
 | TC-QA-064 | 통과 | 2026-11-07 | 7,909.7 m, 경계 4.8429 m(허용 0.5)·4.8737 m(허용 0). 사이 고도 4.858 m 보임, 3고도 모두 일치 |
+| TC-QA-065 | 통과 | 2026-11-07 | hill: 기대 T 101–159, C 160–306, T 307–754와 재계산 상태 651프레임 일치(불일치 0). 표적까지 1.62 m 도달 |
+| TC-QA-066 | 통과 | 2026-11-07 | edge: T→C→T→C→T 4회 전환 모두 같은 프레임(여유 −0.005 m 포함), 두 번째 고정점은 직전 T 프레임 표적 위치. 표적 도달 |
+| TC-QA-067 | 통과 | 2026-11-07 | flat 내내 T(648프레임), coord 내내 조준점 유도(635프레임), 조준점까지 1.76 m |
+| TC-QA-068 | 통과 | 2026-11-07 | hill·edge 각 2회: 궤적·이벤트·StrikeActivity 모두 일치 |
 
 ## 프로세스 결정
 

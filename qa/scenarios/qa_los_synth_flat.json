@@ -1,0 +1,487 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-los-synth-flat",
+ "description": "QA 14차 합성 언덕 가시선 전환 (DEC-064)",
+ "map": {
+  "origin": {
+   "lat_deg": 38.06,
+   "lon_deg": 128.06,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 38.0,
+   "north_deg": 38.12,
+   "west_deg": 128.0,
+   "east_deg": 128.12
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261107,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "link_profiles": [
+  {
+   "name": "uav_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  },
+  {
+   "name": "gcs_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  }
+ ],
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.05865253323751,
+     "lon_deg": 128.03033640982437,
+     "alt_m": 30.0
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "tgt-m",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "scripted",
+   "initial": {
+    "position": {
+     "lat_deg": 38.058383,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    "velocity_ned_mps": {
+     "x": 50.0,
+     "y": 0.0,
+     "z": 0.0
+    }
+   },
+   "script_path": [
+    {
+     "lat_deg": 38.0586076,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0588322,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0590568,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0592814,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0595059,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0597305,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0599551,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0601797,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0604042,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0606288,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0608534,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.061078,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0613026,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0615271,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0617517,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0619763,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0622009,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0624254,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.06265,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0628746,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0630992,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0633238,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0635483,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0637729,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0639975,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0642221,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0644466,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0646712,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0648958,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0651204,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.065345,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0655695,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0657941,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0660187,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0662433,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0664678,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0666924,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.066917,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0671416,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0673662,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0675907,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0678153,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0680399,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0682645,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.068489,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0687136,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0689382,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0691628,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0693874,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0696119,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0698365,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0700611,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0702857,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0705102,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0707348,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0709594,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.071184,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0714086,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0716331,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0718577,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0720823,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0723069,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0725314,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.072756,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0729806,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0732052,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0734298,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0736543,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0738789,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0741035,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    },
+    {
+     "lat_deg": 38.0743281,
+     "lon_deg": 128.0702682,
+     "alt_m": 2.0
+    }
+   ]
+  },
+  {
+   "id": "uav-s",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.05865253323751,
+     "lon_deg": 128.03033640982437,
+     "alt_m": 450.0
+    },
+    "attitude": {
+     "w": 0.7126956427449813,
+     "x": 0.044518120406685145,
+     "y": -0.045417368826528005,
+     "z": 0.6985845119787936
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-qa13",
+  "tasks": []
+ }
+}

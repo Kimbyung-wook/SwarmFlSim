@@ -1,0 +1,336 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-los-track",
+ "description": "QA 14차 비행 중 가시선 추적 (DEC-064)",
+ "map": {
+  "origin": {
+   "lat_deg": 38.1192,
+   "lon_deg": 128.447873,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 38.0,
+   "north_deg": 38.25,
+   "west_deg": 128.3,
+   "east_deg": 128.6
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261107,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "link_profiles": [
+  {
+   "name": "uav_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  },
+  {
+   "name": "gcs_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  }
+ ],
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 1415.4
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "tgt-m",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "scripted",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.491833,
+     "alt_m": 886.22
+    },
+    "velocity_ned_mps": {
+     "x": 0.0,
+     "y": 25.0,
+     "z": 0.0
+    }
+   },
+   "script_path": [
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4921185,
+     "alt_m": 890.65
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.492404,
+     "alt_m": 895.07
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4926894,
+     "alt_m": 891.56
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4929749,
+     "alt_m": 884.02
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4932603,
+     "alt_m": 876.49
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4935458,
+     "alt_m": 862.11
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4938312,
+     "alt_m": 845.38
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4941167,
+     "alt_m": 828.65
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4944022,
+     "alt_m": 817.56
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4946876,
+     "alt_m": 807.67
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4949731,
+     "alt_m": 797.77
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4952585,
+     "alt_m": 794.88
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.495544,
+     "alt_m": 792.71
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4958295,
+     "alt_m": 790.55
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4961149,
+     "alt_m": 787.11
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4964004,
+     "alt_m": 783.66
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4966858,
+     "alt_m": 780.95
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4969713,
+     "alt_m": 788.57
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4972567,
+     "alt_m": 796.19
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4975422,
+     "alt_m": 803.57
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4978277,
+     "alt_m": 809.58
+    },
+    {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.4981131,
+     "alt_m": 815.6
+    }
+   ]
+  },
+  {
+   "id": "uav-p050",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2604.9
+    },
+    "attitude": {
+     "w": 0.692062546664013,
+     "x": 0.14508422210881855,
+     "y": -0.14508422210881855,
+     "z": 0.692062546664013
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-p150",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2704.9
+    },
+    "attitude": {
+     "w": 0.6904777565078046,
+     "x": 0.15244824619505773,
+     "y": -0.15244824619505773,
+     "z": 0.6904777565078046
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-p300",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2854.9
+    },
+    "attitude": {
+     "w": 0.6880171339500374,
+     "x": 0.16319443431433672,
+     "y": -0.16319443431433672,
+     "z": 0.6880171339500374
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-qa13",
+  "tasks": []
+ }
+}
