@@ -198,6 +198,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-052 | Datalink 재시작 직후 최대 1 s 동안 구역 안 수신이 전달된다(O-6, D-21). 선택: 현행 유지 / 시작 때 구역 조회 또는 전달 보류 | Resolved by DEC-062 |
 | OPN-053 | 같은 스테이션의 무장 변화가 한 프레임 또는 상한 간격 안에 겹치면 앞 변화가 GCS에 보고되지 않는다(QA-026, D-23). 선택: (A) 현행 유지·계약 명시 (B) 키 안 변화 순차 전송 (C) 무장별 키 분리. 제안: C | Resolved by DEC-063 |
 | OPN-054 | 무장의 가시선 처리 범위(D-24). 현재 표적 지정 발사 판정만 DEM 가시선을 보고 비행 중 탐색기와 조준점 발사는 보지 않는다. 선택: (A) 현행 유지·명시 (B) 비행 중 가시선 상실 시 락 해제·좌표 유도·재획득 (C) B + 조준점 발사 가시선 확인. 제안: B | Resolved by DEC-064 |
+| OPN-055 | 비행 중 무장 유도 상태(TRACKING / LOS_LOST / COORDINATE)와 유도 지점을 버스로 보고할지(WP8 제안). 현재는 C++ 조회 `PayloadSystem::weapon_track`만 있고 GCS·QA는 궤적과 종료 결과로만 판정한다. 선택: (A) 보고하지 않음 (B) `StrikeActivity`에 EXT 필드 추가, 상태 변화 시 보고(계약 변경). 제안: QA의 DEC-064 재시험(TC-QA-060)에서 관찰 수단이 부족한지 보고 정한다 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
