@@ -103,7 +103,7 @@ message StrikeActivity {
 
   Header header = 1;
   string payload_id = 2;
-  string weapon_entity = 3;  // 발사된 탄체·FPV 엔티티 ID
+  string weapon_entity = 3;  // 발사된 유도 객체·FPV 엔티티 ID
   StrikeState state = 4;
   string reason = 5;
 }

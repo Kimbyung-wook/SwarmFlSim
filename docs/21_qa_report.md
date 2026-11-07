@@ -169,7 +169,7 @@ UI·Monitor 점검은 §3에 따로 적는다. 앱 내장 브라우저로 라이
 시험 설계에서 확인된 한계다. 결함으로 분류하지 않고 §6에서 결정을 요청한다.
 
 - Detection 메시지를 만들지 않는다. 센서 FOV·거리·가시선 판정(DEC-018)이 동작하지 않는다.
-- 무장·발사·명중 논리가 없다(DEC-019). `truth/event/kill` 외 교전 이벤트가 없다.
+- 무장·발사·도달 논리가 없다(DEC-019). `truth/event/kill` 외 교전 이벤트가 없다.
 - `truth/event/jam_zone` 발행자가 없다. 시험이 직접 발행해 Datalink 반응(JAMMED)을 확인했다.
 - `SENSOR` 고장은 기록만 하고 효과가 없다.
 - dof5/dof6은 미지원이다.
@@ -924,7 +924,7 @@ PM 요청 1은 "TC-QA-035 재시험"으로 적혀 있었다. 내용(GCS의 Senso
 | 수신 간격 | 기체별 수신 프레임 사이 최대 간격은 7~11 프레임이다. 이 간격은 BURST_LOSS(기체마다 약 2 %) 때문이다 |
 | UI 수신 목록 | "수신" 창에 다섯 기체의 SensorActivity가 계속 들어온다(89 B) |
 | UI 센서 FOV | 기체마다 FOV 지면 풋프린트(하늘색 사각형)가 그려지고 기체 자세에 따라 움직인다 |
-| QA-023 (발사 뒤 렌더링) | sim 551 s에 발사했다. 이후 명중(영향 반경 15 m 표시)과 표적 파괴까지 렌더링이 멈추지 않았다. 콘솔 오류는 지도 타일 404 4건뿐이다 |
+| QA-023 (발사 뒤 렌더링) | sim 551 s에 발사했다. 이후 도달(영향 반경 15 m 표시)과 표적 파괴까지 렌더링이 멈추지 않았다. 콘솔 오류는 지도 타일 404 4건뿐이다 |
 | 로그 | 모든 프로세스 로그에 경고·오류가 없다 |
 
 - QA-020은 해소되었다. TC-QA-036의 FOV 항목은 통과다.
@@ -1045,7 +1045,7 @@ wp0-contracts 53c94d5(계약 0.12.0)를 병합하고 시험했다. 이 커밋에
 
 - 24회 모두 rc 0으로 끝났다(`qa/out_r9_batchA.log`, `qa/out_r9_batchB.log`). 결과 JSON은 `qa/out/p5/r9_summary.json`에 있다.
 - 0 지연 전달(tx_time = rx_time)이 모든 실행에서 0건이다. §15에서는 변형마다 1~2건이었다. 전달 지연의 최솟값은 모든 변형에서 20 ms(1틱)다. rx_time에서 송신 프레임 시각을 뺀 값의 최솟값도 20 ms다. 따라서 QA-019의 원인 경로(같은 틱 안의 소비 경쟁)가 생길 표본이 없다.
-- 이 시나리오의 truth 이벤트는 모두 `jam_zone`이다. DEC-052의 1 s 재발행으로 50 프레임마다 나온다. 이 재발행도 실행 사이에 프레임·seq·내용이 같다. 14,000 프레임에는 발사·명중이 없다.
+- 이 시나리오의 truth 이벤트는 모두 `jam_zone`이다. DEC-052의 1 s 재발행으로 50 프레임마다 나온다. 이 재발행도 실행 사이에 프레임·seq·내용이 같다. 14,000 프레임에는 발사·도달이 없다.
 - 이벤트 목록을 그대로 비교하면 base 실행 1과 nopayload 실행 1·4가 다르게 나온다. 이 셋은 frame 0의 첫 구역 이벤트(seq 0)를 관찰자가 받지 못했다. seq 1부터는 모두 같다. 원인은 관찰자 구독이 퍼지기 전에 Core가 frame 0 이벤트를 낸 것이다. 그래서 시험 도구 쪽 관찰 누락으로 봤다. 재발행 덕분에 그 관찰자도 frame 50에 구역을 받았다(관찰 O-5).
 - §16.5에서도 6회 모두 어긋나지 않았다. 그래서 어긋나지 않았다는 것만으로는 근거가 약하다. 이번 판정의 근거는 원인 표본(0 지연 전달)이 없어졌고 최소 지연이 1틱이라는 점이다.
 
@@ -1104,7 +1104,7 @@ UI (`qa/out/p5/jl_ui2`, sim 60 s에 KILL):
 |---|---|
 | StrikeActivity 빈도 | 14,000 프레임 실행에는 발사가 없다 |
 | `--activity-max-hz` 값 바꾸기 | `qa/p5_e2e.py`의 P5Stack에 Agent 인자를 넘길 옵션이 없다. 기본값만 확인했다 |
-| 발사·명중이 포함된 긴 lockstep 반복 | 이번에는 14,000 프레임만 돌렸다. TC-QA-035의 84,000 프레임 반복은 하지 않았다 |
+| 발사·도달이 포함된 긴 lockstep 반복 | 이번에는 14,000 프레임만 돌렸다. TC-QA-035의 84,000 프레임 반복은 하지 않았다 |
 | Datalink 재시작 뒤 구역 안 링크 손실 | QA-021 비고의 항목이다. 시험을 만들지 않았다 |
 | DEM 지형(DEC-053, QA-022) | 이번 요청 범위 밖이다 |
 
@@ -1118,7 +1118,7 @@ wp0-contracts 96c32c8(계약 0.12.0)을 병합하고 시험했다. 이 커밋에
 |---|---|
 | DEM | `uv run scripts/fetch_dem.py`로 `data/dem/korea_glo90.json`·`.bin`을 받았다. 격자는 12,001 × 8,401, 33~43°N, 124~131°E, int16이다. `qa/dem_check.py`(새 도구)가 시나리오(`qa/scenarios/qa_dem_mtn.json`, `qa_dem_north.json`)를 만들고 lockstep으로 돌린다. truth 궤적의 프레임마다 DEM 쌍선형 보간 고도를 Python으로 따로 계산한다. 처음 지면 아래로 내려간 프레임을 기대값으로 삼아 Core의 kill(cause=ground)과 비교한다 |
 | DEM 인자 | `swarm_core`에 `--terrain-flat 500 --terrain-dem …`을 두 순서로 주었다. 없는 파일도 주었다(`qa/out/dem/flagtest.log`) |
-| 긴 lockstep | `PREFIX=r10L qa/qa019_batch.sh 48400 84000 3 base`. 기본 시나리오 `p5_payload_demo_5`, 같은 시드, 84,000 프레임, `--trace-io`. 실행마다 82,543에 발사, 83,032에 명중한다. `qa/p5_e2e.py`에 자원 표본(5 s 간격 CPU·RSS)과 15 s 간격 진행 기록(벽시계, 프레임, 관찰자 RSS)을 더했다. 비교는 `qa/qa019_summary.py --prefix r10L --n 3`로 했다 |
+| 긴 lockstep | `PREFIX=r10L qa/qa019_batch.sh 48400 84000 3 base`. 기본 시나리오 `p5_payload_demo_5`, 같은 시드, 84,000 프레임, `--trace-io`. 실행마다 82,543에 발사, 83,032에 도달한다. `qa/p5_e2e.py`에 자원 표본(5 s 간격 CPU·RSS)과 15 s 간격 진행 기록(벽시계, 프레임, 관찰자 RSS)을 더했다. 비교는 `qa/qa019_summary.py --prefix r10L --n 3`로 했다 |
 | `--activity-max-hz` | `qa/p5_e2e.py`에 `--agent-arg`를 더했다. P5Stack이 이 값을 Agent 명령줄 끝에 붙인다. `qa/qa019_batch.sh`는 환경 변수 `AGENT_ARGS`를 넘긴다. 2, 50, 0으로 84,000 프레임을 1회씩 돌렸다(`r10hz2`, `r10hz50`, `r10hz0`). 빈도는 `qa/act_rate.py`로 쟀다 |
 | StrikeActivity | 위 실행의 `link_io.pkl.gz`(송신 시각)와 `gcs_act.pkl.gz`(GCS 수신 본문의 payload_id·해시)로 쟀다 |
 | Datalink 재시작 | `qa/dl_restart_jam.py`(새 도구). realtime 1배속, `qa_p5_near`, 포트 48420. sim 20 s와 40 s에 Datalink를 끝내고 3 s 뒤 다시 띄운다. LinkOutcome을 송신 프레임으로 구간을 나눈다. 수신 기체가 그 프레임에 구역 안에 있었는지(truth 궤적, 수평 거리)로 분류한다 |
@@ -1131,7 +1131,7 @@ wp0-contracts 96c32c8(계약 0.12.0)을 병합하고 시험했다. 이 커밋에
 |---|---|---|
 | TC-QA-044 | DEM 지형에서 지면 충돌 프레임·고도가 DEM 보간값과 맞는가. 격자 밖은 0 m인가 (QA-022) | 부분 통과 (QA-024) → 재시험 통과 (18.16) |
 | TC-QA-045 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 거부하는가 | 불합격 (QA-025) → 재시험 통과 (DEC-061, 18.16) |
-| TC-QA-046 | 발사·생성·명중이 있는 84,000 프레임 lockstep 3회의 결정성, rx 불변식, 자원 추이 | 통과 |
+| TC-QA-046 | 발사·생성·도달이 있는 84,000 프레임 lockstep 3회의 결정성, rx 불변식, 자원 추이 | 통과 |
 | TC-QA-047 | StrikeActivity 변경 보고·1 s 주기 보고·(메시지, payload_id)별 10 Hz 상한 | 통과 (상한은 부하 없음) |
 | TC-QA-048 | `--activity-max-hz` 2, 50, 0 실측 | 통과 |
 | TC-QA-049 | Datalink 재시작 뒤 구역 안 링크가 다시 끊기는가, 수신단 판정 유지 | 통과 (O-6) |
@@ -1178,9 +1178,9 @@ wp0-contracts 96c32c8(계약 0.12.0)을 병합하고 시험했다. 이 커밋에
 
 - 계약(`docs/10_contracts.md` DEM 절)은 "`--terrain-dem`과 `--terrain-flat`은 함께 쓰지 않는다"고 한다. Core는 둘을 함께 받아도 거부하지 않는다(`core/src/main.cpp:80~100`). PM 요청의 "거부되는지" 기준으로 불합격으로 했다(QA-025). 계약 문장이 거부를 요구하는지는 분명하지 않다(D-22).
 
-### 18.5 TC-QA-046 긴 lockstep 결정성 (발사·생성·명중 포함)
+### 18.5 TC-QA-046 긴 lockstep 결정성 (발사·생성·도달 포함)
 
-`p5_payload_demo_5`, 같은 시드 3회, 84,000 프레임. 발사 82,543, 명중 83,032. 생성 엔티티 wpn-uav-001-01은 truth에 490 프레임(82,544~83,033) 나오고 2,501.4 m를 난다. 결과 JSON은 `qa/out/p5/r10L_summary.json`이다.
+`p5_payload_demo_5`, 같은 시드 3회, 84,000 프레임. 발사 82,543, 도달 83,032. 생성 엔티티 wpn-uav-001-01은 truth에 490 프레임(82,544~83,033) 나오고 2,501.4 m를 난다. 결과 JSON은 `qa/out/p5/r10L_summary.json`이다.
 
 | 비교 | 결과 |
 |---|---|
@@ -1217,10 +1217,10 @@ r10L_base_1 (uav-001 → gcs-01, 송신 48건):
 |---|---|---|
 | 1,650.88 s (frame 82,544) | 변경 보고 | 발사. payload_id sta1 |
 | 1,651.0 s부터 1 s마다 | 주기 보고 | 내용 같음 |
-| 1,660.66 s (frame 83,033) | 변경 보고 | 명중 뒤 상태(본문 해시가 바뀐다) |
+| 1,660.66 s (frame 83,033) | 변경 보고 | 도달 뒤 상태(본문 해시가 바뀐다) |
 | 1,661.0 s부터 실행 끝까지 1 s마다 | 주기 보고 | 내용 같음 |
 
-- 변경 보고는 상태가 바뀐 두 번(발사, 명중)에만 나간다. 주기 보고는 1 s 간격을 정확히 지킨다. 같은 키의 최소 간격은 0.12 s(변경 보고 → 다음 주기 보고)다. 10 Hz 상한(0.1 s)보다 길다.
+- 변경 보고는 상태가 바뀐 두 번(발사, 도달)에만 나간다. 주기 보고는 1 s 간격을 정확히 지킨다. 같은 키의 최소 간격은 0.12 s(변경 보고 → 다음 주기 보고)다. 10 Hz 상한(0.1 s)보다 길다.
 - payload_id는 sta1 하나다. 발사가 1건이라 0.1 s 안에 변경이 여러 번 생기는 경우가 없다. 그래서 StrikeActivity에서 상한이 실제로 막는 경우는 만들지 못했다. 상한 동작 자체는 SensorActivity로 확인했다(18.7).
 - 발사 전에는 StrikeActivity가 한 건도 나가지 않는다. 송신 48건 중 1건은 BURST_LOSS로 떨어졌다. GCS 수신 본문 46건의 payload_id·해시가 송신 순서와 맞는다.
 - 실행 6회 모두 같은 양상이다(송신 44~48건, 차이는 실행 끝 프레임 차이).
@@ -1382,7 +1382,7 @@ wp0-contracts 1decbcb(QA-024·025 수정 b591329, DEC-060·061)를 병합하고 
 | 가시선 기대값 | 같은 도구가 Python으로 Core와 같은 식을 따로 계산한다. 표본 수 n = clamp(ceil(d/50), 2, 4000), 표본 k = 1..n−1, 광선 고도 = a.alt + s(b.alt − a.alt) − s(1−s)d²/(2·6,378,137), 지면은 DEM 쌍선형 보간(격자 밖 0 m), 끝점에서 50 m 안(min(s, 1−s)·d ≤ 50 m)은 0.5 m 허용, 광선 < 지면 − 허용이면 가림. 거리·FOV도 같은 좌표식으로 계산한다. 50 m 표본으로 경계 고도를 0.01 m까지 이분법으로 구하고, 5 m·1 m 표본으로도 다시 구했다 |
 | 가시선 실행 | lockstep 300 프레임 두 번: `--terrain-dem data/dem/korea_glo90.json`(`qa/out/los/dem`)과 `--terrain-flat 0`(`qa/out/los/flat`). `onboard/<id>/Detection`을 (센서, 대상)별로 세어 기대값과 견준다 |
 | 연속 발사 배치 | `qa/strike_burst.py`(새 도구)가 `qa/scenarios/qa_burst.json`을 만든다. 정지 사수 uav-001(37.5°N 128.0°E, 500 m), sta1 agm_short 6발, sta2 agm_short 2발. 평지 0 m의 정지 지상 표적 6개(tgt-a~e, 북쪽 1.0~1.5 km; tgt-far, 북쪽 7 km). GCS는 남쪽 2 km. 링크 손실 0. lockstep 2,500 프레임(50 s) |
-| 명령 주입 | `qa/strike_burst_agent.py`(새 도구)는 실제 `swarm_agent.cli`를 띄우고 `flocking_basic`만 정해진 MA 프레임에 StrikeCommand를 내는 관찰용 MA로 바꾼다. MA 포트로 받은 StrikeActivity도 기록한다. 명령은 프레임 100(sta1→tgt-a), 101(sta1→tgt-b), 102(sta1→없는 표적), 103(sta1→tgt-far, 사거리 밖), 150(sta2→tgt-c), 그리고 1차 실행(`qa/out/burst/p1`)에서 잰 명중 프레임에 맞춘 361(sta1→tgt-d, 1번 무장 명중 프레임)과 443(sta2→tgt-e, 3번 무장 명중 2프레임 뒤)이다 |
+| 명령 주입 | `qa/strike_burst_agent.py`(새 도구)는 실제 `swarm_agent.cli`를 띄우고 `flocking_basic`만 정해진 MA 프레임에 StrikeCommand를 내는 관찰용 MA로 바꾼다. MA 포트로 받은 StrikeActivity도 기록한다. 명령은 프레임 100(sta1→tgt-a), 101(sta1→tgt-b), 102(sta1→없는 표적), 103(sta1→tgt-far, 사거리 밖), 150(sta2→tgt-c), 그리고 1차 실행(`qa/out/burst/p1`)에서 잰 도달 프레임에 맞춘 361(sta1→tgt-d, 1번 무장 도달 프레임)과 443(sta2→tgt-e, 3번 무장 도달 2프레임 뒤)이다 |
 | 보고 비교 | Core가 낸 `onboard/uav-001/StrikeActivity`(기준)와 GCS가 받은 `swarm/gcs-01/rx/ms/StrikeActivity`를 견준다. Agent `--activity-max-hz 10`(기본, `qa/out/burst/h10`)과 `0`(`qa/out/burst/h0`)을 같은 명령으로 돌렸다 |
 
 ### 19.2 결과 요약
@@ -1432,7 +1432,7 @@ wp0-contracts 1decbcb(QA-024·025 수정 b591329, DEC-060·061)를 병합하고 
 
 ### 19.6 TC-QA-055 10 Hz 상한
 
-Core 기준 변화와 GCS 첫 수신 시각(모의 시간)이다. 지연은 GCS 첫 수신 − Core 변화 시각이다. 명중 시각은 프레임 안의 명중 시점이다.
+Core 기준 변화와 GCS 첫 수신 시각(모의 시간)이다. 지연은 GCS 첫 수신 − Core 변화 시각이다. 도달 시각은 프레임 안의 도달 시점이다.
 
 **sta1**
 
@@ -1465,7 +1465,7 @@ Core 기준 변화와 GCS 첫 수신 시각(모의 시간)이다. 지연은 GCS 
 ### 19.7 TC-QA-056 0 Hz 대조와 같은 프레임 변화
 
 - `--activity-max-hz 0`에서는 합쳐짐 없이 변화마다 GCS에 왔다. 지연은 20~60 ms로 상한과 무관한 기본 지연이다.
-- 프레임 361에서 sta1은 LAUNCHED w04(7.220 s)와 IMPACT w01(7.235 s)을 함께 냈다. 이 프레임의 앞 변화 LAUNCHED w04는 0 Hz와 10 Hz 모두 GCS에 오지 않았다. GCS 기록에는 w04가 명중(IMPACT w04)할 때 처음 나온다. 발사부터 명중까지 6.7 s 동안 GCS는 w04가 발사된 것을 알 수 없다.
+- 프레임 361에서 sta1은 LAUNCHED w04(7.220 s)와 IMPACT w01(7.235 s)을 함께 냈다. 이 프레임의 앞 변화 LAUNCHED w04는 0 Hz와 10 Hz 모두 GCS에 오지 않았다. GCS 기록에는 w04가 도달(IMPACT w04)할 때 처음 나온다. 발사부터 도달까지 6.7 s 동안 GCS는 w04가 발사된 것을 알 수 없다.
 - 원인은 Agent 런타임이다. `agent/src/swarm_agent/runtime.py:368` `_note_activity`는 키별로 마지막 본문만 남긴다. `_report_activity`(380행, 틱마다 534행에서 호출)는 한 틱에 키 하나를 한 번 보낸다. 그래서 같은 틱 안의 앞 변화는 남지 않는다.
 - 마지막 상태는 두 모드 모두 전달되었다.
 - 판정: 부분 통과. 같은 프레임 변화의 손실을 QA-026으로 등록했다. 계약이 이 합침을 허용하는지는 D-23으로 정리했다.
@@ -1474,9 +1474,9 @@ Core 기준 변화와 GCS 첫 수신 시각(모의 시간)이다. 지연은 GCS 
 
 #### QA-026 — 같은 프레임에 같은 키가 두 번 바뀌면 앞 변화가 GCS에 보고되지 않는다
 - 담당 WP2 Agent 런타임(또는 WP0 계약) / 낮음 / TC-QA-056
-- 재현: `uv run python qa/strike_burst.py --out qa/out/burst/p1 --hz 0` 뒤 `uv run python qa/strike_burst.py --out qa/out/burst/h0 --hz 0 --impact-from qa/out/burst/p1`. 프레임 361에 sta1의 1번 무장이 명중하고, 같은 프레임에 sta1에서 4번째 무장(w04)이 발사된다.
+- 재현: `uv run python qa/strike_burst.py --out qa/out/burst/p1 --hz 0` 뒤 `uv run python qa/strike_burst.py --out qa/out/burst/h0 --hz 0 --impact-from qa/out/burst/p1`. 프레임 361에 sta1의 1번 무장이 도달하고, 같은 프레임에 sta1에서 4번째 무장(w04)이 발사된다.
 - 기대: DEC-051 "변화 시 보고"에 따라 LAUNCHED w04가 GCS에 한 번은 도착한다.
-- 실제: `--activity-max-hz` 0과 10 모두 GCS가 LAUNCHED w04를 받지 못한다. 그 프레임에서는 IMPACT w01만 보내고, w04는 명중 보고(IMPACT w04)에서야 GCS에 나온다. MA 포트는 두 변화를 모두 받는다.
+- 실제: `--activity-max-hz` 0과 10 모두 GCS가 LAUNCHED w04를 받지 못한다. 그 프레임에서는 IMPACT w01만 보내고, w04는 도달 보고(IMPACT w04)에서야 GCS에 나온다. MA 포트는 두 변화를 모두 받는다.
 - 비고: DEC-056은 미룬 변화를 "최신 값으로" 보낸다고 하므로 합침 자체는 계약과 맞다고 볼 수도 있다. 그러나 제한이 없는 0 Hz에서도 생기고, StrikeActivity 키가 스테이션 단위여서 서로 다른 무장의 상태가 덮인다. 10 Hz에서는 같은 이유로 LAUNCHED w02도 빠졌다(19.6). D-23.
 - 상태: 해소 (DEC-063, IMP-AGT-031). §20 재시험
 
@@ -1512,7 +1512,7 @@ wp0-contracts 80a1cda(계약 0.13.0, IMP-AGT-031 5a42d59 병합)로 브랜치를
 
 | 항목 | 내용 |
 |---|---|
-| 연속 발사 재현 | §19와 같은 시나리오·명령으로 `qa/strike_burst.py`를 다시 돌렸다. 1차(`qa/out/burst2/p1`, 0 Hz)에서 명중 프레임을 재고 10 Hz(`qa/out/burst2/h10`)와 0 Hz(`qa/out/burst2/h0`)를 돌렸다. 명중 프레임(361, 362, 441)과 명령 프레임은 §19와 같다 |
+| 연속 발사 재현 | §19와 같은 시나리오·명령으로 `qa/strike_burst.py`를 다시 돌렸다. 1차(`qa/out/burst2/p1`, 0 Hz)에서 도달 프레임을 재고 10 Hz(`qa/out/burst2/h10`)와 0 Hz(`qa/out/burst2/h0`)를 돌렸다. 도달 프레임(361, 362, 441)과 명령 프레임은 §19와 같다 |
 | 키별 분석 | `qa/strike_burst_keys.py`(새 도구). 키 (payload_id, weapon_entity)별로 Core 변화와 GCS 첫 수신을 맞춘다. 1 s 주기 송신 틱(송신 프레임 % 50 = 0)마다 보낸 키와 그 틱에 Agent가 아는 비행 중 무장(발사 프레임 < 틱 ≤ 종료 프레임)을 견준다. 종료 상태를 보낸 키가 다시 나오는지, 같은 키·다른 키 사이 변화 송신 간격도 잰다. 결과는 각 폴더의 `keys.json`이다 |
 | 긴 실행 회귀 | `PREFIX=r12L qa/qa019_batch.sh 48400 84000 1 base`(기본 시나리오 `p5_payload_demo_5`, 84,000 프레임, 발사 1건). 10차 `r10L_base_1`과 `gcs_act.pkl.gz`·`link_io.pkl.gz`를 견주고, `qa/act_rate.py`로 SensorActivity 빈도도 다시 쟀다 |
 
@@ -1572,12 +1572,12 @@ Core 변화 12건은 §19와 같다(프레임·상태·이유·무장). GCS 첫 
 | 항목 | 10차 r10L_base_1 | 12차 r12L_base_1 |
 |---|---|---|
 | GCS StrikeActivity 수신 | 46건, 1,650.92 ~ 1,695.04 s(실행 끝) | 11건, 1,650.92 ~ 1,660.68 s |
-| 본문 변화 | 2회(발사 1,650.92 s, 명중 1,660.68 s) | 같다 |
+| 본문 변화 | 2회(발사 1,650.92 s, 도달 1,660.68 s) | 같다 |
 | 송신(LinkOutcome) | 48건 (DELIVERED 47, DROPPED 1) | 12건 (DELIVERED 11, DROPPED 1) |
 | 같은 키 수신 최소 간격 | 0.1 s | 0.1 s |
 | SensorActivity 빈도(기체마다) | 10.0 /s, 간격 0.1 s | 10.0 /s, 간격 0.1 s |
 
-- 발사 변경 보고, 비행 중 1 s 주기 보고, 명중 변경 보고가 나오고, 명중 뒤에는 주기 보고가 없다. DEC-063 그대로다. 무장은 1건이라 수신 키는 하나다.
+- 발사 변경 보고, 비행 중 1 s 주기 보고, 도달 변경 보고가 나오고, 도달 뒤에는 주기 보고가 없다. DEC-063 그대로다. 무장은 1건이라 수신 키는 하나다.
 - DROPPED 1건은 시나리오의 링크 손실이며 10차와 같은 위치다.
 - SensorActivity의 상한(10 Hz)과 주기 보고는 바뀌지 않았다.
 - 판정: 통과.
@@ -1654,8 +1654,8 @@ Core 변화(세 실행 모두 같다)와 GCS 첫 수신이다.
 - 종료 상태를 보낸 키는 그 뒤 변화 보고와 1 s 주기 보고 어디에도 다시 나오지 않았다(terminal_reappear 0). 5 s 틱에는 w01의 MISSED가 실렸고 6 s 틱부터 w01이 빠졌다. 8 s 틱에는 w04만 남았다.
 - `strike_burst_keys.py`는 5 s 틱(송신 프레임 250)을 "비행 중 무장과 다름"으로 표시했다. MISSED(프레임 249) 변화 송신이 마침 주기 틱 프레임과 겹친 것이다. MISSED 수신은 1건뿐이고 다음 틱부터 빠졌으므로 결함으로 보지 않았다.
 - MISSED expired는 `max_flight_time_s` 도달(`StepEnd::kExpired`) 때 난다. 5 km 표적에 3 s로는 닿지 못해 발사 3 s 뒤(프레임 249)에 끝났다. DEC-048대로 KillEvent는 없다.
-- MISSED destroyed는 무장 자신이 다른 무장의 명중 살상반경 안에서 파괴된 경우다. w02 명중(프레임 361)의 살상 대상에 tgt-a와 w03이 같이 들어갔고, 같은 프레임에 w03이 MISSED destroyed로 끝났다. KillEvent는 tgt-a와 w03 두 건(cause impact)이다.
-- 비행 중 표적이 사라진 w04(tgt-a는 프레임 361에 소멸)는 MISSED가 아니라 표적의 마지막 위치로 좌표 유도해 IMPACT proximity로 끝났다(살상 대상 없음, 명중 고도 1.1 m). 요청의 "표적 소멸"은 이 경로로 끝나며, MISSED destroyed는 무장 자신의 소멸을 뜻한다(O-11).
+- MISSED destroyed는 무장 자신이 다른 무장의 도달 살상반경 안에서 파괴된 경우다. w02 도달(프레임 361)의 살상 대상에 tgt-a와 w03이 같이 들어갔고, 같은 프레임에 w03이 MISSED destroyed로 끝났다. KillEvent는 tgt-a와 w03 두 건(cause impact)이다.
+- 비행 중 표적이 사라진 w04(tgt-a는 프레임 361에 소멸)는 MISSED가 아니라 표적의 마지막 위치로 좌표 유도해 IMPACT proximity로 끝났다(살상 대상 없음, 도달 고도 1.1 m). 요청의 "표적 소멸"은 이 경로로 끝나며, MISSED destroyed는 무장 자신의 소멸을 뜻한다(O-11).
 - 판정: TC-QA-058 통과, TC-QA-059 통과.
 
 ### 21.4 TC-QA-060 능선 뒤 표적 Strike
@@ -1757,7 +1757,7 @@ DEM 배치(`qa/out/los_edge/dem`, 거리 약 3 km). "끝점 여유"는 표적 �
 ### 21.10 관찰
 
 - O-10: 무장은 사수 동체 x축 방향으로 발사되고 비례항법으로 유도된다. 표적이 기수에서 약 90° 벗어나면 접근 속도가 0에 가까워 무장이 돌지 않는다. 기수 북쪽 첫 실행에서 무장 3발(조준점 포함)이 7 km 넘게 북쪽으로 날아가 지면에 부딪혔다. 이번 배치는 seeker_fov_deg를 360으로 재정의해 표적 지정 발사의 FOV 판정을 뺀 경우다. 기본 프로파일(FOV 90°)에서는 표적 지정 발사가 lock_failed로 막힌다. 조준점 발사는 FOV 판정이 없어 기본 프로파일에서도 같은 결과가 날 수 있다. 비행하는 기체는 보통 진행 방향이 기수라 영향이 작다. 정지 기체를 쓰는 시나리오에서 참고할 사항이다.
-- O-11: MISSED destroyed는 무장 자신이 다른 무장의 명중으로 파괴된 경우다. 비행 중 표적이 사라지면 무장은 마지막 위치로 좌표 유도해 IMPACT(살상 대상 없음)로 끝난다. 지상에서 "표적을 잃은 무장"을 MISSED로 기대하면 어긋난다.
+- O-11: MISSED destroyed는 무장 자신이 다른 무장의 도달으로 파괴된 경우다. 비행 중 표적이 사라지면 무장은 마지막 위치로 좌표 유도해 IMPACT(살상 대상 없음)로 끝난다. 지상에서 "표적을 잃은 무장"을 MISSED로 기대하면 어긋난다.
 - DEM 능선 실행(lockstep debug)의 Core overrun은 411(66 s)로 평지보다 많다. 결과에는 영향이 없다.
 
 ### 21.11 확인하지 못한 항목

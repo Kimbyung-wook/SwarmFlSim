@@ -44,15 +44,15 @@ ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2
 | TC-PAY-005 | 재밍 구역: site 처음 켬, 변화 없으면 이벤트 없음, 켬/끔, 이동 30 m 무시·80 m 갱신, 반경 상한, site 파괴 시 끔 | DEC-009 | 통과 |
 | TC-PAY-006 | 잔량 0 거부(no_stores), 무장 ID, Launch·Spawn, StoreLoadout, unknown_station, reset | DEC-012, DEC-019 | 통과 |
 | TC-PAY-007 | 락온 실패: 후방, 탐색기 FOV 밖, DEM 차폐 / out_of_range / aam 좌표 사격 no_target | DEC-012 | 통과 |
-| TC-PAY-008 | PN 명중: 횡단 공중 표적 근접 신관, Impact·Kill 1건, 무장 최종 상태 alive=false | PRP-DYN-003 | 통과 |
+| TC-PAY-008 | PN 도달: 횡단 공중 표적 근접 신관, Impact·Kill 1건, 무장 최종 상태 alive=false | PRP-DYN-003 | 통과 |
 | TC-PAY-009 | PN 빗나감: max_g 0.5, 비행 시간 6 s → MISSED(expired), 파괴 없음 | PRP-DYN-003, DEC-019 | 통과 |
 | TC-PAY-010 | 지면 탄착: 지형 고도 50 m, 탄착 고도 오차 ≤ 1 mm, 탄착 시각이 프레임 안 | DEC-005, DEC-012 | 통과 |
 | TC-PAY-011 | 살상반경 15 m 안 3개 파괴(ID 순), 밖 1개 생존, 재파괴 없음 | DEC-012 | 통과 |
 | TC-PAY-012 | 같은 입력 2회(별개 인스턴스, reset 후) 출력 바이트 동일 | DEC-046, REQ-SIM-001 | 통과 |
 | TC-PAY-013 | 내장 프로파일, 재정의, 오류(모르는 키·형식·프로파일, 문자열 값, 재머 2개, 중복 ID), 무장 ID 충돌 건너뜀 | DEC-019 | 통과 |
-| TC-PAY-014 | FPV 종말 유도: 이동 지상 표적 명중·파괴 | PRP-DYN-003 | 통과 |
+| TC-PAY-014 | FPV 종말 유도: 이동 지상 표적 도달·파괴 | PRP-DYN-003 | 통과 |
 | TC-PAY-015 | 탑 DEM 뒤로 들어간 표적: 락 해제, 좌표 유도 지점 = 직전 프레임 표적 위치, 상실 동안 고정, 표적 미피격(무장은 탑에 지면 충돌) | DEC-064 | 통과 |
-| TC-PAY-016 | 좁은 탑에 잠깐 가린 표적: 락 해제 후 재획득(추적 복귀), 근접 신관 명중·파괴 | DEC-064 | 통과 |
+| TC-PAY-016 | 좁은 탑에 잠깐 가린 표적: 락 해제 후 재획득(추적 복귀), 근접 신관 도달·파괴 | DEC-064 | 통과 |
 | TC-PAY-017 | 평지 회귀 없음(LosFn 없음과 평지 LosFn의 이벤트 바이트 동일, 상실 0), 비행 중 무장 1개당 프레임당 가시선 1회, 조준점 발사는 0회, 10 km 판정 비용 측정 | DEC-064, DEC-046 | 통과 |
 
 ## 결정과 근거 (WP8 내부)

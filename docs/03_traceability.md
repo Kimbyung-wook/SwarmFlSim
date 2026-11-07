@@ -155,7 +155,7 @@
 | TC-QA-043 | DEC-056: 기본 10 Hz 제한에서 기체당 Activity 보고 빈도·대역 | `qa/act_rate.py` | DEC-056, DEC-051 |
 | TC-QA-044 | DEC-053: DEM 지형에서 지면 충돌 프레임·고도가 DEM 보간값과 일치, 격자 밖 0 m(QA-022 재시험) | `qa/dem_check.py --case mtn|north [--flat]` | DEC-053, DEC-060, DEC-016, DEC-004 |
 | TC-QA-045 | DEC-053·061: `--terrain-flat`과 `--terrain-dem` 함께 주면 DEM 우선·경고, 없는 DEM 파일 오류 | `swarm_core` 직접 실행(시나리오는 `swarm-scenario export`) | DEC-053, DEC-061 |
-| TC-QA-046 | DEC-054: 발사·생성·명중이 있는 84,000 프레임 lockstep 3회 결정성, 0 지연 전달 없음, 자원 추이 | `qa/qa019_batch.sh`(PREFIX=r10L), `qa/qa019_summary.py --prefix r10L` | DEC-054, DEC-045, DEC-005 |
+| TC-QA-046 | DEC-054: 발사·생성·도달이 있는 84,000 프레임 lockstep 3회 결정성, 0 지연 전달 없음, 자원 추이 | `qa/qa019_batch.sh`(PREFIX=r10L), `qa/qa019_summary.py --prefix r10L` | DEC-054, DEC-045, DEC-005 |
 | TC-QA-047 | DEC-051·056: StrikeActivity 변경·1 s 주기 보고, (메시지, payload_id)별 10 Hz 상한 | `link_io.pkl.gz`·`gcs_act.pkl.gz` 분석 | DEC-051, DEC-056 |
 | TC-QA-048 | DEC-056: `--activity-max-hz` 2·50·0 실측 | `qa/qa019_batch.sh`(AGENT_ARGS), `qa/act_rate.py` | DEC-056 |
 | TC-QA-049 | DEC-052·055: Datalink 재시작 뒤 구역 재발행으로 구역 안 링크 재두절, 수신단 판정 유지 | `qa/dl_restart_jam.py` | DEC-052, DEC-055 |
@@ -243,7 +243,7 @@
 | TC-QA-044 | 통과 | 2026-11-06 | 재시험(1decbcb): 설악·한라 kill 3건이 DEM 기대값과 같고 격자 밖 0 m. DEM 아래 시작 uav-004(시작 DEM 820.0 m)는 경고 후 시작 프레임 kill(DEC-060). QA-022·024 해소. 첫 실행은 부분 통과 |
 | TC-QA-045 | 통과 | 2026-11-06 | 재시험(1decbcb): 함께 주면 경고 후 DEM 사용(DEC-061). 없는 파일 rc 1. QA-025 해소. 첫 실행은 불합격 |
 | TC-QA-046 | 통과 | 2026-11-06 | 3회 궤적·MA 입력·LinkOutcome·이벤트(seq 맞춤, spawn 포함) 차이 0. 0 지연 전달 0. Core·Datalink RSS 증가 없음, Agent 뒤 절반 +1 MB 미만 |
-| TC-QA-047 | 통과 | 2026-11-06 | 재시험(80a1cda, r12L): 발사·명중 변경 보고, 비행 중만 1 s 주기, 명중 뒤 주기 없음(수신 46→11건). SensorActivity 10 Hz 유지 |
+| TC-QA-047 | 통과 | 2026-11-06 | 재시험(80a1cda, r12L): 발사·도달 변경 보고, 비행 중만 1 s 주기, 도달 뒤 주기 없음(수신 46→11건). SensorActivity 10 Hz 유지 |
 | TC-QA-048 | 통과 | 2026-11-06 | 2 Hz 간격 0.5 s, 50 Hz·0 간격 0.02 s(매 틱), 기본 10 Hz 간격 0.1 s |
 | TC-QA-049 | 통과 | 2026-11-06 | 재시작 뒤 0.80~0.88 s 안에 재두절, 그 뒤 구역 안 전달 0. 재시작 직후 전달 48·80건(O-6) |
 | TC-QA-050 | 정리 | 2026-11-06 | frame 0 단발 truth 이벤트는 jam_zone뿐(재발행). 현재 영향 없음 |

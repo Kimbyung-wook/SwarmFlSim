@@ -86,7 +86,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-009 | 재밍: 재밍 영역 안에서는 링크 100% 손실 | OPN-009 | Confirmed |
 | DEC-010 | OS: Windows 네이티브 우선, WSL2/Linux 호환 | OPN-010 | Confirmed |
 | DEC-011 | 기록·재생 포맷은 MCAP | OPN-011 | Confirmed |
-| DEC-012 | 피해 판정: 탄체 위치는 동역학으로 계산하고, 살상반경 안의 대상은 즉시 파괴 | OPN-012 | Confirmed |
+| DEC-012 | 피해 판정: 유도 객체 위치는 동역학으로 계산하고, 살상반경 안의 대상은 즉시 파괴 | OPN-012 | Confirmed |
 | DEC-013 | A-GRA: 구조 준용 + Gateway로 시작해 L1 전면 준수로 확장한다. MA는 L1 포트로만 통신한다 | OPN-015 | Confirmed |
 | DEC-014 | A-GRA로 표현할 수 없는 운용 C2는 EXT 메시지로 추가한다. 시뮬레이션 통제는 별도 채널로 분리한다 | 사용자 문의 | Draft |
 | DEC-015 | 개발은 WBS 작업 패키지 단위로 멀티 에이전트(병렬 세션) 구조로 나눈다. 패키지 간 계약은 인터페이스 스키마(Protobuf, Zenoh 키, 플러그인 API)로 먼저 고정한다 | 사용자: "멀티 에이전트 구조로 나누어서 개발해도 좋아" | Confirmed |

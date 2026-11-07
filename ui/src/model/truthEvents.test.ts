@@ -43,7 +43,7 @@ describe("zoneShape", () => {
     expect(isEventEntity("x", EntityKind.FPV)).toBe(true);
     expect(isEventEntity("x", EntityKind.MISSILE)).toBe(true);
     expect(isEventEntity("uav-001", EntityKind.UAV)).toBe(false);
-    expect(endCauseLabel("impact")).toBe("명중");
+    expect(endCauseLabel("impact")).toBe("도달");
     expect(endCauseLabel("gone")).toBe("소멸");
   });
 });

@@ -311,7 +311,7 @@ export class TruthEventStore {
 /** 종료 원인 표시 문구 */
 export function endCauseLabel(c: EndCause): string {
   switch (c) {
-    case "impact": return "명중";
+    case "impact": return "도달";
     case "collision": return "충돌";
     case "ground": return "지면 충돌";
     case "fault": return "고장";

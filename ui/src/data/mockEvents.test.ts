@@ -87,7 +87,7 @@ describe("MockEvents", () => {
     expect(dead).toHaveLength(1);
     expect(dead[0]).toBe(missileFrames[missileFrames.length - 1]);
     expect(has(r.frames.find((f) => has(f, "wpn-uav-002-01"))!, "wpn-uav-002-01")!.kind).toBe(EntityKind.FPV);
-    // 보관소에서 보면 미사일은 명중, FPV는 지면 충돌로 끝난다
+    // 보관소에서 보면 미사일은 도달, FPV는 지면 충돌로 끝난다
     expect(r.store.getTrack("wpn-uav-001-01")!.end).toMatchObject({ cause: "impact", radiusM: 30 });
     expect(r.store.getTrack("wpn-uav-002-01")!.end!.cause).toBe("ground");
     expect(r.store.getTrack("wpn-uav-001-01")!.start!.shooter).toBe("uav-001");

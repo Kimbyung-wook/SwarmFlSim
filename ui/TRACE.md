@@ -128,7 +128,7 @@
 | TC-UI-050 | BusSource: `truth/event/**` 구독 키(다운샘플 없음)·TruthEvent 해석·해석 오류 보고 (1건, 구독 키 목록 시험 갱신) | `ui/src/data/busSource.test.ts` | IMP-UI-062 | 통과 |
 | TC-UI-051 | 수동(브라우저, 목 소스): 2D·3D에서 재밍 구역 기둥·꺼짐, 발사체 꼬리·생성/종료 마커·살상반경 원, FOV 원뿔·풋프린트 | 브라우저 확인 | IMP-UI-065 | TC-UI-053로 실시 |
 | TC-UI-052 | Cesium 객체 수명(실제 PolylineCollection·Material, 가짜 viewer): 5회 갱신 뒤 파괴된 Material 없음·polyline 유지·Material 고유, 선 수 감소 시 숨김·색 uniform 갱신, 증가 시 풀 확장, destroy 정리 (수정 전 코드에서 실패 확인) (2건) | `ui/src/cesium/eventLayer.test.ts` | IMP-UI-066 | 통과 |
-| TC-UI-053 | 수동(브라우저, 목 소스): 3D와 2D에서 τ 10·15 s 발사 → 22·27 s 종료를 넘겨 각 주기 2회 이상 갱신, 두 번째 주기(τ 70 s 발사, T 81 s)까지 궤적·종료 마커(명중·지면 충돌)·살상반경 원·재밍 구역·FOV 계속 렌더링, 콘솔에 destroyed·DeveloperError 없음 | 브라우저 확인 | IMP-UI-065, IMP-UI-066 | 통과 |
+| TC-UI-053 | 수동(브라우저, 목 소스): 3D와 2D에서 τ 10·15 s 발사 → 22·27 s 종료를 넘겨 각 주기 2회 이상 갱신, 두 번째 주기(τ 70 s 발사, T 81 s)까지 궤적·종료 마커(도달·지면 충돌)·살상반경 원·재밍 구역·FOV 계속 렌더링, 콘솔에 destroyed·DeveloperError 없음 | 브라우저 확인 | IMP-UI-065, IMP-UI-066 | 통과 |
 | TC-UI-054 | 모드 전환 폭 유지 계산: 원근 거리→폭→높이 왕복, 2D 높이 = 폭, 상·하한·NaN (2건) | `ui/src/model/viewKeep.test.ts` | IMP-UI-067 | 통과 |
 | TC-UI-055 | 맞춤 뷰: 범위·여백, 엔티티 1개 최소 5 km·(0,0)·NaN 제외·없으면 null, FitGate 첫 엔티티 1회·이름 처음 알게 됨은 교체 아님·시나리오 교체 시 엔티티 기다려 1회·rearm (5건) | `ui/src/model/viewKeep.test.ts` | IMP-UI-068 | 통과 |
 | TC-UI-056 | 수동(브라우저, 목 소스, 개발 서버의 `window.__swarmViewer`로 화면 중심 읽기): 시작 시 맞춤(36.66°N 127.51°E, 높이 40 km). 3D 기울임(-40°) 중심 37.3410/127.0965 → 2D 중심 동일·폭 26.9 km(예상 2·23.3 km·tan 30°). 2D → 2.5D 중심 36.6482/127.5153 동일. 2.5D 기울임 → 3D 중심 36.8369/127.5153 동일. 3D 하늘 방향(+6°) → 2D는 카메라 아래 37.0/127.3. 2D → 3D 동일. 전환 중 지구 전체 뷰 없음. "전체" 버튼 맞춤, 카메라 옮긴 뒤 리셋은 카메라 불변. 콘솔 오류 없음 | 브라우저 확인 | IMP-UI-067, IMP-UI-068 | 통과 |

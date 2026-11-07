@@ -3,14 +3,14 @@
 정지 사수(uav-001, sta1 agm_short 6발, sta2 agm_short 2발)가 평지(0 m)의 정지 지상 표적에 프레임 단위로 붙인
 StrikeCommand를 낸다. (StrikeActivity, payload_id) 키가 0.1 s 안에 여러 번 바뀌게 한다.
 - 묶음 A: sta1에 20 ms 간격 4연속 (발사·발사·거부 unknown_target·거부 out_of_range)
-- 묶음 B: sta1의 1·2번 무장이 20 ms 간격으로 명중할 때 같은 프레임에 sta1 3번 발사, sta2는 명중 40 ms 뒤 발사
-  (명중 프레임은 1차 실행에서 잰다: --impact-from 결과 파일)
+- 묶음 B: sta1의 1·2번 무장이 20 ms 간격으로 도달할 때 같은 프레임에 sta1 3번 발사, sta2는 도달 40 ms 뒤 발사
+  (도달 프레임은 1차 실행에서 잰다: --impact-from 결과 파일)
 - 대조: sta2 단발 발사(키 하나에 변화 한 번)
 
 Core가 낸 onboard/<id>/StrikeActivity(진실)와 GCS가 받은 swarm/gcs-01/rx/ms/StrikeActivity를 견준다.
 Agent `--activity-max-hz 10`(기본)과 `0`을 비교한다. 링크 손실은 0으로 둔다.
 
-uv run python qa/strike_burst.py --out qa/out/burst/p1 --hz 0                       (1차: 명중 프레임 측정)
+uv run python qa/strike_burst.py --out qa/out/burst/p1 --hz 0                       (1차: 도달 프레임 측정)
 uv run python qa/strike_burst.py --out qa/out/burst/h10 --hz 10 --impact-from qa/out/burst/p1
 uv run python qa/strike_burst.py --out qa/out/burst/h0 --hz 0 --impact-from qa/out/burst/p1
 """
@@ -208,7 +208,7 @@ def main() -> None:
         res["drops"] = [x for x in act_lo if x[4] != "DELIVERED"]
         res["probe_cmds"] = probe.get("cmds")
         res["analysis"] = analyse(core, rx, probe)
-        # 명중 프레임과 명령 지연 (2차 실행 일정용)
+        # 도달 프레임과 명령 지연 (2차 실행 일정용)
         launch = {r["weapon"]: r["f"] for r in core if r["state"] == "LAUNCHED"}
         imp = {r["weapon"]: r["f"] for r in core if r["state"] in ("IMPACT", "MISSED")}
         w1 = "wpn-uav-001-01"

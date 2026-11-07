@@ -56,7 +56,7 @@ describe("eventOverlay", () => {
     const missileLine = o.lines.find((l) => l.positions[l.positions.length - 1].lat === 37.04)!;
     expect(missileLine.positions).toHaveLength(4); // 궤적 3점 + 종료 위치
     const labels = o.points.map((p) => p.label).filter(Boolean);
-    expect(labels).toEqual(expect.arrayContaining([`${m} · 명중`, `${f} · 지면 충돌`]));
+    expect(labels).toEqual(expect.arrayContaining([`${m} · 도달`, `${f} · 지면 충돌`]));
     // 종료 후 생성 마커는 라벨 없이 남는다
     expect(o.points.filter((p) => p.color === "#ffffff").every((p) => !p.label)).toBe(true);
     expect(o.rings).toEqual([{ key: `impact/${m}/${4n * S}`, center: { lat: 37.04, lon: 127, alt: 120 }, radiusM: 30, color: IMPACT_COLOR, label: `${m} 살상반경 30 m · 파괴 tgt-001` }]);

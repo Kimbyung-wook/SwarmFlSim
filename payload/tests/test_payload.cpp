@@ -488,7 +488,7 @@ void tc_007() {
   check(s.size() == 1 && s[0]->reason() == "lock_failed", "LOS blocked: lock_failed");
 }
 
-// PN 명중: 횡단 공중 표적
+// PN 도달: 횡단 공중 표적
 void tc_008() {
   const std::vector<v1::EntitySpec> sp = {spec("uav-001", v1::ENTITY_KIND_UAV, {pay("sta1", "aam_short", 2)}),
                                           spec("tgt-a", v1::ENTITY_KIND_AIR_TARGET)};
@@ -861,7 +861,7 @@ void tc_015() {
   check(!contains(L.r.killed, "tgt-a"), "hidden target not hit");
 }
 
-// 다시 보이고 FOV·거리 안이면 재획득 → 명중
+// 다시 보이고 FOV·거리 안이면 재획득 → 도달
 void tc_016() {
   // 표적 경로 바로 앞의 좁은 탑: 표적이 동쪽으로 지나가는 잠깐 동안만 가린다
   const auto tower = tower_terrain(2650.0, 2700.0, 60.0, 140.0, 1500.0);
