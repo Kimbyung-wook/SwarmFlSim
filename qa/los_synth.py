@@ -1,4 +1,4 @@
-"""QA 15차 TC-QA-065~068: 합성 언덕 DEM으로 비행 중 가시선 상태 전환 검증 (DEC-064, IMP-PAY-008).
+"""QA 14차 TC-QA-065~068: 합성 언덕 DEM으로 비행 중 가시선 상태 전환 검증 (DEC-064, IMP-PAY-008).
 
 실제 DEM 대신 해석식 언덕 하나(가우스형, int16 반올림)를 `data/dem/korea_glo90.json`과 같은 머리글 형식
 (format=swarm-dem-grid)으로 만들어 Core `--terrain-dem`에 준다. 유도 상태는 버스로 보고되지 않으므로(OPN-055)
@@ -115,7 +115,7 @@ def scenario(case: str) -> tuple[dict, list[dict], dict]:
     sc = base(f"qa-los-synth-{case}", ents, False,
               {"south_deg": 38.0, "north_deg": 38.12, "west_deg": 128.0, "east_deg": 128.12},
               {"lat_deg": HILL["lat_deg"], "lon_deg": HILL["lon_deg"], "alt_m": 0.0})
-    sc["description"] = "QA 15차 합성 언덕 가시선 전환 (DEC-064)"
+    sc["description"] = "QA 14차 합성 언덕 가시선 전환 (DEC-064)"
     terrain = ["--terrain-flat", "0"] if case == "flat" else ["--terrain-dem", str(DEM_JSON)]
     return sc, pl, {"terrain": terrain, "geom": g, "hill": HILL, "aim_at_launch": tl}
 

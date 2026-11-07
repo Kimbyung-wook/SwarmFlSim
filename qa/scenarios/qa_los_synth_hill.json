@@ -1,7 +1,7 @@
 {
  "schema_version": "0.1",
  "name": "qa-los-synth-hill",
- "description": "QA 15차 합성 언덕 가시선 전환 (DEC-064)",
+ "description": "QA 14차 합성 언덕 가시선 전환 (DEC-064)",
  "map": {
   "origin": {
    "lat_deg": 38.06,
