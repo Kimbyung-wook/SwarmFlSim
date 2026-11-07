@@ -33,7 +33,7 @@ if(SWARM_BUILD_TESTS)
   foreach(tc
       TC-PAY-001 TC-PAY-002 TC-PAY-003 TC-PAY-004 TC-PAY-005 TC-PAY-006 TC-PAY-007
       TC-PAY-008 TC-PAY-009 TC-PAY-010 TC-PAY-011 TC-PAY-012 TC-PAY-013 TC-PAY-014
-      TC-PAY-015 TC-PAY-016 TC-PAY-017)
+      TC-PAY-015 TC-PAY-016 TC-PAY-017 TC-PAY-018)
     add_test(NAME pay.${tc} COMMAND swarm_payload_tests ${tc})
   endforeach()
 endif()
