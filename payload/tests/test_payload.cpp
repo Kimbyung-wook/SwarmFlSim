@@ -1,5 +1,7 @@
-// TC-PAY-001~014: 임무장비·무장 계산기 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
+// TC-PAY-001~017: 임무장비·무장 계산기 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -752,6 +754,190 @@ void tc_014() {
                r.end_reason.c_str());
 }
 
+// ---- DEC-064: 비행 중 탐색기 가시선 ----
+
+// 원점 기준 NED 상자(북 n0~n1, 동 e0~e1, 높이 h) 하나가 솟은 평지 DEM
+swarm::dyn::GridTerrain tower_terrain(double n0, double n1, double e0, double e1, double h) {
+  swarm::dyn::GridSpec g;
+  g.lat0_deg = 37.49;
+  g.lon0_deg = 126.99;
+  g.dlat_deg = 0.0001;
+  g.dlon_deg = 0.0001;
+  g.rows = 601;
+  g.cols = 301;
+  std::vector<float> hv(g.rows * g.cols, 0.0f);
+  const Geo base{kOrigin.lat_deg, kOrigin.lon_deg, 0.0};
+  for (std::size_t r = 0; r < g.rows; ++r)
+    for (std::size_t c = 0; c < g.cols; ++c) {
+      const Vec3 d = ned_between(base, Geo{g.lat0_deg + r * g.dlat_deg, g.lon0_deg + c * g.dlon_deg, 0.0});
+      if (d.x >= n0 && d.x <= n1 && d.y >= e0 && d.y <= e1) hv[r * g.cols + c] = static_cast<float>(h);
+    }
+  return swarm::dyn::GridTerrain(g, std::move(hv));
+}
+
+struct TrackLog {
+  RunResult r;
+  std::vector<std::optional<WeaponTrack>> track;  // 프레임별 step 뒤 유도 상태
+  std::vector<Geo> target_pos;                    // 프레임별 표적 위치(step 입력)
+  int lost_frames = 0, lose_events = 0, reacquire_events = 0;
+  long long first_lost = -1, first_reacquire = -1;
+};
+
+TrackLog fly_track(PayloadSystem& ps, std::vector<Ent> ents, const Addressed<v1::StrikeCommand>& cmd,
+                   std::uint64_t max_frames, const std::string& weapon, std::size_t target_index) {
+  TrackLog L;
+  bool prev_lost = false;
+  for (std::uint64_t f = 0; f < max_frames; ++f) {
+    FrameInput in = frame_in(f, ents);
+    if (f == 0) in.strike_cmds.push_back(cmd);
+    L.target_pos.push_back(ents[target_index].pos);
+    const FrameOutput o = ps.step(in);
+    for (const auto& e : o.events) L.r.events.push_back(e);
+    for (const auto& k : o.killed) L.r.killed.push_back(k);
+    const auto t = ps.weapon_track(weapon);
+    L.track.push_back(t);
+    if (t) {
+      if (t->los_lost) ++L.lost_frames;
+      if (t->los_lost && !prev_lost) {
+        ++L.lose_events;
+        if (L.first_lost < 0) L.first_lost = static_cast<long long>(f);
+      }
+      if (!t->los_lost && prev_lost) {
+        ++L.reacquire_events;
+        if (L.first_reacquire < 0) L.first_reacquire = static_cast<long long>(f);
+      }
+      prev_lost = t->los_lost;
+    }
+    for (const auto* a : strikes(o, cmd.entity)) {
+      if (a->state() == v1::STRIKE_STATE_LAUNCHED) L.r.launched = true;
+      if (a->state() == v1::STRIKE_STATE_IMPACT || a->state() == v1::STRIKE_STATE_MISSED ||
+          a->state() == v1::STRIKE_STATE_REJECTED) {
+        L.r.ended = true;
+        L.r.end_state = a->state();
+        L.r.end_reason = a->reason();
+        L.r.end_frame = f;
+      }
+    }
+    if (L.r.ended) break;
+    for (auto& e : ents) {
+      if (std::find(o.killed.begin(), o.killed.end(), e.id) != o.killed.end()) e.alive = false;
+      e.pos = offset(e.pos, kDt * e.vel);
+    }
+  }
+  return L;
+}
+
+std::vector<v1::EntitySpec> aam_specs() {
+  return {spec("uav-001", v1::ENTITY_KIND_UAV, {pay("sta1", "aam_short", 2)}),
+          spec("tgt-a", v1::ENTITY_KIND_AIR_TARGET)};
+}
+
+// 능선(탑) 뒤로 들어간 표적: 락 해제, 마지막으로 본 위치로 좌표 유도
+void tc_015() {
+  const auto tower = tower_terrain(2300.0, 2600.0, 150.0, 900.0, 1500.0);
+  PayloadSystem ps(ProfileLibrary::builtin(), aam_specs(), make_terrain_los(tower), &tower);
+  const Ent u{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, kOrigin, {30.0, 0.0, 0.0}};
+  const Ent t{"tgt-a", v1::ENTITY_KIND_AIR_TARGET, v1::SIDE_RED, at(kOrigin, 0.0, 3000.0, -900.0), {0.0, 60.0, 0.0}};
+  const auto L = fly_track(ps, {u, t}, strike_target("uav-001", "sta1", "tgt-a"), 2000, "wpn-uav-001-01", 1);
+  std::fprintf(stderr, "  launched %d lost@%lld lost_frames %d reacq %d end %d/%s @%llu\n", L.r.launched, L.first_lost,
+               L.lost_frames, L.reacquire_events, L.r.end_state, L.r.end_reason.c_str(),
+               static_cast<unsigned long long>(L.r.end_frame));
+  check(L.r.launched, "launched (visible at launch)");
+  check(L.first_lost > 0, "lock lost behind ridge");
+  if (L.first_lost > 0) {
+    const auto f = static_cast<std::size_t>(L.first_lost);
+    const auto& before = L.track[f - 1];
+    check(before && before->locked && !before->coordinate_mode, "locked before loss");
+    const auto& lost = L.track[f];
+    check(lost && lost->los_lost && lost->coordinate_mode && !lost->locked, "lost: coordinate guidance");
+    // 좌표 유도 지점 = 마지막으로 본 표적 위치(상실 직전 프레임 입력)
+    if (lost) check(distance_m(lost->guide_point, L.target_pos[f - 1]) < 1e-6, "guide point = last seen position");
+    // 상실 동안 지점은 고정
+    bool frozen = true;
+    for (std::size_t k = f; k < L.track.size() && L.track[k] && L.track[k]->los_lost; ++k)
+      frozen &= distance_m(L.track[k]->guide_point, L.track[f]->guide_point) < 1e-9;
+    check(frozen, "guide point frozen while lost");
+  }
+  check(!contains(L.r.killed, "tgt-a"), "hidden target not hit");
+}
+
+// 다시 보이고 FOV·거리 안이면 재획득 → 명중
+void tc_016() {
+  // 표적 경로 바로 앞의 좁은 탑: 표적이 동쪽으로 지나가는 잠깐 동안만 가린다
+  const auto tower = tower_terrain(2650.0, 2700.0, 60.0, 140.0, 1500.0);
+  PayloadSystem ps(ProfileLibrary::builtin(), aam_specs(), make_terrain_los(tower), nullptr);
+  const Ent u{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, kOrigin, {30.0, 0.0, 0.0}};
+  const Ent t{"tgt-a", v1::ENTITY_KIND_AIR_TARGET, v1::SIDE_RED, at(kOrigin, 0.0, 3000.0, -900.0), {0.0, 40.0, 0.0}};
+  const auto L = fly_track(ps, {u, t}, strike_target("uav-001", "sta1", "tgt-a"), 2000, "wpn-uav-001-01", 1);
+  std::fprintf(stderr, "  launched %d lost@%lld lost_frames %d reacq@%lld end %d/%s @%llu\n", L.r.launched, L.first_lost,
+               L.lost_frames, L.first_reacquire, L.r.end_state, L.r.end_reason.c_str(),
+               static_cast<unsigned long long>(L.r.end_frame));
+  check(L.r.launched, "launched");
+  check(L.lose_events >= 1, "lock lost while target behind tower");
+  check(L.reacquire_events >= 1, "reacquired");
+  if (L.first_reacquire > 0) {
+    const auto& re = L.track[static_cast<std::size_t>(L.first_reacquire)];
+    check(re && re->locked && !re->coordinate_mode && !re->los_lost, "reacquired: tracking again");
+  }
+  check(L.r.ended && L.r.end_state == v1::STRIKE_STATE_IMPACT && L.r.end_reason == "proximity", "hit after reacquire");
+  check(contains(L.r.killed, "tgt-a"), "target killed after reacquire");
+}
+
+// 평지 회귀 없음: LosFn 없음 = 평지 LosFn. 조준점 발사는 비행 중 가시선을 보지 않는다. 비용 측정
+void tc_017() {
+  const swarm::dyn::FlatTerrain flat(0.0);
+  const LosFn base = make_terrain_los(flat);
+  long long calls = 0;
+  const LosFn counted = [&](const Geo& a, const Geo& b) {
+    ++calls;
+    return base(a, b);
+  };
+  const Ent u{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, kOrigin, {30.0, 0.0, 0.0}};
+  const Ent t{"tgt-a", v1::ENTITY_KIND_AIR_TARGET, v1::SIDE_RED, at(kOrigin, 10.0, 3000.0, 200.0), {0.0, 40.0, 0.0}};
+  auto run = [&](LosFn los, TrackLog& L) {
+    PayloadSystem ps(ProfileLibrary::builtin(), aam_specs(), std::move(los), nullptr);
+    L = fly_track(ps, {u, t}, strike_target("uav-001", "sta1", "tgt-a"), 2000, "wpn-uav-001-01", 1);
+  };
+  TrackLog a, b;
+  run(nullptr, a);
+  calls = 0;
+  run(counted, b);
+  std::string sa, sb;
+  for (const auto& e : a.r.events) sa += serialize(e);
+  for (const auto& e : b.r.events) sb += serialize(e);
+  check(!sa.empty() && sa == sb, "flat LosFn = no LosFn (events identical)");
+  check(a.r.end_frame == b.r.end_frame && b.r.end_state == v1::STRIKE_STATE_IMPACT, "same hit frame");
+  check(b.lose_events == 0 && b.lost_frames == 0, "flat: never lost");
+  // 비행 중 프레임마다 1회 (발사 판정 1회 + 끝 프레임 포함 비행 프레임 수)
+  const long long flight_frames = static_cast<long long>(b.r.end_frame) + 1;
+  check(calls == 1 + flight_frames, "one LOS query per in-flight weapon per frame");
+  std::fprintf(stderr, "  flight frames %lld, LOS calls %lld\n", flight_frames, calls);
+
+  // 조준점 발사: 비행 중 가시선 판정 없음 (DEC-064)
+  calls = 0;
+  {
+    PayloadSystem ps(ProfileLibrary::builtin(),
+                     {spec("uav-001", v1::ENTITY_KIND_UAV, {pay("sta1", "agm_short", 1, {{"proximity_m", 0.0}})})},
+                     counted, nullptr);
+    Geo aim = at(kOrigin, 0.0, 1500.0);
+    aim.alt_m = 0.0;
+    const auto r = fly(ps, {u}, strike_point("uav-001", "sta1", aim), 3000);
+    check(r.ended && r.end_state == v1::STRIKE_STATE_IMPACT, "aim point impact");
+    check(calls == 0, "aim point launch: no LOS queries");
+  }
+
+  // 비용: 10 km 경로 1회 판정 시간 (표본 200개)
+  const swarm::dyn::GridTerrain grid = tower_terrain(0.0, 0.0, 0.0, 0.0, 0.0);
+  const LosFn gl = make_terrain_los(grid);
+  const Geo p0 = kOrigin, p1 = at(kOrigin, 45.0, 10000.0, -500.0);
+  const auto t0 = std::chrono::steady_clock::now();
+  int vis = 0;
+  for (int i = 0; i < 2000; ++i) vis += gl(p0, p1) ? 1 : 0;
+  const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() / 2000.0;
+  check(vis == 2000, "cost probe visible");
+  std::fprintf(stderr, "  LOS 10 km grid query: %.2f us (Debug)\n", us);
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -764,7 +950,8 @@ int main(int argc, char** argv) {
                         {"TC-PAY-004", tc_004}, {"TC-PAY-005", tc_005}, {"TC-PAY-006", tc_006},
                         {"TC-PAY-007", tc_007}, {"TC-PAY-008", tc_008}, {"TC-PAY-009", tc_009},
                         {"TC-PAY-010", tc_010}, {"TC-PAY-011", tc_011}, {"TC-PAY-012", tc_012},
-                        {"TC-PAY-013", tc_013}, {"TC-PAY-014", tc_014}};
+                        {"TC-PAY-013", tc_013}, {"TC-PAY-014", tc_014}, {"TC-PAY-015", tc_015},
+                        {"TC-PAY-016", tc_016}, {"TC-PAY-017", tc_017}};
   int ran = 0;
   for (const auto& c : cases) {
     if (argc > 1 && std::strcmp(argv[1], c.id) != 0) continue;

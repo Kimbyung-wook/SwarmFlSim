@@ -71,7 +71,8 @@ struct Weapon {
   v1::Side side = v1::SIDE_UNSPECIFIED;
   WeaponState s;
   bool alive = true;
-  GuidanceTarget last;  // 표적이 사라지면 마지막 위치로 좌표 유도
+  bool los_lost = false;  // DEC-064: 탐색기-표적 가시선 상실로 락을 푼 상태
+  GuidanceTarget last;    // 마지막으로 본 표적. 표적 소실·가시선 상실이면 이 위치로 좌표 유도
 };
 
 struct Body {
@@ -399,8 +400,23 @@ struct PayloadSystem::Impl {
       if (!w.target.empty()) {
         if (body_alive(w.target)) {
           const Body& t = bodies.at(w.target);
-          tgt = {true, t.pos, t.vel};
-          w.last = tgt;
+          // IMP-PAY-008 (DEC-064): 프레임 시작 위치로 탐색기-표적 가시선을 본다. 탐색기 FOV로 유도를 멈춘 무장은 보지 않는다
+          if (w.los_lost) {
+            const Vec3 r = ned_between(w.s.pos, t.pos);
+            if (norm(r) <= w.p.lock_range_m && in_seeker_fov(w.p, w.s.vel_ned, r) && visible(w.s.pos, t.pos)) {
+              w.los_lost = false;  // 재획득
+              w.s.coordinate_mode = false;
+            }
+          } else if (w.s.seeker_locked && !w.s.coordinate_mode && !visible(w.s.pos, t.pos)) {
+            w.los_lost = true;  // 락 해제, 마지막으로 본 위치로 좌표 유도
+            w.s.coordinate_mode = true;
+          }
+          if (w.los_lost) {
+            tgt = {w.last.valid, w.last.pos, {}};
+          } else {
+            tgt = {true, t.pos, t.vel};
+            w.last = tgt;
+          }
         } else {
           w.s.coordinate_mode = true;  // 표적 소실: 마지막 위치로 좌표 유도
           tgt = {w.last.valid, w.last.pos, {}};
@@ -571,6 +587,19 @@ const ParamMap* PayloadSystem::params(const std::string& entity, const std::stri
   for (const auto& s : it->second.st)
     if (s.spec.id() == pid) return &s.params;
   return nullptr;
+}
+
+std::optional<WeaponTrack> PayloadSystem::weapon_track(const std::string& id) const {
+  auto it = impl_->weapons.find(id);
+  if (it == impl_->weapons.end() || !it->second.alive) return std::nullopt;
+  const Weapon& w = it->second;
+  WeaponTrack t;
+  t.target = w.target;
+  t.los_lost = w.los_lost;
+  t.coordinate_mode = w.s.coordinate_mode;
+  t.locked = !w.target.empty() && !w.s.coordinate_mode && w.s.seeker_locked;
+  t.guide_point = w.last.pos;
+  return t;
 }
 
 FrameOutput PayloadSystem::step(const FrameInput& in) {

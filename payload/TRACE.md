@@ -1,6 +1,6 @@
 # WP8 Payload 추적표
 
-모듈 코드 PAY. 근거: DEC-046(P5 착수, 순수 계산기), DEC-047(SENSOR 고장), DEC-009, DEC-012, DEC-018, DEC-019, PRP-DYN-003, PRP-PAY-001.
+모듈 코드 PAY. 근거: DEC-046(P5 착수, 순수 계산기), DEC-047(SENSOR 고장), DEC-064(비행 중 탐색기 가시선), DEC-009, DEC-012, DEC-018, DEC-019, PRP-DYN-003, PRP-PAY-001.
 
 ## 구조
 
@@ -29,10 +29,11 @@ flowchart LR
 | IMP-PAY-005 | 무장 비행: aam/agm 질점+PN(추력·항력·G 한계·탐색기 FOV), fpv 3-DoF+선행 추적, 근접 신관, 지면 교차 이분법 보정, 비행 시간 초과 | `include/swarm/payload/weapon.hpp`, `src/weapon.cpp` | PRP-DYN-003, DEC-005, DEC-012 | TC-PAY-008~011, 014 |
 | IMP-PAY-006 | Strike 판정(잔량·락온·거리·LOS), `wpn-<shooter>-<seq>` ID, 잔량·StoreLoadout, 살상반경 다중 파괴, Launch/Spawn/Impact/Kill 이벤트 | `src/payload_system.cpp` | DEC-012, DEC-019, REQ-PAY-004, REQ-PAY-005 | TC-PAY-006~011, 013 |
 | IMP-PAY-007 | 프레임 계산기: 벽시계·난수 없음, 엔티티 ID 순 처리, 이벤트 시각 순 정렬, reset | `include/swarm/payload/payload.hpp`, `src/payload_system.cpp` | DEC-046, PRP-PAY-001, REQ-SIM-001 | TC-PAY-012 |
+| IMP-PAY-008 | 표적 지정 무장의 비행 중 탐색기-표적 DEM 가시선(프레임 시작 위치, 센서와 같은 `LosFn`). 끊기면 락 해제·마지막으로 본 위치로 좌표 유도, 다시 보이고 탐색기 FOV·`lock_range_m` 안이면 재획득. 조준점 발사와 FOV로 유도를 멈춘 무장은 보지 않는다. `weapon_track()`으로 유도 상태 조회(버스 보고 없음) | `src/payload_system.cpp`, `src/weapon.cpp`, `include/swarm/payload/payload.hpp`, `include/swarm/payload/weapon.hpp` | DEC-064, DEC-018, REQ-PAY-004 | TC-PAY-015~017 |
 
 ## 시험 (TC)
 
-ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2026-11-05 전체 14건 통과.
+ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2026-11-07 전체 17건 통과.
 
 | ID | 내용 | 근거 | 결과 |
 |---|---|---|---|
@@ -50,12 +51,16 @@ ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2
 | TC-PAY-012 | 같은 입력 2회(별개 인스턴스, reset 후) 출력 바이트 동일 | DEC-046, REQ-SIM-001 | 통과 |
 | TC-PAY-013 | 내장 프로파일, 재정의, 오류(모르는 키·형식·프로파일, 문자열 값, 재머 2개, 중복 ID), 무장 ID 충돌 건너뜀 | DEC-019 | 통과 |
 | TC-PAY-014 | FPV 종말 유도: 이동 지상 표적 명중·파괴 | PRP-DYN-003 | 통과 |
+| TC-PAY-015 | 탑 DEM 뒤로 들어간 표적: 락 해제, 좌표 유도 지점 = 직전 프레임 표적 위치, 상실 동안 고정, 표적 미피격(무장은 탑에 지면 충돌) | DEC-064 | 통과 |
+| TC-PAY-016 | 좁은 탑에 잠깐 가린 표적: 락 해제 후 재획득(추적 복귀), 근접 신관 명중·파괴 | DEC-064 | 통과 |
+| TC-PAY-017 | 평지 회귀 없음(LosFn 없음과 평지 LosFn의 이벤트 바이트 동일, 상실 0), 비행 중 무장 1개당 프레임당 가시선 1회, 조준점 발사는 0회, 10 km 판정 비용 측정 | DEC-064, DEC-046 | 통과 |
 
 ## 결정과 근거 (WP8 내부)
 
 - 무장 종료는 `FrameOutput.weapons`에 alive=false 상태를 한 번 더 내는 것으로 알린다. 무장 자신에 대한 KillEvent는 내지 않는다 (KillEvent.cause에 소진·만료 값이 없다).
 - JamZoneEvent.owner = 엔티티 ID. Datalink가 owner로 구역을 키잉하므로 엔티티당 재머 하나만 받는다.
 - 움직이는 재머는 중심 이동이 `update_distance_m`를 넘을 때만 갱신 이벤트를 낸다.
-- 비행 중 탐색기는 FOV만 판정하고 LOS는 판정하지 않는다. FOV를 한 번 벗어나면 유도를 멈춘다.
+- 비행 중 탐색기 FOV는 속도 방향 기준이며, FOV를 벗어나면 유도를 멈춘다(재획득 없음). 가시선은 DEC-064를 따른다(IMP-PAY-008).
+- 가시선 판정 비용: 무장 1개·프레임당 `LosFn` 1회(경로 50 m 간격 표본). 10 km 경로 1회 약 3 us(msvc-debug)이므로 비행 중 무장 100개, 50 Hz에서 약 15 ms/s다.
 - 표적이 파괴·소실되면 마지막 위치로 좌표 유도한다.
 - 무장 ID 순번은 2자리(`%02u`)이며, 시나리오 엔티티 ID와 겹치면 건너뛴다.
