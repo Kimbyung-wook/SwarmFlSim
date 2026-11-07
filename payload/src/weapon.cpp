@@ -45,17 +45,17 @@ Vec3 pn_accel(double nav_gain, Vec3 r, Vec3 v_rel, Vec3 vm) {
   return a - dot(a, um) * um;
 }
 
+bool in_seeker_fov(const WeaponParams& p, Vec3 axis, Vec3 r) {
+  if (p.seeker_fov_deg >= 360.0) return true;
+  const double c = dot(unit(axis), unit(r));
+  return std::acos(std::clamp(c, -1.0, 1.0)) <= 0.5 * p.seeker_fov_deg * geo::kDegToRad;
+}
+
 namespace {
 
 Vec3 limit(Vec3 a, double max_norm) {
   const double n = norm(a);
   return n > max_norm && n > 0.0 ? (max_norm / n) * a : a;
-}
-
-bool in_seeker_fov(const WeaponParams& p, Vec3 axis, Vec3 r) {
-  if (p.seeker_fov_deg >= 360.0) return true;
-  const double c = dot(unit(axis), unit(r));
-  return std::acos(std::clamp(c, -1.0, 1.0)) <= 0.5 * p.seeker_fov_deg * geo::kDegToRad;
 }
 
 Vec3 accel(WeaponType type, const WeaponParams& p, WeaponState& s, bool guide, Vec3 r, Vec3 vt) {

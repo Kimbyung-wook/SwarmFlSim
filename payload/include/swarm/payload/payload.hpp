@@ -68,6 +68,15 @@ struct FrameOutput {
   std::vector<std::string> killed;        // 살상반경으로 이번 프레임에 파괴한 엔티티(무장 제외), ID 순. Core가 alive=false로 만든다
 };
 
+// 비행 중 무장의 유도 상태 (DEC-064). 버스로 보고하지 않는다(계약에 필드가 없다)
+struct WeaponTrack {
+  std::string target;          // 지정 표적. 조준점 발사면 빈 문자열
+  bool locked = false;         // 표적을 추적 중 (지정 표적, 가시선·탐색기 FOV 유지)
+  bool los_lost = false;       // 가시선 상실로 락을 풀고 좌표 유도 중
+  bool coordinate_mode = false;
+  Geo guide_point;             // 좌표 유도 지점(마지막으로 본 표적 위치 또는 조준점)
+};
+
 // TruthEvent의 oneof → 키 꼬리 (launch, impact, kill, jam_zone, spawn). 없으면 빈 문자열
 std::string_view event_kind(const v1::TruthEvent& ev);
 
@@ -92,6 +101,8 @@ class PayloadSystem {
   std::vector<v1::PayloadSpec> loadout(const std::string& entity_id) const;
   // 해석된 장비 매개변수 (프로파일 + 재정의). 없으면 nullptr
   const ParamMap* params(const std::string& entity_id, const std::string& payload_id) const;
+  // 비행 중 무장의 유도 상태 (마지막 step 뒤). 끝난 무장이나 모르는 ID면 nullopt
+  std::optional<WeaponTrack> weapon_track(const std::string& weapon_id) const;
 
  private:
   struct Impl;

@@ -64,6 +64,9 @@ struct WeaponStepResult {
 WeaponStepResult advance_weapon(WeaponType type, const WeaponParams& p, WeaponState& s, const GuidanceTarget& tgt,
                                 double dt, const dyn::Terrain* terrain, double max_substep_s);
 
+// 탐색기 축 axis(비행 중에는 속도 방향) 기준 시야각 안에 r이 있는지
+bool in_seeker_fov(const WeaponParams& p, Vec3 axis, Vec3 r);
+
 // PN 가속 명령 (속도에 수직 성분만, 한계 미적용). r = 표적 - 무장, v_rel = 표적 속도 - 무장 속도
 Vec3 pn_accel(double nav_gain, Vec3 r, Vec3 v_rel, Vec3 vm);
 
