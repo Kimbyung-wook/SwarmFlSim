@@ -208,6 +208,10 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-057 | 비행 중 목표 엔티티가 사라진 유도 객체의 종료 보고(QA O-11). 현재는 마지막 위치로 좌표 유도해 IMPACT(파괴 대상 없음)로 끝난다. 선택: (A) 현행 유지, 계약에 "IMPACT는 도달만 뜻하고 효과는 kill 이벤트로 판단"을 명시 (B) MISSED(reason target_lost)로 끝낸다. 제안: A | Resolved by DEC-067 |
 | OPN-058 | P6 Gateway(WP9) 범위. 선택: (A) 발행 전용(시뮬레이터 → 외부 STD 메시지) (B) 단계적 양방향: 1단계 발행, 2단계 외부 C2 명령 수신 (C) 처음부터 양방향. 외부 C2 명령은 기존 규칙대로 Datalink를 거친다. 제안: B | Resolved by DEC-068 |
 | OPN-059 | Gateway의 LA-CAL 클라이언트 확보. agra_lacal은 저장소 밖(`../open_arsenal/agra_lacal`)에 있고 패키지로 설치되지 않는다(`package = false`). 선택: (A) uv 경로 의존성(agra_lacal 패키지화 필요) (B) `gateway/` 안에 OWP 클라이언트 최소 구현을 두고, agra_lacal 서버는 시험 상대로만 쓴다 (C) git submodule. 제안: B | Resolved by DEC-069 |
+| OPN-060 | 기체 위치의 외부 메시지 대응(WP9 CR-GW-001). 공개 XSD의 `MA_NavigationReport`·`MA_PackagePartnerStatusReport`에는 위치가 없고 위치는 `MA_PositionReport`에 있다. 선택: (A) `NavigationReport`의 `uci_name`을 `MA_PositionReport`로 바꾼다 (B) 한 내부 메시지가 UCI 메시지 여러 개에 대응하도록 옵션을 늘린다(`repeated string uci_also`) — `PeerStatus`의 운동 상태도 같은 방식으로 싣는다. 제안: B | Open |
+| OPN-061 | `ApprovalResponse`를 STD로 바꾸고 `uci_name = "MA_ApprovalRequestStatus"`를 단다(WP9 CR-GW-002). STD가 되면 외부 운용자의 승인 응답을 Gateway 2단계로 받을 수 있다. 선택: (A) STD로 바꾼다 (B) EXT로 둔다. 제안: A | Open |
+| OPN-062 | 외부 `MA_TaskCommand`의 작업 내용 표현(WP9 CR-GW-003). `MA_TaskCommand`는 TaskID·CapabilityID 참조만 담고 목적지·영역이 없다. 선택: (A) MP(`MA_MissionPlan`) 연동 전까지 Gateway 임시 규칙(CapabilityID Label = `<엔티티>/<작업 종류>`, hold·return_to_base·취소만)을 인정하고 위치가 필요한 작업은 MP 연동 뒤에 받는다 (B) 지금 MP 연동까지 구현한다. 제안: A | Open |
+| OPN-063 | 같은 GCS 키에 UI와 Gateway가 함께 발행할 때의 발행자 구분(WP9 CR-GW-005). `header.seq`가 발행자별로 따로 매겨져 Datalink·Logger가 source만으로 구분할 수 없다. 선택: (A) `LinkEnvelope` 헤더에 발행 참여자 ID를 더한다(계약 변경) (B) Gateway를 별도 지상 엔티티(예: `gw-01`)로 시나리오에 둔다 (C) 현행 유지, 구분하지 않는다. 제안: A | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
