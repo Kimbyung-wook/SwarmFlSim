@@ -127,6 +127,7 @@ flowchart LR
   - Agent 런타임은 자기 기체의 `onboard/<id>/{SensorActivity,JammerActivity,StrikeActivity}`를 받아 값이 바뀔 때와 1 Hz(모의 시간)로 GCS에 `swarm/<id>/tx/ms/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
   - 변화 보고는 (메시지, payload_id)별 최대 빈도를 둔다. 기본 10 Hz이고 Agent 런타임 설정(CLI `--activity-max-hz`)으로 바꾼다. 제한으로 미룬 변화는 다음 허용 시점에 최신 값으로 보낸다. 1 Hz 전체 보고는 제한과 별개다 (DEC-056).
   - `StrikeActivity`는 키를 (메시지, payload_id, weapon_entity)로 한다. 무장마다 상태를 따로 두므로 같은 스테이션의 다른 무장 변화가 서로 덮지 않는다. `weapon_entity`가 비어 있는 보고(발사 전 REJECTED 등)는 (메시지, payload_id, "") 키를 쓴다. 종료 상태(IMPACT, MISSED, REJECTED)를 한 번 보낸 무장 키는 1 Hz 전체 보고에서 뺀다 (DEC-063).
+  - IMPACT는 유도 객체의 도달(근접 신관·지면 교차)만 뜻한다. 파괴 효과는 `truth/event/kill`로 판단한다. 비행 중 목표 엔티티가 사라진 경우도 IMPACT로 끝날 수 있다 (DEC-067).
   - Datalink를 거치므로 GCS 링크가 끊기면 지상 표시에도 반영된다. UI는 `swarm/<gcs>/rx/ms/<Msg>`만 읽고 `onboard/**`를 구독하지 않는다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.

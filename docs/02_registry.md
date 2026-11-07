@@ -140,6 +140,10 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-063 | `StrikeActivity` 변화 보고(DEC-051·056)의 키를 (메시지, payload_id, weapon_entity)로 나눈다. 빈 `weapon_entity`는 그대로 한 키로 쓴다. 종료 상태(IMPACT·MISSED·REJECTED)를 한 번 보낸 무장 키는 1 Hz 전체 보고에서 뺀다. 근거: 메시지가 무장 단위(`weapon_entity`)라 스테이션 단위 키는 같은 프레임·상한 안의 다른 무장 상태를 덮는다(QA-026). 종료 키 제거로 전체 보고 크기가 비행 중 무장 수로 묶인다 | OPN-053, QA-026, D-23, DEC-051, DEC-056, 사용자 답변: "무장별 키로 분리" | Confirmed |
 | DEC-064 | 표적 지정 무장은 비행 중에도 프레임마다 탐색기와 표적 사이의 DEM 가시선(DEC-018과 같은 판정)을 본다. 가시선이 끊기면 락을 풀고 마지막으로 본 표적 위치로 좌표 유도하며, 다시 보이고 탐색기 FOV·거리 안이면 재획득한다. 조준점 발사는 좌표 유도이므로 가시선을 보지 않는다. 근거: 저고도 지형 은폐가 군집 알고리즘 평가에 의미를 갖고, 비행 중 무장 수만큼의 계산은 감당할 수 있다 | OPN-054, QA D-24, TC-QA-060, DEC-018, DEC-019, 사용자 답변: "비행 중 가시선 반영" | Confirmed |
 | DEC-065 | 비행 중 유도 객체의 상태(따라가기·가시선 상실·좌표 유도)와 유도 지점은 버스로 보고하지 않는다. 계약은 0.13.0을 유지한다. 근거: 이 보고가 필요한 REQ가 없고, QA는 truth 궤적 재계산으로 상태를 프레임 단위로 판정했다(TC-QA-065~068). UI·알고리즘이 필요해지면 새 OPN으로 다시 연다 | OPN-055, QA D-25, IMP-PAY-008, 사용자 답변: "보고하지 않음" | Confirmed |
+| DEC-066 | 조준점 발사도 조준점이 발사 기체 기준 탐색 FOV 안에 있어야 발사한다. 벗어나면 REJECTED(reason `out_of_fov`)를 낸다. 근거: 기수에서 크게 벗어난 조준점은 비례항법으로 돌지 않아 유도 객체가 직진한다(QA O-10). 표적 지정 발사와 같은 규칙이 되고 유도 식은 바뀌지 않는다 | OPN-056, QA O-10, DEC-019, 사용자 답변: "FOV 밖이면 거부" | Confirmed |
+| DEC-067 | `StrikeActivity`의 IMPACT는 유도 객체의 도달(근접 신관·지면 교차)만 뜻한다. 파괴 효과는 `truth/event/kill`로 판단한다. 비행 중 목표 엔티티가 사라지면 마지막 위치로 좌표 유도하고 IMPACT로 끝나는 현행 동작을 유지한다 | OPN-057, QA O-11, DEC-012, DEC-064, 사용자 답변: "현행 유지·계약 명시" | Confirmed |
+| DEC-068 | P6 Gateway(WP9, `gateway/`, Python)는 단계적 양방향으로 만든다. 1단계는 GCS 쪽에서 받은 VI·C2·P2P·MS 상태를 STD 메시지로 바꿔 LA-CAL로 내보낸다. 2단계는 외부 C2 명령(STD)을 받아 내부 메시지로 바꾼다. Gateway는 지상 참여자이며 기체와의 교환은 모두 Datalink를 거친다. `truth/**`와 `onboard/**`는 쓰지 않는다. 외부로는 STD만 내보낸다(DEC-014) | OPN-058, PRP-STD-002, DEC-002, DEC-013, DEC-014, 사용자 답변: "단계적 양방향" | Confirmed |
+| DEC-069 | LA-CAL 클라이언트는 agra_lacal 저장소를 git submodule `third_party/agra_lacal`로 넣어 쓴다(커밋 고정). 서브모듈은 수정하지 않는다 | OPN-059, DEC-002, 사용자 답변: "git submodule" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -200,6 +204,10 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-053 | 같은 스테이션의 무장 변화가 한 프레임 또는 상한 간격 안에 겹치면 앞 변화가 GCS에 보고되지 않는다(QA-026, D-23). 선택: (A) 현행 유지·계약 명시 (B) 키 안 변화 순차 전송 (C) 무장별 키 분리. 제안: C | Resolved by DEC-063 |
 | OPN-054 | 무장의 가시선 처리 범위(D-24). 현재 표적 지정 발사 판정만 DEM 가시선을 보고 비행 중 탐색기와 조준점 발사는 보지 않는다. 선택: (A) 현행 유지·명시 (B) 비행 중 가시선 상실 시 락 해제·좌표 유도·재획득 (C) B + 조준점 발사 가시선 확인. 제안: B | Resolved by DEC-064 |
 | OPN-055 | 비행 중 무장 유도 상태(TRACKING / LOS_LOST / COORDINATE)와 유도 지점을 버스로 보고할지(WP8 제안). 현재는 C++ 조회 `PayloadSystem::weapon_track`만 있고 GCS·QA는 궤적과 종료 결과로만 판정한다. 선택: (A) 보고하지 않음 (B) `StrikeActivity`에 EXT 필드 추가, 상태 변화 시 보고(계약 변경). 제안: A | Resolved by DEC-065 |
+| OPN-056 | 조준점 발사의 발사 허용각(QA O-10). 목표 방향이 발사 기체 기수에서 약 90° 벗어나면 비례항법의 접근 속도가 0에 가까워 유도 객체가 돌지 않고 직진한다. 표적 지정 발사는 탐색 FOV 판정으로 거부되지만 조준점 발사는 판정이 없다. 선택: (A) 현행 유지·명시 (B) 조준점 발사도 탐색 FOV 안이어야 발사, 벗어나면 REJECTED (C) 접근 속도가 작을 때 방향 추종 유도를 섞는다. 제안: B | Resolved by DEC-066 |
+| OPN-057 | 비행 중 목표 엔티티가 사라진 유도 객체의 종료 보고(QA O-11). 현재는 마지막 위치로 좌표 유도해 IMPACT(파괴 대상 없음)로 끝난다. 선택: (A) 현행 유지, 계약에 "IMPACT는 도달만 뜻하고 효과는 kill 이벤트로 판단"을 명시 (B) MISSED(reason target_lost)로 끝낸다. 제안: A | Resolved by DEC-067 |
+| OPN-058 | P6 Gateway(WP9) 범위. 선택: (A) 발행 전용(시뮬레이터 → 외부 STD 메시지) (B) 단계적 양방향: 1단계 발행, 2단계 외부 C2 명령 수신 (C) 처음부터 양방향. 외부 C2 명령은 기존 규칙대로 Datalink를 거친다. 제안: B | Resolved by DEC-068 |
+| OPN-059 | Gateway의 LA-CAL 클라이언트 확보. agra_lacal은 저장소 밖(`../open_arsenal/agra_lacal`)에 있고 패키지로 설치되지 않는다(`package = false`). 선택: (A) uv 경로 의존성(agra_lacal 패키지화 필요) (B) `gateway/` 안에 OWP 클라이언트 최소 구현을 두고, agra_lacal 서버는 시험 상대로만 쓴다 (C) git submodule. 제안: B | Resolved by DEC-069 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

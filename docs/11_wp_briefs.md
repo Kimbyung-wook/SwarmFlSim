@@ -198,3 +198,19 @@ WP8 Payload를 payload/에 C++20 정적 라이브러리(swarm_payload)로 구현
 
 완료 기준: msvc-debug 빌드·ctest 통과, payload/TRACE.md, 커밋. 최종 보고에 WP1 통합을 위한 호출 순서(입력·출력 표)와 계약 변경 요청(키·proto 필드가 부족하면)을 적는다.
 ```
+
+## WP9 A-GRA Gateway — `gateway/`
+
+```text
+WP9 A-GRA Gateway를 gateway/에 Python 3.12(uv) 패키지로 구현한다 (DEC-068, DEC-069, PRP-STD-002, DEC-013, DEC-014, REQ-STD-001). 모듈 코드 GW. gateway/ 밖은 수정하지 않는다. third_party/agra_lacal(서브모듈)은 읽기만 하고 고치지 않는다.
+
+0. 준비: git submodule update --init third_party/agra_lacal. agra_lacal의 README·client·schema를 읽고 LA-CAL 클라이언트 접속 방법과 A-GRA 6.0a 공개 XSD 검증 방법을 확인한다. Distribution D 표기 문서의 내용은 옮기지 않는다. 메시지명은 공개 XSD에서 가져온다.
+1. 위치: Gateway는 지상 참여자다. 시나리오의 GCS 엔티티(예: gcs-01) 쪽에서 swarm/<gcs>/rx/** 를 구독한다(UI와 함께 구독해도 된다). truth/**, onboard/**, link/** 는 쓰지 않는다. 버스는 open_bus로 연다(DEC-026).
+2. 매핑: proto 메시지 옵션 (uci_name)을 descriptor에서 읽어 내부 메시지 ↔ UCI 메시지 표를 만든다. 하드코딩하지 않는다. 변환기는 상호작용(메시지)별 플러그인으로 둔다(DEC-013). docs/02_registry.md §5 매핑 표의 STD만 외부로 내보내고 EXT는 내보내지 않는다(DEC-014).
+3. 1단계(발행): GCS가 받은 VI·C2·P2P·MS 상태(예: 항법 보고, 작업 상태, 센서·재머 활동)를 UCI XML로 바꾸고, XSD 검증을 통과한 것만 LA-CAL로 보낸다. 검증에 실패한 메시지는 보내지 않고 로그와 카운터에 남기며, Gateway는 계속 동작한다.
+4. 2단계(수신): LA-CAL에서 받은 외부 C2 명령(STD)을 내부 proto로 바꿔 swarm/<gcs>/tx/c2/<msg> 로 발행한다. Datalink를 거쳐 기체에 간다. 매핑이 없거나 검증에 실패한 명령은 거부하고 기록한다.
+5. 시험: uv run pytest. InMemoryBus와 agra_lacal 서버(로컬 기동 또는 목)로 왕복 시험한다. 매핑 표 생성, 상태→XML→XSD 통과, EXT 미발행, 외부 C2→tx 키 발행, 잘못된 XML 거부, truth/** 미구독 확인.
+6. 실행: uv run python -m gateway --gcs gcs-01 --lacal <주소> 형태의 진입점과 gateway/README.md(실행·시험 명령).
+
+완료 기준: P6 기준 "VI·C2·P2P 주요 상호작용을 agra_lacal과 교환"을 시험으로 보인다. pytest 통과, gateway/TRACE.md, 커밋. 최종 보고에 내보낸·받은 UCI 메시지 목록과 계약 변경 요청(키·proto·매핑 표가 부족하면)을 적는다.
+```
