@@ -1,0 +1,39 @@
+[project]
+name = "swarm-gateway"
+version = "0.1.0"
+description = "WP9 A-GRA Gateway: 내부 버스 ⇄ LA-CAL(agra_lacal) UCI 메시지 교환 (DEC-068, DEC-069)"
+requires-python = ">=3.12"
+dependencies = [
+    "swarm-api",
+    # third_party/agra_lacal(서브모듈)의 server/omsjson.py, client/lacal_client.py가 쓰는 의존성 (DEC-069)
+    "websockets>=13",
+    "xmlschema>=3.4",
+    "lxml>=5",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+zenoh = ["swarm-api[zenoh]"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swarm_gateway"]
+
+# 루트 워크스페이스에 아직 등록되지 않았으므로(gateway/ 밖 수정 금지) 독립 프로젝트로 둔다.
+# 등록 요청은 TRACE.md "계약 변경 요청" 참고
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+swarm-api = { path = "../api/python", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
