@@ -166,6 +166,7 @@ def main() -> None:
     ap.add_argument("--impact-from")
     ap.add_argument("--frames", type=int, default=2500)
     ap.add_argument("--base-port", type=int, default=48400)
+    ap.add_argument("--realtime", action="store_true", help="realtime 모드(rate 1.0)로 돌린다")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -174,13 +175,16 @@ def main() -> None:
         impact = json.loads((Path(a.impact_from) / "result.json").read_text(encoding="utf-8"))["impact"]
     pl = plan(impact)
     sp = SCN / "qa_burst.json"
-    sp.write_text(json.dumps(scenario(), ensure_ascii=False, indent=1), encoding="utf-8")
+    sc = scenario()
+    if a.realtime:
+        sc["run"].update({"mode": "realtime", "rate": 1.0})
+    sp.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
     probe_out = out / "probe.json"
     os.environ["BURST_OUT"] = str(probe_out)
     os.environ["BURST_PLAN"] = json.dumps(pl)
-    st = BurstStack(out / "stack", sp, base_port=a.base_port, lockstep=True, rate=20.0, record=False,
-                    core_extra=["--terrain-flat", "0", "--frames", str(a.frames)])
-    res: dict = {"hz": a.hz, "plan": pl}
+    st = BurstStack(out / "stack", sp, base_port=a.base_port, lockstep=not a.realtime,
+                    rate=1.0 if a.realtime else 20.0, record=False, core_extra=["--terrain-flat", "0", "--frames", str(a.frames)])
+    res: dict = {"hz": a.hz, "realtime": a.realtime, "plan": pl}
     try:
         st.start_one("datalink")
         st.start_one("agent", ["--activity-max-hz", str(a.hz)])

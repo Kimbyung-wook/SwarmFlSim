@@ -1,0 +1,266 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-ridge",
+ "description": "QA 13차 StrikeActivity·임무장비 보고",
+ "map": {
+  "origin": {
+   "lat_deg": 38.1192,
+   "lon_deg": 128.447873,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 38.0,
+   "north_deg": 38.25,
+   "west_deg": 128.3,
+   "east_deg": 128.6
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261107,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "link_profiles": [
+  {
+   "name": "uav_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  },
+  {
+   "name": "gcs_default",
+   "ge": {
+    "p_gb": 0.0,
+    "p_bg": 1.0,
+    "loss_good": 0.0,
+    "loss_bad": 0.0
+   }
+  }
+ ],
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 1415.4
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "tgt-r",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.476418,
+     "alt_m": 1252.8
+    }
+   }
+  },
+  {
+   "id": "uav-low",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2404.9
+    },
+    "attitude": {
+     "w": 0.6906873718188447,
+     "x": 0.151495724064995,
+     "y": -0.151495724064995,
+     "z": 0.6906873718188447
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-elo",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2553.9
+    },
+    "attitude": {
+     "w": 0.6868500102042419,
+     "x": 0.16803887491420813,
+     "y": -0.16803887491420813,
+     "z": 0.6868500102042419
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-ehi",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2555.9
+    },
+    "attitude": {
+     "w": 0.686797102786355,
+     "x": 0.16825498389132215,
+     "y": -0.16825498389132215,
+     "z": 0.686797102786355
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-high",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.1192,
+     "lon_deg": 128.447873,
+     "alt_m": 2704.9
+    },
+    "attitude": {
+     "w": 0.6827718740049388,
+     "x": 0.18390912991959954,
+     "y": -0.18390912991959954,
+     "z": 0.6827718740049388
+    }
+   },
+   "payloads": [
+    {
+     "id": "sta1",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    },
+    {
+     "id": "sta2",
+     "type": "agm_short",
+     "profile": "agm_generic",
+     "overrides": {
+      "seeker_fov_deg": 360.0
+     },
+     "count": 1
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-qa13",
+  "tasks": []
+ }
+}
