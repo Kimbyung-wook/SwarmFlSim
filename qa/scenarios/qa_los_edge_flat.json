@@ -1,0 +1,163 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-los-edge",
+ "description": "TC-QA-063·064 가시선 끝점 허용 (DEC-018)",
+ "map": {
+  "origin": {
+   "lat_deg": 37.5,
+   "lon_deg": 127.910549,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 37.45,
+   "north_deg": 37.55,
+   "west_deg": 127.860549,
+   "east_deg": 128.05
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261107,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 127.910549,
+     "alt_m": 30.0
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "tgt-flat",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 128.0,
+     "alt_m": 0.0
+    }
+   }
+  },
+  {
+   "id": "uav-001",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 127.910549,
+     "alt_m": 4.833
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": 90.0,
+      "default_el_deg": -0.035009
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-002",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 127.910549,
+     "alt_m": 4.858
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": 90.0,
+      "default_el_deg": -0.03519
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-003",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 37.5,
+     "lon_deg": 127.910549,
+     "alt_m": 4.884
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": 90.0,
+      "default_el_deg": -0.035378
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-los-edge",
+  "tasks": []
+ }
+}

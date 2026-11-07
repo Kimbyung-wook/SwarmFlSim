@@ -1,0 +1,372 @@
+{
+ "schema_version": "0.1",
+ "name": "qa-los-edge",
+ "description": "TC-QA-063·064 가시선 끝점 허용 (DEC-018)",
+ "map": {
+  "origin": {
+   "lat_deg": 38.095,
+   "lon_deg": 128.604244,
+   "alt_m": 0.0
+  },
+  "extent": {
+   "south_deg": 38.018,
+   "north_deg": 38.265,
+   "west_deg": 128.308,
+   "east_deg": 128.654244
+  }
+ },
+ "run": {
+  "mode": "lockstep",
+  "frame_hz": 50,
+  "seed": 20261107,
+  "rate": 20.0,
+  "duration_s": 600.0
+ },
+ "entities": [
+  {
+   "id": "gcs-01",
+   "kind": "gcs",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.095,
+     "lon_deg": 128.604244,
+     "alt_m": 99.4
+    }
+   },
+   "link_profile": "gcs_default"
+  },
+  {
+   "id": "tgt-a1-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.095,
+     "lon_deg": 128.57,
+     "alt_m": 107.0
+    }
+   }
+  },
+  {
+   "id": "tgt-a1-agl20",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.095,
+     "lon_deg": 128.57,
+     "alt_m": 109.0
+    }
+   }
+  },
+  {
+   "id": "tgt-a2-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.215,
+     "lon_deg": 128.47,
+     "alt_m": 483.0
+    }
+   }
+  },
+  {
+   "id": "tgt-a3-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.08,
+     "lon_deg": 128.538,
+     "alt_m": 385.0
+    }
+   }
+  },
+  {
+   "id": "tgt-b1-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.164,
+     "lon_deg": 128.358,
+     "alt_m": 964.16
+    }
+   }
+  },
+  {
+   "id": "tgt-b1-agl6",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.164,
+     "lon_deg": 128.358,
+     "alt_m": 964.76
+    }
+   }
+  },
+  {
+   "id": "tgt-b1-agl20",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.164,
+     "lon_deg": 128.358,
+     "alt_m": 966.16
+    }
+   }
+  },
+  {
+   "id": "tgt-b2-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.068,
+     "lon_deg": 128.554,
+     "alt_m": 188.84
+    }
+   }
+  },
+  {
+   "id": "tgt-b3-agl0",
+   "kind": "ground_target",
+   "side": "red",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.143,
+     "lon_deg": 128.454,
+     "alt_m": 1130.6
+    }
+   }
+  },
+  {
+   "id": "uav-001",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.095,
+     "lon_deg": 128.604244,
+     "alt_m": 369.43
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": -90.0,
+      "default_el_deg": -4.992756
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-002",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.215,
+     "lon_deg": 128.5043,
+     "alt_m": 416.68
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": -90.0,
+      "default_el_deg": 1.264706
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-003",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.08,
+     "lon_deg": 128.503763,
+     "alt_m": 577.65
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": 90.0,
+      "default_el_deg": -3.669326
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-004",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.164,
+     "lon_deg": 128.392276,
+     "alt_m": 1013.66
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": -90.0,
+      "default_el_deg": -0.943944
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-005",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.068,
+     "lon_deg": 128.519769,
+     "alt_m": 678.9
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": 90.0,
+      "default_el_deg": -9.265319
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  },
+  {
+   "id": "uav-006",
+   "kind": "uav",
+   "side": "blue",
+   "dynamics": "static",
+   "initial": {
+    "position": {
+     "lat_deg": 38.143,
+     "lon_deg": 128.488266,
+     "alt_m": 1321.17
+    }
+   },
+   "payloads": [
+    {
+     "id": "cam0",
+     "type": "camera",
+     "profile": "eo_wide",
+     "overrides": {
+      "hfov_deg": 30.0,
+      "vfov_deg": 30.0,
+      "max_range_m": 8000.0,
+      "default_az_deg": -90.0,
+      "default_el_deg": -3.629438
+     }
+    }
+   ],
+   "autonomy": {
+    "ma_plugin": "flocking_basic",
+    "ma_params": {
+     "group": "alpha"
+    }
+   },
+   "link_profile": "uav_default",
+   "controlling_gcs": "gcs-01"
+  }
+ ],
+ "mission_plan": {
+  "plan_id": "plan-los-edge",
+  "tasks": []
+ }
+}

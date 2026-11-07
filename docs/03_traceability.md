@@ -167,6 +167,13 @@
 | TC-QA-055 | DEC-051·056: 0.1 s 안 StrikeActivity 연속 변경에서 10 Hz 상한의 합침·지연, 마지막 상태 전달 | `qa/strike_burst.py --hz 10 --impact-from …` + `qa/strike_burst_agent.py` | DEC-051, DEC-056 |
 | TC-QA-056 | DEC-051·056: `--activity-max-hz 0` 대조, 같은 프레임 안 두 변경의 보고 | `qa/strike_burst.py --hz 0 --impact-from …` | DEC-051, DEC-056 |
 | TC-QA-057 | DEC-063: StrikeActivity 무장별 키, 1 s 전체 보고에 비행 중 무장만(종료 무장 제외), 변화 보고 상한이 무장 키별 | `qa/strike_burst.py` + `qa/strike_burst_keys.py` | DEC-063, DEC-051, DEC-056 |
+| TC-QA-058 | MISSED expired(max_flight_time 도달)가 GCS에 한 번 도착하고 이후 1 s 전체 보고에서 빠짐 | `qa/strike_cases.py --case cases` + `qa/strike_burst_keys.py` | DEC-063, DEC-048, REQ-PAY-002 |
+| TC-QA-059 | MISSED destroyed(무장 자신 파괴)가 한 번 도착하고 이후 빠짐, 비행 중 표적 소멸 시 종료 상태 | `qa/strike_cases.py --case cases` + `qa/strike_burst_keys.py` | DEC-063, DEC-048, REQ-PAY-002 |
+| TC-QA-060 | 능선 뒤 표적 Strike: 발사 판정·조준점 발사·비행 중 탐색기의 DEM 가시선 사용 | `qa/strike_cases.py --case ridge --point` | DEC-018, DEC-019, DEC-046 |
+| TC-QA-061 | realtime 모드 StrikeActivity 10 Hz 상한과 무장별 키 | `qa/strike_burst.py --realtime` + `qa/strike_burst_keys.py` | DEC-063, DEC-056 |
+| TC-QA-062 | SensorActivity·JammerActivity 변화 보고 상한(10 Hz, 0 Hz, realtime) | `qa/strike_cases.py --case cases` | DEC-051, DEC-056 |
+| TC-QA-063 | DEM 끝점 0.5 m 허용이 판정을 가르는 배치(지면 표적, 표적 앞 언덕) | `qa/los_edge.py --terrain dem` | DEC-018 |
+| TC-QA-064 | 평지 곡률 처짐으로 끝점 표본 하나만 가리는 배치 | `qa/los_edge.py --terrain flat` | DEC-018 |
 
 ## 시험 결과
 
@@ -247,6 +254,13 @@
 | TC-QA-055 | 통과 | 2026-11-06 | 재시험(80a1cda): 빠진 변화 0. 상한이 늦춘 것은 같은 거부 키의 REJECTED 1건(100 ms 뒤 최신 값, 지연 140 ms). 키별 마지막 상태 전달 |
 | TC-QA-056 | 통과 | 2026-11-06 | 재시험(80a1cda, DEC-063): 같은 프레임 LAUNCHED w04가 0·10 Hz 모두 7.26 s 도착, LAUNCHED w02도 도착. QA-026 해소. 첫 실행은 부분 통과 |
 | TC-QA-057 | 통과 | 2026-11-06 | 주기 틱 13개 모두 보낸 키 = 비행 중 무장, 종료 키 재보고 0. 같은 키 최소 간격 100 ms, 다른 무장 키는 0~40 ms. GCS 수신 102→40건 |
+| TC-QA-058 | 통과 | 2026-11-07 | 프레임 249 MISSED expired, 10·0 Hz lockstep과 realtime 모두 GCS 1건(5.04 s), 6 s 틱부터 빠짐. 종료 키 재보고 0 |
+| TC-QA-059 | 통과 | 2026-11-07 | 프레임 361 w02 IMPACT 살상에 w03 포함, w03 MISSED destroyed 1건(7.26 s), 이후 빠짐. 표적 소멸 뒤 w04는 마지막 위치로 IMPACT(O-11) |
+| TC-QA-060 | 통과 | 2026-11-07 | 발사 판정은 DEM 가시선 사용(−0.285 m lock_failed, +0.312 m LAUNCHED). 조준점 발사·비행 중 탐색기는 가시선 미사용, 능선 지면 충돌. D-24, O-10 |
+| TC-QA-061 | 통과 | 2026-11-07 | realtime 10 Hz: 변화 12건 모두 도착(25~45 ms), 같은 키 미룸 1건 121 ms, 다른 무장 키 0~40 ms, 수신 40건, overrun 0 |
+| TC-QA-062 | 통과 | 2026-11-07 | 1 s 창 51변화: 10 Hz·realtime 100 ms 간격 11건, 0 Hz 20 ms 51건. 마지막 상태 전달 |
+| TC-QA-063 | 통과 | 2026-11-07 | 9쌍 모두 허용 0.5 m 기대와 일치, 허용 0과 다른 4쌍(A1·A2·A3 AGL 0, B1 AGL 0.6) 보임 |
+| TC-QA-064 | 통과 | 2026-11-07 | 7,909.7 m, 경계 4.8429 m(허용 0.5)·4.8737 m(허용 0). 사이 고도 4.858 m 보임, 3고도 모두 일치 |
 
 ## 프로세스 결정
 
