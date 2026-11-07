@@ -264,20 +264,23 @@ struct PayloadSystem::Impl {
     const WeaponParams& p = s->wp;
     GuidanceTarget tgt;
     bool coordinate = false;
+    // 발사 기체 기준 탐색 FOV: 기체 기수에서 seeker_el_deg만큼 기운 축 (표적 지정·조준점 공통)
+    const Vec3 axis = frd_to_ned(sh.quat, az_el_to_frd(0.0, p.seeker_el_deg));
+    auto in_launch_fov = [&](Vec3 r) { return p.seeker_fov_deg >= 360.0 || angle_deg(axis, r) <= 0.5 * p.seeker_fov_deg; };
     if (!c.msg.target_id().empty()) {
       auto it = bodies.find(c.msg.target_id());
       if (it == bodies.end() || !it->second.alive || it->first == c.entity) return reject("unknown_target");
       const Vec3 r = ned_between(sh.pos, it->second.pos);
       const double range = norm(r);
       if (range > p.max_range_m) return reject("out_of_range");
-      const Vec3 axis = frd_to_ned(sh.quat, az_el_to_frd(0.0, p.seeker_el_deg));
-      const bool in_fov = p.seeker_fov_deg >= 360.0 || angle_deg(axis, r) <= 0.5 * p.seeker_fov_deg;
-      if (range > p.lock_range_m || !in_fov || !visible(sh.pos, it->second.pos)) return reject("lock_failed");
+      if (range > p.lock_range_m || !in_launch_fov(r) || !visible(sh.pos, it->second.pos)) return reject("lock_failed");
       tgt = {true, it->second.pos, it->second.vel};
     } else if (c.msg.has_aim_point()) {
       if (s->wtype == WeaponType::kAam) return reject("no_target");
       const Geo aim = to_geo(c.msg.aim_point());
-      if (distance_m(sh.pos, aim) > p.max_range_m) return reject("out_of_range");
+      const Vec3 r = ned_between(sh.pos, aim);
+      if (norm(r) > p.max_range_m) return reject("out_of_range");
+      if (!in_launch_fov(r)) return reject("out_of_fov");  // IMP-PAY-009 (DEC-066)
       tgt = {true, aim, {}};
       coordinate = true;
     } else {

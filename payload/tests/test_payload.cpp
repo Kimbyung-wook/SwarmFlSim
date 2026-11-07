@@ -1,4 +1,4 @@
-// TC-PAY-001~017: 임무장비·무장 계산기 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
+// TC-PAY-001~018: 임무장비·무장 계산기 시험. 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <chrono>
 #include <optional>
@@ -938,6 +938,92 @@ void tc_017() {
   std::fprintf(stderr, "  LOS 10 km grid query: %.2f us (Debug)\n", us);
 }
 
+// DEC-066: 조준점 발사도 발사 기체 기준 탐색 FOV 안이어야 한다
+// agm_generic: seeker_fov 90°(반각 45°), 축은 기수에서 아래로 30°
+std::string run_aim_fov(bool verbose) {
+  PayloadSystem ps(ProfileLibrary::builtin(),
+                   {spec("uav-001", v1::ENTITY_KIND_UAV, {pay("sta1", "agm_short", 10), pay("fpv1", "fpv", 1)})},
+                   nullptr, nullptr);
+  Geo hi = kOrigin;
+  hi.alt_m = 5000.0;
+  const Ent u{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, kOrigin};
+  const Ent uh{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, hi};
+  const double d = 1000.0;
+  auto dz = [&](double elev_deg) { return d * std::tan(elev_deg * geo::kDegToRad); };  // 위 +
+  std::string acc;
+  std::uint64_t f = 0;
+  std::uint32_t stores = 10;
+  auto shoot = [&](const Ent& shooter, const std::string& pid, const Geo& aim, bool expect_launch, const char* what) {
+    FrameInput in = frame_in(f, {shooter});
+    in.strike_cmds.push_back(strike_point("uav-001", pid, aim));
+    const auto o = ps.step(in);
+    ++f;
+    for (const auto& m : o.events) acc += serialize(m);
+    for (const auto& m : o.spawned) acc += serialize(m);
+    for (const auto& ob : o.onboard)
+      for (const auto& m : ob.strike_activity) acc += serialize(m);
+    const auto s = strikes(o, "uav-001");
+    const v1::StrikeActivity* a = nullptr;
+    for (const auto* x : s)
+      if (x->state() == v1::STRIKE_STATE_LAUNCHED || x->state() == v1::STRIKE_STATE_REJECTED) a = x;
+    if (!verbose) return;
+    if (expect_launch) {
+      check(a && a->state() == v1::STRIKE_STATE_LAUNCHED, what);
+      if (pid == "sta1") --stores;
+    } else {
+      check(a && a->state() == v1::STRIKE_STATE_REJECTED && a->reason() == "out_of_fov", what);
+      check(a && a->weapon_entity().empty(), "reject: no weapon id");
+      check(o.spawned.empty() && events_of(o, "spawn").empty() && events_of(o, "launch").empty(),
+            "reject: no entity spawned");
+    }
+    check(ps.loadout("uav-001")[1].count() == stores, "stores only drop on launch");
+  };
+  // 축 위(아래 30°) → 발사
+  shoot(u, "sta1", at(kOrigin, 0.0, d, dz(-30.0)), true, "on axis: LAUNCHED");
+  // 후방·측방 → 거부
+  Geo behind = at(kOrigin, 180.0, 1500.0);
+  behind.alt_m = 0.0;
+  shoot(u, "sta1", behind, false, "behind: out_of_fov");
+  Geo side = at(kOrigin, 90.0, 1500.0);
+  side.alt_m = 0.0;  // 아래 33.7°, 방위 90° → 축과 약 66°
+  shoot(u, "sta1", side, false, "abeam: out_of_fov");
+  // 경계: 축 기준 위로 45° = 고각 +15°, 아래로 45° = 고각 −75°
+  shoot(u, "sta1", at(kOrigin, 0.0, d, dz(14.8)), true, "elev +14.8: inside");
+  shoot(u, "sta1", at(kOrigin, 0.0, d, dz(15.2)), false, "elev +15.2: out_of_fov");
+  shoot(uh, "sta1", at(hi, 0.0, d, dz(-74.8)), true, "elev -74.8: inside");
+  shoot(uh, "sta1", at(hi, 0.0, d, dz(-75.2)), false, "elev -75.2: out_of_fov");
+  // 거리 초과가 FOV보다 먼저다
+  Geo far_behind = at(kOrigin, 180.0, 7000.0);
+  far_behind.alt_m = 0.0;
+  {
+    FrameInput in = frame_in(f++, {u});
+    in.strike_cmds.push_back(strike_point("uav-001", "sta1", far_behind));
+    const auto o = ps.step(in);
+    const auto s = strikes(o, "uav-001");
+    if (verbose)
+      check(!s.empty() && s.back()->state() == v1::STRIKE_STATE_REJECTED && s.back()->reason() == "out_of_range",
+            "out_of_range precedes out_of_fov");
+  }
+  // fpv(seeker_fov 360)는 후방 조준점도 발사
+  {
+    FrameInput in = frame_in(f++, {u});
+    in.strike_cmds.push_back(strike_point("uav-001", "fpv1", behind));
+    const auto o = ps.step(in);
+    const auto s = strikes(o, "uav-001");
+    bool launched = false;
+    for (const auto* x : s) launched |= x->payload_id() == "fpv1" && x->state() == v1::STRIKE_STATE_LAUNCHED;
+    if (verbose) check(launched, "fpv 360: behind aim point launched");
+    for (const auto& m : o.events) acc += serialize(m);
+  }
+  return acc;
+}
+
+void tc_018() {
+  const std::string a = run_aim_fov(true);
+  const std::string b = run_aim_fov(false);
+  check(!a.empty() && a == b, "same input twice: identical output");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -951,7 +1037,7 @@ int main(int argc, char** argv) {
                         {"TC-PAY-007", tc_007}, {"TC-PAY-008", tc_008}, {"TC-PAY-009", tc_009},
                         {"TC-PAY-010", tc_010}, {"TC-PAY-011", tc_011}, {"TC-PAY-012", tc_012},
                         {"TC-PAY-013", tc_013}, {"TC-PAY-014", tc_014}, {"TC-PAY-015", tc_015},
-                        {"TC-PAY-016", tc_016}, {"TC-PAY-017", tc_017}};
+                        {"TC-PAY-016", tc_016}, {"TC-PAY-017", tc_017}, {"TC-PAY-018", tc_018}};
   int ran = 0;
   for (const auto& c : cases) {
     if (argc > 1 && std::strcmp(argv[1], c.id) != 0) continue;

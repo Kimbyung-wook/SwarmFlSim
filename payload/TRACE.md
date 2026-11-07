@@ -1,6 +1,6 @@
 # WP8 Payload 추적표
 
-모듈 코드 PAY. 근거: DEC-046(P5 착수, 순수 계산기), DEC-047(SENSOR 고장), DEC-064(비행 중 탐색기 가시선), DEC-009, DEC-012, DEC-018, DEC-019, PRP-DYN-003, PRP-PAY-001.
+모듈 코드 PAY. 근거: DEC-046(P5 착수, 순수 계산기), DEC-047(SENSOR 고장), DEC-064(비행 중 탐색기 가시선), DEC-066(조준점 발사 FOV), DEC-067(IMPACT = 도달), DEC-009, DEC-012, DEC-018, DEC-019, PRP-DYN-003, PRP-PAY-001.
 
 ## 구조
 
@@ -30,10 +30,11 @@ flowchart LR
 | IMP-PAY-006 | Strike 판정(잔량·락온·거리·LOS), `wpn-<shooter>-<seq>` ID, 잔량·StoreLoadout, 살상반경 다중 파괴, Launch/Spawn/Impact/Kill 이벤트 | `src/payload_system.cpp` | DEC-012, DEC-019, REQ-PAY-004, REQ-PAY-005 | TC-PAY-006~011, 013 |
 | IMP-PAY-007 | 프레임 계산기: 벽시계·난수 없음, 엔티티 ID 순 처리, 이벤트 시각 순 정렬, reset | `include/swarm/payload/payload.hpp`, `src/payload_system.cpp` | DEC-046, PRP-PAY-001, REQ-SIM-001 | TC-PAY-012 |
 | IMP-PAY-008 | 표적 지정 무장의 비행 중 탐색기-표적 DEM 가시선(프레임 시작 위치, 센서와 같은 `LosFn`). 끊기면 락 해제·마지막으로 본 위치로 좌표 유도, 다시 보이고 탐색기 FOV·`lock_range_m` 안이면 재획득. 조준점 발사와 FOV로 유도를 멈춘 무장은 보지 않는다. `weapon_track()`으로 유도 상태 조회(버스 보고 없음) | `src/payload_system.cpp`, `src/weapon.cpp`, `include/swarm/payload/payload.hpp`, `include/swarm/payload/weapon.hpp` | DEC-064, DEC-018, REQ-PAY-004 | TC-PAY-015~017 |
+| IMP-PAY-009 | 조준점 발사의 발사 기체 기준 탐색 FOV 판정. 축은 기수에서 `seeker_el_deg`만큼 기운 방향, 반각 `seeker_fov_deg`/2(360 이상이면 판정 없음). 벗어나면 REJECTED `out_of_fov`, 잔량·유도 객체 생성 없음. 유도 식 변경 없음 | `src/payload_system.cpp` | DEC-066, DEC-019, REQ-PAY-004 | TC-PAY-018 |
 
 ## 시험 (TC)
 
-ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2026-11-07 전체 17건 통과.
+ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2026-11-07 전체 18건 통과.
 
 | ID | 내용 | 근거 | 결과 |
 |---|---|---|---|
@@ -54,6 +55,7 @@ ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2
 | TC-PAY-015 | 탑 DEM 뒤로 들어간 표적: 락 해제, 좌표 유도 지점 = 직전 프레임 표적 위치, 상실 동안 고정, 표적 미피격(무장은 탑에 지면 충돌) | DEC-064 | 통과 |
 | TC-PAY-016 | 좁은 탑에 잠깐 가린 표적: 락 해제 후 재획득(추적 복귀), 근접 신관 도달·파괴 | DEC-064 | 통과 |
 | TC-PAY-017 | 평지 회귀 없음(LosFn 없음과 평지 LosFn의 이벤트 바이트 동일, 상실 0), 비행 중 무장 1개당 프레임당 가시선 1회, 조준점 발사는 0회, 10 km 판정 비용 측정 | DEC-064, DEC-046 | 통과 |
+| TC-PAY-018 | 조준점 FOV: 축 위 LAUNCHED, 후방·측방 out_of_fov(잔량 불변, Spawn·Launch·유도 객체 없음), 경계 고각 +14.8°/+15.2°·−74.8°/−75.2°, out_of_range가 out_of_fov보다 먼저, fpv(360°) 후방 발사, 같은 입력 2회 동일 출력 | DEC-066, DEC-046 | 통과 |
 
 ## 결정과 근거 (WP8 내부)
 
@@ -61,6 +63,13 @@ ctest 이름 `pay.TC-PAY-NNN`, 실행 파일 `swarm_payload_tests`. msvc-debug 2
 - JamZoneEvent.owner = 엔티티 ID. Datalink가 owner로 구역을 키잉하므로 엔티티당 재머 하나만 받는다.
 - 움직이는 재머는 중심 이동이 `update_distance_m`를 넘을 때만 갱신 이벤트를 낸다.
 - 비행 중 탐색기 FOV는 속도 방향 기준이며, FOV를 벗어나면 유도를 멈춘다(재획득 없음). 가시선은 DEC-064를 따른다(IMP-PAY-008).
+- 발사 판정 순서(앞이 우선, 처음 걸린 reason 하나만 낸다):
+  1. `unknown_station` → `not_a_weapon` → `no_stores`
+  2. 표적 지정: `unknown_target` → `out_of_range`(max_range_m) → `lock_failed`(lock_range_m, 탐색 FOV, DEM 가시선)
+  3. 조준점: aam이면 `no_target` → `out_of_range`(max_range_m) → `out_of_fov`(탐색 FOV, DEC-066). 조준점은 가시선을 보지 않는다
+  4. 표적·조준점 모두 없으면 `no_target`
+- 표적 지정의 FOV 실패는 기존대로 `lock_failed`이고, `out_of_fov`는 조준점 발사에만 쓴다.
+- StrikeActivity IMPACT는 유도 객체의 도달(근접 신관·지면 교차)만 뜻하고, 파괴는 `truth/event/kill`로 판단한다(DEC-067).
 - 가시선 판정 비용: 무장 1개·프레임당 `LosFn` 1회(경로 50 m 간격 표본). 10 km 경로 1회 약 3 us(msvc-debug)이므로 비행 중 무장 100개, 50 Hz에서 약 15 ms/s다.
 - 표적이 파괴·소실되면 마지막 위치로 좌표 유도한다.
 - 무장 ID 순번은 2자리(`%02u`)이며, 시나리오 엔티티 ID와 겹치면 건너뛴다.
