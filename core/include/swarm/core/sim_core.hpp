@@ -118,6 +118,9 @@ class SimCore {
                                         std::vector<payload::Addressed<v1::JammerCommand>> jammer,
                                         std::vector<payload::Addressed<v1::StrikeCommand>> strike);
   void publish_frame();
+  // IMP-CORE-028: onboard/<id>/SystemStatus 발행 (DEC-073)
+  void publish_system_status();
+  v1::SystemStatus system_status(std::size_t i) const;
   void publish_truth();
   void publish_status(Clock::time_point now);
   void set_state(v1::SimRunState s, Clock::time_point now);
@@ -162,6 +165,12 @@ class SimCore {
   // IMP-CORE-024: 활성 재밍 구역 owner → 마지막 JamZone 이벤트. 1 s 모의 시간마다 다시 발행한다 (DEC-052)
   std::map<std::string, v1::TruthEvent> active_zones_;
   std::uint64_t next_zone_us_ = 0;  // 다음 주기 재발행 시각(모의 µs)
+  // IMP-CORE-028: SystemStatus. 엔티티 ID 순 색인, 키, 마지막 발행 내용(health·subsystems), 다음 주기 시각
+  std::vector<std::size_t> id_order_;
+  std::vector<std::string> sys_keys_;
+  std::vector<std::string> sys_last_;
+  std::vector<std::uint32_t> sys_seq_;
+  std::uint64_t next_sys_us_ = 0;
 
   // 실행 상태
   v1::SimRunState state_ = v1::SIM_RUN_STATE_IDLE;
