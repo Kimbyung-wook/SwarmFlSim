@@ -47,13 +47,13 @@
 | REQ-PAY-001 | PRP-PAY-001, PRP-CFG-001 | DEC-046 | WP8, WP7 | IMP-PAY-002, IMP-SCN-010 | TC-PAY-013, TC-SCN-012~013 | 구현중 |
 | REQ-PAY-002 | PRP-PAY-001 | DEC-018, DEC-047, DEC-051, DEC-056, DEC-063 | WP8, WP3 | IMP-PAY-001, 003, IMP-CORE-022, IMP-AGT-029~031 | TC-PAY-001~004, TC-CORE-034, TC-AGT-051~062 | 구현중 |
 | REQ-PAY-003 | PRP-PAY-001, PRP-LNK-001 | DEC-009, DEC-049, DEC-052 | WP8, WP4 | IMP-PAY-004, IMP-CORE-022, 024~025 | TC-PAY-005, TC-CORE-035, 038~039 | 구현중 |
-| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064, DEC-066, DEC-067 | WP8 | IMP-PAY-005~006, 008~009, IMP-CORE-022 | TC-PAY-006~011, 015~018, TC-CORE-034, TC-QA-065~068 | 구현중 |
+| REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064, DEC-066, DEC-067 | WP8 | IMP-PAY-005~006, 008~009, IMP-CORE-022 | TC-PAY-006~011, 015~018, TC-CORE-034, TC-QA-065~068, 075~077 | 구현중 |
 | REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | IMP-PAY-002, 006 | TC-PAY-006, 009, 013 | 구현중 |
 | REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-054 | WP1, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~011, IMP-INT-001 | TC-LOG-001~010, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069 | WP0, WP9 | IMP-API-002, 005, IMP-GW-001~013 | TC-GW-001~011 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069 | WP0, WP9 | IMP-API-002, 005, IMP-GW-001~013 | TC-GW-001~011, TC-QA-069~074 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -178,6 +178,15 @@
 | TC-QA-066 | DEC-064: 가시선 회복 시 재획득, 연속 전환에서 고정점 갱신 | `qa/los_synth.py run --case hill·edge` + `analyse` | DEC-064 |
 | TC-QA-067 | DEC-064: 평지(`--terrain-flat 0`)와 조준점 좌표 유도의 회귀 없음 | `qa/los_synth.py run --case flat·coord` + `analyse` | DEC-064, DEC-019 |
 | TC-QA-068 | DEC-064: 같은 시드 2회 실행의 궤적·이벤트·StrikeActivity 결정성 | `qa/los_synth.py same` | DEC-064, DEC-004 |
+| TC-QA-069 | DEC-068: 통합 실행에서 외부 클라이언트가 VI·C2·P2P·MS 상태를 받고 공개 XSD 재검증 통과 | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-068, PRP-STD-002 |
+| TC-QA-070 | DEC-014: EXT 메시지 외부 미발행(통합 실행) | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-014, DEC-068 |
+| TC-QA-071 | DEC-068: 외부 MA_TaskCommand(hold·return_to_base·취소)가 Datalink를 거쳐 기체에 도달하고 동작 변화 | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-068, DEC-013 |
+| TC-QA-072 | DEC-068: GCS 링크 차단 시 외부 상태 발행 감소·정지, 해제 시 회복 | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-068, DEC-009 |
+| TC-QA-073 | Gateway 끊김·재접속 중 시뮬레이터 연속 진행 | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-068, DEC-005 |
+| TC-QA-074 | Gateway 버스 범위: `swarm/<gcs>/rx/**` 구독, `tx/c2/**` 발행만 | `qa/gw_integ.py` + `qa/gw_ext_client.py` | DEC-068, DEC-013 |
+| TC-QA-075 | DEC-066: FOV 안 조준점 발사 LAUNCHED | `qa/fov_launch.py` | DEC-066 |
+| TC-QA-076 | DEC-066: FOV 밖 조준점 REJECTED(out_of_fov), 잔량·엔티티 변화 없음 | `qa/fov_launch.py` | DEC-066 |
+| TC-QA-077 | DEC-066: FOV 경계 근처(44.6°~45.4°) 판정 | `qa/fov_launch.py` | DEC-066 |
 
 ## 시험 결과
 
@@ -269,6 +278,15 @@
 | TC-QA-066 | 통과 | 2026-11-07 | edge: T→C→T→C→T 4회 전환 모두 같은 프레임(여유 −0.005 m 포함), 두 번째 고정점은 직전 T 프레임 표적 위치. 표적 도달 |
 | TC-QA-067 | 통과 | 2026-11-07 | flat 내내 T(648프레임), coord 내내 조준점 유도(635프레임), 조준점까지 1.76 m |
 | TC-QA-068 | 통과 | 2026-11-07 | hill·edge 각 2회: 궤적·이벤트·StrikeActivity 모두 일치 |
+| TC-QA-069 | 부분 통과 | 2026-11-08 | 8,422건 XSD 통과, VI 0건(D-26) |
+| TC-QA-070 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-071 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-072 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-073 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-074 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-075 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-076 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
+| TC-QA-077 | 통과 | 2026-11-08 | msvc-debug, Zenoh 1.10.2, agra_lacal 45274ce |
 
 ## 프로세스 결정
 
