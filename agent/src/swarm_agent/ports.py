@@ -15,6 +15,8 @@ from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, mp_pb2, ms_pb2, vi_pb2
 
+from .reporting import vi_key
+
 if TYPE_CHECKING:
     from .vehicle import Vehicle
 
@@ -94,6 +96,7 @@ class VIPortImpl:
     def push_status(self, st: vi_pb2.FlightCommandStatus) -> None:
         self._v.stamp(st)
         self._status.append(st)
+        self._v.vi_reports.note(vi_key("FlightCommandStatus", st), st)  # GCS 변화 보고 (DEC-071)
 
 
 class MSPortImpl:

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from google.protobuf.message import Message
 
-from swarm.v1 import entity_pb2, link_pb2, ms_pb2, options_pb2, sim_pb2, vi_pb2
+from swarm.v1 import entity_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
 from swarm_api import BatchMissionAutonomy, Bus, NavBatch, Sample, keys
 from swarm_api.keys import Iface
 
@@ -29,6 +29,7 @@ from .messages import decode, encoding, full_name, short_name
 from .params import OWNER_KEY, ParamSet, param_defs
 from .plugins import PluginRegistry
 from .ports import C2_INBOUND
+from .reporting import activity_key, vi_key
 from .vehicle import Vehicle
 
 log = logging.getLogger("swarm_agent")
@@ -53,7 +54,8 @@ class RuntimeConfig:
     participant: str = "agent-0"
     entities: set[str] | None = None  # None이면 AutonomySpec이 있는 기체
     strict: bool = False              # 플러그인 예외를 다시 던진다 (시험용)
-    activity_max_hz: float = 10.0     # 임무장비 상태 변화 보고의 키별 최대 빈도. 0 이하면 제한 없음 (DEC-056). 키는 _activity_key 참고 (DEC-063)
+    vi_report_hz: float = 1.0         # NavigationReport GCS 보고 빈도(모의 시간). 0 이하면 끈다 (DEC-071)
+    activity_max_hz: float = 10.0     # 임무장비·VI 상태 변화 보고의 키별 최대 빈도. 0 이하면 제한 없음 (DEC-056, DEC-071). 키는 reporting.activity_key·vi_key
 
 
 @dataclass
@@ -97,18 +99,6 @@ PARAM_PUBLISH_S = 1.0
 NAV_WAIT_S = 0.05
 ACTIVITY_PERIOD_US = 1_000_000  # 임무장비 상태 주기 보고 (DEC-051)
 ACTIVITY_NAMES = frozenset({"SensorActivity", "JammerActivity", "StrikeActivity"})
-# 종료 상태: 한 번 보낸 무장 키는 전체 보고에서 빼고 상태 저장소에서 지운다 (DEC-063)
-STRIKE_TERMINAL = frozenset({ms_pb2.STRIKE_STATE_IMPACT, ms_pb2.STRIKE_STATE_MISSED, ms_pb2.STRIKE_STATE_REJECTED})
-ActivityKey = tuple[str, str, str]   # (메시지, payload_id, weapon_entity). Sensor·Jammer는 세 번째가 ""
-
-
-def _activity_key(name: str, msg: Message) -> ActivityKey:
-    """StrikeActivity는 무장별, 나머지는 (메시지, payload_id)별. weapon_entity가 비면 "" 그대로 (DEC-063)"""
-    return (name, msg.payload_id, msg.weapon_entity if name == "StrikeActivity" else "")
-
-
-def _is_terminal(name: str, msg: Message) -> bool:
-    return name == "StrikeActivity" and msg.state in STRIKE_TERMINAL
 DATALINK_PREFIX = "datalink"  # run.participants 중 이 접두어로 시작하는 것이 Datalink (DEC-040)
 
 
@@ -133,11 +123,7 @@ class AgentRuntime:
         self._tx_count: dict[str, int] = {}
         self._rx_count: dict[str, int] = {}
         self._dl_sent: dict[str, dict[int, dict[str, int]]] = {}  # 참여자 → 프레임 → FrameDone.sent_count
-        # 임무장비 상태 보고 (DEC-051, DEC-063): 기체 → 키 → (헤더 뺀 직렬화, 메시지)
-        self._activity: dict[str, dict[ActivityKey, tuple[bytes, Message]]] = {}
-        self._activity_dirty: dict[str, set[ActivityKey]] = {}
-        self._activity_period: dict[str, int] = {}
-        self._activity_sent: dict[str, dict[ActivityKey, int]] = {}  # 기체 → 키 → 마지막 보고 모의 시각
+        # 임무장비·VI 상태 보고(DEC-051, DEC-063, DEC-071)의 키별 상태는 Vehicle.activity_reports·vi_reports에 둔다
         self._gcs: dict[str, str] = {}
         self._ticks_seen = 0
         self._prev_tick_us: int | None = None
@@ -332,10 +318,6 @@ class AgentRuntime:
         self._tx_count = {}
         self._rx_count = {}
         self._dl_sent = {}
-        self._activity = {}
-        self._activity_dirty = {}
-        self._activity_period = {}
-        self._activity_sent = {}
         self._gcs = {}
         self._ticks_seen = 0
         self._prev_tick_us = None
@@ -370,56 +352,46 @@ class AgentRuntime:
         msg = decode(f"swarm.v1.{name}", payload)
         if name == "SystemStatus":
             v.system_status = msg
+            v.vi_reports.note(vi_key(name, msg), msg)   # GCS 변화 보고 (DEC-071)
         elif name == "Detection":
             v.ports.ms.detection_buffer.push(msg)
         else:
             v.ports.ms.on_activity(msg)
             if name in ACTIVITY_NAMES:
-                self._note_activity(v, name, msg)
-
-    def _note_activity(self, v: Vehicle, name: str, msg: Message) -> None:
-        body = type(msg)()
-        body.CopyFrom(msg)
-        body.ClearField("header")
-        k = _activity_key(name, msg)
-        blob = body.SerializeToString(deterministic=True)
-        state = self._activity.setdefault(v.entity_id, {})
-        prev = state.get(k)
-        state[k] = (blob, msg)
-        if prev is None or prev[0] != blob:
-            self._activity_dirty.setdefault(v.entity_id, set()).add(k)
+                v.activity_reports.note(activity_key(name, msg), msg)
 
     def _report_activity(self, sim_time_us: int) -> None:
-        """바뀐 임무장비 상태는 이번 틱에, 전체는 모의 시간 1 s마다 GCS로 보낸다 (DEC-051).
-        변화 보고는 키별 최소 간격(activity_max_hz)을 지키고, 미룬 변화는 다음 허용 틱에 그때 최신 값으로 보낸다 (DEC-056).
-        StrikeActivity는 무장별 키이고, 종료 상태를 보낸 무장 키는 저장소에서 지워 전체 보고에서 빠진다 (DEC-063)"""
+        """GCS 자동 보고. 틱 시작(begin_frame 뒤, MA 전)에 부르므로 송신이 그 틱의 sent_count에 들어간다 (DEC-044).
+
+        - 임무장비 상태(DEC-051): 바뀐 값은 이번 틱에, 전체는 모의 시간 1 s마다 `tx/ms/<Msg>`
+        - VI 상태(DEC-071): `FlightCapability`는 첫 틱에 한 번, `NavigationReport`는 vi_report_hz 주기(0이면 끔),
+          `SystemStatus`·`FlightCommandStatus`는 바뀔 때 `tx/vi/<Msg>`. 전체 주기 보고는 없다
+        - 변화 보고는 키별 최소 간격(activity_max_hz)을 지키고 미룬 변화는 최신 값으로 보낸다 (DEC-056).
+          종료 상태(무장 IMPACT·MISSED·REJECTED, 비행 명령 REJECTED·COMPLETED·FAILED·CANCELLED)를 보낸 키는 지운다 (DEC-063)
+        """
         period = sim_time_us // ACTIVITY_PERIOD_US
         hz = self.config.activity_max_hz
         min_gap_us = round(1e6 / hz) if hz > 0 else 0
+        nav_hz = self.config.vi_report_hz
+        nav_period = sim_time_us // round(1e6 / nav_hz) if nav_hz > 0 else None
         for v in self._order:
-            state = self._activity.get(v.entity_id)
             gcs = self._gcs.get(v.entity_id)
-            sent = self._activity_sent.get(v.entity_id)
-            if not gcs or (not state and not sent):   # 저장소가 비어도 지운 키의 송신 시각은 정리한다
+            if not gcs:
                 continue
-            state = state if state is not None else {}
-            dirty = self._activity_dirty.get(v.entity_id, set())
-            sent = self._activity_sent.setdefault(v.entity_id, {})
-            if self._activity_period.get(v.entity_id) != period:
-                self._activity_period[v.entity_id] = period
-                due = set(state)
-            else:
-                due = {k for k in dirty if k not in sent or sim_time_us - sent[k] >= min_gap_us}
-            for k in sorted(due):
-                msg = state[k][1]
+            for msg in v.activity_reports.due(sim_time_us, min_gap_us, period):
                 self.send_link(v, "ms", msg, [gcs])
-                sent[k] = sim_time_us
-                if _is_terminal(k[0], msg):
-                    del state[k]
-            dirty -= due
-            # 지운 키의 송신 시각은 상한 간격이 지나면 버린다 (저장소가 무장 수만큼 커지지 않게)
-            for k in [k for k, t in sent.items() if k not in state and sim_time_us - t >= min_gap_us]:
-                del sent[k]
+            if not v.capability_reported:
+                v.capability_reported = True
+                cap = vi_pb2.FlightCapability()
+                cap.CopyFrom(v.capability)
+                v.stamp(cap)
+                self.send_link(v, "vi", cap, [gcs])
+            if nav_period is not None and v.nav_report_period != nav_period:
+                v.nav_report_period = nav_period
+                if v.nav is not None:
+                    self.send_link(v, "vi", v.nav, [gcs])
+            for msg in v.vi_reports.due(sim_time_us, min_gap_us):
+                self.send_link(v, "vi", msg, [gcs])
 
     def _on_rx(self, key: str, payload: bytes) -> None:
         parts = key.split("/")
