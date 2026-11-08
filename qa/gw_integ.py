@@ -47,6 +47,7 @@ T_EXT, T_INJ, T_STRIKE = 30.0, (35, 44), 45.0
 T_CUT1, T_CUT2, CUT_S = 70.0, 95.0, 15.0
 T_GW_KILL, T_GW_UP = 120.0, 130.0
 T_EXT2, T_CANCEL, T_END = 140.0, 145.0, 165.0
+T_FAULT_ON, T_FAULT_OFF = 55.0, 62.0   # 16차: uav-004 SENSOR 고장 주입·해제 (SystemStatus 변화)
 
 # 내부 STD 메시지 → UCI (gateway/README.md 교환 메시지 표)
 STD_UCI = {"NavigationReport": "MA_NavigationReport", "SystemStatus": "SystemStatus",
@@ -58,10 +59,11 @@ STD_UCI = {"NavigationReport": "MA_NavigationReport", "SystemStatus": "SystemSta
 UCI_IFACE = {"MA_NavigationReport": "VI", "SystemStatus": "VI", "MA_FlightCommandStatus": "VI",
              "MA_FlightCapability": "VI", "MA_TaskStatus": "C2", "MA_ApprovalRequest": "C2",
              "MA_PackagePartnerStatusReport": "P2P", "MA_LeaderUpdateRequest": "P2P", "MA_Entity": "P2P",
-             "PO_Activity": "MS", "EA_Activity": "MS", "StrikeActivity": "MS", "StoreLoadoutConfiguration": "MS"}
+             "PO_Activity": "MS", "EA_Activity": "MS", "StrikeActivity": "MS", "StoreLoadoutConfiguration": "MS",
+             "MA_PositionReport": "POS"}  # 16차: uci_also (vi·p2p 토픽 둘 다)
 
 
-def scenario() -> dict:
+def scenario(mover_ma: str = "flocking_basic") -> dict:
     agm = {"type": "agm_short", "profile": "agm_generic"}
     cam = {"id": "cam0", "type": "camera", "profile": "eo_wide"}
     ents = [{"id": GCS, "kind": "gcs", "side": "blue", "dynamics": "static",
@@ -70,7 +72,8 @@ def scenario() -> dict:
         ents.append({"id": e, "kind": "uav", "side": "blue", "dynamics": "dof2",
                      "initial": {"position": {**at(1000 * i, 0), "alt_m": 500.0},
                                  "velocity_ned_mps": {"x": 0.0, "y": 22.0, "z": 0.0}},
-                     "payloads": [cam], "autonomy": {"ma_plugin": "flocking_basic", "ma_params": {"group": f"g{i}"}},
+                     "payloads": [cam], "autonomy": {"ma_plugin": mover_ma,
+                                                     "ma_params": {"group": f"g{i}"} if mover_ma == "flocking_basic" else {}},
                      "link_profile": "uav_default", "controlling_gcs": GCS})
     ents.append({"id": SHOOTER, "kind": "uav", "side": "blue", "dynamics": "static",
                  "initial": {"position": {**at(-1000, 0), "alt_m": 500.0}, "attitude": {"w": 1.0, "x": 0.0,
@@ -101,15 +104,40 @@ class GwObserver(h.Observer):
         self.gcs_tx: list[dict] = []      # swarm/gcs-01/tx/** (Gateway만 발행)
         self.lo: list[tuple] = []         # gcs 관련 link outcome (sim_s, src, dst, msg, outcome, reason)
         self.subs.append(self.bus.subscribe(f"swarm/{GCS}/tx/**", self._gtx))
+        self.vi_rx: list[tuple] = []      # 16차: GCS가 받은 VI·PeerStatus 내용 (epoch, sim_s, msg, src, hdr_us, detail)
+        from swarm.v1 import p2p_pb2, vi_pb2
+        self.vi, self.p2p = vi_pb2, p2p_pb2
 
     def _rx(self, s) -> None:  # noqa: ANN001
         link = self.m[2]
         try:
             env = link.LinkEnvelope.FromString(s.payload)
+            short = env.msg_type.rsplit(".", 1)[-1]
             with self.lock:
-                self.gcs_rx.append((time.time(), self.sim_s(), env.msg_type.rsplit(".", 1)[-1], env.header.source))
-        except Exception:  # noqa: BLE001
-            pass
+                self.gcs_rx.append((time.time(), self.sim_s(), short, env.header.source))
+            det = None
+            if short in ("NavigationReport", "PeerStatus"):
+                m = (self.vi.NavigationReport if short == "NavigationReport" else self.p2p.PeerStatus).FromString(
+                    env.payload)
+                p = m.kinematics.position
+                det = (m.header.sim_time_us, p.lat_deg, p.lon_deg, p.alt_m)
+            elif short == "SystemStatus":
+                m = self.vi.SystemStatus.FromString(env.payload)
+                det = (m.header.sim_time_us, self.vi.Health.Name(m.health).removeprefix("HEALTH_"),
+                       round(m.energy_frac, 4), [(x.name, self.vi.Health.Name(x.health).removeprefix("HEALTH_"))
+                                                 for x in m.subsystems])
+            elif short == "FlightCommandStatus":
+                m = self.vi.FlightCommandStatus.FromString(env.payload)
+                det = (m.header.sim_time_us, m.command_id,
+                       self.m[4].CommandState.Name(m.state).removeprefix("COMMAND_STATE_"), m.reason)
+            elif short == "FlightCapability":
+                det = (0,)
+            if det is not None:
+                with self.lock:
+                    self.vi_rx.append((time.time(), self.sim_s(), short, env.header.source, *det))
+        except Exception as e:  # noqa: BLE001
+            with self.lock:
+                self.add("decode", f"gcs rx: {e}")
         super()._rx(s)
 
     def _outcome(self, s) -> None:  # noqa: ANN001
@@ -180,6 +208,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--base-port", type=int, default=48600)
+    ap.add_argument("--mover-ma", default="flocking_basic",
+                    help="uav-001~004 MA (16차 FlightCommandStatus 확인은 waypoint)")
+    ap.add_argument("--gw-zenoh-config", action="store_true",
+                    help="15차 방식: --no-multicast 대신 qa/scenarios/gw_zenoh_peer.json5로 멀티캐스트를 끈다")
     ap.add_argument("--no-wait-gw2", dest="wait_gw2", action="store_false",
                     help="재기동 Gateway의 LA-CAL 접속을 기다리지 않고 시간표대로 외부 명령을 보낸다 (r1·r2 방식)")
     a = ap.parse_args()
@@ -189,7 +221,7 @@ def main() -> None:
     (ext_dir / "cmd").mkdir(parents=True, exist_ok=True)
     for f in [*ext_dir.glob("cmd/*.json"), ext_dir / "STOP", ext_dir / "ext.ready", ext_dir / "ext.json"]:
         f.unlink(missing_ok=True)
-    sc = scenario()
+    sc = scenario(a.mover_ma)
     sp = SCN / "qa_gw_integ.json"
     sp.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
     sh_pos = next(e for e in sc["entities"] if e["id"] == SHOOTER)["initial"]["position"]
@@ -210,7 +242,8 @@ def main() -> None:
     def start_gw(gen: int):  # noqa: ANN202
         os.environ["GW_PROBE_OUT"] = str(out / f"gw{gen}.json")
         pr = p0.Proc(f"gateway.{gen}", [str(GW_PY), str(QA / "gw_wrap.py"), "--gcs", GCS, "--lacal", CAL_URL,
-                                        "--zenoh-config", str(QA / "scenarios" / "gw_zenoh_peer.json5"),
+                                        *(["--zenoh-config", str(QA / "scenarios" / "gw_zenoh_peer.json5")]
+                                          if a.gw_zenoh_config else ["--no-multicast"]),
                                         "--connect", st.endpoint(), "--listen", f"tcp/127.0.0.1:{gw_port + gen}",
                                         "--stats-s", "5"], st.out, cwd=ROOT)
         gw_procs.append(pr)
@@ -266,10 +299,15 @@ def main() -> None:
                     ob.put_ext("uav-003", "c2", c2_pb2.FormationCommand(), [GCS])
                     inj["n"] += 1
                 once(f"inj{k}", float(k), _inj)
+            once("fault_on", T_FAULT_ON, lambda: ob.fault("uav-004", "SENSOR"))
+            once("fault_off", T_FAULT_OFF, lambda: ob.fault("uav-004", "SENSOR", clear=True))
             once("cut1", T_CUT1, lambda: [ob.fault(e, "GCS_LINK_CUT", CUT_S) for e in ("uav-003", "uav-004")])
             once("cut2", T_CUT2, lambda: ob.fault(GCS, "LINK_CUT", CUT_S))
             once("gw_kill", T_GW_KILL, lambda: (res.__setitem__("gw1_pid", gw.p.pid), gw.kill()))
             once("gw_up", T_GW_UP, lambda: res.__setitem__("gw2_pid", start_gw(2).p.pid))
+            if "gw_up" in done and "gw2_ready_log" not in marks and (st.out / "gateway.2.log").exists():
+                if "gateway: ready at" in (st.out / "gateway.2.log").read_text(encoding="utf-8", errors="replace"):
+                    marks["gw2_ready_log"] = time.time()
             if "gw_up" in done and "gw2_connected" not in marks and (out / "gw2.json").exists():
                 try:
                     if json.loads((out / "gw2.json").read_text(encoding="utf-8")).get("connected"):
@@ -277,9 +315,10 @@ def main() -> None:
                 except (ValueError, OSError):
                     pass
             # 재기동 Gateway가 LA-CAL 구독을 마친 뒤에 보낸다 (r1: 구독 전 PUB은 +OK이지만 받는 쪽이 없어 사라졌다)
-            ready = "gw2_connected" in marks or not a.wait_gw2
-            once("ext2", T_EXT2 if ready else 1e9, lambda: ext_cmd("ext-hold-2", ["uav-003"], "hold"))
-            once("cancel", T_CANCEL if ready else 1e9,
+            # 16차: 준비 완료 로그(O-13 대응)가 나오면 곧바로 보낸다
+            ready = "gw2_ready_log" in marks or not a.wait_gw2
+            once("ext2", (0.0 if ready else 1e9) if a.wait_gw2 else T_EXT2, lambda: ext_cmd("ext-hold-2", ["uav-003"], "hold"))
+            once("cancel", (sim_at(clock, marks["ext2"]) + 5.0) if "ext2" in marks else 1e9,
                  lambda: ext_cmd("ext-hold-1", ["uav-001"], "hold", cancel=True))
             t_end = max(T_END, (sim_at(clock, marks["cancel"]) + 25.0) if "cancel" in marks else 1e9)
             if s >= t_end or "core" in "".join(st.dead()):
@@ -295,6 +334,7 @@ def main() -> None:
             gcs_rx, gcs_tx, lo = list(ob.gcs_rx), list(ob.gcs_tx), list(ob.lo)
             taskstatus = {k: list(v) for k, v in ob.taskstatus.items()}
             status_hist = list(ob.status_hist)
+            vi_rx = list(ob.vi_rx)
         ob.close()
     finally:
         st.down()
@@ -305,7 +345,16 @@ def main() -> None:
     gwj = {g: json.loads((out / f"gw{g}.json").read_text(encoding="utf-8")) for g in (1, 2)
            if (out / f"gw{g}.json").exists()}
     probe = json.loads((out / "probe.json").read_text(encoding="utf-8")) if (out / "probe.json").exists() else {}
+    import gzip
+    import pickle
+    with gzip.open(out / "raw.pkl.gz", "wb") as f:  # 분석 전에 원자료를 남긴다
+        pickle.dump({"res": res, "traj": traj, "gcs_rx": gcs_rx, "gcs_tx": gcs_tx, "lo": lo, "taskstatus": taskstatus,
+                     "status_hist": status_hist, "clock": clock, "vi_rx": vi_rx, "probe": probe}, f)
     analyse(res, extj, gwj, probe, traj, gcs_rx, gcs_tx, lo, taskstatus, status_hist, clock)
+    import gw_vi
+    res["summary"]["vi"] = gw_vi.analyse(res, extj, vi_rx, traj, clock, {g: (st.out / f"gateway.{g}.log")
+                                                                     for g in (1, 2)})
+    (out / "vi_rx.json").write_text(json.dumps(vi_rx, ensure_ascii=False), encoding="utf-8")
     (out / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     print(json.dumps(res["summary"], ensure_ascii=False, indent=1, default=str))
 

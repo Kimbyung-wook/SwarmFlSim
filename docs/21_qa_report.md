@@ -2030,3 +2030,184 @@ Gateway가 끊긴 동안에도 Core·Datalink·Agent는 영향 없이 돌았다.
 | CAL Server 재기동, 외부 클라이언트 재접속 | Gateway 재기동만 했다 |
 | lockstep에서 Gateway 동작 | realtime만 했다. Gateway는 lockstep 참여자가 아니다 |
 | B: 표적 지정 발사의 FOV, 비행 궤적·도달 | 범위 밖 (조준점 발사 시점 응답만) |
+
+## 24. 16차 시험: D-26 재시험, VI 통합 교환과 MA_PositionReport (2026-11-08)
+
+기준은 wp0-contracts 9d21a05(계약 0.14.0)이다. proto를 다시 생성했고 msvc-debug를 Zenoh 1.10.2와 함께 다시 빌드했다. Gateway 단위 시험은 43건 모두 통과했다. 대상은 DEC-071(Agent의 VI 보고), DEC-072(`MA_PositionReport` 추가 발행), DEC-073(Core의 SystemStatus 발행), D-27(`--no-multicast`), O-13(준비 완료 로그)이다. OPN-061~063은 Open 상태이고 이번에도 관찰만 했다.
+
+### 24.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 구성 | §23과 같다(`qa/gw_integ.py`, 기체 5대 + gcs-01, realtime 1배속, 평지, 링크 손실 0). Gateway는 `--no-multicast`로 띄웠다 |
+| 추가한 것 | 외부 클라이언트가 `MA_PositionReport`를 `swarm.vi`·`swarm.p2p`에서 구독한다. 관찰자는 GCS가 받은 VI·PeerStatus의 내용을 기록한다. 55 s에 uav-004 SENSOR 고장을 주입하고 62 s에 해제한다. 재기동 Gateway의 `gateway: ready at` 로그를 보면 곧바로 외부 명령을 보낸다 |
+| 실행 | r2: flocking_basic(§23과 같은 구성). r3wp: uav-001~004를 waypoint MA로 바꾼 구성(`--mover-ma waypoint`). flocking은 작업이 바뀌어도 비행 명령 ID가 그대로라 FlightCommandStatus 확인용으로 따로 돌렸다. r1은 QA 도구 오류(분석 단계 KeyError)로 결과가 없다 |
+| 위치 비교 | 외부 `MA_PositionReport`를 GCS가 받은 내부 NavigationReport·PeerStatus와 좌표로 짝짓는다(같은 좌표가 반복되면 Timestamp에 가장 가까운 표본). 그 메시지의 모의 시각과 외부 수신 시점의 truth 두 가지와 비교했다. truth는 QA 비교에만 썼다 |
+| 판정 근거 | `qa/gw_vi.py`(재분석: `uv run python qa/gw_vi.py qa/out/gw16/r2`). 아래 값은 표시가 없으면 r2다 |
+
+```
+uv run python qa/gw_integ.py --out qa/out/gw16/r2
+uv run python qa/gw_integ.py --out qa/out/gw16/r3wp --mover-ma waypoint
+```
+
+### 24.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-078 | VI 4종과 `MA_PositionReport`를 외부에서 받고 XSD 통과, 종류별 개수가 기대값과 맞음 | 통과 |
+| TC-QA-079 | `MA_PositionReport` 위치가 같은 시각 기체 상태와 맞음 | 통과 (항법 잡음 0 조건) |
+| TC-QA-080 | 고장 주입·해제 때 SystemStatus 변화가 외부까지 나감 | 통과 |
+| TC-QA-081 | 외부 hold·return_to_base에 대한 `MA_FlightCommandStatus` 변화가 외부까지 나감 | 조건부 통과. waypoint MA는 통과, flocking은 변화가 없다(D-28, O-18) |
+| TC-QA-082 | GCS 링크 차단 시 VI 외부 발행이 줄고 해제하면 회복 | 통과 |
+| TC-QA-083 | `--no-multicast` 기동, 준비 완료 로그 뒤 보낸 명령이 유실되지 않음 | 통과 |
+| TC-QA-084 | TC-QA-069 재판정 | 통과. VI·C2·P2P·MS 모두 외부에서 받았다. 발신자가 없는 4종은 남았다(§24.8) |
+
+두 실행 모두 프레임 8678까지 돌았다(모의 173.6 s). truth 누락 프레임은 0, overrun은 1~2다. 프로세스 이상 종료와 로그 이상 항목은 없다. Gateway의 `rejections`·`invalid`·`send_failed`·`internal_error`는 모두 0이다. 외부 수신은 r2 12,986건, r3wp 8,065건이고 XSD 실패는 0이다.
+
+### 24.3 TC-QA-078 VI 수신과 개수
+
+| UCI 메시지 | 토픽 | 외부 수신 | XSD 통과 | GCS rx (Gateway 접속 중) | 기대값 |
+|---|---|---|---|---|---|
+| `MA_NavigationReport` | swarm.vi | 656 | 656 | 666 | 아래 참고 |
+| `MA_PositionReport` (NavigationReport) | swarm.vi | 656 | 656 | 666 | MA_NavigationReport와 같은 수 |
+| `MA_PositionReport` (PeerStatus) | swarm.p2p | 3,209 | 3,209 | 3,253 | PeerStatus와 같은 수 |
+| `SystemStatus` | swarm.vi | 9 | 9 | 9 | 기체당 처음 1건 + 고장·해제 변화 |
+| `MA_FlightCommandStatus` | swarm.vi | 10 | 10 | 10 | 변화 시 (§24.6) |
+| `MA_FlightCapability` | swarm.vi | 5 | 5 | 5 | 기체당 1건 |
+
+- NavigationReport 기대값은 기체 수 × 1 Hz × 시간이다. GCS rx는 uav-001·002·005가 각 159건(기대 158.6 = 173.6 − LINK_CUT 15 s), uav-003·004가 145·144건(기대 143.6 = 추가 GCS_LINK_CUT 15 s 제외)이다.
+- 외부 수신의 기대값은 외부 기록이 끝난 171 s와 Gateway 부재 20.7 s를 빼면 약 646건이다. 실제는 656건으로 기체별 +1~3건 차이다. 1 Hz 주기 경계와 구간 경계의 반올림으로 보이며 건별로 가리지는 않았다.
+- Gateway 안에서 빠진 것은 없다. `exported.MA_NavigationReport`는 501 + 165 = 666으로 GCS rx(접속 중)와 같다. 외부와의 차이 10건은 외부 클라이언트가 약 2 s 먼저 기록을 끝낸 몫(5건/s)이다.
+- 기체별 `MA_FlightCapability`는 `CapabilityID` Label(`uav-001/flight`)로 구분된다.
+
+### 24.4 TC-QA-079 위치 정확도
+
+| 항목 | NavigationReport → swarm.vi | PeerStatus → swarm.p2p |
+|---|---|---|
+| 외부 수신 / 내부 메시지와 짝지음 | 656 / 656 | 3,209 / 3,209 |
+| 변환 오차 (내부 값과 차이) | 0 m | 0 m |
+| 메시지 모의 시각의 truth 대비 수평·수직 오차 | 0 m / 0 m | 0 m / 0 m |
+| 외부 수신 시점의 메시지 나이 p50 / p95 / 최대 | 0.04 / 0.09 / 0.39 s | 0.04 / 0.07 / 0.35 s |
+| 외부 수신 시점 truth 대비 수평 오차, 이동 기체 평균 / p50 / p95 / 최대 | 1.09 / 0.88 / 1.77 / 8.35 m | 0.82 / 0.88 / 1.32 / 7.47 m |
+| Gateway Timestamp − GCS 수신 시각 p50 / p95 | 4.3 / 18.5 ms | 2.0 / 9.2 ms |
+| DomainVelocity 포함 | 519 / 656 | 2,536 / 3,209 |
+| Orientation 포함 | 656 / 656 | 3,209 / 3,209 |
+
+- truth 대비 0 m는 이 시나리오의 항법 해에 잡음이 없기 때문이다. 항법 잡음이 있는 경우의 오차는 이번에 보지 못했다. 위 값이 보이는 것은 변환이 위치를 바꾸지 않는다는 것이다.
+- 외부 수신 시점 오차 약 0.9 m는 22 m/s 기체의 메시지 나이 40 ms에 해당한다.
+- DomainVelocity가 빠진 수(137, 673)는 정지 기체 uav-005의 건수와 같다. 나머지 기체에는 모두 있다.
+
+### 24.5 TC-QA-080 SystemStatus
+
+uav-004의 값이다. r3wp도 같은 순서다(외부 도달 55.13 s, 62.10 s).
+
+| 사건 (모의 s) | GCS 수신 health | 외부 SystemState (도달 모의 s) |
+|---|---|---|
+| 시작 | NOMINAL (1.0) | OPERATIONAL (1.27) |
+| 55.04 SENSOR 고장 주입 | DEGRADED, sensor FAILED (55.06) | DEGRADED (55.11) |
+| 62.02 고장 해제 | NOMINAL (62.04) | OPERATIONAL (62.06) |
+
+- 주입에서 외부 도달까지 약 70 ms다. 외부 메시지에는 어떤 하위 시스템이 고장인지 값이 없다(SubsystemID 목록만 있다, 공개 매핑의 빠지는 정보).
+- 70 s의 GCS_LINK_CUT 때 uav-003·004가 낸 SystemStatus 변화는 그 차단에 막혀 DROPPED/FAULT_INJECTED로 끝났고, 85 s 해제 때 NOMINAL 보고만 도착했다(기체별 SystemStatus 건수 uav-003 2, uav-004 4). 이는 링크 모의와 맞는 동작이다(O-16).
+
+### 24.6 TC-QA-081 FlightCommandStatus
+
+| 구성 | 외부 명령 | GCS 수신 | 외부 `MA_FlightCommandStatus` |
+|---|---|---|---|
+| waypoint (r3wp) | hold uav-001 (30 s) | task-1 CANCELLED(superseded), task-2 EXECUTING (30.22) | task-1 CANCELED, task-2 ACCEPTED (30.27~30.28) |
+| waypoint (r3wp) | return_to_base uav-002 (30 s) | task-1 CANCELLED, task-2 EXECUTING (30.22), task-2 COMPLETED (67.12) | task-1 CANCELED, task-2 ACCEPTED (30.27~30.28), task-2 ACCEPTED (67.19) |
+| waypoint (r3wp) | hold uav-003 (140.8 s) | task-1 CANCELLED, task-2 EXECUTING (141.02) | task-1 CANCELED, task-2 ACCEPTED (141.09) |
+| flocking (r2) | hold·return_to_base | 변화 없음. 시작 때 `<id>-flock` EXECUTING → ACCEPTED 2건뿐 | 시작 때 ACCEPTED 2건뿐 |
+
+- waypoint에서는 외부 명령 하나가 기존 비행 명령 취소와 새 비행 명령 수락으로 약 0.25 s 안에 외부까지 나갔다.
+- 외부에서는 EXECUTING·COMPLETED가 모두 ACCEPTED로 보인다. 공개 XSD 열거값이 RECEIVED·ACCEPTED·REJECTED·CANCELED뿐이기 때문이다. 완료는 `MA_TaskStatus`로 본다(O-17).
+- r3wp에서 145 s에 외부 CANCEL을 보낸 uav-001은 `MA_TaskStatus` CANCELED가 나갔지만 FlightCommandStatus 변화는 없었다.
+
+### 24.7 TC-QA-082 GCS 링크 차단, TC-QA-083 기동과 준비 로그
+
+외부 VI 발행률(건/s)이다.
+
+| 구간 (모의 s) | 주입 | `MA_NavigationReport` r2 / r3wp | `MA_PositionReport`@vi r2 | 보낸 기체 |
+|---|---|---|---|---|
+| 40–55 | 없음 | 5.00 / 5.00 | 5.00 | 5대 |
+| 72–85 | GCS_LINK_CUT uav-003·004 | 2.92 / 3.00 | 2.92 | uav-001·002·005 |
+| 87–95 | 해제 | 5.00 / 5.00 | 5.00 | 5대 |
+| 97–110 | LINK_CUT gcs-01 | 0 / 0 | 0 | 없음 |
+| 112–120 | 해제 | 5.00 / 5.00 | 5.00 | 5대 |
+| Gateway 부재 (120.6–140.8) | Gateway 종료 | 0 / 0 | 0 | 없음 |
+| 재기동 뒤 (142.8–168) | | 5.03 / 5.16 | 5.03 | 5대 |
+
+| 항목 | r2 | r3wp |
+|---|---|---|
+| Gateway 준비 로그 (LA-CAL 접속 기준, 1차 / 2차) | +7.78 s / +9.09 s | +7.33 s / +9.06 s |
+| 재기동 명령 → 준비 로그 (벽시계) | 10.73 s | 10.78 s |
+| 준비 로그 → 외부 명령 전송 | 0.020 s | 0.018 s |
+| 그 명령 `ext-hold-2`의 tx/c2 | 140.86 s, seq 0, DELIVERED | 140.94 s, DELIVERED |
+| 5 s 뒤 CANCEL `ext-hold-1` | DELIVERED, CANCELED | DELIVERED, CANCELED |
+| 두 Gateway의 구독·수신 범위 | `swarm/gcs-01/rx/**`만 | 같음 |
+
+- 준비 로그 직후 보낸 명령은 두 실행 모두 유실되지 않았고 기체가 수락했다(§23 O-13의 손실이 재현되지 않음). 준비 전 전송은 이번에 다시 시험하지 않았다. 코드 주석의 설명대로 그 구간의 PUB은 여전히 받는 쪽이 없다.
+- `--no-multicast`의 효과는 Gateway 수신 키가 gcs-01 rx 뿐이고 정상 동작한다는 것까지 확인했다. 다른 버스를 일부러 띄워 섞이지 않음을 시험하지는 않았다.
+
+### 24.8 TC-QA-084 TC-QA-069 재판정
+
+13종 가운데 이번 통합에서 나온 것은 r2 기준 9종이다.
+
+| L1 | 받음 | 나오지 않음 |
+|---|---|---|
+| VI | `MA_NavigationReport` 656, `SystemStatus` 9, `MA_FlightCommandStatus` 10, `MA_FlightCapability` 5 | — |
+| C2 | `MA_TaskStatus` 12 | `MA_ApprovalRequest` |
+| P2P | `MA_PackagePartnerStatusReport` 3,210 | `MA_LeaderUpdateRequest`, `MA_Entity` |
+| MS | `PO_Activity` 5,076, `EA_Activity` 137, `StrikeActivity` 6 | `StoreLoadoutConfiguration` |
+| 위치 (DEC-072) | `MA_PositionReport` 3,865 | — |
+
+§23의 판정 "VI 0건"은 해소됐다. TC-QA-069는 통과로 바꾼다. 나오지 않은 4종은 시뮬레이터에 발신 코드가 없다. 외부 시스템이 필요로 할 때 별도로 정할 항목이다.
+
+### 24.9 새 결함
+
+| # | 심각도 | 내용 | 근거 | 담당 |
+|---|---|---|---|---|
+| D-28 | 하 | 같은 `command_id`로 비행 명령을 갱신하면 FA가 수행 중이어도 ACCEPTED를 돌려준다(`agent/src/swarm_agent/fa.py:140`, 갱신 판정 `:101`). 매 프레임 같은 ID로 명령을 내는 flocking에서는 GCS가 EXECUTING(0.88 s) 다음에 ACCEPTED(0.90~1.08 s)를 받고, 이후 마지막 상태가 ACCEPTED로 남는다. 실제로는 수행 중이다. 외부에서는 둘 다 ACCEPTED라 보이지 않고 내부 GCS·Monitor에서만 보인다 | TC-QA-081, r2 | WP3 Agent |
+
+### 24.10 결함 상태 갱신
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-26 | 해소 (VI) | VI 4종과 위치가 통합 실행에서 외부까지 나간다. 발신자 없는 4종은 §24.8 |
+| D-27 | 해소 | `--no-multicast`로 기동해 정상 동작 |
+| O-13 | 완화 | 준비 완료 로그가 생겼고 그 뒤 명령은 유실되지 않았다. 준비 전 PUB이 사라지는 동작 자체는 그대로다 |
+
+### 24.11 관찰
+
+- O-16: SystemStatus는 변화할 때만 보내고 주기 전체 보고가 없다(DEC-071). 링크가 끊긴 동안 생긴 변화는 다음 변화가 있기 전까지 GCS에 전달되지 않는다. 이번에는 해제 때 또 변화가 생겨 복구됐다. 차단 중 주입한 고장이 해제 뒤에도 남는 경우는 시험하지 않았고, 코드 설명으로 추론한 것이다.
+- O-17: `MA_FlightCommandStatus`에서 EXECUTING·COMPLETED가 ACCEPTED로 합쳐진다. r3wp의 uav-002 COMPLETED(67.12 s)는 외부에 ACCEPTED 재보고로만 보인다.
+- O-18: flocking은 작업이 바뀌어도 비행 명령 ID가 그대로라 외부 hold·return_to_base에 대한 FlightCommandStatus 변화가 없다. 설계상 FA 수준의 상태이고, 작업 수준 변화는 `MA_TaskStatus`로 본다.
+- O-19: 재기동한 Gateway(또는 늦게 붙은 외부 시스템)는 `MA_FlightCapability`와 현재 `SystemStatus`를 받지 못한다. 2차 Gateway의 카운터에 두 항목이 없다(r2). Capability는 시작 시 1회, SystemStatus는 변화 시에만 나가기 때문이다.
+- O-20: `gateway/config/lacal_server.yaml`의 `declared.pub`에 `MA_PositionReport`가 없다. 서버가 선언을 강제하지 않아(O-15) 동작에는 영향이 없다.
+- OPN-061~063 관찰. OPN-061: 통합 실행에 ApprovalRequest가 없어 승인 왕복은 여전히 볼 수 없다. OPN-062: 임시 규칙(hold, return_to_base, 취소)이 두 MA 구성 모두에서 동작했다. OPN-063: 이번에도 UI 없이 Gateway만 gcs-01 키에 발행했다.
+
+### 24.12 P6 완료 판정 의견
+
+완료 기준 "VI·C2·P2P 주요 상호작용을 agra_lacal과 교환"은 통합 실행에서 충족했다고 본다. VI 4종, C2 상태와 외부 명령 왕복, P2P 상태, 위치 보고를 시뮬레이터 전체와 함께 실제 CAL Server로 주고받았고 모두 XSD를 통과했다. 링크 차단과 Gateway 재기동에서도 시뮬레이터가 계속 돌고 외부 흐름이 회복됐다. 새 결함 D-28은 하 등급이고 외부 교환에는 영향이 없다.
+
+완료로 처리하되 다음은 P6 안에서 닫지 못한 항목으로 남긴다.
+
+| 항목 | 상태 |
+|---|---|
+| 승인 왕복 (`MA_ApprovalRequest`, OPN-061) | Open. 시뮬레이터에 발신 코드가 없어 통합 확인이 안 됐다 |
+| 위치가 필요한 외부 작업 (OPN-062) | Open. 지금은 hold, return_to_base, 취소만 |
+| GCS 키의 발행자 구분 (OPN-063) | Open. UI와 Gateway 동시 발행은 시험하지 않았다 |
+| 발신자 없는 UCI 4종, D-28, O-16 | 담당 WP·필요 시점 판단 |
+
+승인 왕복을 P6 완료 조건에 넣는다면 OPN-061과 발신 경로가 먼저 필요하다.
+
+### 24.13 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 항법 잡음이 있을 때의 위치 오차 | 시나리오의 항법 해에 잡음이 없다 |
+| 링크 손실이 있을 때의 VI 흐름 | 링크 손실 0 구성만 돌렸다. 차단은 고장 주입으로만 봤다 |
+| 재밍 구역으로 인한 VI 감소 | 고장 주입만 썼다 |
+| `--no-multicast`의 격리 효과 자체 | 다른 버스를 띄워 시험하지 않았다 |
+| 준비 전 전송의 손실 재현 | 준비 로그 뒤 전송만 시험했다 |
+| 3-DoF 기체의 VI, lockstep에서 VI 보고의 외부 전달 | dof2·realtime만 돌렸다 |
