@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.13.0
+- 계약 버전: 0.14.0
+  - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072)
   - 0.13.0: `StrikeActivity` 변화 보고 키를 무장별 (메시지, payload_id, weapon_entity)로 분리(DEC-063)
   - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056), DEM 파일 형식과 받기 절차(DEC-053)
   - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
@@ -129,6 +130,11 @@ flowchart LR
   - `StrikeActivity`는 키를 (메시지, payload_id, weapon_entity)로 한다. 무장마다 상태를 따로 두므로 같은 스테이션의 다른 무장 변화가 서로 덮지 않는다. `weapon_entity`가 비어 있는 보고(발사 전 REJECTED 등)는 (메시지, payload_id, "") 키를 쓴다. 종료 상태(IMPACT, MISSED, REJECTED)를 한 번 보낸 무장 키는 1 Hz 전체 보고에서 뺀다 (DEC-063).
   - IMPACT는 유도 객체의 도달(근접 신관·지면 교차)만 뜻한다. 파괴 효과는 `truth/event/kill`로 판단한다. 비행 중 목표 엔티티가 사라진 경우도 IMPACT로 끝날 수 있다 (DEC-067).
   - Datalink를 거치므로 GCS 링크가 끊기면 지상 표시에도 반영된다. UI는 `swarm/<gcs>/rx/ms/<Msg>`만 읽고 `onboard/**`를 구독하지 않는다.
+- 기체 VI 상태 보고 (DEC-071)
+  - Agent 런타임은 자기 기체의 VI 상태를 GCS에 `swarm/<id>/tx/vi/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
+  - `NavigationReport`는 모의 시간 기준 주기로 보낸다. 기본 1 Hz이고 Agent 런타임 CLI `--vi-report-hz`로 바꾼다(0이면 끈다).
+  - `SystemStatus`·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
+  - Datalink를 거치므로 GCS 링크 상태가 반영된다. UI·Gateway는 `swarm/<gcs>/rx/vi/<Msg>`만 읽는다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
   - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
@@ -168,7 +174,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.13.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.14.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |

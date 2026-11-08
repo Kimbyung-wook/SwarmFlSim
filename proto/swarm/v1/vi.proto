@@ -100,6 +100,7 @@ message FlightCapability {
 // 센서 잡음이 포함된 항법 상태. ground truth가 아니다 (PRP-SIM-003)
 message NavigationReport {
   option (uci_name) = "MA_NavigationReport";
+  option (uci_also) = "MA_PositionReport";
   option (mapping) = MAPPING_CLASS_STD;
   option (l1) = L1_INTERFACE_VI;
 

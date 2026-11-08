@@ -27,4 +27,5 @@ extend google.protobuf.MessageOptions {
   string uci_name = 51001;        // 공개 XSD의 UCI 메시지명. EXT/SIM은 비워 둔다
   MappingClass mapping = 51002;
   L1Interface l1 = 51003;
+  repeated string uci_also = 51004; // 같은 내용을 함께 싣는 추가 UCI 메시지명(STD만, DEC-072)
 }

@@ -10,6 +10,7 @@ import "swarm/v1/options.proto";
 // 군집 상태 공유 (분산 알고리즘의 기본 입력)
 message PeerStatus {
   option (uci_name) = "MA_PackagePartnerStatusReport";
+  option (uci_also) = "MA_PositionReport";
   option (mapping) = MAPPING_CLASS_STD;
   option (l1) = L1_INTERFACE_P2P;
 
