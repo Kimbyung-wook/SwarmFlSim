@@ -1,6 +1,6 @@
 """QA 15차 외부 CAL Client (TC-QA-069~073). gateway/.venv의 python으로 띄운다.
 
-- agra_lacal CAL Server에 `external_c2` 서비스로 접속해 Gateway 발행 13종을 모두 구독한다.
+- agra_lacal CAL Server에 `external_c2` 서비스로 접속해 Gateway 발행 13종과 MA_PositionReport(vi·p2p, DEC-072)를 구독한다.
 - 받은 메시지마다 이 프로세스가 따로 적재한 공개 XSD(A-GRA 6.0a)로 다시 검증한다(서버 검증과 별개).
 - 관리 포트 /tap으로 서버를 지나간 모든 메시지 이름·발신 서비스를 센다(구독하지 않은 이름도 보인다).
 - <out>/cmd/NNN.json 명령 파일을 읽어 MA_TaskCommand를 PUB한다. Gateway 변환기를 쓰지 않고 JSON을 직접 만든다.
@@ -35,6 +35,9 @@ EXPORTS = {
     "MA_PackagePartnerStatusReport": "p2p", "MA_LeaderUpdateRequest": "p2p", "MA_Entity": "p2p",
     "PO_Activity": "ms", "EA_Activity": "ms", "StrikeActivity": "ms", "StoreLoadoutConfiguration": "ms",
 }
+# DEC-072 uci_also: NavigationReport → swarm.vi, PeerStatus → swarm.p2p (16차)
+EXTRA_SUBS = [("MA_PositionReport", "vi"), ("MA_PositionReport", "p2p")]
+VI_DETAIL = ("SystemStatus", "MA_FlightCommandStatus", "MA_FlightCapability")
 
 
 def ts() -> str:
@@ -92,6 +95,20 @@ class Ext:
             if name == "MA_TaskStatus":
                 extra = {"task": label(md.get("TaskID")), "state": md.get("ExecutionState"),
                          "by": label((md.get("ExecutingSystemOrPackage") or {}).get("SystemID"))}
+            elif name == "MA_PositionReport":
+                ins = md.get("InertialState", {})
+                pos = ins.get("Position", {})
+                import math as _m
+                extra = {"who": md.get("DisplayName", ""), "lat": _m.degrees(pos.get("Latitude", 0.0)),
+                         "lon": _m.degrees(pos.get("Longitude", 0.0)), "alt": pos.get("Altitude"),
+                         "ts": pos.get("Timestamp", ""), "vel": "DomainVelocity" in ins,
+                         "ori": "Orientation" in ins}
+            elif name == "MA_NavigationReport":
+                extra = {"keys": sorted(md.keys())[:8], "who": label(md.get("SystemID"))}
+            elif name in VI_DETAIL:
+                extra = {"md": json.dumps(md, ensure_ascii=False, sort_keys=True)[:1500],
+                         "who": label(md.get("SystemID")), "cmd": label(md.get("CommandID")),
+                         "state": md.get("SystemState") or md.get("CommandProcessingState") or ""}
             elif name in ("PO_Activity", "EA_Activity", "StrikeActivity"):
                 extra = {"keys": sorted(md.keys())[:6]}
             sysid = (body.get("MessageHeader") or {}).get("SystemID", {}).get("UUID", "")
@@ -149,9 +166,14 @@ async def main() -> None:
             await cli.subscribe(name, f"swarm.{iface}", ext.on_msg(f"swarm.{iface}"))
         except CalError as e:
             sub_err[name] = str(e)
+    for name, iface in EXTRA_SUBS:
+        try:
+            await cli.subscribe(name, f"swarm.{iface}", ext.on_msg(f"swarm.{iface}"))
+        except CalError as e:
+            sub_err[f"{name}@{iface}"] = str(e)
     ext.errors += [f"sub {k}: {v}" for k, v in sub_err.items()]
     asyncio.create_task(tap_loop(ext, a.admin))
-    print(f"ext ready system={cli.system_uuid} subs={len(EXPORTS) - len(sub_err)}", flush=True)
+    print(f"ext ready system={cli.system_uuid} subs={len(EXPORTS) + len(EXTRA_SUBS) - len(sub_err)}", flush=True)
     (out / "ext.ready").write_text("ok", encoding="utf-8")
     done: set[str] = set()
     last = 0.0
