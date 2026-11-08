@@ -1863,3 +1863,170 @@ DEM 배치(`qa/out/los_edge/dem`, 거리 약 3 km). "끝점 여유"는 표적 �
 | 실제 DEM(설악·한라)에서의 비행 중 전환 | 이번에는 합성 언덕만 썼다. `qa/los_track.py` move 케이스는 돌리지 않았다 |
 | 다른 시드, realtime 모드 | 같은 시드 lockstep만 비교했다 |
 | DEC-064 이전 빌드와의 궤적 비교 | 이전 빌드를 따로 만들지 않았다. 회귀는 평지·조준점 케이스의 규칙 일치로만 보았다 |
+
+## 23. 15차 시험: P6 Gateway 통합 데모, 조준점 FOV 판정 (2026-11-08)
+
+기준은 claude/qa-p6-gateway-8256f7 057e337(wp0-contracts와 같음)이다. msvc-debug를 Zenoh 1.10.2와 함께 새로 빌드했고(`qa/build_debug.bat`, `-DCMAKE_PREFIX_PATH=C:/dev/zenoh`), 서브모듈 `third_party/agra_lacal`은 45274ce다. Gateway 단위 시험은 이 빌드 환경에서 다시 돌려 35건 모두 통과했다. 대상은 두 가지다. 하나는 DEC-068 Gateway를 시뮬레이터 전체와 함께 돌리는 통합 경로다. 다른 하나는 DEC-066 조준점 FOV 판정의 발사 시점 응답이다. 지형 위 은폐·유도·도달 성능은 이번 범위가 아니다. OPN-060~063은 관찰만 했다.
+
+### 23.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| A 구성 | Datalink, Agent(`qa/strike_burst_agent.py`: flocking_basic에 정해진 프레임 조준점 발사를 더함), Core(realtime 1배속, 50 Hz, `--terrain-flat 0`), agra_lacal CAL Server(`qa/scenarios/gw_lacal_server.yaml`: Gateway 설정과 같고 포트만 18765/18766), Gateway(`--gcs gcs-01`), 외부 CAL Client(`external_c2`)를 띄웠다. Gateway·CAL Server·외부 클라이언트는 `gateway/.venv`의 python으로 실행했다 |
+| Gateway 래퍼 | `qa/gw_wrap.py`는 실제 진입점 `swarm_gateway.__main__.main()`을 그대로 부른다. 그 모듈의 `open_bus`·`start_gateway`만 감싸서 구독 키 표현식, 발행 키, 실제로 받은 표본 키, 카운터를 0.5 s마다 기록한다. Gateway 코드는 바꾸지 않았다. 멀티캐스트는 `--zenoh-config qa/scenarios/gw_zenoh_peer.json5`로 껐다 (D-27) |
+| 외부 클라이언트 | `qa/gw_ext_client.py`. 13종을 모두 `swarm.<iface>`로 구독하고, 받은 메시지마다 직접 적재한 공개 XSD(A-GRA 6.0a)로 다시 검증한다. 서버 관리 포트 `/tap`으로 서버를 지난 모든 메시지 이름과 발신 서비스를 센다. `MA_TaskCommand`는 Gateway 변환기를 쓰지 않고 JSON을 직접 만든다(CapabilityID Label `<엔티티>/<작업>`, TaskID Label, 임의 UUIDv4) |
+| A 시나리오 | `qa/scenarios/qa_gw_integ.json`(드라이버가 생성). gcs-01 1개와 기체 5대로 구성했다. uav-001~004는 dof2 기체로, 고도 500 m에서 1 km 간격으로 동쪽 8 km `task-001` move_to를 수행한다. 서로 응집하지 않도록 그룹을 기체마다 나눴다. uav-005는 정지 사수로 cam0, jam0, agm_short 2발을 실었다. 모든 기체에 cam0이 있다. 링크 손실은 0이다 |
+| A 시간표(모의 s) | 30 외부 hold uav-001(`ext-hold-1`), return_to_base uav-002(`ext-rtb-1`) / 35~44 EXT 주입: uav-003 → gcs-01로 PeerAlgorithmMessage·Detection·FormationCommand를 1 Hz로 각 10건 / 45 uav-005 조준점 발사 / 70 GCS_LINK_CUT uav-003·004 15 s / 95 LINK_CUT gcs-01 15 s / 120 Gateway 강제 종료(PID, `taskkill /T /F /PID`), 130 다시 기동 / 140 외부 hold uav-003(`ext-hold-2`), 145 외부 CANCEL `ext-hold-1` |
+| A 판정 근거 | 관찰자가 `swarm/gcs-01/rx/**`·`swarm/gcs-01/tx/**`·`link/outcome/**`·truth/state를 기록한다. 외부 수신은 수신 시각(epoch)을 모의 시각으로 바꿔 구간별로 셌다 |
+| A 실행 | r1, r2, r3 세 번. r1은 드라이버 종료 단계의 잠금 버그(QA 도구)로 결과 파일을 쓰지 못했고, 원자료(ext.json, gw*.json)만 썼다. r2는 시간표대로 실행했다. r3은 재기동 Gateway가 LA-CAL 구독을 마친 뒤에 외부 명령을 보내게 고쳤다(O-13). 아래 표는 r3 값이고, r2도 같은 판정이다 |
+| B 구성 | `qa/fov_launch.py`. lockstep, 평지 0 m. 정지 사수 uav-001(고도 500 m, 기수 북쪽·수평)이 agm_short(FOV 90°, 축 고각 −30°)로 쏜다. 케이스마다 스테이션을 달리 쓰고(각 2발), 프레임 100부터 20 프레임 간격으로 조준점 1발씩 쏜다 |
+| B 판정 근거 | Core `onboard/uav-001/StrikeActivity`의 상태·사유·weapon_entity, GCS가 받은 StrikeActivity, `onboard/uav-001/StoreLoadout`의 스테이션별 잔량, `truth/event` launch·spawn, truth/state 엔티티 수 |
+
+```
+uv run python qa/gw_integ.py --out qa/out/gw/r3
+uv run python qa/fov_launch.py --out qa/out/fov/r1
+```
+
+### 23.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-069 | 외부 클라이언트가 VI·C2·P2P·MS 상태를 받고 공개 XSD 검증 통과 | 부분 통과. C2·P2P·MS는 통과했다. VI는 0건이다(D-26) |
+| TC-QA-070 | EXT 메시지가 외부로 나가지 않음 | 통과 |
+| TC-QA-071 | 외부 `MA_TaskCommand`(hold, return_to_base, CANCEL)가 Datalink를 거쳐 기체에 도달하고 동작이 바뀜 | 통과 |
+| TC-QA-072 | GCS 링크 차단 시 외부 상태 메시지 감소·정지 | 통과 |
+| TC-QA-073 | Gateway 프로세스를 끊었다 다시 붙여도 시뮬레이터 계속 진행, 재접속 뒤 양방향 회복 | 통과 (O-13) |
+| TC-QA-074 | Gateway의 버스 범위: 구독 `swarm/gcs-01/rx/**`만, `truth/**` 미수신, 발행 `swarm/gcs-01/tx/c2/**`만 | 통과 |
+| TC-QA-075 | 조준점이 탐색 FOV 안이면 LAUNCHED | 통과 |
+| TC-QA-076 | FOV 밖이면 REJECTED `out_of_fov`, 잔량·엔티티 불변 | 통과 |
+| TC-QA-077 | FOV 경계 앞뒤(축과 44.6~45.4°) | 통과 |
+
+A(r3)는 프레임 8629까지 돌았다(모의 172.6 s). truth 누락 프레임은 0이고 overrun은 2다. 프로세스 이상 종료는 없었고, 로그 이상 항목도 없었다. Gateway 거부(`rejections`)·`invalid`·`send_failed`는 모두 0이다.
+
+### 23.3 TC-QA-069 외부 수신과 XSD
+
+외부 클라이언트가 받은 메시지 수다(r3). 모든 메시지가 클라이언트 쪽 XSD 재검증을 통과했고 MessageHeader Mode는 모두 `SIMULATION`이다.
+
+| L1 | UCI 메시지 | 내부 메시지 | GCS rx (Gateway 접속 중) | 외부 수신 | XSD 통과 |
+|---|---|---|---|---|---|
+| VI | `MA_NavigationReport`, `SystemStatus`, `MA_FlightCommandStatus`, `MA_FlightCapability` | — | 0 | 0 | — |
+| C2 | `MA_TaskStatus` | TaskStatus | 12 | 12 | 12 |
+| C2 | `MA_ApprovalRequest` | — | 0 | 0 | — |
+| P2P | `MA_PackagePartnerStatusReport` | PeerStatus | 3,252 | 3,207 | 3,207 |
+| P2P | `MA_LeaderUpdateRequest`, `MA_Entity` | — | 0 | 0 | — |
+| MS | `PO_Activity` | SensorActivity | 5,110 | 5,060 | 5,060 |
+| MS | `EA_Activity` | JammerActivity | 138 | 137 | 137 |
+| MS | `StrikeActivity` | StrikeActivity | 6 | 6 | 6 |
+| MS | `StoreLoadoutConfiguration` | — | 0 | 0 | — |
+| 계 | | | | 8,422 | 8,422 |
+
+- Gateway 카운터로 보면 `exported`와 `sent`가 같고(1차 6,515, 2차 2,024), 실패는 0이다. GCS rx와 외부 수신의 차이(PeerStatus 45, SensorActivity 50)는 측정 끝 구간에서 생긴다. 외부 클라이언트는 관찰자보다 먼저 기록을 끝낸다. Gateway 안에서 빠진 메시지는 없다.
+- 13종 가운데 5종만 실제로 교환됐다. 나머지 8종은 GCS rx에 한 건도 오지 않았다. VI 4종은 기체가 GCS로 보내지 않는다(D-26). 조준점 발사의 StrikeActivity(LAUNCHED 프레임 2252, IMPACT 2496 `proximity`)는 외부에 도착했다.
+- 외부 `MA_TaskStatus`는 hold·RTB를 `EXECUTION_PENDING` → `COMPLETED`/`CANCELED`로 보였다. 기체가 hold·RTB에 EXECUTING을 보고하지 않기 때문이다.
+
+### 23.4 TC-QA-070 EXT 미발행, TC-QA-074 버스 범위
+
+| 항목 | 값 |
+|---|---|
+| EXT 주입 (uav-003 → gcs-01) | PeerAlgorithmMessage 10, Detection 10, FormationCommand 10. GCS rx에 각 10건 도착 |
+| Gateway가 받은 EXT | 1차 Gateway의 `rx_keys`: `p2p/PeerAlgorithmMessage` 10, `ms/Detection` 10, `c2/FormationCommand` 10. 카운터 `skipped_ext` 30 |
+| 서버를 지난 메시지 (`/tap`) | Gateway(서비스 1·3) 발신: MA_TaskStatus, PO_Activity, EA_Activity, MA_PackagePartnerStatusReport, StrikeActivity. 외부(서비스 2) 발신: MA_TaskCommand 4. 13종 밖의 이름은 없다 |
+| 구독 키 (1·2차 Gateway) | `swarm/gcs-01/rx/**` 하나 |
+| 실제로 받은 표본 키 | `swarm/gcs-01/rx/*`만 (1차 6,545, 2차 2,024). `truth/**`·`onboard/**`·`link/**`·`sim/**`는 0 |
+| 발행 키 | `swarm/gcs-01/tx/c2/TaskCommand`만 (1차 2, 2차 2) |
+
+### 23.5 TC-QA-071 외부 명령 → 기체
+
+| 외부 명령 | PUB | tx/c2 도달 | link/outcome | 기체 TaskStatus (GCS rx) | 외부 MA_TaskStatus |
+|---|---|---|---|---|---|
+| `ext-hold-1` hold uav-001 (30 s) | +OK, XSD 통과 | 5 ms, seq 0, dst uav-001 | DELIVERED | ACCEPTED, `task-001` CANCELLED(preempted) | EXECUTION_PENDING |
+| `ext-rtb-1` return_to_base uav-002 (30 s) | +OK | 3 ms, seq 1 | DELIVERED | ACCEPTED → COMPLETED | EXECUTION_PENDING → COMPLETED |
+| `ext-hold-2` hold uav-003 (140 s, 재기동 Gateway) | +OK | 7 ms, seq 0 | DELIVERED | ACCEPTED, `task-001` CANCELLED(preempted) | EXECUTION_PENDING |
+| `ext-hold-1` CANCEL uav-001 (145 s) | +OK | 4 ms, seq 1, cancel=true | DELIVERED | CANCELLED | CANCELED |
+
+기체 동작(truth). uav-004는 외부 명령을 받지 않은 대조 기체다.
+
+| 기체 | 명령 | 명령 뒤 60 s 동쪽 이동 | 판정 근거 |
+|---|---|---|---|
+| uav-001 | hold (30 s) | +57 m (uav-004 +1,295 m) | 50~120 s 동안 명령 시점 위치에서 최대 330 m. 기본 반경 300 m 선회 |
+| uav-002 | return_to_base (30 s) | −619 m | 출발점까지 거리 659 m → 90 s에 40 m, COMPLETED |
+| uav-003 | hold (140 s) | −296 m (140~172 s, uav-004 +681 m) | 150 s 뒤 명령 시점 위치에서 최대 298 m |
+| uav-001 | CANCEL (145 s) | — | 선회를 멈추고 침로를 유지했다(작업 없음 동작) |
+
+### 23.6 TC-QA-072 GCS 링크 차단
+
+r3 구간별 값이다. 외부 수신률은 외부 클라이언트가 받은 메시지 수를 모의 초로 나눈 값이다.
+
+| 구간 (모의 s) | 주입 | 외부 수신 /s | GCS rx /s | GCS rx 발신 기체 | gcs-01 쪽 link/outcome |
+|---|---|---|---|---|---|
+| 50–70 | 없음 | 67.2 | 67.1 | 5대 | DELIVERED 1,341 |
+| 72–85 | GCS_LINK_CUT uav-003·004 | 37.0 | 37.0 | uav-001·002·005 | DELIVERED 480, DROPPED/FAULT_INJECTED 390 |
+| 87–95 | 해제 | 66.9 | 67.0 | 5대 | DELIVERED 536 |
+| 97–110 | LINK_CUT gcs-01 | 0.0 | 0.0 | — | DROPPED/FAULT_INJECTED 870 |
+| 112–120 | 해제 | 65.9 | 66.8 | 5대 | DELIVERED 535 |
+
+부분 차단에서는 차단한 두 기체의 몫만큼 줄었고(−45%), GCS 전체 차단에서는 멈췄다. 해제 뒤 2 s 안에 원래 수준으로 돌아왔다. r2도 37.0/s, 0/s로 같았다.
+
+### 23.7 TC-QA-073 Gateway 재기동
+
+| 항목 | r3 | r2 |
+|---|---|---|
+| 종료 → 재기동 명령 (벽시계) | 10.0 s | 10.0 s |
+| 재기동 → LA-CAL 구독 완료 | 9.7 s | 기록 없음 (첫 외부 수신까지 6.3 s) |
+| Gateway가 없던 동안 모의 시각 진행 | 19.3 s / 벽시계 19.8 s | 9.9 s / 9.95 s |
+| 그동안 GCS rx | 66.9 /s (5대 모두) | 66.0 /s |
+| 그동안 외부 수신 | 17건(종료 직후 서버에 남아 있던 메시지), 이후 0 | 0.4 /s 이하 |
+| truth 누락 프레임, Core 상태 | 0, RUNNING 유지 | 0, RUNNING 유지 |
+| 재접속 뒤 | 외부 수신 61.1/s, 외부 명령 2건 처리(§23.5) | 60.4/s, 명령 2건 처리 |
+
+Gateway가 끊긴 동안에도 Core·Datalink·Agent는 영향 없이 돌았다. CAL Server와 외부 클라이언트는 연결을 유지했고 오류도 없었다. 다시 붙은 Gateway는 서버에서 새 서비스 세션(서비스 3)으로 보였다.
+
+### 23.8 TC-QA-075~077 조준점 FOV 판정 (DEC-066)
+
+사수 고도는 500 m다. 각도는 조준점 방향과 탐색 축(기수 북쪽, 고각 −30°) 사이 각이고, 반각은 45°다. 방위 경계는 고각 −30°에서 52.45°다.
+
+| 케이스 | 조준점 | 축과의 각 | 기대 | Core StrikeActivity | weapon_entity | launch·spawn | 잔량 (전 → 끝) | GCS 수신 |
+|---|---|---|---|---|---|---|---|---|
+| on_axis | 북 866 m, 지면 | 0.0° | LAUNCHED | LAUNCHED (명령과 같은 프레임) | wpn-uav-001-01 | 1·1 | 2 → 1 | LAUNCHED |
+| behind | 남 1,500 m, 지면 | 131.6° | REJECTED | REJECTED `out_of_fov` | 없음 | 0·0 | 2 → 2 | REJECTED/out_of_fov |
+| abeam | 동 1,500 m, 지면 | 80.9° | REJECTED | REJECTED `out_of_fov` | 없음 | 0·0 | 2 → 2 | REJECTED/out_of_fov |
+| el_up_in | 북 1 km, 고각 +14.7° (762 m) | 44.7° | LAUNCHED | LAUNCHED | wpn-uav-001-02 | 1·1 | 2 → 1 | LAUNCHED |
+| el_up_out | 북 1 km, 고각 +15.3° (774 m) | 45.3° | REJECTED | REJECTED `out_of_fov` | 없음 | 0·0 | 2 → 2 | REJECTED/out_of_fov |
+| az_in | 방위 51.95°, 고각 −30° (38 m) | 44.6° | LAUNCHED | LAUNCHED | wpn-uav-001-03 | 1·1 | 2 → 1 | LAUNCHED |
+| az_out | 방위 52.95°, 고각 −30° (38 m) | 45.4° | REJECTED | REJECTED `out_of_fov` | 없음 | 0·0 | 2 → 2 | REJECTED/out_of_fov |
+
+- StoreLoadout는 프레임 0, 100, 160, 200에만 나왔다. 이는 처음 보고와 세 번의 발사 시점이다. 거부 때는 잔량 보고가 새로 나오지 않았고, 끝 잔량도 2 그대로다.
+- truth/event는 launch 3, spawn 3으로 발사 수와 같다. 엔티티 수는 2(gcs, uav) → 5(유도 객체 3)다.
+- 경계는 고각 방향(위쪽 45°)과 방위 방향 모두 축과의 각 ±0.3~0.4° 안에서 갈렸다. 단위 시험 TC-PAY-018(±0.2°)과 같은 규칙이 전체 실행에서도 성립한다.
+- lockstep debug에서 Core overrun은 190이었다(rate 20). 판정에는 영향이 없다.
+
+### 23.9 새 결함
+
+| # | 심각도 | 내용 | 근거 | 담당 |
+|---|---|---|---|---|
+| D-26 | 중 | 통합 실행에서 Gateway 발행 13종 가운데 8종이 한 건도 나오지 않는다. VI 4종(`MA_NavigationReport`, `SystemStatus`, `MA_FlightCommandStatus`, `MA_FlightCapability`), `MA_ApprovalRequest`, `MA_LeaderUpdateRequest`, `MA_Entity`, `StoreLoadoutConfiguration`이다. 이 메시지들은 GCS rx에 오지 않는다. Agent가 GCS로 보내는 것은 C2 포트(TaskStatus), P2P 브로드캐스트(PeerStatus), MS 활동 보고(Sensor·Jammer·StrikeActivity)뿐이다(`agent/src/swarm_agent/ports.py:64`, `:173`, `runtime.py:415`). 기체 상태를 GCS로 보내는 VI 보고 경로가 없다. 그래서 P6 완료 기준 "VI·C2·P2P 주요 상호작용"의 VI는 단위 시험(TC-GW-003·010의 표본 주입)으로만 보였다. 외부 시스템은 기체 위치도 받지 못한다(PeerStatus의 위치는 변환에서 빠진다, OPN-060) | TC-QA-069 | WP3 Agent(보고 경로), WP0(어떤 VI 메시지를 어떤 주기로 GCS에 보고할지 결정, OPN-060과 함께) |
+| D-27 | 하 | Gateway CLI에 `--no-multicast`가 없다. `BusConfig` 기본값은 멀티캐스트 스카우팅 켬이다. 다른 참여자(Core·Datalink·Agent·브리지)는 이 옵션을 쓰므로, Gateway만 같은 PC의 다른 버스와 섞일 수 있다. 우회: `--zenoh-config`에 `scouting.multicast.enabled=false` | §23.1 | WP9 |
+
+### 23.10 결정 확인 항목
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-26 | 확인 필요 | P6 완료 판정에 VI 통합 교환을 요구할지 정해야 한다. (A) 요구한다: VI 보고 경로를 만들고(D-26) OPN-060을 정한 뒤 다시 시험한다. (B) 요구하지 않는다: P6은 C2·P2P·MS 통합과 VI 단위 시험으로 판정하고 VI 통합은 P7(L1 전면 준수)로 넘긴다 |
+
+### 23.11 관찰
+
+- O-13: 재기동 Gateway가 LA-CAL 구독을 마치기 전에 외부가 PUB한 `MA_TaskCommand`는 서버가 +OK를 돌려주지만 받는 쪽이 없어 사라진다. r1에서는 재기동부터 구독까지 약 20 s가 걸렸다(r3은 9.7 s). 구독 1.6 s 전에 보낸 `ext-hold-2`는 tx/c2에 나오지 않았다. 외부 C2는 MA_TaskStatus가 오지 않는 것으로만 이를 알 수 있다. 기동 시간의 대부분은 XSD 적재로 보인다.
+- O-14: 재기동한 Gateway는 `swarm/gcs-01/tx/c2/TaskCommand`의 `header.seq`를 0부터 다시 매긴다(1차 0·1, 2차 0·1). 이번에는 Datalink 전달과 기체 수락에 영향이 없었다(DELIVERED, ACCEPTED). OPN-063(같은 GCS 키의 발행자 구분)을 정할 때 재기동에 따른 seq 재시작도 함께 볼 항목이다.
+- O-15: CAL Server 설정에서 `external_c2`의 `declared.sub`은 2종뿐이다. 그런데 서버는 13종 구독을 모두 받았다. agra_lacal에서 선언은 정보이고 강제되지 않는다.
+- OPN-060~063 관찰. OPN-060: 외부가 받은 `MA_PackagePartnerStatusReport` 3,207건에 위치가 없고, VI도 오지 않아 외부는 기체 위치를 알 수 없다. OPN-061: 통합 실행에는 ApprovalRequest 자체가 없어 승인 왕복을 볼 수 없었다. OPN-062: 임시 규칙(hold, return_to_base, CANCEL)은 외부에서 직접 만든 JSON으로도 그대로 동작했다. OPN-063: 이번에는 UI 없이 Gateway만 gcs-01 키에 발행해 충돌이 없었다. LA-CAL 쪽에서는 서비스 세션으로 발신자가 구분되지만, 내부 키에서는 source가 `gcs-01` 하나다.
+
+### 23.12 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| VI 4종·ApprovalRequest·LeaderUpdate·TrackShare·StoreLoadout의 통합 교환 | 시뮬레이터가 GCS로 보내지 않는다 (D-26) |
+| UI와 Gateway가 같은 GCS 키에 함께 발행 | UI·브리지를 띄우지 않았다 (OPN-063) |
+| 재밍 구역으로 GCS 수신 차단 | 링크 고장 주입(GCS_LINK_CUT, LINK_CUT)만 썼다 |
+| CAL Server 재기동, 외부 클라이언트 재접속 | Gateway 재기동만 했다 |
+| lockstep에서 Gateway 동작 | realtime만 했다. Gateway는 lockstep 참여자가 아니다 |
+| B: 표적 지정 발사의 FOV, 비행 궤적·도달 | 범위 밖 (조준점 발사 시점 응답만) |

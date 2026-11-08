@@ -1,0 +1,32 @@
+# QA 15차(TC-QA-069~) 통합 데모용 CAL Server 설정. gateway/config/lacal_server.yaml과 같고 포트만 다르다
+# 실행: qa/gw_integ.py가 gateway/.venv의 python -m swarm_gateway.lacal_server로 띄운다
+# UUID는 이 저장소에서 임의로 정한 값이다.
+server_id: calsrv-swarm-qa
+system_uuid: 2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30
+system_label: SWARM-SIM-GW
+listen: {host: 127.0.0.1, port: 18765}
+admin: {host: 127.0.0.1, port: 18766}
+schema:
+  path: schema/A-GRA_MessageDefinitions_v6_0_a.xsd   # agra_lacal 루트 기준
+  versions: ["006.0.ASK"]
+owp_versions: ["1.0"]
+allowed_topics: ["swarm.*"]
+accept_unknown_services: false
+backend: {type: local}
+graph: {inactive_after_s: 10}
+
+services:
+  swarm_gateway:              # WP9 Gateway (gcs 쪽 지상 참여자)
+    service: 6c0b0f8e-3d2a-4f1b-8e47-91a3c5d7e201
+    declared:
+      pub: [MA_NavigationReport@swarm.vi, SystemStatus@swarm.vi, MA_FlightCommandStatus@swarm.vi,
+            MA_FlightCapability@swarm.vi, MA_TaskStatus@swarm.c2, MA_ApprovalRequest@swarm.c2,
+            MA_PackagePartnerStatusReport@swarm.p2p, MA_LeaderUpdateRequest@swarm.p2p, MA_Entity@swarm.p2p,
+            PO_Activity@swarm.ms, EA_Activity@swarm.ms, StrikeActivity@swarm.ms,
+            StoreLoadoutConfiguration@swarm.ms]
+      sub: [MA_TaskCommand@swarm.c2]
+  external_c2:                # 외부 C2(운용자) 모사, 시험·수동 연동용
+    service: 6c0b0f8e-3d2a-4f1b-8e47-91a3c5d7e202
+    declared:
+      pub: [MA_TaskCommand@swarm.c2]
+      sub: [MA_TaskStatus@swarm.c2, MA_NavigationReport@swarm.vi]
