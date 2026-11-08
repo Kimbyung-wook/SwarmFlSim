@@ -213,6 +213,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-061 | `ApprovalResponse`를 STD로 바꾸고 `uci_name = "MA_ApprovalRequestStatus"`를 단다(WP9 CR-GW-002). STD가 되면 외부 운용자의 승인 응답을 Gateway 2단계로 받을 수 있다. 선택: (A) STD로 바꾼다 (B) EXT로 둔다. 제안: A | Open |
 | OPN-062 | 외부 `MA_TaskCommand`의 작업 내용 표현(WP9 CR-GW-003). `MA_TaskCommand`는 TaskID·CapabilityID 참조만 담고 목적지·영역이 없다. 선택: (A) MP(`MA_MissionPlan`) 연동 전까지 Gateway 임시 규칙(CapabilityID Label = `<엔티티>/<작업 종류>`, hold·return_to_base·취소만)을 인정하고 위치가 필요한 작업은 MP 연동 뒤에 받는다 (B) 지금 MP 연동까지 구현한다. 제안: A | Open |
 | OPN-063 | 같은 GCS 키에 UI와 Gateway가 함께 발행할 때의 발행자 구분(WP9 CR-GW-005). `header.seq`가 발행자별로 따로 매겨져 Datalink·Logger가 source만으로 구분할 수 없다. 선택: (A) `LinkEnvelope` 헤더에 발행 참여자 ID를 더한다(계약 변경) (B) Gateway를 별도 지상 엔티티(예: `gw-01`)로 시나리오에 둔다 (C) 현행 유지, 구분하지 않는다. 제안: A | Open |
+| OPN-064 | 기체 VI 상태의 GCS 보고 경로(QA D-26). 통합 실행에서 Agent가 GCS로 VI를 보내지 않아 외부 시스템이 기체 위치를 모른다. 선택: (A) Agent 런타임이 FA의 VI 상태를 `swarm/<id>/tx/vi/<msg>`로 GCS에 보낸다. `NavigationReport`는 시나리오에서 정하는 주기(기본 1 Hz)로, `SystemStatus`·`FlightCommandStatus`는 바뀔 때, `FlightCapability`는 시작할 때 한 번 보낸다. Datalink를 거치므로 링크 상태가 반영된다 (B) MA 플러그인이 보낼지 정한다 (C) GCS가 `truth/**`에서 얻는다(DEC-013 위반). 제안: A | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
