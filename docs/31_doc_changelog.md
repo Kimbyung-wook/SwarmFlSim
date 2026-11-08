@@ -47,3 +47,4 @@
 | 2026-11-08 | `93f17e6` | IMP-AGT-032, TC-AGT-063~069, DEC-071 | Agent가 VI 상태를 GCS에 보고(`--vi-report-hz`). SystemStatus는 발행 주체 미정(OPN-065) | 개발 3, 개발 8 agent, 사용자 4 | 미처리 | |
 | 2026-11-08 | (이 커밋) | DEC-073, OPN-065 | Core가 `onboard/<id>/SystemStatus`를 바뀔 때와 1 Hz로 발행하기로 정함 | 개발 3, 개발 8 core | 미처리 | |
 | 2026-11-08 | `5510bdd` | IMP-GW-014~017, TC-GW-012~015, DEC-072, D-27, O-13 | Gateway: NavigationReport·PeerStatus를 MA_PositionReport로도 발행, CLI `--no-multicast`, LA-CAL 구독 준비 완료 로그 | 개발 8 gateway, 사용자 9 | 미처리 | |
+| 2026-11-08 | `1161dbf` | IMP-CORE-028, TC-CORE-043, DEC-073 | Core가 `onboard/<id>/SystemStatus`를 바뀔 때와 1 Hz로 발행(고장→health·subsystems) | 개발 8 core, 사용자 4 | 미처리 | |
