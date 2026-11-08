@@ -144,6 +144,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-067 | `StrikeActivity`의 IMPACT는 유도 객체의 도달(근접 신관·지면 교차)만 뜻한다. 파괴 효과는 `truth/event/kill`로 판단한다. 비행 중 목표 엔티티가 사라지면 마지막 위치로 좌표 유도하고 IMPACT로 끝나는 현행 동작을 유지한다 | OPN-057, QA O-11, DEC-012, DEC-064, 사용자 답변: "현행 유지·계약 명시" | Confirmed |
 | DEC-068 | P6 Gateway(WP9, `gateway/`, Python)는 단계적 양방향으로 만든다. 1단계는 GCS 쪽에서 받은 VI·C2·P2P·MS 상태를 STD 메시지로 바꿔 LA-CAL로 내보낸다. 2단계는 외부 C2 명령(STD)을 받아 내부 메시지로 바꾼다. Gateway는 지상 참여자이며 기체와의 교환은 모두 Datalink를 거친다. `truth/**`와 `onboard/**`는 쓰지 않는다. 외부로는 STD만 내보낸다(DEC-014) | OPN-058, PRP-STD-002, DEC-002, DEC-013, DEC-014, 사용자 답변: "단계적 양방향" | Confirmed |
 | DEC-069 | LA-CAL 클라이언트는 agra_lacal 저장소를 git submodule `third_party/agra_lacal`로 넣어 쓴다(커밋 고정). 서브모듈은 수정하지 않는다 | OPN-059, DEC-002, 사용자 답변: "git submodule" | Confirmed |
+| DEC-070 | 매뉴얼의 알고리즘 플러그인 예제는 실행 가능한 예제 패키지로 둔다. 위치는 최상위 `examples/plugins/`(패키지 `swarm-plugin-examples`)이고 루트 uv 워크스페이스 멤버로 둔다. `swarm.ma`·`swarm.fa` entry point로 등록하고, 시험을 루트 `testpaths`에 넣는다. 매뉴얼 개발자 4~6장은 이 파일을 가리킨다. 근거: 외부 작성자가 자기 패키지를 만들어 등록하는 실제 경로를 그대로 보여 주고, API가 바뀌면 시험이 깨져 드러난다. `algorithms/`(WP3)는 고치지 않는다 | `docs/30_doc_plan.md` §9.2, DEC-003, 사용자 답변: "Runnable example package" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
