@@ -5,7 +5,7 @@
 ## 1. 목표
 - 군집·편대 형성 알고리즘의 설계·검증 환경 제공
 - 하위 유도/제어(FA)부터 상위 행동결정(MA)까지 계층별 교체·설계
-- 데이터링크 불완전성(지연·손실·재밍)과 이종 기체 특성(센서·재머·무장) 반영
+- 데이터링크 불완전성(지연·손실·재밍)과 이종 기체 특성(센서·재머, 시뮬레이션 이벤트를 내는 임무장비) 반영
 - A-GRA 구조 준용 → 이후 A-GRA 호환 MA 시험 환경으로 확장 (DEC-013)
 
 ## 2. 주요 기능
@@ -109,17 +109,19 @@ uv run pytest
 
 ## 7. 로드맵
 
-| 단계 | 내용 |
-|---|---|
-| P0 | 2-DoF + 2D UI 골격 |
-| P1 | 3-DoF + 편대 + Traffic Monitor |
-| P2 | 데이터링크·재밍 |
-| P3 | 5/6-DoF + RK45 |
-| P4 | 분산 실행 |
-| P5 | 임무장비·무장·표적 |
-| P6 | A-GRA Gateway |
-| P7 | A-GRA L1 전면 준수 |
-| P8 | PX4/ArduPilot SITL 연동 |
+| 단계 | 내용 | 상태 (2026-11-08) |
+|---|---|---|
+| P0 | 2-DoF + 2D UI 골격 | 완료 |
+| P1 | 3-DoF + 편대 + Traffic Monitor | 기능 구현 |
+| P2 | 데이터링크·재밍 | 부분 (링크 상실 행동 미구현) |
+| P3 | 5/6-DoF + RK45 | 부분 (RK45·RK4만, 5·6-DoF 미구현) |
+| P4 | 분산 실행 | 미착수 |
+| P5 | 임무장비·표적 (센서·재머·시뮬레이션 이벤트) | 기능 구현 |
+| P6 | A-GRA Gateway | 진행 중 |
+| P7 | A-GRA L1 전면 준수 | 미착수 |
+| P8 | PX4/ArduPilot SITL 연동 | 미착수 |
+
+- 상태의 근거와 완료 기준: [docs/40_overview.md §8](docs/40_overview.md#8-진행-상태)
 
 ## 8. 문서
 
@@ -135,7 +137,7 @@ uv run pytest
 | [21_qa_report.md](docs/21_qa_report.md) | QA 시험 결과 |
 | [30_doc_plan.md](docs/30_doc_plan.md) | 매뉴얼 작성 계획 |
 | [31_doc_changelog.md](docs/31_doc_changelog.md) | 문서 변경 기록: 병합별 매뉴얼 영향과 반영 상태 |
-| `40_overview.md` | 프로젝트 개괄 (작성 예정) |
+| [40_overview.md](docs/40_overview.md) | 프로젝트 개괄: 목적, 현재 기능, 구성, 처음 실행, 진행 상태 |
 | [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 (목차, 본문 작성 예정) |
 | [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 (목차, 본문 작성 예정) |
 | [en/](docs/en/README.md) | 영문판 (목차, 본문 작성 예정) |
