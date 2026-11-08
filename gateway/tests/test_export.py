@@ -19,15 +19,15 @@ def test_status_to_valid_uci_xml(gateway, bus, sent, xsd, uci_name):
     """TC-GW-003: GCS rx로 받은 VI·C2·P2P·MS 상태가 XSD를 통과한 UCI XML로 나간다"""
     msg = S.EXPORT_SAMPLES[uci_name]()
     S.deliver(bus, msg)
-    assert len(sent) == 1, gateway.rejections
-    topic, obj = sent[0]
-    assert list(obj) == [uci_name]
-    assert topic == f"swarm.{S.iface_of(msg)}"
-    xml = gateway.to_xml(obj)
-    assert xsd.validate(etree.fromstring(xml)), xsd.error_log
-    root = etree.fromstring(xml)
-    assert etree.QName(root).localname == uci_name
-    assert gateway.counters["exported"] == 1
+    expected = [uci_name, *S.ALSO.get(uci_name, ())]       # uci_also도 함께 나간다 (DEC-072)
+    assert [list(o)[0] for _, o in sent] == expected, gateway.rejections
+    for topic, obj in sent:
+        assert topic == f"swarm.{S.iface_of(msg)}"
+        xml = gateway.to_xml(obj)
+        root = etree.fromstring(xml)
+        assert xsd.validate(root), xsd.error_log
+        assert etree.QName(root).localname == list(obj)[0]
+    assert gateway.counters["exported"] == len(expected)
 
 
 def test_content_mapping(gateway, bus, sent):
@@ -84,7 +84,7 @@ def test_invalid_is_rejected_and_gateway_continues(gateway, bus, sent):
     reasons = [r.reason for r in gateway.rejections]
     assert "maxInclusive" in reasons[0] and "non-finite" in reasons[1]
     S.deliver(bus, S.nav())
-    assert [list(o)[0] for _, o in sent] == ["MA_NavigationReport"]
+    assert [list(o)[0] for _, o in sent] == ["MA_NavigationReport", "MA_PositionReport"]
 
 
 def test_sim_and_unknown_types_are_not_exported(gateway, bus, sent):

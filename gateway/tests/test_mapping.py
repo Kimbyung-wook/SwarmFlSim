@@ -43,8 +43,8 @@ def test_converters_take_uci_name_from_table_only():
 
 def test_markdown_table_lists_std_and_ext():
     md = MappingTable.from_descriptors().markdown()
-    assert "| `StrikeActivity` | `StrikeActivity` | STD | ms |" in md
-    assert "| `FormationCommand` | — | EXT | c2 |" in md
+    assert "| `StrikeActivity` | `StrikeActivity` | — | STD | ms |" in md
+    assert "| `FormationCommand` | — | — | EXT | c2 |" in md
 
 
 def test_mapping_class_enum_is_contract():

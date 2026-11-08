@@ -26,7 +26,7 @@ _PROCESSING = {
 @register
 class NavigationReportConverter(Converter):
     """MA_NavigationReport는 항법 모드·연속 비행 가능 시간 보고다. 공개 XSD에 위치 필드가 없어
-    kinematics는 싣지 않는다(위치는 MA_PositionReport 몫, 계약 변경 요청 CR-GW-001)."""
+    kinematics는 여기 싣지 않는다. 위치는 uci_also의 MA_PositionReport로 따로 나간다 (DEC-072)."""
     proto = "swarm.v1.NavigationReport"
 
     def to_uci(self, msg: vi_pb2.NavigationReport, ctx: ConvContext) -> dict:

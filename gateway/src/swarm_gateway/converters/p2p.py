@@ -27,7 +27,7 @@ _ENVIRONMENT = {
 @register
 class PeerStatusConverter(Converter):
     """패키지(그룹) 동료 상태. 공개 XSD의 MA_PackagePartnerStatusReport에는 운동 상태 필드가 없어
-    그룹·참여 상태만 싣는다."""
+    그룹·참여 상태만 싣는다. 위치·운동 상태는 uci_also의 MA_PositionReport로 따로 나간다 (DEC-072)."""
     proto = "swarm.v1.PeerStatus"
 
     def to_uci(self, msg: p2p_pb2.PeerStatus, ctx: ConvContext) -> dict:

@@ -6,6 +6,10 @@
 - to_uci: 내부 메시지 → UCI MessageData(OMS JSON 객체). 1단계(발행)
 - from_uci: UCI MessageData → (내부 메시지, 수신 엔티티 목록). 2단계(수신). 지원하지 않으면 None
 
+추가 UCI 변환기(DEC-072): proto의 (uci_also)에 적힌 UCI 메시지는 그 UCI 메시지를 맡는 변환기가 채운다.
+이 변환기는 `uci`(맡는 UCI 메시지명)와 `protos`(받을 수 있는 내부 메시지, 비우면 전부)를 갖는다.
+어느 내부 메시지에 쓸지는 변환기가 아니라 descriptor의 uci_also가 정한다.
+
 외부 패키지는 엔트리 포인트 그룹 `swarm_gateway.converters`로 변환기 클래스를 추가할 수 있다.
 """
 from __future__ import annotations
@@ -59,7 +63,17 @@ class Converter:
         return cls.from_uci is not Converter.from_uci
 
 
+class AlsoConverter(Converter):
+    """uci_also 대상 UCI 메시지 하나를 맡는 변환기 (DEC-072). 내보내기만 한다"""
+    uci: ClassVar[str] = ""                 # 맡는 UCI 메시지명. 예: MA_PositionReport
+    protos: ClassVar[tuple[str, ...]] = ()  # 받을 수 있는 내부 메시지. 비우면 제한 없음
+
+    def accepts(self, full_name: str) -> bool:
+        return not self.protos or full_name in self.protos
+
+
 _BUILTIN: dict[str, type[Converter]] = {}
+_BUILTIN_ALSO: dict[str, type[AlsoConverter]] = {}
 
 
 def register(cls: type[Converter]) -> type[Converter]:
@@ -69,15 +83,39 @@ def register(cls: type[Converter]) -> type[Converter]:
     return cls
 
 
-def load_converters(include_entry_points: bool = True) -> dict[str, Converter]:
-    from . import c2, ms, p2p, vi  # noqa: F401  내장 변환기 등록
+def register_also(cls: type[AlsoConverter]) -> type[AlsoConverter]:
+    if not cls.uci:
+        raise ValueError(f"{cls.__name__}: uci is empty")
+    _BUILTIN_ALSO[cls.uci] = cls
+    return cls
 
+
+def _load_builtin() -> None:
+    from . import c2, ms, p2p, position, vi  # noqa: F401  내장 변환기 등록
+
+
+def _entry_point_classes(include: bool) -> list[type]:
+    return [ep.load() for ep in entry_points(group=ENTRY_POINT_GROUP)] if include else []
+
+
+def load_converters(include_entry_points: bool = True) -> dict[str, Converter]:
+    """내부 메시지 → uci_name 변환기 (전체 이름 → 인스턴스)"""
+    _load_builtin()
     found: dict[str, type[Converter]] = dict(_BUILTIN)
-    if include_entry_points:
-        for ep in entry_points(group=ENTRY_POINT_GROUP):
-            cls = ep.load()
+    for cls in _entry_point_classes(include_entry_points):
+        if not issubclass(cls, AlsoConverter):
             found[cls.proto] = cls
     return {name: cls() for name, cls in found.items()}
+
+
+def load_also_converters(include_entry_points: bool = True) -> dict[str, AlsoConverter]:
+    """uci_also 대상 변환기 (UCI 메시지명 → 인스턴스, DEC-072)"""
+    _load_builtin()
+    found: dict[str, type[AlsoConverter]] = dict(_BUILTIN_ALSO)
+    for cls in _entry_point_classes(include_entry_points):
+        if issubclass(cls, AlsoConverter):
+            found[cls.uci] = cls
+    return {uci: cls() for uci, cls in found.items()}
 
 
 # ---- 단위·값 도우미 (UCI 각도는 라디안, 거리·고도 m, 속력 m/s) ----

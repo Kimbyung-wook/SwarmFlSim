@@ -20,7 +20,8 @@ from swarm.v1 import link_pb2, options_pb2
 from swarm_api import keys
 from swarm_api.bus import Bus, Sample, protobuf_encoding
 
-from .converters import ConvContext, ConversionError, Converter, load_converters
+from .converters import (AlsoConverter, ConvContext, ConversionError, Converter, load_also_converters,
+                         load_converters)
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
@@ -59,16 +60,19 @@ class Outcome:
     topic: str = ""
     key: str = ""
     message: dict | None = field(default=None, repr=False)
+    also: list["Outcome"] = field(default_factory=list, repr=False)  # uci_also 결과 (DEC-072)
 
 
 class Gateway:
     def __init__(self, bus: Bus, config: GatewayConfig, *, table: MappingTable | None = None,
-                 converters: dict[str, Converter] | None = None, codec: OmsJsonCodec | None = None,
+                 converters: dict[str, Converter] | None = None,
+                 also_converters: dict[str, AlsoConverter] | None = None, codec: OmsJsonCodec | None = None,
                  sink: Sink | None = None, ids: IdMap | None = None):
         self.bus = bus
         self.config = config
         self.table = table or MappingTable.from_descriptors()
         self.converters = converters if converters is not None else load_converters()
+        self.also_converters = also_converters if also_converters is not None else load_also_converters()
         self.codec = codec or load_codec()
         self.ids = ids or IdMap()
         self.ctx = ConvContext(ids=self.ids, gcs=config.gcs)
@@ -93,10 +97,21 @@ class Gateway:
             elif self.codec.global_element(entry.uci_name) is None:
                 log.warning("converter %s ignored: %s not in XSD", name, entry.uci_name)
                 del self.converters[name]
+        used_also = {u for e in self.table.exportable() for u in e.uci_targets[1:]}
+        for uci in list(self.also_converters):
+            if uci not in used_also:
+                log.info("uci_also converter %s unused: no proto lists it in (uci_also)", uci)
+            if self.codec.global_element(uci) is None:
+                log.warning("uci_also converter %s ignored: not in XSD", uci)
+                del self.also_converters[uci]
 
     def export_entries(self) -> list[MappingEntry]:
         return [e for e in self.table.exportable()
                 if e.full_name in self.converters and self.converters[e.full_name].supports_export()]
+
+    def export_targets(self) -> list[tuple[MappingEntry, str]]:
+        """(내부 메시지, UCI 메시지) 중 변환기가 있는 것: uci_name과 uci_also 모두 (DEC-072)"""
+        return [(e, u) for e in self.table.exportable() for u in e.uci_targets if self.converter_for(e, u)]
 
     def import_entries(self) -> list[MappingEntry]:
         """외부 C2 명령으로 받을 수 있는 STD 메시지 (2단계)"""
@@ -116,8 +131,8 @@ class Gateway:
         except RuntimeError:
             self._loop = None
         self._subs.append(self.bus.subscribe(keys.rx_all(self.config.gcs), self._on_sample))
-        log.info("gateway %s: subscribed %s; export %d, import %s", self.config.gcs,
-                 keys.rx_all(self.config.gcs), len(self.export_entries()), self.import_names())
+        log.info("gateway %s: subscribed %s; export %d UCI targets, import %s", self.config.gcs,
+                 keys.rx_all(self.config.gcs), len(self.export_targets()), self.import_names())
 
     def close(self) -> None:
         for s in self._subs:
@@ -165,10 +180,6 @@ class Gateway:
         if entry.uci_name in self.import_names():  # 외부에서 받는 명령은 되돌려 보내지 않는다
             self.counters["skipped_inbound_kind"] += 1
             return Outcome("skipped_inbound_kind", proto=entry.full_name, uci_name=entry.uci_name, key=key)
-        conv = self.converters.get(entry.full_name)
-        if conv is None or not conv.supports_export():
-            return self._reject(Outcome("unmapped", proto=entry.full_name, uci_name=entry.uci_name, key=key,
-                                        reason="no converter"))
         msg = entry.new_message()
         try:
             msg.ParseFromString(env.payload)
@@ -177,19 +188,38 @@ class Gateway:
                                         reason=f"bad payload: {exc}"))
         if not msg.header.source:
             msg.header.source = env.header.source
+        # uci_name과 uci_also 각각을 따로 변환·검증·발행한다 (DEC-072). 하나가 실패해도 나머지는 나간다
+        outcomes = [self._export_one(entry, uci, msg, key) for uci in entry.uci_targets]
+        first = outcomes[0]
+        first.also = outcomes[1:]
+        return first
+
+    def converter_for(self, entry: MappingEntry, uci: str) -> Converter | None:
+        if uci == entry.uci_name:
+            conv = self.converters.get(entry.full_name)
+        else:
+            conv = self.also_converters.get(uci)
+            if conv is not None and not conv.accepts(entry.full_name):
+                conv = None
+        return conv if conv is not None and conv.supports_export() else None
+
+    def _export_one(self, entry: MappingEntry, uci: str, msg, key: str) -> Outcome:
+        conv = self.converter_for(entry, uci)
+        if conv is None:
+            return self._reject(Outcome("unmapped", proto=entry.full_name, uci_name=uci, key=key,
+                                        reason="no converter"))
         try:
-            obj = self.envelope(entry.uci_name, conv.to_uci(msg, self.ctx))
+            obj = self.envelope(uci, conv.to_uci(msg, self.ctx))
             self.to_xml(obj)
         except (ConversionError, InvalidMessage, ValueError, TypeError, KeyError) as exc:
             self.counters["invalid"] += 1
-            return self._reject(Outcome("rejected", proto=entry.full_name, uci_name=entry.uci_name, key=key,
+            return self._reject(Outcome("rejected", proto=entry.full_name, uci_name=uci, key=key,
                                         reason=f"{type(exc).__name__}: {exc}"))
         topic = self.config.topic(entry.iface)
         self.counters["exported"] += 1
-        self.counters[f"exported.{entry.uci_name}"] += 1
+        self.counters[f"exported.{uci}"] += 1
         self._emit(topic, obj)
-        return Outcome("exported", proto=entry.full_name, uci_name=entry.uci_name, topic=topic, key=key,
-                       message=obj)
+        return Outcome("exported", proto=entry.full_name, uci_name=uci, topic=topic, key=key, message=obj)
 
     def _emit(self, topic: str, obj: dict) -> None:
         if self._outbox is not None and self._loop is not None:
