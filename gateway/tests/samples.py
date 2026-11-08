@@ -24,6 +24,10 @@ def nav() -> vi_pb2.NavigationReport:
     m = _h(vi_pb2.NavigationReport())
     m.kinematics.position.lat_deg, m.kinematics.position.lon_deg, m.kinematics.position.alt_m = 37.5, 128.0, 1500
     m.kinematics.velocity_ned_mps.x = 20.0
+    m.kinematics.velocity_ned_mps.y = -3.0
+    m.kinematics.velocity_ned_mps.z = -1.0
+    # 진북 기준 90° 방향(동쪽), 롤 0, 피치 0: q = (cos 45°, 0, 0, sin 45°)
+    m.kinematics.attitude.w, m.kinematics.attitude.z = 0.7071067811865476, 0.7071067811865476
     m.position_sigma_m = 3.0
     return m
 
@@ -56,7 +60,8 @@ def approval_request() -> c2_pb2.ApprovalRequest:
 
 def peer_status() -> p2p_pb2.PeerStatus:
     m = _h(p2p_pb2.PeerStatus(current_task_id="task-3", group_id="grp-a", energy_frac=0.8))
-    m.kinematics.position.lat_deg = 37.5
+    m.kinematics.position.lat_deg, m.kinematics.position.lon_deg, m.kinematics.position.alt_m = 37.5, 128.0, 520
+    m.kinematics.velocity_ned_mps.y = 22.0
     return m
 
 
@@ -109,6 +114,13 @@ EXPORT_SAMPLES = {
     "EA_Activity": jammer_activity,
     "StrikeActivity": strike_activity,
     "StoreLoadoutConfiguration": store_loadout,
+}
+
+
+# uci_also로 함께 나가는 UCI 메시지 (proto 옵션과 같아야 한다, DEC-072)
+ALSO = {
+    "MA_NavigationReport": ("MA_PositionReport",),
+    "MA_PackagePartnerStatusReport": ("MA_PositionReport",),
 }
 
 

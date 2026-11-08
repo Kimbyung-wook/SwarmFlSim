@@ -1,6 +1,6 @@
 """내부 proto ⇄ UCI 메시지 매핑 표 (IMP-GW-002, DEC-013, DEC-014, docs/10_contracts.md §4).
 
-proto 메시지 옵션 (uci_name), (mapping), (l1)을 descriptor에서 읽어 만든다. 메시지명을 하드코딩하지 않는다.
+proto 메시지 옵션 (uci_name), (uci_also), (mapping), (l1)을 descriptor에서 읽어 만든다. 메시지명을 하드코딩하지 않는다.
 등록부 §5 표와 어긋나면 proto가 기준이다.
 """
 from __future__ import annotations
@@ -38,6 +38,7 @@ class MappingEntry:
     full_name: str           # swarm.v1.NavigationReport
     short_name: str          # NavigationReport
     uci_name: str            # MA_NavigationReport (STD가 아니면 "")
+    uci_also: tuple[str, ...]  # 같은 내용을 함께 싣는 추가 UCI 메시지 (DEC-072). 예: ("MA_PositionReport",)
     mapping: int             # MappingClass
     l1: int                  # L1Interface
     descriptor: _d.Descriptor
@@ -55,6 +56,13 @@ class MappingEntry:
         """외부로 내보낼 수 있는가: STD이고 uci_name이 있다 (DEC-014)"""
         return self.mapping == STD and bool(self.uci_name)
 
+    @property
+    def uci_targets(self) -> tuple[str, ...]:
+        """내보낼 UCI 메시지 전체: uci_name 다음에 uci_also (DEC-072). STD가 아니면 빈 튜플"""
+        if not self.exportable:
+            return ()
+        return (self.uci_name, *(u for u in self.uci_also if u and u != self.uci_name))
+
     def new_message(self) -> Message:
         return message_factory.GetMessageClass(self.descriptor)()
 
@@ -65,8 +73,8 @@ class MappingTable:
         self._by_full = {e.full_name: e for e in entries}
         self._by_uci: dict[str, list[MappingEntry]] = {}
         for e in entries:
-            if e.exportable:
-                self._by_uci.setdefault(e.uci_name, []).append(e)
+            for uci in e.uci_targets:
+                self._by_uci.setdefault(uci, []).append(e)
 
     @classmethod
     def from_descriptors(cls, modules: tuple[ModuleType, ...] = PROTO_MODULES) -> "MappingTable":
@@ -77,6 +85,7 @@ class MappingTable:
                 entries.append(MappingEntry(
                     full_name=desc.full_name, short_name=desc.name,
                     uci_name=opts.Extensions[options_pb2.uci_name],
+                    uci_also=tuple(opts.Extensions[options_pb2.uci_also]),
                     mapping=opts.Extensions[options_pb2.mapping],
                     l1=opts.Extensions[options_pb2.l1],
                     descriptor=desc))
@@ -86,7 +95,7 @@ class MappingTable:
         return self._by_full.get(full_name)
 
     def by_uci(self, uci_name: str) -> list[MappingEntry]:
-        """한 UCI 메시지에 내부 메시지 여러 개가 대응할 수 있다"""
+        """한 UCI 메시지에 내부 메시지 여러 개가 대응할 수 있다 (uci_name·uci_also 모두)"""
         return list(self._by_uci.get(uci_name, ()))
 
     def exportable(self) -> list[MappingEntry]:
@@ -97,10 +106,11 @@ class MappingTable:
 
     def markdown(self) -> str:
         """TRACE.md·README용 표"""
-        rows = ["| 내부 메시지 | UCI 메시지 | 구분 | L1 |", "|---|---|---|---|"]
+        rows = ["| 내부 메시지 | UCI 메시지 | 추가 UCI (uci_also) | 구분 | L1 |", "|---|---|---|---|---|"]
         for e in sorted(self.entries, key=lambda e: (e.mapping or 9, e.iface, e.short_name)):
             if e.mapping == 0:
                 continue
+            also = ", ".join(f"`{u}`" for u in e.uci_also) or "—"
             rows.append(f"| `{e.short_name}` | {('`' + e.uci_name + '`') if e.uci_name else '—'} "
-                        f"| {e.mapping_name} | {e.iface or '—'} |")
+                        f"| {also} | {e.mapping_name} | {e.iface or '—'} |")
         return "\n".join(rows)

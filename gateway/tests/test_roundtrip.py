@@ -46,30 +46,34 @@ async def test_roundtrip_with_cal_server(cal_server, bus, codec):
     await ext.connect()
     received: list[tuple[str, dict]] = []
     table = MappingTable.from_descriptors()
-    names = {}
     for uci in S.EXPORT_SAMPLES:
         (entry,) = table.by_uci(uci)
-        names[uci] = f"swarm.{entry.iface}"
-        await ext.subscribe(uci, names[uci], lambda n, obj: received.append((n, obj)))
+        await ext.subscribe(uci, f"swarm.{entry.iface}", lambda n, obj: received.append((n, obj)))
+    # uci_also (DEC-072): NavigationReport는 swarm.vi, PeerStatus는 swarm.p2p로 MA_PositionReport가 나간다
+    for topic in sorted({f"swarm.{e.iface}" for e in table.by_uci("MA_PositionReport")}):
+        await ext.subscribe("MA_PositionReport", topic, lambda n, obj: received.append((n, obj)))
+    expected = sorted([*S.EXPORT_SAMPLES, *(u for also in S.ALSO.values() for u in also)])
     tx = []
     bus.subscribe("swarm/gcs-01/tx/c2/**", lambda s: tx.append(s))
     try:
         # 1단계: VI·C2·P2P·MS 상태 13종
         for make in S.EXPORT_SAMPLES.values():
             S.deliver(bus, make())
-        await _wait(lambda: len(received) == len(S.EXPORT_SAMPLES))
-        assert sorted(n for n, _ in received) == sorted(S.EXPORT_SAMPLES)
+        await _wait(lambda: len(received) == len(expected))
+        assert sorted(n for n, _ in received) == expected
         for n, obj in received:  # 서버가 다시 XML로 바꿔 검증한 메시지가 그대로 왔다
             codec.to_xml_bytes(obj)
             assert obj[n]["MessageHeader"]["SystemID"]["UUID"] == running.client.system_uuid
-        assert gw.counters["sent"] == len(S.EXPORT_SAMPLES) and gw.counters["send_failed"] == 0
+        assert gw.counters["sent"] == len(expected) and gw.counters["send_failed"] == 0
+        positions = [o["MA_PositionReport"]["MessageData"] for n, o in received if n == "MA_PositionReport"]
+        assert all(p["InertialState"]["Position"]["Altitude"] in (1500, 520) for p in positions)
 
         # EXT는 서버로 가지 않는다
         from test_export import _ext_messages
         for m in _ext_messages():
             S.deliver(bus, m)
         await asyncio.sleep(0.2)
-        assert len(received) == len(S.EXPORT_SAMPLES)
+        assert len(received) == len(expected)
 
         # 2단계: 외부 C2 → 내부 tx
         tc = c2_pb2.TaskCommand(task_id="task-ext-1", assignees=[S.UAV])
@@ -102,11 +106,28 @@ async def test_send_failure_is_counted_and_gateway_continues(cal_server, bus, co
     try:
         S.deliver(bus, S.nav())
         S.deliver(bus, S.task_status())
-        await _wait(lambda: gw.counters["send_failed"] == 2)
-        assert gw.counters["exported"] == 2 and gw.counters["sent"] == 0
+        await _wait(lambda: gw.counters["send_failed"] == 3)   # nav는 MA_PositionReport까지 2건
+        assert gw.counters["exported"] == 3 and gw.counters["sent"] == 0
         assert all(r.status == "send_failed" for r in gw.rejections)
         gw.config.topic_prefix = "swarm"
         S.deliver(bus, S.nav())
-        await _wait(lambda: gw.counters["sent"] == 1)
+        await _wait(lambda: gw.counters["sent"] == 2)
+    finally:
+        await running.stop()
+
+
+async def test_ready_is_logged_after_subscription(cal_server, bus, codec, caplog):
+    """TC-GW-015 (O-13): 접속·XSD 적재·SUB 완료·ready 시점을 로그로 남긴다. ready는 SUB 뒤다"""
+    import logging
+
+    caplog.set_level(logging.INFO, logger="swarm_gateway")
+    running = await start_gateway(bus, GatewayConfig(S.GCS), f"ws://127.0.0.1:{cal_server.port}", codec=codec)
+    try:
+        msgs = [r.getMessage() for r in caplog.records if r.name == "swarm_gateway"]
+        order = [next(i for i, m in enumerate(msgs) if key in m)
+                 for key in ("LA-CAL connected", "not ready yet", "XSD loaded", "SUB MA_TaskCommand@swarm.c2",
+                             "ready at +")]
+        assert order[0] == order[1] and order[1] < order[2] < order[3] < order[4]
+        assert running.ready_after_s >= 0.0  # codec을 미리 적재한 시험이라 짧다
     finally:
         await running.stop()

@@ -26,6 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--zenoh-mode", default="")
     ap.add_argument("--connect", action="append", default=[], help="Zenoh 접속 endpoint (반복 가능)")
     ap.add_argument("--listen", action="append", default=[])
+    ap.add_argument("--no-multicast", action="store_true",
+                    help="Zenoh 멀티캐스트 스카우팅을 끈다 (같은 PC의 다른 버스와 섞이지 않게, --connect와 함께 쓴다)")
     ap.add_argument("--stats-s", type=float, default=10.0, help="카운터 로그 주기(벽시계 s), 0이면 끔")
     ap.add_argument("--log", default="INFO")
     return ap
@@ -33,7 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def _run(args) -> None:
     bus = open_bus(BusConfig(backend=args.bus, zenoh_config_file=args.zenoh_config, zenoh_mode=args.zenoh_mode,
-                             connect=args.connect, listen=args.listen))
+                             connect=args.connect, listen=args.listen,
+                             multicast_scouting=not args.no_multicast))
     running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, topic_prefix=args.topic_prefix), args.lacal,
                                   service_id=args.service, inbound_topic=args.inbound_topic)
     try:

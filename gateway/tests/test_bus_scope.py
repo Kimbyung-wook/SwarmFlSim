@@ -57,7 +57,14 @@ def test_cli_opens_bus_with_open_bus(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(cli._run(args))
     assert seen["cfg"].backend == "memory"
+    assert seen["cfg"].multicast_scouting is True
     assert (seen["gcs"], seen["url"], seen["service_id"]) == ("gcs-01", "ws://127.0.0.1:9", "swarm_gateway")
+    args = cli.build_parser().parse_args(["--gcs", "gcs-01", "--bus", "memory", "--no-multicast",
+                                          "--connect", "tcp/127.0.0.1:7447"])
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(cli._run(args))
+    assert seen["cfg"].multicast_scouting is False                      # D-27
+    assert list(seen["cfg"].connect) == ["tcp/127.0.0.1:7447"]
 
 
 def test_rejects_invalid_gcs_id():
