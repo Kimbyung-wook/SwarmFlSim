@@ -53,11 +53,11 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-054 | WP1, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~011, IMP-INT-001 | TC-LOG-001~010, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069 | WP0, WP9 | IMP-API-002, 005 |  | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069 | WP0, WP9 | IMP-API-002, 005, IMP-GW-001~013 | TC-GW-001~011 | 구현중 |
 
 ## 구현·시험 항목
 
-- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`, `payload/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
+- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`, `payload/`, `gateway/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
 - `검증완료`는 그 REQ의 범위를 구현했고 연결된 TC가 모두 통과한 경우다. 일부만 구현했으면 TC가 통과해도 `구현중`으로 둔다.
 - 아래 첫 표는 WP0(`API`) 항목, 둘째 표는 통합(`INT`) 항목이다. 통합 실행 방법과 확인 화면은 [20_p0_demo.md](20_p0_demo.md)에 있다.
 
