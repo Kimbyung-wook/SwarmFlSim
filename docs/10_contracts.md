@@ -168,7 +168,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.10.0"}` | 접속 승인 |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.13.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
