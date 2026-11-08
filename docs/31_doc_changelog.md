@@ -44,3 +44,4 @@
 | 2026-11-08 | `31dedda` | — | 문서 S1 병합: `40_overview.md` 개괄, README 로드맵 상태·개괄 링크 | — | 해당 없음 | |
 | 2026-11-08 | `4ae020f` | TC-QA-069~077, D-26, D-27 | QA 15차: Gateway 통합 실행 확인, VI 상태가 GCS로 오지 않음(D-26), Gateway 멀티캐스트 옵션 부재(D-27) | 개괄 §8, 사용자 9 | 미처리 | |
 | 2026-11-08 | (이 커밋) | DEC-071, DEC-072, OPN-060, OPN-064 | 계약 0.14.0: Agent가 VI 상태를 GCS에 보고(`--vi-report-hz`, 기본 1 Hz), 옵션 `uci_also`로 NavigationReport·PeerStatus를 MA_PositionReport로도 내보냄 | 개괄 §2, 개괄 §8, 개발 3, 개발 8 agent, 개발 8 gateway, 사용자 9 | 미처리 | |
+| 2026-11-08 | `93f17e6` | IMP-AGT-032, TC-AGT-063~069, DEC-071 | Agent가 VI 상태를 GCS에 보고(`--vi-report-hz`). SystemStatus는 발행 주체 미정(OPN-065) | 개발 3, 개발 8 agent, 사용자 4 | 미처리 | |
