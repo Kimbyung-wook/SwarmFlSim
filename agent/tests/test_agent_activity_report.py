@@ -178,9 +178,9 @@ def test_tc_agt_060_terminal_weapon_dropped_from_full_report():
     assert n == 5
     h.run_s(2.0)                       # 1 s·2 s 전체 보고: 종료 키는 빠지고 남은 키가 없다
     assert len(strikes(h)) == n
-    keys_left = h.rt._activity.get("uav-001", {})
+    keys_left = h.rt.vehicles["uav-001"].activity_reports.state
     assert not any(k[0] == "StrikeActivity" for k in keys_left)
-    assert not h.rt._activity_sent.get("uav-001")       # 송신 시각도 정리된다
+    assert not h.rt.vehicles["uav-001"].activity_reports.sent     # 송신 시각도 정리된다
 
 
 def test_tc_agt_061_full_report_keeps_live_weapon_only():

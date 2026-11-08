@@ -13,6 +13,7 @@ from swarm_api import AgentContext, FlightAutonomy, MissionAutonomy
 from .messages import fill_header, full_name
 from .params import ParamSet
 from .ports import PortsImpl
+from .reporting import ChangeReporter, activity_terminal, vi_terminal
 
 if TYPE_CHECKING:
     from .runtime import AgentRuntime
@@ -39,6 +40,11 @@ class Vehicle:
         self.frame = 0
         self.sim_time_us = 0
         self._seq: dict[str, int] = defaultdict(int)
+        # GCS 자동 보고 (DEC-051, DEC-063, DEC-071). 런타임이 틱 시작에 비운다
+        self.activity_reports = ChangeReporter(activity_terminal)
+        self.vi_reports = ChangeReporter(vi_terminal)
+        self.nav_report_period: int | None = None
+        self.capability_reported = False
         self.ports = PortsImpl(self, plan, criteria)
         self.ctx = AgentContext(entity_id=spec.id, frame=0, sim_time_s=0.0, dt_s=0.0,
                                 ports=self.ports, params=ma_set.values, rng=rng)

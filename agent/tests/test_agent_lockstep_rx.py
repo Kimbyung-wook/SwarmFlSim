@@ -122,7 +122,8 @@ def test_tc_agt_049_done_carries_own_tx_count():
     h.rt.send_link(v, "c2", mp_pb2.RoutePlan(route_id="x", entity_id="uav-001"), ["gcs-01"])
     h.rt.send_link(v, "c2", mp_pb2.RoutePlan(route_id="y", entity_id="uav-001"), ["gcs-01"])
     tick(h, 1)
-    assert got[0] == {} and got[1] == {"uav-001": 2}
+    base = got[0].get("uav-001", 0)    # 첫 틱의 런타임 자동 보고(FlightCapability, DEC-071)
+    assert got[1] == {"uav-001": base + 2}
 
 
 def test_tc_agt_050_realtime_ignores_sent_count():

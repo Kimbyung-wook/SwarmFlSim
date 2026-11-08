@@ -63,9 +63,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--scenario", default="", help="시작할 때 읽을 시나리오 파일")
     p.add_argument("--frames", type=int, default=0, help="n 틱 처리 후 종료")
     p.add_argument("--activity-max-hz", type=float, default=10.0,
-                   help="임무장비 상태 변화 보고의 키별 최대 빈도(Hz, 모의 시간). 키는 Sensor·Jammer가 (메시지, payload_id), "
-                        "Strike가 (메시지, payload_id, weapon_entity). 0 이하면 제한 없음. "
-                        "1 Hz 전체 보고는 이와 별개 (DEC-056, DEC-063)")
+                   help="임무장비·VI 상태 변화 보고의 키별 최대 빈도(Hz, 모의 시간). 키는 Sensor·Jammer가 (메시지, payload_id), "
+                        "Strike가 (메시지, payload_id, weapon_entity), SystemStatus가 기체당 하나, "
+                        "FlightCommandStatus가 command_id별. 0 이하면 제한 없음. "
+                        "임무장비 1 Hz 전체 보고와 NavigationReport 주기 보고는 이와 별개 (DEC-056, DEC-063, DEC-071)")
+    p.add_argument("--vi-report-hz", type=float, default=1.0,
+                   help="NavigationReport를 GCS에 보내는 빈도(Hz, 모의 시간). 0 이하면 끈다 (DEC-071)")
     p.add_argument("--list-plugins", action="store_true", help="등록된 MA/FA 플러그인 이름을 출력하고 종료")
     p.add_argument("-v", "--verbose", action="store_true")
     add_bus_args(p)
@@ -84,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     entities = {e for arg in a.entities for e in arg.split(",") if e} or None
     bus = open_bus(bus_config(a))
     rt = AgentRuntime(bus, RuntimeConfig(participant=a.participant, entities=entities,
-                                         activity_max_hz=a.activity_max_hz), registry, threaded=True)
+                                         activity_max_hz=a.activity_max_hz, vi_report_hz=a.vi_report_hz),
+                      registry, threaded=True)
     if a.scenario:
         rt.load(read_scenario(a.scenario))
 
