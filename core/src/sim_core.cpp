@@ -2,6 +2,7 @@
 // IMP-CORE-009: 지면 충돌, IMP-CORE-011: 고장 주입, IMP-CORE-013: 동역학 매개변수
 // IMP-CORE-024: 활성 재밍 구역 1 s 재발행 (DEC-052)
 // IMP-CORE-026: DEM 아래 시작 공중 엔티티 경고·시작 프레임 kill (DEC-060)
+// IMP-CORE-028: onboard/<id>/SystemStatus 발행 (DEC-073)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -21,6 +22,7 @@ namespace swarm::core {
 namespace {
 
 constexpr std::uint64_t kZonePeriodUs = 1'000'000;  // JamZone 재발행 주기 (DEC-052)
+constexpr std::uint64_t kSystemStatusPeriodUs = 1'000'000;  // SystemStatus 주기 발행 (DEC-073)
 
 // 지면 판정 대상인 공중 엔티티 (DEC-060). 지상 엔티티(GCS·지상 표적·재머 기지)는 지형 높이에 둔다
 bool airborne(v1::EntityKind k) {
@@ -141,6 +143,11 @@ bool SimCore::load(const Scenario& sc) {
   participants_.assign(parts.begin(), parts.end());
   nav_keys_.clear();
   for (std::size_t i = 0; i < store_.size(); ++i) nav_keys_.push_back(keys::onboard(store_.id(i), "NavigationReport"));
+  sys_keys_.clear();
+  for (std::size_t i = 0; i < store_.size(); ++i) sys_keys_.push_back(keys::onboard(store_.id(i), "SystemStatus"));
+  id_order_.resize(store_.size());
+  for (std::size_t i = 0; i < id_order_.size(); ++i) id_order_[i] = i;
+  std::sort(id_order_.begin(), id_order_.end(), [&](std::size_t a, std::size_t b) { return store_.id(a) < store_.id(b); });
 
   mode_ = sc.mode == v1::RUN_MODE_UNSPECIFIED ? v1::RUN_MODE_REALTIME : sc.mode;
   frame_hz_ = sc.frame_hz;
@@ -209,6 +216,9 @@ void SimCore::reset_run_state() {
   onboard_seq_.clear();
   active_zones_.clear();
   next_zone_us_ = kZonePeriodUs;
+  sys_last_.assign(store_.size(), std::string());
+  sys_seq_.assign(store_.size(), 0);
+  next_sys_us_ = 0;  // 첫 발행 프레임(0)에 낸다
   std::lock_guard lock(inbox_mu_);
   inbox_.controls.clear();
   inbox_.dones.clear();
@@ -271,11 +281,12 @@ void SimCore::handle_start(const v1::Start& s, Clock::time_point now) {
 
 void SimCore::handle_fault(const v1::InjectFault& f) {
   const auto kind = f.fault();
-  // 링크 차단은 Datalink(WP4)가 sim/ctrl/cmd를 직접 구독해 처리한다
-  if (kind == v1::FAULT_KIND_LINK_CUT || kind == v1::FAULT_KIND_GCS_LINK_CUT) return;
+  // 링크 차단은 Datalink(WP4)가 sim/ctrl/cmd를 직접 구독해 처리한다.
+  // Core는 SystemStatus의 link 상태로만 기록한다 (IMP-CORE-028, DEC-073)
+  const bool link = kind == v1::FAULT_KIND_LINK_CUT || kind == v1::FAULT_KIND_GCS_LINK_CUT;
   const auto idx = store_.find(f.entity_id());
   if (!idx) {
-    log("fault: unknown entity " + f.entity_id());
+    if (!link) log("fault: unknown entity " + f.entity_id());
     return;
   }
   const std::string name = v1::FaultKind_Name(kind);
@@ -286,6 +297,8 @@ void SimCore::handle_fault(const v1::InjectFault& f) {
     case v1::FAULT_KIND_ENGINE:
     case v1::FAULT_KIND_NAV:
     case v1::FAULT_KIND_SENSOR:
+    case v1::FAULT_KIND_LINK_CUT:
+    case v1::FAULT_KIND_GCS_LINK_CUT:
       break;
     default:
       log("fault " + name + " ignored");
@@ -657,6 +670,55 @@ std::vector<std::string> SimCore::step_payload(std::vector<payload::Addressed<v1
   return std::move(out.killed);
 }
 
+// IMP-CORE-028: 고장 종류 → subsystem. engine(ENGINE), nav(NAV), sensor(SENSOR: 그 기체의 모든 센서, DEC-047),
+// link(LINK_CUT은 FAILED, GCS_LINK_CUT만이면 DEGRADED). 네 항목을 늘 이 순서로 싣는다.
+// 전체 health: 죽었거나 engine 고장이면 FAILED, 다른 고장이 하나라도 있으면 DEGRADED, 없으면 NOMINAL.
+// energy_frac: 2/3-DoF·스크립트 모델에 에너지 상태가 없어 1.0으로 둔다 (DEC-073)
+v1::SystemStatus SimCore::system_status(std::size_t i) const {
+  v1::SystemStatus st;
+  const bool dead = !store_.alive(i);
+  const auto health_of = [&](bool failed) { return dead || failed ? v1::HEALTH_FAILED : v1::HEALTH_NOMINAL; };
+  const bool engine = fault_active(i, v1::FAULT_KIND_ENGINE), nav = fault_active(i, v1::FAULT_KIND_NAV),
+             sensor = fault_active(i, v1::FAULT_KIND_SENSOR), cut = fault_active(i, v1::FAULT_KIND_LINK_CUT),
+             gcs_cut = fault_active(i, v1::FAULT_KIND_GCS_LINK_CUT);
+  auto add = [&](const char* name, v1::Health h) {
+    auto* s = st.add_subsystems();
+    s->set_name(name);
+    s->set_health(h);
+  };
+  add("engine", health_of(engine));
+  add("nav", health_of(nav));
+  add("sensor", health_of(sensor));
+  add("link", dead || cut ? v1::HEALTH_FAILED : gcs_cut ? v1::HEALTH_DEGRADED : v1::HEALTH_NOMINAL);
+  st.set_health(dead || engine                         ? v1::HEALTH_FAILED
+                : nav || sensor || cut || gcs_cut      ? v1::HEALTH_DEGRADED
+                                                       : v1::HEALTH_NOMINAL);
+  st.set_energy_frac(1.0);
+  return st;
+}
+
+// 프레임마다 엔티티 ID 순으로, 내용이 바뀌었거나 모의 시간 1 s 경계를 지났으면 낸다.
+// 죽은 기체는 FAILED로 바뀔 때 한 번만 내고 주기 발행은 멈춘다. 모의 시간·프레임으로만 정하므로 lockstep 결정적이다
+void SimCore::publish_system_status() {
+  const bool periodic = sim_time_us_ >= next_sys_us_;
+  if (periodic)
+    while (next_sys_us_ <= sim_time_us_) next_sys_us_ += kSystemStatusPeriodUs;
+  for (const std::size_t i : id_order_) {
+    if (!store_.has_onboard(i)) continue;
+    v1::SystemStatus st = system_status(i);
+    std::string sig = st.SerializeAsString();
+    const bool changed = sig != sys_last_[i];
+    if (!changed && (!periodic || !store_.alive(i))) continue;
+    sys_last_[i] = std::move(sig);
+    auto* h = st.mutable_header();
+    h->set_sim_time_us(sim_time_us_);
+    h->set_frame(frame_);
+    h->set_source(store_.id(i));
+    h->set_seq(sys_seq_[i]++);
+    publish(sys_keys_[i], st);
+  }
+}
+
 void SimCore::publish_truth() {
   v1::TruthFrame tf;
   auto* h = tf.mutable_header();
@@ -684,6 +746,7 @@ void SimCore::publish_frame() {
     if (cfg_.nav_noise) cfg_.nav_noise(store_.id(i), nav, rng_);
     publish(nav_keys_[i], nav);
   }
+  publish_system_status();
 
   v1::ClockTick tick;
   tick.set_frame(frame_);

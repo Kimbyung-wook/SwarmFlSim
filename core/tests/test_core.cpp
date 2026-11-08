@@ -3,6 +3,7 @@
 // TC-CORE-019~023: 동역학 매개변수 (DEC-035)
 // TC-CORE-036~039: DEM 지형 충돌·가시선, JamZone 재발행, ID·재머 적재 검증 (DEC-053, DEC-052, DEC-050, DEC-049)
 // TC-CORE-041: DEM 아래 시작 공중 엔티티 적재 경고·시작 프레임 kill (DEC-060)
+// TC-CORE-043: onboard/<id>/SystemStatus 변화·1 Hz 발행, 다중 고장, 결정성 (DEC-073)
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -675,7 +676,7 @@ void test_scripted_path() {
 }
 
 // TC-CORE-016: InjectFault ENGINE(속도 명령 최소, 기간 후 복귀), NAV(NavigationReport 중단·해제), SENSOR(기록),
-//              LINK_CUT·GCS_LINK_CUT 무시, Reset 시 해제
+//              LINK_CUT·GCS_LINK_CUT은 효과 없이 기록만(SystemStatus용, IMP-CORE-028), Reset 시 해제
 void test_faults() {
   InMemoryBus bus;
   Recorder rec(bus);
@@ -715,7 +716,8 @@ void test_faults() {
   sim.submit(fault_cmd("gcs-01", v1::FAULT_KIND_ENGINE));  // 모델 없는 엔티티
   run_frames(sim, 1);
   CHECK(sim.fault_active("uav-001", v1::FAULT_KIND_SENSOR));
-  CHECK(!sim.fault_active("uav-001", v1::FAULT_KIND_LINK_CUT) && !sim.fault_active("gcs-01", v1::FAULT_KIND_ENGINE));
+  // 링크 차단은 효과 없이 SystemStatus용으로만 기록한다 (IMP-CORE-028)
+  CHECK(sim.fault_active("uav-001", v1::FAULT_KIND_LINK_CUT) && !sim.fault_active("gcs-01", v1::FAULT_KIND_ENGINE));
   CHECK(sim.entities().alive(0) && rec.events.empty());
 
   sim.submit(simple([](auto& c) { c.mutable_reset(); }));
@@ -1897,6 +1899,144 @@ void test_dem_below_start() {
   }
 }
 
+// TC-CORE-043: onboard/<id>/SystemStatus (IMP-CORE-028, DEC-073)
+// - 첫 프레임과 모의 시간 1 s마다 엔티티 ID 순으로 낸다(시나리오 순서 uav-001, uav-000과 무관). GCS(onboard 없음)는 내지 않는다
+// - 고장 주입·해제·기간 만료 때 바뀐 기체만 다음 발행 프레임에 낸다
+// - 다중 고장: engine+sensor+GCS 링크 → FAILED(engine·sensor FAILED, link DEGRADED), 전체 링크 추가 → link FAILED,
+//   engine 해제 → DEGRADED. 죽으면 FAILED 한 번, 그 뒤 주기 발행 없음
+// - 같은 입력 두 번이면 키·바이트가 같다
+struct SysRec {
+  std::vector<std::pair<std::string, v1::SystemStatus>> msgs;
+  std::vector<std::string> bytes;
+  std::unique_ptr<Subscription> sub;
+  explicit SysRec(Bus& bus) {
+    sub = bus.subscribe("onboard/*/SystemStatus", [this](const Sample& s) {
+      msgs.emplace_back(s.key, decode<v1::SystemStatus>(s));
+      bytes.push_back(s.key + "|" + std::string(s.payload.begin(), s.payload.end()));
+      CHECK(s.encoding == "application/protobuf;swarm.v1.SystemStatus");
+    });
+  }
+};
+
+v1::Health sub_health(const v1::SystemStatus& st, const char* name) {
+  for (const auto& s : st.subsystems())
+    if (s.name() == name) return s.health();
+  return v1::HEALTH_UNSPECIFIED;
+}
+
+std::vector<std::string> run_system_status(bool check) {
+  InMemoryBus bus;
+  SysRec rec(bus);
+  core::SimCore sim(bus, core::wp2_provider(), quiet());
+  auto sc = one_uav();
+  sc.entities[0].set_airframe("skywalker_x8");
+  v1::EntitySpec u0 = sc.entities[0];
+  u0.set_id("uav-000");
+  sc.entities.push_back(u0);  // 시나리오 순서: uav-001, gcs-01, uav-000
+  CHECK(sim.load(sc));
+  CHECK(rec.msgs.empty());  // 적재만으로는 내지 않는다
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 120);  // 프레임 0..120 → 주기 발행 0, 50, 100
+
+  auto since = [&](std::size_t from) {
+    return std::vector<std::pair<std::string, v1::SystemStatus>>(rec.msgs.begin() + static_cast<std::ptrdiff_t>(from),
+                                                                 rec.msgs.end());
+  };
+  if (check) {
+    CHECK(rec.msgs.size() == 6);
+    const std::uint64_t frames[] = {0, 50, 100};
+    for (std::size_t k = 0; k < rec.msgs.size() && k < 6; ++k) {
+      const auto& [key, st] = rec.msgs[k];
+      CHECK(key == (k % 2 == 0 ? "onboard/uav-000/SystemStatus" : "onboard/uav-001/SystemStatus"));
+      CHECK(st.header().frame() == frames[k / 2] && st.header().sim_time_us() == frames[k / 2] * 20000);
+      CHECK(st.header().seq() == k / 2 && st.header().source() == (k % 2 == 0 ? "uav-000" : "uav-001"));
+      CHECK(st.health() == v1::HEALTH_NOMINAL && st.energy_frac() == 1.0 && st.subsystems_size() == 4);
+      CHECK(st.subsystems(0).name() == "engine" && st.subsystems(1).name() == "nav" &&
+            st.subsystems(2).name() == "sensor" && st.subsystems(3).name() == "link");
+    }
+  }
+
+  // 단일 고장: NAV 0.5 s → 바로 다음 프레임에 uav-001만 DEGRADED, 주입 시각 + 0.5 s(25프레임) 프레임에 만료로 NOMINAL
+  std::size_t mark = rec.msgs.size();
+  const std::uint64_t f0 = sim.frame();
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_NAV, 0.5));
+  run_frames(sim, 26);
+  if (check) {
+    const auto got = since(mark);
+    CHECK(got.size() == 2);
+    if (got.size() == 2) {
+      CHECK(got[0].first == "onboard/uav-001/SystemStatus" && got[0].second.header().frame() == f0 + 1);
+      CHECK(got[0].second.health() == v1::HEALTH_DEGRADED && sub_health(got[0].second, "nav") == v1::HEALTH_FAILED);
+      CHECK(sub_health(got[0].second, "engine") == v1::HEALTH_NOMINAL);
+      CHECK(got[1].first == "onboard/uav-001/SystemStatus" && got[1].second.header().frame() == f0 + 25);
+      CHECK(got[1].second.health() == v1::HEALTH_NOMINAL && sub_health(got[1].second, "nav") == v1::HEALTH_NOMINAL);
+    }
+  }
+
+  // 다중 고장(같은 프레임에 셋) → 변화 한 번
+  mark = rec.msgs.size();
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_ENGINE));
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_SENSOR));
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_GCS_LINK_CUT));
+  run_frames(sim, 1);
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_LINK_CUT));
+  run_frames(sim, 1);
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_ENGINE, 0.0, true));
+  run_frames(sim, 1);
+  if (check) {
+    const auto got = since(mark);
+    CHECK(got.size() == 3);
+    if (got.size() == 3) {
+      for (const auto& g : got) CHECK(g.first == "onboard/uav-000/SystemStatus");
+      const auto& a = got[0].second;
+      CHECK(a.health() == v1::HEALTH_FAILED && sub_health(a, "engine") == v1::HEALTH_FAILED &&
+            sub_health(a, "sensor") == v1::HEALTH_FAILED && sub_health(a, "link") == v1::HEALTH_DEGRADED &&
+            sub_health(a, "nav") == v1::HEALTH_NOMINAL);
+      CHECK(got[1].second.health() == v1::HEALTH_FAILED && sub_health(got[1].second, "link") == v1::HEALTH_FAILED);
+      const auto& c = got[2].second;
+      CHECK(c.health() == v1::HEALTH_DEGRADED && sub_health(c, "engine") == v1::HEALTH_NOMINAL &&
+            sub_health(c, "sensor") == v1::HEALTH_FAILED);
+    }
+  }
+
+  // 다음 1 s 경계(프레임 150)에서 두 기체 모두 주기 발행. 고장 상태는 그대로 실린다
+  mark = rec.msgs.size();
+  CHECK(sim.frame() < 150);
+  run_frames(sim, 199 - sim.frame());
+  if (check) {
+    const auto got = since(mark);
+    CHECK(got.size() == 2);
+    if (got.size() == 2) {
+      CHECK(got[0].first == "onboard/uav-000/SystemStatus" && got[0].second.header().frame() == 150);
+      CHECK(got[0].second.health() == v1::HEALTH_DEGRADED);
+      CHECK(got[1].first == "onboard/uav-001/SystemStatus" && got[1].second.health() == v1::HEALTH_NOMINAL);
+    }
+  }
+
+  // 죽으면 FAILED 한 번, 그 뒤 주기 발행은 살아 있는 기체만. 같은 프레임(200) 안에서도 ID 순이다
+  mark = rec.msgs.size();
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_KILL));
+  run_frames(sim, 60);  // 199 → 259, 경계 200·250
+  if (check) {
+    const auto got = since(mark);
+    CHECK(got.size() == 3);
+    if (got.size() == 3) {
+      CHECK(got[0].first == "onboard/uav-000/SystemStatus" && got[0].second.header().frame() == 200);
+      CHECK(got[1].first == "onboard/uav-001/SystemStatus" && got[1].second.header().frame() == 200);
+      CHECK(got[1].second.health() == v1::HEALTH_FAILED);
+      for (const auto& s : got[1].second.subsystems()) CHECK(s.health() == v1::HEALTH_FAILED);
+      CHECK(got[2].first == "onboard/uav-000/SystemStatus" && got[2].second.header().frame() == 250);
+    }
+  }
+  return rec.bytes;
+}
+
+void test_system_status() {
+  const auto a = run_system_status(true);
+  const auto b = run_system_status(false);
+  CHECK(!a.empty() && a == b);
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -1935,6 +2075,7 @@ int main() {
   test_jam_zone_republish();
   test_load_validation_ids_jammers();
   test_dem_below_start();
+  test_system_status();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
