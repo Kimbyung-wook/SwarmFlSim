@@ -49,3 +49,4 @@
 | 2026-11-08 | `5510bdd` | IMP-GW-014~017, TC-GW-012~015, DEC-072, D-27, O-13 | Gateway: NavigationReport·PeerStatus를 MA_PositionReport로도 발행, CLI `--no-multicast`, LA-CAL 구독 준비 완료 로그 | 개발 8 gateway, 사용자 9 | 미처리 | |
 | 2026-11-08 | `1161dbf` | IMP-CORE-028, TC-CORE-043, DEC-073 | Core가 `onboard/<id>/SystemStatus`를 바뀔 때와 1 Hz로 발행(고장→health·subsystems) | 개발 8 core, 사용자 4 | 미처리 | |
 | 2026-11-08 | `5cc769e` | TC-QA-078~084, D-26, D-28 | QA 16차: VI 통합 교환 확인(D-26 해소). 재기동한 Gateway는 Capability·현재 SystemStatus를 받지 못함(O-19) | 개괄 §8, 사용자 9 | 미처리 | |
+| 2026-11-09 | (이 커밋) | DEC-074 | 로드맵 P6 완료 판정. 미결: OPN-061~063, 발신 코드 없는 UCI 4종, D-28, O-16, O-19 | 개괄 §8, README §7, 사용자 9 | 미처리 | |

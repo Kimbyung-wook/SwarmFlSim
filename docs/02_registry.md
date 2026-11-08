@@ -148,6 +148,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-071 | Agent 런타임이 기체 VI 상태를 GCS에 자동 보고한다. `NavigationReport`는 주기(기본 1 Hz, CLI `--vi-report-hz`), `SystemStatus`·`FlightCommandStatus`는 변화 시, `FlightCapability`는 시작 시 1회 보낸다. 보고는 Datalink를 거쳐 `swarm/<gcs>/rx/vi/<Msg>`로 도달하며 MA 구현과 무관하다. 주기 설정은 DEC-051·DEC-056과 같이 Agent 런타임 설정으로 둔다 | OPN-064, QA D-26, DEC-051, DEC-013, 사용자 답변: "런타임이 보냄" | Confirmed |
 | DEC-072 | 메시지 옵션 `repeated string uci_also`를 둔다. STD 메시지 하나가 `uci_name` 외의 UCI 메시지에도 대응할 수 있다. `NavigationReport`와 `PeerStatus`는 `uci_also = "MA_PositionReport"`로 위치·운동 상태를 함께 내보낸다. Gateway는 `uci_name`과 `uci_also` 각각에 변환기를 둔다 | OPN-060, WP9 CR-GW-001, DEC-013, DEC-014, 사용자 답변: "여러 UCI 대응" | Confirmed |
 | DEC-073 | Core가 기체마다 `onboard/<id>/SystemStatus`를 발행한다. health·subsystems는 활성 고장(DEC-047)에서, energy_frac는 동역학 상태에서 만든다. 값이 바뀔 때와 1 Hz(모의 시간)로 낸다. Agent 런타임이 이를 GCS에 변화 보고한다(DEC-071) | OPN-065, DEC-047, DEC-071, 사용자 답변: "Core가 발행" | Confirmed |
+| DEC-074 | 로드맵 P6(A-GRA Gateway)을 완료로 판정한다. 완료 기준 "VI·C2·P2P 주요 상호작용을 agra_lacal과 교환"은 통합 실행에서 확인했다(TC-QA-069~074, 078~084). 다음은 P6 완료 판정에 넣지 않고 미결로 둔다: OPN-061(승인 왕복), OPN-062(위치가 필요한 외부 작업), OPN-063(GCS 키 발행자 구분), 발신 코드가 없는 UCI 4종(ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), D-28, O-16, O-19 | `docs/21_qa_report.md` §24.12, DEC-068, DEC-071~073, 사용자 답변: "Mark complete" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
