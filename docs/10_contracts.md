@@ -3,7 +3,7 @@
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
 - 계약 버전: 0.14.0
-  - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072)
+  - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072), Core의 `onboard/<id>/SystemStatus` 발행(DEC-073)
   - 0.13.0: `StrikeActivity` 변화 보고 키를 무장별 (메시지, payload_id, weapon_entity)로 분리(DEC-063)
   - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056), DEM 파일 형식과 받기 절차(DEC-053)
   - 0.11.0: 시나리오 엔티티 ID 25자 이하(DEC-050), 엔티티당 재머 1개(DEC-049), Agent의 `*Activity` GCS 자동 보고(DEC-051), 재밍 구역 1 s 재발행(DEC-052)
@@ -81,7 +81,7 @@ flowchart LR
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS) |
-| `onboard/<id>/<msg>` | `NavigationReport`, `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
+| `onboard/<id>/<msg>` | `NavigationReport`, `SystemStatus`(DEC-073), `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `link/outcome/<src>/<dst>` | `LinkOutcome` | Datalink | Monitor, Logger |
 | `link/state/<a>/<b>` | `LinkState` (a < b 사전순) | Datalink | UI, Monitor |
 | `truth/state` | `TruthFrame` | Core | UI, Monitor, Logger |
@@ -133,7 +133,7 @@ flowchart LR
 - 기체 VI 상태 보고 (DEC-071)
   - Agent 런타임은 자기 기체의 VI 상태를 GCS에 `swarm/<id>/tx/vi/<Msg>`로 보낸다. MA 플러그인 구현과 무관하다.
   - `NavigationReport`는 모의 시간 기준 주기로 보낸다. 기본 1 Hz이고 Agent 런타임 CLI `--vi-report-hz`로 바꾼다(0이면 끈다).
-  - `SystemStatus`·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
+  - `SystemStatus`(Core가 `onboard/<id>/SystemStatus`로 바뀔 때와 1 Hz로 발행, DEC-073)·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
   - Datalink를 거치므로 GCS 링크 상태가 반영된다. UI·Gateway는 `swarm/<gcs>/rx/vi/<Msg>`만 읽는다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.

@@ -147,6 +147,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-070 | 매뉴얼의 알고리즘 플러그인 예제는 실행 가능한 예제 패키지로 둔다. 위치는 최상위 `examples/plugins/`(패키지 `swarm-plugin-examples`)이고 루트 uv 워크스페이스 멤버로 둔다. `swarm.ma`·`swarm.fa` entry point로 등록하고, 시험을 루트 `testpaths`에 넣는다. 매뉴얼 개발자 4~6장은 이 파일을 가리킨다. 근거: 외부 작성자가 자기 패키지를 만들어 등록하는 실제 경로를 그대로 보여 주고, API가 바뀌면 시험이 깨져 드러난다. `algorithms/`(WP3)는 고치지 않는다 | `docs/30_doc_plan.md` §9.2, DEC-003, 사용자 답변: "Runnable example package" | Confirmed |
 | DEC-071 | Agent 런타임이 기체 VI 상태를 GCS에 자동 보고한다. `NavigationReport`는 주기(기본 1 Hz, CLI `--vi-report-hz`), `SystemStatus`·`FlightCommandStatus`는 변화 시, `FlightCapability`는 시작 시 1회 보낸다. 보고는 Datalink를 거쳐 `swarm/<gcs>/rx/vi/<Msg>`로 도달하며 MA 구현과 무관하다. 주기 설정은 DEC-051·DEC-056과 같이 Agent 런타임 설정으로 둔다 | OPN-064, QA D-26, DEC-051, DEC-013, 사용자 답변: "런타임이 보냄" | Confirmed |
 | DEC-072 | 메시지 옵션 `repeated string uci_also`를 둔다. STD 메시지 하나가 `uci_name` 외의 UCI 메시지에도 대응할 수 있다. `NavigationReport`와 `PeerStatus`는 `uci_also = "MA_PositionReport"`로 위치·운동 상태를 함께 내보낸다. Gateway는 `uci_name`과 `uci_also` 각각에 변환기를 둔다 | OPN-060, WP9 CR-GW-001, DEC-013, DEC-014, 사용자 답변: "여러 UCI 대응" | Confirmed |
+| DEC-073 | Core가 기체마다 `onboard/<id>/SystemStatus`를 발행한다. health·subsystems는 활성 고장(DEC-047)에서, energy_frac는 동역학 상태에서 만든다. 값이 바뀔 때와 1 Hz(모의 시간)로 낸다. Agent 런타임이 이를 GCS에 변화 보고한다(DEC-071) | OPN-065, DEC-047, DEC-071, 사용자 답변: "Core가 발행" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -216,7 +217,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-062 | 외부 `MA_TaskCommand`의 작업 내용 표현(WP9 CR-GW-003). `MA_TaskCommand`는 TaskID·CapabilityID 참조만 담고 목적지·영역이 없다. 선택: (A) MP(`MA_MissionPlan`) 연동 전까지 Gateway 임시 규칙(CapabilityID Label = `<엔티티>/<작업 종류>`, hold·return_to_base·취소만)을 인정하고 위치가 필요한 작업은 MP 연동 뒤에 받는다 (B) 지금 MP 연동까지 구현한다. 제안: A | Open |
 | OPN-063 | 같은 GCS 키에 UI와 Gateway가 함께 발행할 때의 발행자 구분(WP9 CR-GW-005). `header.seq`가 발행자별로 따로 매겨져 Datalink·Logger가 source만으로 구분할 수 없다. 선택: (A) `LinkEnvelope` 헤더에 발행 참여자 ID를 더한다(계약 변경) (B) Gateway를 별도 지상 엔티티(예: `gw-01`)로 시나리오에 둔다 (C) 현행 유지, 구분하지 않는다. 제안: A | Open |
 | OPN-064 | 기체 VI 상태의 GCS 보고 경로(QA D-26). 통합 실행에서 Agent가 GCS로 VI를 보내지 않아 외부 시스템이 기체 위치를 모른다. 선택: (A) Agent 런타임이 FA의 VI 상태를 `swarm/<id>/tx/vi/<msg>`로 GCS에 보낸다. `NavigationReport`는 시나리오에서 정하는 주기(기본 1 Hz)로, `SystemStatus`·`FlightCommandStatus`는 바뀔 때, `FlightCapability`는 시작할 때 한 번 보낸다. Datalink를 거치므로 링크 상태가 반영된다 (B) MA 플러그인이 보낼지 정한다 (C) GCS가 `truth/**`에서 얻는다(DEC-013 위반). 제안: A | Resolved by DEC-071 |
-| OPN-065 | `onboard/<id>/SystemStatus` 발행 주체(WP3 DEC-071 구현 확인 사항). Agent는 이 키를 받아 GCS에 변화 보고하지만, 지금은 아무도 발행하지 않아 통합 실행에서 SystemStatus가 나가지 않는다. 선택: (A) Core가 발행한다. 활성 고장(DEC-047)에서 health·subsystems, 동역학 상태에서 energy_frac를 만들어 바뀔 때와 1 Hz(모의 시간)로 낸다 (B) Payload 라이브러리가 낸다(센서·재머 subsystem만 앎) (C) Agent FA가 낸다(고장 정보를 truth 없이 알 수 없음). 제안: A | Open |
+| OPN-065 | `onboard/<id>/SystemStatus` 발행 주체(WP3 DEC-071 구현 확인 사항). Agent는 이 키를 받아 GCS에 변화 보고하지만, 지금은 아무도 발행하지 않아 통합 실행에서 SystemStatus가 나가지 않는다. 선택: (A) Core가 발행한다. 활성 고장(DEC-047)에서 health·subsystems, 동역학 상태에서 energy_frac를 만들어 바뀔 때와 1 Hz(모의 시간)로 낸다 (B) Payload 라이브러리가 낸다(센서·재머 subsystem만 앎) (C) Agent FA가 낸다(고장 정보를 truth 없이 알 수 없음). 제안: A | Resolved by DEC-073 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
