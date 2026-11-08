@@ -11,6 +11,7 @@
 ## 2. 주요 기능
 - **동역학**
   - 2/3/5/6-DoF 선택. 2·3-DoF는 알고리즘 시험용, 5·6-DoF는 실기체 모사용
+    - 미구현: 5·6-DoF (로드맵 P3). 현재는 2·3-DoF만 쓸 수 있다
   - 고정 프레임(50–100 Hz) + 프레임 안의 가변 스텝 RK45 (RK4 선택 가능)
 - **실행 모드**
   - 실시간 / 가속 lockstep(결정론적, 시드 고정) / free-run (DEC-005)
@@ -19,9 +20,13 @@
   - 지연·지터·손실·대역폭, 재밍 영역, 개별 기체 두절
 - **UI**
   - CesiumJS 2D/3D 지도, RTS식 선택·명령, 시나리오 편집
+    - 미구현: UI의 시나리오 편집. 시나리오는 JSON으로 쓰고 `swarm-scenario`로 검증한다
   - Traffic Monitor: 엔티티별 메시지 트래픽 (실시간·재생)
 - **기록·재생**: 전 채널 MCAP 기록과 버스 재송출
 - **규모**: 20대 필수, 수백 대까지 확장, 이종 컴퓨터 분산 실행
+  - 확인 안 됨: 여러 PC 분산 실행과 수백 대 규모 (로드맵 P4). 단일 PC에서 시연했다
+- **센서·재머·시뮬레이션 이벤트**: 카메라 탐지, 재밍 구역, 유도 객체의 발사·도달 판정 (WP8, Core 내장)
+- **A-GRA Gateway**: GCS가 받은 상태를 UCI 메시지로 LA-CAL에 내보내고, 외부 C2 명령 일부를 받는다 (WP9, DEC-068)
 
 ## 3. 아키텍처
 
@@ -34,6 +39,8 @@ flowchart LR
     DL["Datalink Emulator<br/>C++20"] <--> BUS
     AG["Vehicle Agent ×N<br/>MA(Python)·FA"] <--> BUS
     LG["Logger/Replay<br/>C++20·MCAP"] <--> BUS
+    GW["A-GRA Gateway<br/>Python"] <--> BUS
+    GW <-->|WebSocket| CAL["LA-CAL<br/>agra_lacal"]
 ```
 
 - **통신**: Zenoh만 사용, DDS 미사용 (DEC-002). 프로세스는 `open_bus`로 버스를 연다 (DEC-026)
@@ -56,14 +63,17 @@ flowchart LR
 | `ui/`, `bridge/` | WP5 | 지도·통제 UI, WebSocket 브리지 |
 | `ui/monitor/` | WP6 | Traffic Monitor |
 | `scenario/`, `logger/` | WP7 | 시나리오 JSON Schema, MCAP 기록·재생 |
+| `payload/` | WP8 | 센서·재머·유도 객체 판정 라이브러리(Core가 프레임마다 호출), 기본 프로파일 |
+| `gateway/` | WP9 | A-GRA Gateway(UCI 변환, LA-CAL 연동). 독립 uv 프로젝트 |
+| `third_party/agra_lacal` | WP9 | LA-CAL 서브모듈(수정하지 않음, DEC-069) |
 | `qa/` | QA | 시험 하니스, 고장 주입, 결정성 진단 |
 
 ## 5. 기술 스택
 
 | 영역 | 언어·도구 |
 |---|---|
-| Core·Datalink·Logger | C++20, CMake, vcpkg / MSYS2 / 배포판 패키지 |
-| Agent 플러그인·Bridge·시나리오 | Python 3.12, uv |
+| Core·Datalink·Logger·Payload | C++20, CMake, vcpkg / MSYS2 / 배포판 패키지 |
+| Agent 플러그인·Bridge·시나리오·Gateway | Python 3.12, uv |
 | UI·Monitor | TypeScript, Vite, CesiumJS |
 | 메시지 | Protobuf |
 
@@ -123,6 +133,12 @@ uv run pytest
 | [11_wp_briefs.md](docs/11_wp_briefs.md) | WP 세션 지시문 |
 | [20_p0_demo.md](docs/20_p0_demo.md) | 통합 데모 구성·실행 |
 | [21_qa_report.md](docs/21_qa_report.md) | QA 시험 결과 |
+| [30_doc_plan.md](docs/30_doc_plan.md) | 매뉴얼 작성 계획 |
+| [31_doc_changelog.md](docs/31_doc_changelog.md) | 문서 변경 기록: 병합별 매뉴얼 영향과 반영 상태 |
+| `40_overview.md` | 프로젝트 개괄 (작성 예정) |
+| [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 (목차, 본문 작성 예정) |
+| [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 (목차, 본문 작성 예정) |
+| [en/](docs/en/README.md) | 영문판 (목차, 본문 작성 예정) |
 
 ## 9. 개발 규칙
 - 모든 구현은 REQ 또는 DEC에 연결하고 `IMP-*`·`TC-*` ID를 부여한다
