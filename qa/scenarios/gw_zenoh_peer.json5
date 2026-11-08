@@ -1,0 +1,2 @@
+// QA 15차: Gateway를 다른 버스와 섞지 않게 멀티캐스트 스카우팅을 끈다 (Gateway CLI에 --no-multicast가 없다)
+{ mode: "peer", scouting: { multicast: { enabled: false } } }
