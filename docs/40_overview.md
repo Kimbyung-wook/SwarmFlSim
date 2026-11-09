@@ -1,7 +1,7 @@
 # 프로젝트 개괄
 
 - 저장소를 처음 보는 사람을 위한 문서다. 무엇인지, 지금 무엇이 되는지, 어디서 시작하는지를 다룬다.
-- 기준: 계약 0.13.0, 로드맵 P6 진행 중(2026-11-08).
+- 기준: 계약 0.14.0, 로드맵 P6 완료(2026-11-09).
 - 설계 근거는 [제안 계획서](00_proposal.md)와 [등록부](02_registry.md), 계약은 [10_contracts.md](10_contracts.md)가 기준이다. 이 문서는 그 절로 링크한다.
 
 ## 1. 목적과 범위
@@ -36,7 +36,7 @@ SwarmFlSim은 군집·편대 알고리즘을 설계하고 검증하는 연구용
 | UI | 역할별 권한 | 미구현 (P6 이후, DEC-020). 지금은 control/observer만 구분 |
 | Traffic Monitor | 엔티티별 트래픽 통계, 손실 사유, 시퀀스 타임라인, 메시지 해석 (실시간·재생) | 구현 |
 | 기록·재생 | 전 채널 MCAP 기록, 배속 재생 | 구현 |
-| A-GRA Gateway | 1단계: GCS가 받은 상태를 UCI 메시지로 LA-CAL에 발행. 2단계: 외부 `MA_TaskCommand` 수신(hold·귀환·취소) | 구현 (P6 진행 중, 매핑 일부 변경 예정 OPN-060~063) |
+| A-GRA Gateway | 1단계: GCS가 받은 기체 상태(VI·C2·P2P·MS)를 UCI 메시지로 LA-CAL에 발행, 위치는 `MA_PositionReport`로도 발행(DEC-072). 2단계: 외부 `MA_TaskCommand` 수신(hold·귀환·취소) | 구현 (P6 완료, DEC-074). 미결: 승인 왕복(OPN-061), 위치가 필요한 외부 작업(OPN-062), GCS 키 발행자 구분(OPN-063) |
 | A-GRA | L1 전면 준수, PX4/ArduPilot SITL | 미구현 (P7, P8) |
 
 ## 3. 구성 요소
@@ -58,7 +58,7 @@ flowchart LR
 |---|---|---|
 | Sim Core | 프레임 진행, 실행 모드, 엔티티 상태, 동역학 적분, 지면 충돌, 센서·재머·시뮬레이션 이벤트 판정, 고장 주입 | C++20 |
 | Datalink | `tx` 메시지에 링크 모델을 적용해 `rx`로 전달, 메시지마다 전달·손실 사유 발행 | C++20 |
-| Vehicle Agent | 한 프로세스가 여러 기체를 맡는다. 기체마다 MA·FA 플러그인을 돌리고 L1 포트를 제공한다 | Python |
+| Vehicle Agent | 한 프로세스가 여러 기체를 맡는다. 기체마다 MA·FA 플러그인을 돌리고 L1 포트를 제공한다. VI 상태와 임무장비 상태를 GCS에 자동 보고한다(DEC-071, DEC-051) | Python |
 | 브리지 | 브라우저를 버스에 붙인다. 구독 다운샘플, 발행 키 허용 검사 | Python |
 | GCS/UI, Traffic Monitor | 지도·명령, 트래픽 분석 | TypeScript |
 | Logger/Replay | 모든 키를 MCAP으로 기록, 버스로 재발행 | C++20 |
@@ -154,7 +154,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. 진행 상태
 
-완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-08 기준이다.
+완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-09 기준이다.
 
 | 단계 | 완료 기준 | 상태 | 근거 |
 |---|---|---|---|
@@ -164,7 +164,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 | P3 | Aerosonde 6-DoF가 VI 제어 모드 추종, RK45/RK4 오차 비교 | 부분 | RK45·RK4와 오차 시험은 있다. 5·6-DoF 미구현 |
 | P4 | 4대 PC에 분산해 300대 실행 | 미착수 | 단일 PC에서 100기까지 QA 부하 시험 |
 | P5 | 센서·재머·시뮬레이션 이벤트 시나리오, 효과 반경 판정 | 기능 구현 | WP8 Payload Core 통합, QA 종단 시험([21_qa_report.md §14](21_qa_report.md#14-6차-시험-p5-종단-시험-2026-11-05)) |
-| P6 | VI·C2·P2P 주요 상호작용을 agra_lacal과 교환 | 진행 중 | Gateway 1·2단계 구현과 왕복 시험 통과. 계약 변경 요청 OPN-060~063 대기 |
+| P6 | VI·C2·P2P 주요 상호작용을 agra_lacal과 교환 | 완료 | DEC-074. 통합 실행 확인 TC-QA-069~074, 078~084([21_qa_report.md §24.12](21_qa_report.md#2412-p6-완료-판정-의견)). 미결: OPN-061~063, 발신 코드가 없는 UCI 4종(ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), D-28, O-16, O-19 |
 | P7 | L1 컴플라이언스 하네스 통과 | 미착수 | |
 | P8 | PX4/ArduPilot SITL 기체 1대 이상 연동 | 미착수 | |
 
