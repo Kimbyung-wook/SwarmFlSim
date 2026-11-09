@@ -33,7 +33,7 @@ def test_publishes_only_gcs_tx_c2(gateway, bus):
         S.deliver(bus, m())
     gateway.handle_external("MA_TaskCommand", _task_command(gateway))
     own = [k for k in bus.published if not k.startswith("swarm/gcs-01/rx/")]   # 시험이 주입한 rx 제외
-    assert own == ["swarm/gcs-01/tx/c2/TaskCommand"]
+    assert own == ["swarm/gcs-01/tx/c2/TaskCommand"]      # 임무 계획까지 보낸 경우는 TC-GW-026
 
 
 def test_cli_opens_bus_with_open_bus(monkeypatch):

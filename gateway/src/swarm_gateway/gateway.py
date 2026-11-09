@@ -1,10 +1,10 @@
 """A-GRA Gateway 본체 (IMP-GW-009, IMP-GW-010, DEC-068).
 
-Gateway는 지상 참여자다. GCS 엔티티의 `swarm/<gcs>/rx/**`만 구독하고, `swarm/<gcs>/tx/c2/<msg>`에만 발행한다.
+Gateway는 지상 참여자다. GCS 엔티티의 `swarm/<gcs>/rx/**`만 구독하고, `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`에만 발행한다.
 `truth/**`, `onboard/**`, `link/**`는 구독하지도 발행하지도 않는다.
 
 - 1단계(발행): rx LinkEnvelope → 매핑 표(STD만) → 변환기 → UCI OMS JSON → XML → XSD 검증 → LA-CAL PUB
-- 2단계(수신): LA-CAL MSG(외부 C2, STD) → XSD 검증 → 변환기 → 내부 proto → tx/c2 LinkEnvelope
+- 2단계(수신): LA-CAL MSG(외부 C2·MP, STD) → XSD 검증 → 변환기 → 내부 proto → tx/c2 또는 tx/mp LinkEnvelope
 검증·변환에 실패한 메시지는 보내지 않고 로그와 카운터에 남긴다. Gateway는 계속 동작한다.
 """
 from __future__ import annotations
@@ -31,12 +31,18 @@ log = logging.getLogger("swarm_gateway")
 # LA-CAL에 연결하기 전(시험·오프라인 검증)에 쓰는 SystemID
 OFFLINE_SYSTEM_UUID = "00000000-0000-4000-8000-000000000000"
 
+DEFAULT_PARTICIPANT = "gateway-0"
+
+# 외부 메시지를 받아 내부로 보낼 수 있는 L1 (DEC-068, DEC-076). 발행 키의 범위이기도 하다
+INBOUND_L1 = (options_pb2.L1_INTERFACE_C2, options_pb2.L1_INTERFACE_MP)
+
 Sink = Callable[[str, dict], "Awaitable[None] | None"]
 
 
 @dataclass
 class GatewayConfig:
     gcs: str
+    participant: str = DEFAULT_PARTICIPANT   # LinkEnvelope.publisher (DEC-077)
     topic_prefix: str = "swarm"      # LA-CAL 토픽 = <prefix>.<iface>  (예: swarm.vi)
     mode: str = "SIMULATION"         # MessageHeader.Mode
     classification: str = "U"
@@ -45,6 +51,7 @@ class GatewayConfig:
 
     def __post_init__(self) -> None:
         keys.check_entity_id(self.gcs)
+        keys.check_entity_id(self.participant)
 
     def topic(self, iface: str) -> str:
         return f"{self.topic_prefix}.{iface}"
@@ -114,9 +121,9 @@ class Gateway:
         return [(e, u) for e in self.table.exportable() for u in e.uci_targets if self.converter_for(e, u)]
 
     def import_entries(self) -> list[MappingEntry]:
-        """외부 C2 명령으로 받을 수 있는 STD 메시지 (2단계)"""
+        """외부 C2·MP로 받을 수 있는 STD 메시지 (2단계)"""
         return [e for e in self.table.exportable()
-                if e.l1 == options_pb2.L1_INTERFACE_C2 and e.full_name in self.converters
+                if e.l1 in INBOUND_L1 and e.full_name in self.converters
                 and self.converters[e.full_name].supports_import()]
 
     def import_names(self) -> list[str]:
@@ -253,11 +260,11 @@ class Gateway:
 
     # ------------------------------------------------------------------ 2단계: 수신
     def handle_external(self, uci_name: str, obj: dict) -> Outcome:
-        """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/c2/<msg>"""
+        """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/<c2|mp>/<msg>"""
         self.counters["ext_rx"] += 1
         candidates = [e for e in self.import_entries() if e.uci_name == uci_name]
         if not candidates:
-            return self._reject(Outcome("rejected", uci_name=uci_name, reason="no inbound mapping (STD C2)"))
+            return self._reject(Outcome("rejected", uci_name=uci_name, reason="no inbound mapping (STD C2/MP)"))
         try:
             if set(obj) != {uci_name}:
                 raise InvalidMessage(f"message name mismatch: {sorted(obj)}")
@@ -276,21 +283,23 @@ class Gateway:
             if result is None:
                 continue
             msg, dst = result
-            key = self.publish_c2(entry, msg, dst)
+            key = self.publish_inbound(entry, msg, dst)
             self.counters["ext_published"] += 1
             return Outcome("published", proto=entry.full_name, uci_name=uci_name, key=key)
         self.counters["ext_rejected"] += 1
         return self._reject(Outcome("rejected", uci_name=uci_name, reason="; ".join(errors) or "not convertible"))
 
-    def publish_c2(self, entry: MappingEntry, msg, dst: list[str]) -> str:
-        """GCS가 보내는 C2처럼 tx에 싣는다. Datalink가 기체로 전달한다"""
-        key = keys.tx(self.config.gcs, keys.Iface.C2, entry.short_name)
+    def publish_inbound(self, entry: MappingEntry, msg, dst: list[str]) -> str:
+        """GCS가 보내는 C2·MP처럼 tx에 싣는다. Datalink가 기체로 전달한다. seq는 발행자·키별이다 (DEC-077)"""
+        if entry.l1 not in INBOUND_L1:
+            raise ValueError(f"{entry.short_name}: gateway publishes only c2/mp")
+        key = keys.tx(self.config.gcs, keys.Iface(entry.iface), entry.short_name)
         seq = self._tx_seq.get(key, 0)
         self._tx_seq[key] = seq + 1
         msg.header.source = self.config.gcs
         msg.header.seq = seq
-        env = link_pb2.LinkEnvelope(dst=list(dst), iface=options_pb2.L1_INTERFACE_C2, msg_type=entry.full_name,
-                                    payload=msg.SerializeToString(), priority=0)
+        env = link_pb2.LinkEnvelope(dst=list(dst), iface=entry.l1, msg_type=entry.full_name,
+                                    payload=msg.SerializeToString(), priority=0, publisher=self.config.participant)
         env.header.source = self.config.gcs
         env.header.seq = seq
         self.bus.put(key, env.SerializeToString(), protobuf_encoding(env.DESCRIPTOR.full_name))

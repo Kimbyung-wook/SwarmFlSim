@@ -9,12 +9,12 @@ flowchart LR
     DL -- "swarm/gcs-01/rx/**" --> GW["Gateway (gcs-01 쪽)"]
     DL -- "swarm/gcs-01/rx/**" --> UI["GCS/UI"]
     GW -- "1단계: UCI OMS JSON (XSD 검증 통과분만)<br/>PUB swarm.&lt;iface&gt;" --> CAL["CAL Server (agra_lacal)"]
-    CAL -- "2단계: MSG MA_TaskCommand @ swarm.c2" --> GW
-    GW -- "swarm/gcs-01/tx/c2/TaskCommand" --> DL
+    CAL -- "2단계: MA_TaskCommand, MA_ApprovalRequestStatus @ swarm.c2<br/>MA_RoutePlan, MA_MissionPlan @ swarm.mp" --> GW
+    GW -- "swarm/gcs-01/tx/c2/*, tx/mp/*" --> DL
     CAL <--> EXT["외부 C2 / A-GRA 시스템"]
 ```
 
-- 구독은 `swarm/<gcs>/rx/**` 하나뿐이다. 발행은 `swarm/<gcs>/tx/c2/<msg>`뿐이다. `truth/**`, `onboard/**`, `link/**`는 쓰지 않는다.
+- 구독은 `swarm/<gcs>/rx/**` 하나뿐이다. 발행은 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`뿐이다. 발행하는 `LinkEnvelope.publisher`에 Gateway 참여자 ID를 채운다 (DEC-077). `truth/**`, `onboard/**`, `link/**`는 쓰지 않는다.
 - 버스는 `open_bus(BusConfig)`로 연다 (DEC-026).
 - 매핑은 proto 옵션 `(uci_name)`, `(uci_also)`, `(mapping)`, `(l1)`을 descriptor에서 읽어 만든다. STD만 외부로 내보내고 EXT·SIM은 내보내지 않는다 (DEC-014).
 - 내부 메시지 하나를 받으면 `uci_name`과 `uci_also`의 UCI 메시지를 각각 따로 변환·검증·발행한다. 하나가 실패해도 나머지는 나간다 (DEC-072).
@@ -61,15 +61,16 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 |---|---|---|
 | `--gcs` | (필수) | GCS 엔티티 ID |
 | `--lacal` | `ws://127.0.0.1:8765` | CAL Server OWP 주소 |
+| `--participant` | `gateway-0` | 발행 참여자 ID. `LinkEnvelope.publisher`에 싣는다 (DEC-077) |
 | `--service` | `swarm_gateway` | CAL Server 설정의 service_id |
 | `--topic-prefix` | `swarm` | LA-CAL 토픽 `<prefix>.<iface>` (vi, c2, p2p, ms) |
-| `--inbound-topic` | `<prefix>.c2` | 외부 C2 수신 토픽 |
+| `--inbound-topic` | `<prefix>.c2` | 외부 C2 수신 토픽. MP는 `<prefix>.mp`로 고정이다 |
 | `--bus` | `zenoh` | `zenoh` 또는 `memory`. `memory`는 프로세스 안 버스라 시뮬레이터 메시지가 오지 않는다. 명시했을 때만 쓰고 경고를 남긴다 |
 | `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen` | | `BusConfig` 항목 |
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
-외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`를 PUB하면 된다.
+외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다.
 
 예: 같은 PC에서 Zenoh 라우터(또는 Datalink 등)에 직접 붙고 멀티캐스트를 끈다.
 
@@ -112,16 +113,46 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | 발행 | `StrikeActivity` | `StrikeActivity` | `swarm.ms` |
 | 발행 | `StoreLoadout` | `StoreLoadoutConfiguration` | `swarm.ms` |
 | 수신 | `TaskCommand` → `swarm/<gcs>/tx/c2/TaskCommand` | `MA_TaskCommand` | `swarm.c2` |
+| 수신 | `ApprovalResponse` → `swarm/<gcs>/tx/c2/ApprovalResponse` | `MA_ApprovalRequestStatus` | `swarm.c2` |
+| 수신 | `RoutePlan` → `swarm/<gcs>/tx/mp/RoutePlan` | `MA_RoutePlan` | `swarm.mp` |
+| 수신 | `MissionPlan` → `swarm/<gcs>/tx/mp/MissionPlan` | `MA_MissionPlan` | `swarm.mp` |
 
 ### ID 변환
 
 - 내부 문자열 ID(엔티티·작업·명령)는 고정 이름공간의 UUIDv5로 바꾸고 `DescriptiveLabel`에 원래 ID를 싣는다.
 - 받은 ID는 `DescriptiveLabel`을 먼저 쓰고, 없으면 Gateway가 만든 UUID의 역표를 쓴다.
 
-### 외부 `MA_TaskCommand` 규칙 (임시, CR-GW-003)
+### 외부 승인 응답 (DEC-075)
+
+- `RequestProcessingState`가 `COMPLETED`이고 `ApprovalRequestProcessingState`가 `APPROVED` 또는 `REJECTED`인 것만 받는다. `PENDING`, `CANCELED`, 처리 중인 상태는 `approved`(참/거짓)로 표현할 수 없어 거부한다.
+- Gateway가 그 요청을 내보냈으면 요청한 기체로만 보낸다. 모르는 요청(재기동 뒤 포함)은 `dst`를 비워 보내고, 받는 쪽이 `request_id`로 가른다.
+
+### 임무 계획 수신 (DEC-076)
+
+공개 XSD에서 `MA_RoutePlan`은 위치를 직접 담지만, `MA_MissionPlan`은 하위 계획을 ID로 참조만 한다. 대상은 `Applicability/ApplicableToIDs`다.
+
+| 항목 | 지원 | 거부 (XSD를 통과해도 거부·기록) |
+|---|---|---|
+| 대상 (`dst`, `entity_id`, `assignees`) | `ApplicableToIDs/SystemID` 하나. Label이 엔티티 ID이거나 Gateway가 만든 UUID | `ALL`, `NON`, `PackageID` |
+| 계획 상태 | `ForPlanningUseOnly` = false | true (XSD 주석: 기능을 일으키면 안 된다) |
+| 시간 | 없음 | `Window`, 세그먼트 `RequiredTimeOfArrival` |
+| 경로 구성 | `PRIMARY` 경로 하나. `FirstInPathSegmentID`와 `NextPathSegment`로 끝까지 이어진 세그먼트 | 여러 경로, 다른 `PathType`·`RouteType`, 끊김, 순환, 조건부 세그먼트 |
+| 항로점 | `WayPoint`, `NAV_ONLY`, 절대 좌표 `Point2D`, `Altitude`와 `AltitudeReference`=`MSL` | `TurnPoint`, `LoiterPoint`, 상대 좌표, 고도 범위, 다른 고도 기준 |
+| 속력 | `SpeedValue`(`GROUNDSPEED`, `TRUE_AIRSPEED`) | `CALIBRATED_AIRSPEED`, Mach, 최적화 지시 |
+| 구간 종류 | 없음, `TF`, `DF`, `IF` | 그 밖의 `CivilPathTerminator`, `Climb`, `MaximumRoll`, `Acceleration` 등 |
+| `MA_MissionPlan` 하위 계획 | 먼저 받은 `RoutePlanID`만, 대상이 같을 때 | `TaskPlanID` 등 다른 하위 계획, 받지 못한 경로, 판(`Version`) 불일치, 빈 계획, `ExecutionSequence`, 상하위 계획 참조 |
+
+- `MA_RoutePlan` → `RoutePlan`(항로점별 위치·속력). 수락 반경은 XSD에 없어 비워 두고 FA 기본값을 쓴다.
+- `MA_MissionPlan`은 참조한 경로마다 작업 하나로 편다. 항로점 하나면 `move_to`, 둘 이상이면 `route`이고 `task_id`는 경로 ID다.
+- 외부는 `MA_RoutePlan`을 먼저 보낸 뒤 `MA_MissionPlan`을 보낸다. 받은 경로는 프로세스 메모리에만 있어(최근 1024건) 재기동 뒤에는 다시 보내야 한다.
+- 영역 탐색(`search_area`) 등 경로로 표현되지 않는 작업은 받지 못한다(CR-GW-007).
+- 내장 MA는 `MissionPlan`을 시작할 때만 읽는다. 실행 중에 받은 계획을 바로 수행하는 경로는 `waypoint` MA의 `RoutePlan`뿐이다(CR-GW-008).
+
+### 외부 `MA_TaskCommand` 규칙 (DEC-076으로 유지)
 
 - `Command` 항목 하나가 수행 기체 하나다. `CapabilityID.DescriptiveLabel` = `<엔티티 ID>/<작업 종류>`.
 - 작업 종류는 위치 정보가 필요 없는 `hold`(현재 위치 선회 대기)와 `return_to_base`만 받는다.
+- 위치가 필요한 작업은 임무 계획 경로로 받는다. 이 규칙은 hold, return_to_base, 취소에만 쓴다.
 - `TaskID.DescriptiveLabel` = 내부 `task_id`. `CommandState`가 `CANCEL`이면 취소 명령이다.
 - 모든 항목은 같은 `TaskID`와 `CommandState`를 가져야 한다. 어긋나면 거부한다.
 
@@ -132,7 +163,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/lacal.py` | 서브모듈 경로, OMS JSON 코덱(XSD 검증), CAL Client |
 | `src/swarm_gateway/mapping.py` | descriptor 기반 매핑 표 |
 | `src/swarm_gateway/ids.py` | 문자열 ID ⇄ UUID |
-| `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
+| `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms, mp)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
 | `src/swarm_gateway/gateway.py` | 1단계·2단계 처리, 카운터, 거부 기록 |
 | `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결) |
 | `src/swarm_gateway/__main__.py` | 진입점 |

@@ -6,7 +6,7 @@ InMemoryBus ─rx─► Gateway ─OWP PUB─► CAL Server ─MSG─► 외부 
 import asyncio
 
 import pytest
-from swarm.v1 import c2_pb2, link_pb2
+from swarm.v1 import c2_pb2, link_pb2, mp_pb2
 
 import samples as S
 from conftest import CONFIG_DIR
@@ -100,9 +100,9 @@ async def test_roundtrip_with_cal_server(cal_server, bus, codec):
 async def test_send_failure_is_counted_and_gateway_continues(cal_server, bus, codec):
     """TC-GW-011: LA-CAL이 거부한 PUB(허용되지 않은 토픽)는 세고, Gateway는 계속 동작한다"""
     url = f"ws://127.0.0.1:{cal_server.port}"
-    running = await start_gateway(bus, GatewayConfig(S.GCS, topic_prefix="other"), url, codec=codec,
-                                  inbound_topic="swarm.c2")
+    running = await start_gateway(bus, GatewayConfig(S.GCS), url, codec=codec)
     gw = running.gateway
+    gw.config.topic_prefix = "other"                         # 구독을 건 뒤 발행 토픽만 허용 밖으로 바꾼다
     try:
         S.deliver(bus, S.nav())
         S.deliver(bus, S.task_status())
@@ -130,4 +130,39 @@ async def test_ready_is_logged_after_subscription(cal_server, bus, codec, caplog
         assert order[0] == order[1] and order[1] < order[2] < order[3] < order[4]
         assert running.ready_after_s >= 0.0  # codec을 미리 적재한 시험이라 짧다
     finally:
+        await running.stop()
+
+
+async def test_external_plans_and_approval_roundtrip(cal_server, bus, codec):
+    """TC-GW-027: 실제 CAL Server 왕복. 외부 승인 응답 → tx/c2, MA_RoutePlan·MA_MissionPlan → tx/mp, 잘못된 XML은 서버가 거부"""
+    from test_inbound_plans import approval_data, mission_data, route_data
+
+    url = f"ws://127.0.0.1:{cal_server.port}"
+    running = await start_gateway(bus, GatewayConfig(S.GCS, participant="gateway-3"), url, codec=codec)
+    gw = running.gateway
+    ext = LaCalClient(url, "external_c2")
+    await ext.connect()
+    tx = []
+    bus.subscribe("swarm/gcs-01/tx/**", lambda s: tx.append(s))
+    try:
+        await ext.publish("swarm.c2", gw.envelope("MA_ApprovalRequestStatus", approval_data()))
+        await ext.publish("swarm.mp", gw.envelope("MA_RoutePlan", route_data()))
+        await ext.publish("swarm.mp", gw.envelope("MA_MissionPlan", mission_data()))
+        await _wait(lambda: len(tx) == 3)
+        assert [s.key for s in tx] == ["swarm/gcs-01/tx/c2/ApprovalResponse", "swarm/gcs-01/tx/mp/RoutePlan",
+                                       "swarm/gcs-01/tx/mp/MissionPlan"]
+        envs = [link_pb2.LinkEnvelope.FromString(s.payload) for s in tx]
+        assert all(e.publisher == "gateway-3" for e in envs)
+        assert c2_pb2.ApprovalResponse.FromString(envs[0].payload).approved is True
+        route = mp_pb2.RoutePlan.FromString(envs[1].payload)
+        assert list(envs[1].dst) == [S.UAV] and route.waypoints[0].position.lat_deg == pytest.approx(37.5)
+        plan = mp_pb2.MissionPlan.FromString(envs[2].payload)
+        assert list(envs[2].dst) == [S.UAV] and plan.tasks[0].route.waypoints[1].position.alt_m == 900
+
+        with pytest.raises(CalError):
+            await ext.publish("swarm.mp", gw.envelope("MA_RoutePlan", {"RoutePlanID": {"UUID": "bad"}}))
+        await asyncio.sleep(0.2)
+        assert len(tx) == 3
+    finally:
+        await ext.close()
         await running.stop()

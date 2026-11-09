@@ -1,7 +1,7 @@
 """C2 변환기 (IMP-GW-006).
 
 - 1단계: TaskStatus, ApprovalRequest를 UCI로 내보낸다.
-- 2단계: 외부 MA_TaskCommand를 내부 TaskCommand로 바꾼다 (DEC-068).
+- 2단계: 외부 MA_TaskCommand를 내부 TaskCommand로(DEC-068), 외부 승인 응답을 ApprovalResponse로(DEC-075) 바꾼다.
 
 MA_TaskCommand는 "TaskID 작업을 CapabilityID 능력으로 수행하라"는 명령이고 작업 내용(목적지·영역)은
 임무 계획(MP)에 따로 둔다. 임무 계획 연동 전까지 Gateway는 다음 규칙을 쓴다 (계약 변경 요청 CR-GW-003).
@@ -59,6 +59,7 @@ class ApprovalRequestConverter(Converter):
     proto = "swarm.v1.ApprovalRequest"
 
     def to_uci(self, msg: c2_pb2.ApprovalRequest, ctx: ConvContext) -> dict:
+        ctx.approvals.put(msg.request_id, None, msg.header.source)   # 응답을 요청 기체에게만 보내려고 기억한다
         return {
             "RequestID": ctx.ids.ref("request", msg.request_id),
             "RequestState": "NEW",
@@ -70,6 +71,26 @@ class ApprovalRequestConverter(Converter):
             },
             "RespondBy": uci_timestamp(ctx.now() + APPROVAL_WINDOW),
         }
+
+
+@register
+class ApprovalResponseConverter(Converter):
+    """외부 승인 응답 (IMP-GW-020, DEC-075). 처리가 끝난(COMPLETED) APPROVED·REJECTED만 응답으로 본다.
+    PENDING·CANCELED는 ApprovalResponse.approved(참/거짓)로 표현할 수 없어 거부한다.
+    요청 기체를 알면(Gateway가 그 요청을 내보냈으면) 그 기체로, 모르면 dst를 비워 보낸다(request_id로 가려진다)."""
+    proto = "swarm.v1.ApprovalResponse"
+
+    def from_uci(self, data: dict, ctx: ConvContext) -> tuple[c2_pb2.ApprovalResponse, list[str]]:
+        processing = data["RequestProcessingState"]
+        if processing != "COMPLETED":
+            raise ConversionError(f"RequestProcessingState {processing} is not a final response")
+        state = data["ApprovalRequestProcessingState"]
+        if state not in ("APPROVED", "REJECTED"):
+            raise ConversionError(f"ApprovalRequestProcessingState {state} has no internal form")
+        request_id = ctx.ids.internal(data["RequestID"])
+        msg = c2_pb2.ApprovalResponse(request_id=request_id, approved=state == "APPROVED")
+        requester = ctx.approvals.get(request_id)
+        return msg, [requester] if requester else []
 
 
 @register
