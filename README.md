@@ -141,7 +141,7 @@ uv run pytest
 | [40_overview.md](docs/40_overview.md) | 프로젝트 개괄: 목적, 현재 기능, 구성, 처음 실행, 진행 상태 |
 | [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 |
 | [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 |
-| [en/](docs/en/README.md) | 영문판 (목차만 있다. 본문은 국문에서 옮기는 중) |
+| [en/](docs/en/README.md) | 영문판 (개괄·개발자·사용자 매뉴얼, 국문 `7affdae` 기준) |
 
 ## 9. 개발 규칙
 - 모든 구현은 REQ 또는 DEC에 연결하고 `IMP-*`·`TC-*` ID를 부여한다
