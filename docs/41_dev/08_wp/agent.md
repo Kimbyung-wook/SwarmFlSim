@@ -59,3 +59,5 @@ uv run pytest agent/tests
 - 기체 수가 많으면 Agent를 나눈다. 시나리오의 `participants`에 모두 적는다.
 
 추적: [agent/TRACE.md](../../../agent/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

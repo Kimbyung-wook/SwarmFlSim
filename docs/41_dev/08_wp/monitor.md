@@ -45,3 +45,5 @@ cd ui/monitor && npm test
 - 필터는 타임라인과 echo에 적용되고, 통계 표에는 엔티티 필터만 적용된다.
 
 추적: [ui/monitor/TRACE.md](../../../ui/monitor/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

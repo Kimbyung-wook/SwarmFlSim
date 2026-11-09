@@ -41,3 +41,5 @@ uv run pytest bridge/tests
 - 송신 대기가 넘치면 오래된 프레임부터 버리고, 접속을 닫을 때 버린 수를 로그에 남긴다.
 
 추적: [bridge/TRACE.md](../../../bridge/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

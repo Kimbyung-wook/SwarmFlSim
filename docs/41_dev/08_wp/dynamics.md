@@ -34,3 +34,5 @@ TC-DYN-001~015는 해석해 비교, 적분 차수, 이벤트 시점, 지면 교�
 - 2·3-DoF는 `ControlOutput.kinematic`만 받는다.
 
 추적: [dynamics/TRACE.md](../../../dynamics/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

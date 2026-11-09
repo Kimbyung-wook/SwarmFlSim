@@ -9,7 +9,7 @@
 |---|---|---|
 | 첫 틱이 나가지 않는다 | `run.participants`의 참여자가 준비 신호(`FrameDone{0}`)를 보내지 않았다. 참여자가 안 떴거나 ID가 다르다 | Core 로그의 대기 참여자 목록과 프로세스의 `--participant`를 맞춘다 |
 | 진행 중 멈춘다. UI·Monitor에 참여자 대기 표시 | 참여자가 죽었거나 응답하지 않는다(DEC-041) | 재합류는 지원하지 않는다. 참여자를 다시 띄우고 Reset+Start |
-| 같은 시드인데 궤적이 다르다 | 플러그인이 `ctx.rng` 외의 난수, 벽시계, 수신 순서에 의존한다. 또는 realtime·free-run으로 돌렸다 | 3.6의 규칙을 확인한다. `qa/diag_determinism.py`로 처음 어긋나는 프레임을 찾는다 |
+| 같은 시드인데 궤적이 다르다 | 플러그인이 `ctx.rng` 외의 난수, 벽시계, 수신 순서에 의존한다. 또는 realtime·free-run으로 돌렸다 | [3.6](03_architecture.md#36-lockstep-한-프레임)의 규칙을 확인한다. `qa/diag_determinism.py`로 처음 어긋나는 프레임을 찾는다 |
 | 배속이 목표보다 낮다 | Python Agent가 병목이다. `frame_overruns`가 는다 | 기체를 여러 Agent로 나누거나(`--entities`) 배속을 낮춘다 |
 
 ## 11.2 버스
@@ -41,7 +41,7 @@
 ## 11.5 진단 도구
 
 ```bash
-uv run python qa/run_qa.py --list
+uv run --with psutil python qa/run_qa.py --list
 ```
 
 ```bash

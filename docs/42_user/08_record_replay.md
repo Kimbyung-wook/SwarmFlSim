@@ -62,3 +62,5 @@ build/msvc-debug/logger/swarm_logger replay run.mcap --dry-run
 ## 8.5 분량 참고
 
 20대 데모를 약 25초 기록하면 약 12 MB, 메시지 약 5만 8천 건이었다. 약 2분이면 메시지 약 30만 건이다. 기체 수와 시간에 비례해 늘어난다.
+
+다음: [9. A-GRA Gateway 연동](09_gateway.md).

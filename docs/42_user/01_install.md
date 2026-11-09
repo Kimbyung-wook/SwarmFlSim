@@ -16,7 +16,7 @@
 uv run swarm-agent --list-plugins
 ```
 
-정상이면 `swarm.ma: flocking, flocking_basic, formation, hold, waypoint`와 `swarm.fa: default`가 나온다.
+정상이면 `swarm.ma:`에 `flocking`, `flocking_basic`, `formation`, `hold`, `waypoint`가, `swarm.fa:`에 `default`가 나온다. `example_`로 시작하는 이름은 예제 패키지이고 함께 나온다.
 
 ## 1.2 지도 자료 (선택)
 

@@ -46,7 +46,7 @@ ctest --preset <preset> -R pay
 
 ## 2.3 Python (API, 시나리오, Bridge, Agent, 알고리즘)
 
-루트 `pyproject.toml`의 uv workspace가 다섯 패키지를 묶는다.
+루트 `pyproject.toml`의 uv workspace가 여섯 패키지(예제 패키지 포함)를 묶는다.
 
 ```bash
 uv sync
@@ -60,7 +60,7 @@ uv run python scripts/gen_proto.py
 uv run pytest
 ```
 
-- 대상은 루트 `pyproject.toml`의 `testpaths`다: `api/python/tests`, `scenario/tests`, `bridge/tests`, `agent/tests`, `algorithms/tests`.
+- 대상은 루트 `pyproject.toml`의 `testpaths`다: `api/python/tests`, `scenario/tests`, `bridge/tests`, `agent/tests`, `algorithms/tests`, `examples/plugins/tests`.
 - 한 패키지만 돌린다.
 
 ```bash
@@ -116,7 +116,7 @@ git submodule update --init third_party/agra_lacal
 ```
 
 ```bash
-cd gateway && uv sync
+cd gateway && uv sync --extra zenoh
 ```
 
 ```bash
@@ -124,7 +124,7 @@ cd gateway && uv run pytest
 ```
 
 - proto 생성물이 없으면 루트에서 2.3의 `gen_proto.py`를 먼저 실행한다.
-- 시험은 프로세스 안에서 띄운 CAL Server와 `InMemoryBus`를 쓴다. Zenoh 버스로 실행하려면 `uv sync --extra zenoh`. 실행 방법은 [gateway/README.md](../../gateway/README.md).
+- 시험은 프로세스 안에서 띄운 CAL Server와 `InMemoryBus`를 쓴다. `--extra zenoh`를 빼도 시험은 통과하지만, 실행하면 인메모리 버스로 조용히 떠서 시뮬레이터 메시지가 오지 않는다. 실행 방법은 [사용자 매뉴얼 9장](../42_user/09_gateway.md).
 
 ## 2.7 커밋하지 않는 것
 
@@ -133,3 +133,5 @@ cd gateway && uv run pytest
 ## 2.8 통합 확인
 
 단위 시험을 통과한 뒤 전체 경로를 돌려 본다. 데모 실행과 자동 확인은 사용자 매뉴얼 [2. 빠른 시작](../42_user/02_quickstart.md), QA 하니스는 [10장](10_qa.md)을 본다.
+
+다음: [3. 아키텍처와 실행 모델](03_architecture.md).

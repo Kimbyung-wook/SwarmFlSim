@@ -37,3 +37,5 @@ uv run pytest algorithms/tests
 - 다른 기체 정보는 데이터링크로 받은 `PeerStatus`만 쓴다. 링크가 나쁘면 편대 품질이 함께 나빠지는 것은 의도한 동작이다.
 
 추적: [algorithms/TRACE.md](../../../algorithms/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

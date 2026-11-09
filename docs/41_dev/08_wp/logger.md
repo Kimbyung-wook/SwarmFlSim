@@ -43,3 +43,5 @@ ctest --preset msvc-debug -R "swarm_logger"
 - 큐 상한을 넘으면 메시지를 버리고 건수를 남긴다.
 
 추적: [logger/TRACE.md](../../../logger/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

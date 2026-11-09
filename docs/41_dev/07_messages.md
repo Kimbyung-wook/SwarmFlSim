@@ -56,3 +56,5 @@ C++는 다시 빌드하면 생성된다. UI·Monitor는 `npm test`가 다시 생
 ## 7.4 MCAP과의 관계
 
 MCAP 채널은 버스 키와 1:1이고, 스키마는 protobuf descriptor다(PRP-LOG-001). 새 키는 Logger 수정 없이 기록된다.
+
+다음: [8장](README.md#8장-wp별-파일-08_wp), [9. 기여 규칙](09_contributing.md).
