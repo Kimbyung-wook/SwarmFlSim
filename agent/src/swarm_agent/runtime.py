@@ -61,6 +61,7 @@ class RuntimeConfig:
 @dataclass
 class RuntimeStats:
     ticks: int = 0
+    late_onboard: int = 0   # lockstep에서 처리할 틱이 지난 뒤 도착한 onboard 입력 (D-30)
     ma_s: float = 0.0
     fa_s: float = 0.0
     frame_s: list[float] = field(default_factory=list)  # 틱 처리 시간 (최근 것만)
@@ -99,6 +100,11 @@ PARAM_PUBLISH_S = 1.0
 NAV_WAIT_S = 0.05
 ACTIVITY_PERIOD_US = 1_000_000  # 임무장비 상태 주기 보고 (DEC-051)
 ACTIVITY_NAMES = frozenset({"SensorActivity", "JammerActivity", "StrikeActivity"})
+# lockstep에서 onboard 입력(NavigationReport 제외)을 처리하는 틱 = header.frame + 지연 (D-30, DEC-039).
+# Core는 틱 P 직전에 입력을 몰아 내므로 그 틱에 도착이 보장되지 않고, 틱 P+1은 Agent의 FrameDone(P) 뒤에야 나온다.
+# SystemStatus는 P에 찍히고(publish_frame), 임무장비 출력은 적분 프레임 P-1로 찍혀 틱 P 앞에 나온다(step_payload)
+ONBOARD_LAG_FRAMES = {"SystemStatus": 1}
+ONBOARD_LAG_DEFAULT = 2
 DATALINK_PREFIX = "datalink"  # run.participants 중 이 접두어로 시작하는 것이 Datalink (DEC-040)
 
 
@@ -128,6 +134,8 @@ class AgentRuntime:
         self._ticks_seen = 0
         self._prev_tick_us: int | None = None
         self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
+        self._onboard_hold: dict[str, list] = {}    # 기체 → [(처리할 틱, 메시지 이름, seq, msg)] (lockstep, D-30)
+        self._last_frame: int | None = None         # 마지막으로 처리한 틱
         self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample),
                       bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_sample)]
@@ -322,6 +330,8 @@ class AgentRuntime:
         self._ticks_seen = 0
         self._prev_tick_us = None
         self._rx_hold = {}
+        self._onboard_hold = {}
+        self._last_frame = None
         self._pending_params = []
         if self._initialized:
             for v in self._order:
@@ -350,6 +360,32 @@ class AgentRuntime:
             self._try_release()
             return
         msg = decode(f"swarm.v1.{name}", payload)
+        if self._lockstep:
+            self._hold_onboard(v, name, msg)
+        else:
+            self._apply_onboard(v, name, msg)
+
+    def _hold_onboard(self, v: Vehicle, name: str, msg: Message) -> None:
+        """도착 순서가 아니라 메시지의 프레임으로 처리할 틱을 정한다. NavigationReport처럼 틱을 기다리게 할 수는 없다:
+        SystemStatus·임무장비 출력은 바뀔 때만 나와 그 프레임에 메시지가 있는지 Agent가 알 수 없다 (D-30)"""
+        due = msg.header.frame + ONBOARD_LAG_FRAMES.get(name, ONBOARD_LAG_DEFAULT)
+        if self._last_frame is not None and due <= self._last_frame:
+            self.stats.late_onboard += 1              # 처리할 틱을 이미 지났다. 다음 틱에 처리하므로 재현성이 깨질 수 있다
+            if self.stats.late_onboard == 1:
+                self.warn(f"{v.entity_id}: onboard {name} frame {msg.header.frame} arrived after tick {due}")
+        self._onboard_hold.setdefault(v.entity_id, []).append((due, name, msg.header.seq, msg))
+
+    def _release_onboard(self, frame: int) -> None:
+        for v in self._order:
+            held = self._onboard_hold.get(v.entity_id)
+            if not held:
+                continue
+            due = sorted((e for e in held if e[0] <= frame), key=lambda e: e[:3])
+            self._onboard_hold[v.entity_id] = [e for e in held if e[0] > frame]
+            for _, name, _, msg in due:
+                self._apply_onboard(v, name, msg)
+
+    def _apply_onboard(self, v: Vehicle, name: str, msg: Message) -> None:
         if name == "SystemStatus":
             v.system_status = msg
             v.vi_reports.note(vi_key(name, msg), msg)   # GCS 변화 보고 (DEC-071)
@@ -522,6 +558,8 @@ class AgentRuntime:
             # 이번 틱의 rx는 Datalink가 지금 내고 있을 수 있다. FrameDone이 보장된 이전 틱 시각까지만 소비한다
             self._release_rx(self._prev_tick_us)
             self._prev_tick_us = tick.sim_time_us
+            self._release_onboard(tick.frame)
+            self._last_frame = tick.frame
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
         self._report_activity(tick.sim_time_us)

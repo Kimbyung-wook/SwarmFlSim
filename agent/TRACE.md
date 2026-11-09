@@ -58,6 +58,7 @@ flowchart LR
 | IMP-AGT-031 | 무장별 보고 키(DEC-063): `StrikeActivity` 키를 (메시지, payload_id, weapon_entity)로 분리(비면 "" 그대로), Sensor·Jammer는 (메시지, payload_id). 10 Hz 상한은 새 키별. 종료 상태(IMPACT·MISSED·REJECTED)를 한 번 보낸 키는 상태 저장소에서 지워 1 Hz 전체 보고에서 빠지고, 그 송신 시각도 상한 간격이 지나면 버림. QA-026(같은 프레임 두 무장 변화 중 하나 누락) 해소 | `src/swarm_agent/runtime.py`, `src/swarm_agent/cli.py` | REQ-PAY-002, DEC-063, QA-026 | TC-AGT-059~062 Pass |
 | IMP-AGT-032 | 기체 VI 상태 GCS 자동 보고(DEC-071): 틱 시작(begin_frame 뒤, MA 전)에 `swarm/<id>/tx/vi/<Msg>`로 GCS(DEC-051과 같은 대상·LinkEnvelope·tx 키별 seq)에 보냄. 값의 출처: `FlightCapability`는 `Vehicle.capability`(FA `on_init` 반환)로 첫 틱 1회, `NavigationReport`는 `onboard/<id>/NavigationReport`의 최신 값을 `round(1e6/vi_report_hz)` µs 경계마다(기본 1 Hz, CLI `--vi-report-hz`, 0 이하면 끔), `SystemStatus`는 `onboard/<id>/SystemStatus`를 받을 때, `FlightCommandStatus`는 `VIPort.push_status`(FA `on_command`·`pending_status` 모두 거침)에서 가로채지 않고 복사해 command_id별 변화 보고. 변화 보고는 `--activity-max-hz` 키별 상한(DEC-056)과 최신 값 보내기, 종료 명령 상태(REJECTED·COMPLETED·FAILED·CANCELLED)를 보낸 키는 지움. 주기 전체 보고는 없음. 키별 추적은 `reporting.ChangeReporter`로 묶고 임무장비 보고(IMP-AGT-029~031)도 같은 클래스로 옮김. MA 플러그인과 무관 | `src/swarm_agent/reporting.py`, `runtime.py`, `vehicle.py`, `ports.py`, `cli.py` | DEC-071, OPN-064, DEC-056, DEC-044 | TC-AGT-049, 063~069 Pass |
 | IMP-AGT-033 | 비행 명령 갱신의 상태 역행 방지(D-28): 같은 `command_id`·종류로 갱신하면 `on_command`가 수행 중에는 EXECUTING, 수행 전에는 ACCEPTED를 돌려줌. 새 ID·종류 변경·REJECTED 처리는 그대로. 파이썬 FA 구현은 `DefaultFlightAutonomy`뿐이라 다른 곳은 고칠 것이 없음 | `src/swarm_agent/fa.py` | D-28, DEC-071 | TC-AGT-070~074 Pass |
+| IMP-AGT-036 | lockstep onboard 입력의 처리 틱을 메시지 프레임으로 고정(D-30, DEC-039): `NavigationReport`를 뺀 onboard 입력(`SystemStatus`, `Detection`, `*Activity`)을 도착 즉시 처리하지 않고 보관했다가 틱 `header.frame + 지연`의 begin_frame 전에 (틱, 메시지, seq) 순으로 처리한다. 지연은 `SystemStatus` 1(Core `publish_frame`이 틱 P 직전에 프레임 P로 발행), 임무장비 출력 2(`step_payload`가 적분 프레임 P-1로 찍어 틱 P 앞에 발행). 틱 P+1은 Agent의 FrameDone(P) 뒤에야 나오므로 그때까지 도착한다. NavigationReport처럼 틱을 기다리게 할 수 없는 이유: 이 입력들은 바뀔 때만 나와 그 프레임에 메시지가 있는지 알 수 없다. 처리할 틱이 지난 뒤 도착하면 `stats.late_onboard`를 세고 경고 후 다음 틱에 처리한다. realtime·free-run은 도착 즉시 처리 그대로. 변화 보고 규칙(DEC-056, DEC-071)은 그대로 | `src/swarm_agent/runtime.py` | D-30, DEC-039, DEC-005, DEC-051, DEC-071, DEC-073 | TC-AGT-088~093 Pass |
 
 ## TC
 
@@ -126,8 +127,14 @@ flowchart LR
 | TC-AGT-072 | 새 ID는 이전 명령 CANCELLED 후 ACCEPTED, 같은 ID라도 종류가 바뀌면 ACCEPTED, REJECTED는 그대로 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
 | TC-AGT-073 | flocking(매 프레임 같은 ID) 5 s: GCS가 받은 FlightCommandStatus가 command_id별로 역행·반복 없음 | `tests/test_agent_fa_status.py` | IMP-AGT-033, IMP-AGT-032 | Pass |
 | TC-AGT-074 | lockstep에서 같은 입력 두 번 실행 시 GCS가 받은 FlightCommandStatus가 같음 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
+| TC-AGT-088 | SystemStatus가 항법 보고 앞이든 틱 처리 뒤든 프레임 0의 상태는 틱 1에 보고 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
+| TC-AGT-089 | SensorActivity가 두 도착 순서 모두 같은 틱에 보고(적분 프레임 + 2) | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
+| TC-AGT-090 | Detection이 두 도착 순서 모두 같은 틱에 MA에 보임 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
+| TC-AGT-091 | 프레임마다 값이 바뀌는 100프레임 실행에서 두 도착 순서의 GCS 수신(키·시각·seq·내용)이 같음 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
+| TC-AGT-092 | realtime은 도착한 다음 틱에 보고(동작 유지) | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
+| TC-AGT-093 | 처리할 틱이 지난 뒤 도착한 입력은 `late_onboard`로 세고 잃지 않음 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
 
-시험 결과(2026-11-09): agent 80, algorithms 74 passed
+시험 결과(2026-11-10): agent 89, algorithms 74 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 
