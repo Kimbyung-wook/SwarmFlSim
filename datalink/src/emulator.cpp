@@ -159,8 +159,11 @@ void Datalink::on_tx(const Sample& s) {
 }
 
 void Datalink::enqueue_locked(const std::string& src, const std::string& suffix, const Sample& s, v1::LinkEnvelope&& env) {
-  // 송신 시각은 헤더의 sim_time_us를 쓴다(DEC-039: 받은 시점·도착 순서에 의존하지 않는다). 없으면 마지막 tick 시각
-  const std::uint64_t tx_us = env.header().sim_time_us() != 0 ? env.header().sim_time_us() : now_us_;
+  // 송신 시각은 헤더의 sim_time_us를 쓴다(DEC-039: 받은 시점·도착 순서에 의존하지 않는다).
+  // 0은 기체 런타임이면 프레임 0의 유효한 시각이다. publisher가 있는 지상 발행자(UI·Gateway, DEC-077)의 0만 "시각 없음"으로 보고
+  // 마지막 tick 시각을 쓴다 (QA O-23)
+  const bool no_time = env.header().sim_time_us() == 0 && !env.publisher().empty();
+  const std::uint64_t tx_us = no_time ? now_us_ : env.header().sim_time_us();
   Pending p{tx_us, src, s.key, env.header().seq(), arrival_++, suffix, s.payload.size(), std::move(env)};
   if (pending_.size() >= cfg_.max_pending) {
     overflow_locked(std::move(p));
@@ -350,14 +353,15 @@ void Datalink::run_tick() {
     frame_ = tick.frame();
     std::erase_if(faults_, [&](const Fault& f) { return f.until_us != 0 && now_us_ >= f.until_us; });
 
-    // 이전 틱 시각에 송신된 메시지만 처리한다. 도착이 tick보다 앞서든 뒤서든 같은 틱에서 처리해 결정론을 지킨다
+    // 이전 틱 시각에 송신된 메시지만 처리한다. 도착이 tick보다 앞서든 뒤서든 같은 틱에서 처리해 결정론을 지킨다.
+    // 프레임 0의 송신(시각 0)도 예외 없이 틱 1에서 처리한다. 틱 0은 기다리지 않으므로 틱 0에 넣으면 도착 경쟁이 된다
     auto by_order = [](const Pending& a, const Pending& b) {
       return std::tie(a.tx_time_us, a.src, a.key, a.seq, a.arrival) <
              std::tie(b.tx_time_us, b.src, b.key, b.seq, b.arrival);
     };
     const std::uint64_t cutoff = now_us_;
     auto held = std::stable_partition(pending_.begin(), pending_.end(),
-                                      [&](const Pending& p) { return p.tx_time_us < cutoff || p.tx_time_us == 0; });
+                                      [&](const Pending& p) { return p.tx_time_us < cutoff; });
     std::vector<Pending> batch(std::make_move_iterator(pending_.begin()), std::make_move_iterator(held));
     pending_.erase(pending_.begin(), held);
     std::sort(batch.begin(), batch.end(), by_order);
