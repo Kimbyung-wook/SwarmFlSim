@@ -421,6 +421,8 @@ def make_tiles(sources: list[dict], args) -> int:
 # ---------------------------------------------------------------- main
 
 def main() -> int:
+    # cp949 콘솔에서 --help의 비 cp949 문자로 끝나지 않게 한다
+    sys.stdout.reconfigure(errors="replace")
     today = dt.date.today()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "tiles" / "imagery")

@@ -106,6 +106,8 @@ def encode(heights: np.ndarray, child_mask: int) -> bytes:
 
 
 def main() -> int:
+    # cp949 콘솔에서 --help의 비 cp949 문자로 끝나지 않게 한다
+    sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dem", type=Path, default=ROOT / "data" / "dem" / "korea_glo90.json")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "tiles" / "terrain")

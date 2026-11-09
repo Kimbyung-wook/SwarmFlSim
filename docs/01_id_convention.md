@@ -45,6 +45,7 @@
 | `AGT` | Vehicle Agent 런타임과 플러그인 API |
 | `LNK` | Datalink Emulator |
 | `UI` | GCS/UI (CesiumJS) |
+| `MON` | Traffic Monitor (`ui/monitor/`) |
 | `SCN` | Scenario Manager |
 | `LOG` | Logger/Replay |
 | `GW` | A-GRA Gateway |

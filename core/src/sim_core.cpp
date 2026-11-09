@@ -317,7 +317,7 @@ void SimCore::handle_fault(const v1::InjectFault& f) {
   faults_[key] = f.duration_s() > 0.0
                      ? sim_time_us_ + static_cast<std::uint64_t>(std::llround(f.duration_s() * 1e6))
                      : std::numeric_limits<std::uint64_t>::max();
-  // SENSOR는 기록만 한다. 탐지(Detection)를 Core가 만들게 되면 이 상태로 막는다
+  // SENSOR 고장은 Payload 입력 sensor_fault로 넘겨 탐지를 막는다 (DEC-047)
   log("fault " + name + " on " + f.entity_id());
 }
 

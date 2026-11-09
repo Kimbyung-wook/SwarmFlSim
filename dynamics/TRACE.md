@@ -52,7 +52,7 @@ flowchart LR
 
 ## 제약과 계약 변경 요청
 
-- 바람 미반영: `to_kinematic`이 `Environment`를 받지 않아 대지 속도를 낼 수 없다. 위치 적분과 출력 속도를 일치시키려고 바람을 넣지 않았다.
+- (해소: DEC-023, TC-DYN-013) 바람 미반영: `to_kinematic`이 `Environment`를 받지 않아 대지 속도를 낼 수 없다. 위치 적분과 출력 속도를 일치시키려고 바람을 넣지 않았다.
   계약 변경 요청: `to_kinematic`에 `const Environment&` 추가, 또는 대기 속도와 대지 속도를 구분한 `KinematicSample` 필드 추가.
 - 3-DoF `to_kinematic`의 각속도는 표준 중력으로 계산한다(같은 이유).
 - 적분기 인스턴스는 작업 버퍼를 가진다. 스레드마다 인스턴스를 따로 쓴다.

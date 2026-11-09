@@ -1,6 +1,6 @@
 """라이브 스택에 고장을 주입한다 (UI 고장 표시 점검용).
 
-uv run python qa/inject_fault.py --connect tcp/127.0.0.1:48281 --entity uav-001 --kind ENGINE_OUT [--clear]
+uv run python qa/inject_fault.py --connect tcp/127.0.0.1:48281 --entity uav-001 --kind ENGINE [--clear]
 """
 from __future__ import annotations
 

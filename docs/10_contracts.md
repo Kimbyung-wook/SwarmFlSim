@@ -84,7 +84,7 @@ flowchart LR
 | `onboard/<id>/<msg>` | `NavigationReport`, `SystemStatus`(DEC-073), `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `link/outcome/<src>/<dst>` | `LinkOutcome` | Datalink | Monitor, Logger |
 | `link/state/<a>/<b>` | `LinkState` (a < b 사전순) | Datalink | UI, Monitor |
-| `truth/state` | `TruthFrame` | Core | UI, Monitor, Logger |
+| `truth/state` | `TruthFrame` | Core | Datalink, UI, Monitor, Logger |
 | `truth/event/<kind>` | `TruthEvent` (`launch`, `impact`, `kill`, `jam_zone`, `spawn`) | Core | UI, Monitor, Logger |
 
 ### 3.3 규칙
@@ -399,7 +399,7 @@ ctest --preset <preset>
 uv sync
 ```
 
-- `uv sync`는 dev 그룹으로 워크스페이스 패키지 전체와 `eclipse-zenoh`를 설치한다. `uv run pytest`는 `api/python/tests`와 `scenario/tests`를 모두 돈다.
+- `uv sync`는 dev 그룹으로 워크스페이스 패키지 전체와 `eclipse-zenoh`를 설치한다. `uv run pytest`는 루트 `pyproject.toml`의 `testpaths`를 모두 돈다.
 
 ```bash
 uv run python scripts/gen_proto.py
