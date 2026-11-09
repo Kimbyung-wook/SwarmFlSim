@@ -14,7 +14,7 @@
 | `include/swarm/payload/profiles.hpp`, `src/profiles.cpp` | 프로파일 읽기와 재정의 |
 | [`profiles/`](../../../payload/profiles/) | 장비 프로파일 JSON |
 
-제원은 프로파일 파일에 있다. 시나리오에서 프로파일 이름과 `overrides`로 재정의하는 방법은 사용자 매뉴얼 [3.8](../../42_user/03_scenario.md#38-탑재-장비-payloads).
+수치는 프로파일 파일에 있다. 시나리오에서 프로파일 이름과 `overrides`로 재정의하는 방법은 사용자 매뉴얼 [3.8](../../42_user/03_scenario.md#38-탑재-장비-payloads).
 
 ## 실행 파일
 
@@ -38,3 +38,5 @@ ctest --preset msvc-debug -R "^pay\."
 - 기본 MA는 장비 명령을 내지 않는다. 시험과 MA 플러그인이 `ms.command`로 보낸다.
 
 추적: [payload/TRACE.md](../../../payload/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

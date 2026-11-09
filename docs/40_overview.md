@@ -121,7 +121,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 - 실행기가 Logger → Datalink → Agent → 브리지 → Core → UI·Monitor 순으로 띄운다. 기체 20대와 GCS 1개가 있는 시나리오(`scenario/examples/p0_demo_20.json`)를 realtime 50 Hz로 돌린다.
 - 브라우저: `http://localhost:5173/?source=bus&gcs=gcs-01&bridge=ws://127.0.0.1:8765/bus`. 왼쪽 드래그로 기체를 고르고 지도를 우클릭하면 이동 명령이 나간다.
 - 기록은 `out/p0_demo/live-<시각>/p0_demo.mcap`에 남는다. 종료는 Ctrl+C.
-- 옵션, 재생, 자동 확인(`probe`)은 [20_p0_demo.md](20_p0_demo.md). 사용자 매뉴얼 [2장](42_user/README.md)에서 다시 다룬다(작성 예정).
+- 옵션, 재생, 자동 확인(`probe`)은 [20_p0_demo.md](20_p0_demo.md). 따라 하기는 사용자 매뉴얼 [2장](42_user/02_quickstart.md).
 
 ![P0 데모 2D 지도, 기체 20대](img/p0_demo/01_live_2d_20uav.jpg)
 

@@ -1,7 +1,6 @@
 # 1. 개발 환경
 
 - 설치 명령의 기준은 [10_contracts.md §7](../10_contracts.md#7-빌드-환경과-시험-dec-022)이다. 이 장은 무엇을 설치할지 고르는 기준과 자주 나는 실패를 다룬다.
-- 다음 장: [2. 빌드와 시험](02_build_test.md).
 
 ## 1.1 무엇을 설치할까
 
@@ -61,3 +60,5 @@ flowchart TD
 | `--help`에서 `UnicodeEncodeError: 'cp949'` | 일부 스크립트 도움말에 cp949로 못 쓰는 글자가 있다 | `PYTHONUTF8=1`을 설정하고 실행한다. 또는 PowerShell에서 `$env:PYTHONUTF8=1` |
 
 그 밖의 실패는 [11. 문제 해결](11_troubleshooting.md).
+
+다음: [2. 빌드와 시험](02_build_test.md).

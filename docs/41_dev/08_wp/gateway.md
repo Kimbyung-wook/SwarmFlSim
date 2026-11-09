@@ -44,7 +44,7 @@ GCS 쪽 지상 참여자로서 내부 메시지와 외부 UCI 메시지를 변�
 cd gateway && uv run pytest
 ```
 
-InMemoryBus와 프로세스 안의 CAL Server로 돈다. 처음이면 `git submodule update --init third_party/agra_lacal`과 `cd gateway && uv sync --extra zenoh`가 필요하다. `--extra zenoh`가 없으면 인메모리 버스로 조용히 동작해 시뮬레이터 메시지가 오지 않는다.
+InMemoryBus와 프로세스 안의 CAL Server로 돈다. 처음이면 [2.6](../02_build_test.md#26-gateway)의 설치를 먼저 한다.
 
 ## 계약 변경 요청 상태
 
@@ -64,3 +64,5 @@ InMemoryBus와 프로세스 안의 CAL Server로 돈다. 처음이면 `git submo
 - `config/lacal_server.yaml`의 `declared.pub`에 `MA_PositionReport`가 없다(O-20).
 
 추적: [gateway/TRACE.md](../../../gateway/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

@@ -156,3 +156,5 @@ sequenceDiagram
 | 각속도 | 기체 FRD(rad/s) |
 | 시간 | `sim_time_us`(uint64, µs), `frame` |
 | 각도 필드 | 이름에 `_deg`·`_rad`를 붙인다. 없으면 rad |
+
+다음: 플러그인 작성자는 [4장](04_ma_plugin.md), WP 기여자는 [8장](README.md#8장-wp별-파일-08_wp).

@@ -49,3 +49,5 @@ cd ui && npm test
 - 목 소스는 `TaskStatus(ACCEPTED)`만 돌려주고 기동을 흉내 내지 않는다.
 
 추적: [ui/TRACE.md](../../../ui/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

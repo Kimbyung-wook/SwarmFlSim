@@ -1,6 +1,6 @@
 # 6. 동역학 모델 추가
 
-동역학 모델은 C++로 쓰고 `dynamics/`에 넣어 Core와 함께 빌드한다. Python 플러그인처럼 따로 등록하지 않는다. 그래서 [예제 패키지](../../examples/plugins/)에는 모델 예제가 없고, 이 장은 실제 `dof2` 코드와 시험을 예로 든다.
+동역학 모델은 C++로 쓰고 `dynamics/`에 넣어 Core와 함께 빌드한다. Python 플러그인처럼 따로 등록하지 않는다. 동역학은 C++이라 Python 플러그인을 담는 [예제 패키지](../../examples/plugins/)(DEC-070)의 대상이 아니다. 이 장은 실제 `dof2` 코드와 시험을 예로 든다.
 
 | 볼 파일 | 내용 |
 |---|---|
@@ -68,7 +68,7 @@ flowchart LR
 1. `models.hpp`·`models.cpp`에 클래스를 만든다. 매개변수는 `Params` 구조체와 `ParamDesc` 표(`kDof2Descs`처럼)로 선언한다.
 2. [factory.cpp](../../dynamics/src/factory.cpp)에 `FieldTable`을 추가하고 `make_model(name, params)`에 분기를 넣는다. `model_names()`에 이름을 넣는다.
 3. `dof5`, `dof6`는 예약돼 있다. 이 모델을 구현하면 `reserved_model_names()`에서 뺀다. 예약 모델은 Core 검사에서 거부된다.
-4. 그 밖의 이름은 `proto`의 `DynamicsKind`와 시나리오 스키마를 바꿔야 한다. [계약 변경 요청](09_contributing.md) 절차를 따른다.
+4. 그 밖의 이름은 `proto`의 `DynamicsKind`와 시나리오 스키마를 바꿔야 한다. [계약 변경 요청](09_contributing.md#95-계약-변경-요청) 절차를 따른다.
 5. 기체별 기본값이 필요하면 [core/src/wp2_dynamics.cpp](../../core/src/wp2_dynamics.cpp)의 `kAirframes`를 고친다. 현재 표는 `skywalker_x8`, `aerosonde`이고 속도 한계와 뱅크 한계를 정한다.
 
 ## 6.4 매개변수
@@ -109,6 +109,6 @@ flowchart LR
 ctest --preset msvc-debug -R "^dyn\."
 ```
 
-> 미구현: `dof5`, `dof6` 모델. 이름만 예약돼 있고 시나리오에 쓰면 Core가 거부한다.
+> 미구현: `dof5`, `dof6` 모델 (로드맵 P3). 이름만 예약돼 있고 시나리오에 쓰면 Core가 거부한다.
 
 다음: [7. 메시지와 계약](07_messages.md).

@@ -38,3 +38,5 @@ uv run pytest scenario/tests
 - `run.rate`는 0보다 커야 한다. 최대 속도는 Core의 `--rate 0`으로 준다.
 
 추적: [scenario/TRACE.md](../../../scenario/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).

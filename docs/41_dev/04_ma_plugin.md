@@ -72,13 +72,13 @@ swarm.ma: example_patrol, example_rendezvous, example_turn, flocking, flocking_b
 swarm.fa: default, example_hsa
 ```
 
-**4. 시나리오에서 고른다.** 예제 전부를 쓰는 시나리오는 [examples_all.json](../../examples/plugins/scenarios/examples_all.json)이다.
+**4. 시나리오에서 고른다.** 시나리오 형식은 사용자 매뉴얼 [3장](../42_user/03_scenario.md)에 있다. 예제 전부를 쓰는 시나리오는 [examples_all.json](../../examples/plugins/scenarios/examples_all.json)이다.
 
 ```json
 "autonomy": { "ma_plugin": "example_turn", "ma_params": { "heading_deg": 120.0 } }
 ```
 
-**5. 실행한다.** 시나리오를 `.pb`로 바꾼 뒤 터미널마다 하나씩 띄운다. Core의 `--rate 0`은 최대 속도, `--frames 3000`은 모의 시간 60초다.
+**5. 실행한다.** C++ 실행 파일이 필요하다([2.2](02_build_test.md#22-c-core-동역학-datalink-logger-payload-버스)). 빌드 없이 확인하려면 [4.9](#49-단위-시험)로 건너뛴다. 시나리오를 `.pb`로 바꾼 뒤 터미널마다 하나씩 띄운다. Core의 `--rate 0`은 최대 속도, `--frames 3000`은 모의 시간 60초다.
 
 ```bash
 uv run swarm-scenario export examples/plugins/scenarios/examples_all.json --out out/examples.pb
@@ -232,6 +232,8 @@ stateDiagram-v2
 | `flocking` | [flocking.py](../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds 분리·정렬·응집 일괄 MA. Route는 거부 | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
 
 `flocking_basic`은 예제 시나리오용 변형이다. 전체 항목은 [algorithms/TRACE.md](../../algorithms/TRACE.md).
+
+> 미구현: 링크 상실 시 기체 행동 (로드맵 P2).
 
 `formation`의 슬롯은 리더 FRD 기준 오프셋이다. `s`는 `spacing_m`, `k`는 추종기 순번(0부터)이다.
 

@@ -31,17 +31,7 @@
 
 ## 7.2 메시지가 사라지는 이유
 
-Monitor의 손실 사유와 같은 이름이다.
-
-| 사유 | 뜻 |
-|---|---|
-| `JAMMED` | 수신 엔티티가 재밍 구역 안 |
-| `NO_LOS` | 지형에 가려짐. Datalink는 평지만 본다([4.5](04_run.md#45-지형과-적분기)) |
-| `OUT_OF_RANGE` | 거리 또는 SNR 부족 |
-| `BURST_LOSS` | 버스트 손실 |
-| `QUEUE_OVERFLOW` | 대역폭 큐 초과 |
-| `NODE_DEAD` | 상대 엔티티가 파괴됨 |
-| `FAULT_INJECTED` | 고장 주입 |
+사유별 뜻은 Monitor의 [손실 사유 표](06_monitor.md#62-손실-사유)와 같다. `NO_LOS`에서 Datalink는 평지만 본다([4.5](04_run.md#45-지형과-적분기)). `FAULT_INJECTED`는 [7.4](#74-고장-주입)로 만든다.
 
 ## 7.3 재밍 구역
 
@@ -89,3 +79,5 @@ uv run python qa/inject_fault.py --connect tcp/127.0.0.1:17601 --entity uav-003 
 ## 7.5 결과 확인
 
 Traffic Monitor의 통계 표와 타임라인에 손실 사유가 나온다. 화면 읽는 법은 [6장](06_monitor.md). 지나간 실행은 [8장](08_record_replay.md)으로 재생해 같은 화면에서 본다.
+
+다음: [8. 기록과 재생](08_record_replay.md).

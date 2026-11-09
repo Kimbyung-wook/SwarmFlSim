@@ -7,7 +7,7 @@
 - 자기 WP 디렉터리만 수정한다. WP와 디렉터리의 대응은 [개괄 §7](../40_overview.md#7-저장소-지도).
 - `proto/`, `api/`, `bus/`, `docs/10_contracts.md`는 WP0의 계약이다. 바꿔야 하면 [9.5](#95-계약-변경-요청) 절차를 따른다.
 - 다른 WP의 내부 구현에 의존하지 않는다. 동역학·버스·플러그인은 `api/`의 인터페이스로만 연결한다. 다른 WP가 없으면 자기 디렉터리의 목과 `InMemoryBus`로 시험한다.
-- 새 Python 패키지를 만드는 WP는 루트 `pyproject.toml`의 workspace members, dev 그룹, testpaths에 추가한다. 새 C++ 의존성은 `vcpkg.json`과 계약 §7.2의 패키지 목록을 함께 고친다.
+- 새 Python 패키지를 만드는 WP는 루트 `pyproject.toml`의 네 곳에 추가한다([4.1](04_ma_plugin.md#41-따라-하기) 2단계). 새 C++ 의존성은 `vcpkg.json`과 계약 §7.2의 패키지 목록을 함께 고친다.
 
 ## 9.2 ID 체계
 
@@ -22,7 +22,7 @@
 | `IMP-<모듈>-NNN` | 구현 항목 | 각 WP의 `TRACE.md` |
 | `TC-<모듈>-NNN` | 시험 항목 | 각 WP의 `TRACE.md` |
 
-- 모듈 코드: `API`, `CORE`, `DYN`, `AGT`, `LNK`, `UI`, `MON`, `SCN`, `LOG`, `PAY`, `GW`, `INT`, `QA`.
+- 모듈 코드: `API`, `CORE`, `DYN`, `AGT`, `LNK`, `UI`, `MON`, `SCN`, `LOG`, `PAY`, `GW`, `EXP`, `INT`, `QA`.
 - ID는 재사용하지 않는다. 이미 `TRACE.md`가 있는 디렉터리는 기존 번호 뒤를 잇는다.
 - 모든 구현은 REQ 또는 DEC에 연결한다.
 
@@ -55,7 +55,7 @@ flowchart LR
 
 - 자기 영역의 시험을 모두 통과시킨다([2장](02_build_test.md)).
 - 버스를 거치는 동작은 실제 Zenoh로 한 번 돌려 보고 결과를 `TRACE.md`에 적는다.
-- lockstep에 영향을 주는 변경은 같은 시드 2회 실행의 결과를 비교한다([QA 하니스, 10장](README.md), 작성 예정).
+- lockstep에 영향을 주는 변경은 같은 시드 2회 실행의 결과를 비교한다([10.3](10_qa.md#103-결정성-진단)).
 
 ## 9.7 문서 갱신
 
@@ -66,3 +66,5 @@ WP 세션은 매뉴얼을 고치지 않는다. 통합 담당이 병합할 때 [3
 - 무기체계 실제 제원은 넣지 않는다. 프로파일은 공개 일반값만 쓴다(DEC-019).
 - A-GRA 배포 제한(Distribution D) 내용은 저장소에 옮기지 않는다. 메시지명은 공개 XSD에서 가져온다.
 - 용어는 '도달', '유도 객체'를 쓴다.
+
+다음: [10. QA 하니스](10_qa.md).

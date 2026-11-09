@@ -48,7 +48,7 @@ flowchart LR
 - **채널 분리**
   - `swarm/**`: 기체 간·지상-기체 간 메시지 (tx → Datalink → rx)
   - `sim/**`: 시뮬레이션 통제·시간 동기
-  - `truth/**`: 실제 상태. UI·Monitor·Logger만 구독하고 기체 에이전트는 접근 불가
+  - `truth/**`: 실제 상태. UI·Monitor·Logger·Datalink가 구독하고 기체 에이전트는 접근 불가
 - **A-GRA 경계**: MA는 L1 포트(C2/VI/MS/MP/MD/P2P)로만 통신 (DEC-013)
 
 ## 4. 디렉터리
@@ -67,6 +67,7 @@ flowchart LR
 | `gateway/` | WP9 | A-GRA Gateway(UCI 변환, LA-CAL 연동). 독립 uv 프로젝트 |
 | `third_party/agra_lacal` | WP9 | LA-CAL 서브모듈(수정하지 않음, DEC-069) |
 | `qa/` | QA | 시험 하니스, 고장 주입, 결정성 진단 |
+| `examples/plugins/` | — | 플러그인 예제 패키지. MA 3종, FA 1종 (DEC-070) |
 
 ## 5. 기술 스택
 
@@ -138,9 +139,9 @@ uv run pytest
 | [30_doc_plan.md](docs/30_doc_plan.md) | 매뉴얼 작성 계획 |
 | [31_doc_changelog.md](docs/31_doc_changelog.md) | 문서 변경 기록: 병합별 매뉴얼 영향과 반영 상태 |
 | [40_overview.md](docs/40_overview.md) | 프로젝트 개괄: 목적, 현재 기능, 구성, 처음 실행, 진행 상태 |
-| [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 (목차, 본문 작성 예정) |
-| [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 (목차, 본문 작성 예정) |
-| [en/](docs/en/README.md) | 영문판 (목차, 본문 작성 예정) |
+| [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 |
+| [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 |
+| [en/](docs/en/README.md) | 영문판 (목차만 있다. 본문은 국문에서 옮기는 중) |
 
 ## 9. 개발 규칙
 - 모든 구현은 REQ 또는 DEC에 연결하고 `IMP-*`·`TC-*` ID를 부여한다

@@ -23,11 +23,11 @@ build/msvc-debug/logger/swarm_logger record --out run.mcap --no-multicast --list
 ```
 
 ```bash
-build/msvc-debug/datalink/swarm_datalink --scenario my.pb --no-frame-done --no-multicast --listen tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17600
+build/msvc-debug/datalink/swarm_datalink --scenario my_first.pb --no-frame-done --no-multicast --listen tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17600
 ```
 
 ```bash
-uv run swarm-agent --scenario my.pb --no-multicast --listen tcp/127.0.0.1:17602 --connect tcp/127.0.0.1:17600 --connect tcp/127.0.0.1:17601
+uv run swarm-agent --scenario my_first.pb --no-multicast --listen tcp/127.0.0.1:17602 --connect tcp/127.0.0.1:17600 --connect tcp/127.0.0.1:17601
 ```
 
 ```bash
@@ -35,7 +35,7 @@ uv run swarm-bridge --port 8765 --no-multicast --listen tcp/127.0.0.1:17603 --co
 ```
 
 ```bash
-build/msvc-debug/core/swarm_core --scenario my.pb --autostart --mode realtime --no-multicast --listen tcp/127.0.0.1:17604 --connect tcp/127.0.0.1:17600 --connect tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17602 --connect tcp/127.0.0.1:17603
+build/msvc-debug/core/swarm_core --scenario my_first.pb --autostart --mode realtime --no-multicast --listen tcp/127.0.0.1:17604 --connect tcp/127.0.0.1:17600 --connect tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17602 --connect tcp/127.0.0.1:17603
 ```
 
 브라우저 화면은 `ui/`와 `ui/monitor/`에서 각각 띄운다.
@@ -85,6 +85,8 @@ sequenceDiagram
 | `lockstep` | `rate`. 0은 최대 속도 | 결정론 | 알고리즘 비교, 반복 실험 |
 | `freerun` | `rate`. 0은 최대 속도 | 아님 | Core만 빠르게 돌릴 때 |
 
+> 확인 안 됨: `freerun`은 모드 전환 시험(TC-QA-011)만 있고 사용 사례 기록이 없다.
+
 - 모드는 시나리오 `run.mode`로 정하고, Core의 `--mode`, `--rate`로 바꿀 수 있다.
 - 배속 0(최대 속도)은 Core의 `--rate 0`으로만 준다. 시나리오의 `run.rate`는 0보다 커야 한다.
 
@@ -101,7 +103,7 @@ uv run swarm-agent --no-multicast --listen tcp/127.0.0.1:17602 --connect tcp/127
 ```
 
 ```bash
-build/msvc-debug/core/swarm_core --scenario my.pb --autostart --no-multicast --listen tcp/127.0.0.1:17603 --connect tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17602
+build/msvc-debug/core/swarm_core --scenario my_first.pb --autostart --no-multicast --listen tcp/127.0.0.1:17603 --connect tcp/127.0.0.1:17601 --connect tcp/127.0.0.1:17602
 ```
 
 - `run.participants`의 ID가 실제 프로세스의 ID와 같아야 한다. 기본은 `datalink-0`, `agent-0`이다. 틀리면 첫 틱이 나가지 않는다.

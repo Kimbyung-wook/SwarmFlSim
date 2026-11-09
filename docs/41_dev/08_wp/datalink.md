@@ -52,3 +52,5 @@ TC-LNK 항목이 판정 단계별 동작과 같은 입력의 결정성을 본다
 - 폭주 폐기 outcome은 틱당 상한까지만 기록하고 나머지는 로그에 건수만 남긴다.
 
 추적: [datalink/TRACE.md](../../../datalink/TRACE.md).
+
+다음: [9. 기여 규칙](../09_contributing.md).
