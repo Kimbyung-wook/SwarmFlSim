@@ -137,7 +137,9 @@ class DefaultFlightAutonomy(FlightAutonomy):
         if not update:
             self._cmd_id = cmd.command_id
             self._executing = False
-        return self._status(cmd.command_id, _S.COMMAND_STATE_ACCEPTED)
+        # 같은 ID·종류의 갱신은 상태를 뒤로 돌리지 않는다. 새 명령이면 위에서 _executing을 내렸다 (D-28)
+        return self._status(cmd.command_id,
+                            _S.COMMAND_STATE_EXECUTING if self._executing else _S.COMMAND_STATE_ACCEPTED)
 
     def _executing_or_accepted(self) -> bool:
         return self._kind in ("hsa", "waypoint", "orbit")
