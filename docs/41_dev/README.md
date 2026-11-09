@@ -16,17 +16,17 @@
 
 | 장 | 파일 | 내용 | 상태 |
 |---|---|---|---|
-| 1 | `01_setup.md` | 개발 환경: 툴체인 선택, 설치, 흔한 실패 | 작성 예정 |
-| 2 | `02_build_test.md` | 빌드와 시험: C++·Python·UI·Gateway, 코드 생성물 | 작성 예정 |
-| 3 | `03_architecture.md` | 아키텍처와 실행 모델: 프로세스, 버스 키 접근 규칙, 실행 모드, lockstep | 작성 예정 |
+| 1 | [`01_setup.md`](01_setup.md) | 개발 환경: 툴체인 선택, 설치, 흔한 실패 | 작성됨 |
+| 2 | [`02_build_test.md`](02_build_test.md) | 빌드와 시험: C++·Python·UI·Gateway, 코드 생성물 | 작성됨 |
+| 3 | [`03_architecture.md`](03_architecture.md) | 아키텍처와 실행 모델: 프로세스, 버스 키 접근 규칙, 실행 모드, lockstep | 작성됨 |
 | 4 | `04_ma_plugin.md` | MA 플러그인 작성: 따라 하기, 포트, 매개변수, 일괄 호출, 시험. 예제 패키지 `examples/plugins/`(DEC-070) | 작성 예정 |
 | 5 | `05_fa_plugin.md` | FA 플러그인 작성: VI 제어 모드, 기본 FA | 작성 예정 |
 | 6 | `06_dynamics.md` | 동역학 모델 추가: 인터페이스, 팩토리, 매개변수, 시험 | 작성 예정 |
-| 7 | `07_messages.md` | 메시지와 계약: proto 역할, A-GRA 매핑 옵션, 메시지 추가 절차 | 작성 예정 |
+| 7 | [`07_messages.md`](07_messages.md) | 메시지와 계약: proto 역할, A-GRA 매핑 옵션, 메시지 추가 절차 | 작성됨 |
 | 8 | `08_wp/` | WP별 기여 안내(아래 표) | 작성 예정 |
-| 9 | `09_contributing.md` | 기여 규칙: ID, TRACE, 커밋, 계약 변경 요청 | 작성 예정 |
+| 9 | [`09_contributing.md`](09_contributing.md) | 기여 규칙: ID, TRACE, 커밋, 계약 변경 요청 | 작성됨 |
 | 10 | `10_qa.md` | QA 하니스: `qa/run_qa.py`, 시나리오, 결정성 진단 | 작성 예정 |
-| 11 | `11_troubleshooting.md` | 문제 해결: 증상 → 원인 → 조치 | 작성 예정 |
+| 11 | [`11_troubleshooting.md`](11_troubleshooting.md) | 문제 해결: 증상 → 원인 → 조치 | 작성됨 |
 
 ### 8장 WP별 파일 (`08_wp/`)
 
