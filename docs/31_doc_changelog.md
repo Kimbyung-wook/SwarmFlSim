@@ -64,3 +64,4 @@
 | 2026-11-09 | `a6f133b` | — | 문서 변경 기록 4행 반영 병합. 코드 변화 없음 | — | 해당 없음 | |
 | 2026-11-09 | `a2de464` | IMP-UI-076, TC-UI-064, DEC-077 | UI가 보내는 `LinkEnvelope`에 `publisher`를 채움 | 개발 8 ui | 미처리 | |
 | 2026-11-09 | `45f64fc` | TC-GW-019~027, DEC-075~077 | Gateway가 외부 승인 응답과 `MA_RoutePlan`·`MA_MissionPlan`을 받음. `--participant`로 발행자 ID 지정. 지원 범위는 `gateway/README.md` | 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
+| 2026-11-09 | `e334603` | IMP-AGT-034, TC-AGT-075~081, DEC-076, CR-GW-008 | 내장 MA가 실행 중 받은 `MissionPlan`을 반영. 같은 `plan_id`는 무시, 새 `plan_id`는 현재 작업을 교체 | 개발 4, 개발 8 agent, 개발 8 algorithms, 사용자 9 | 미처리 | |
