@@ -4,9 +4,9 @@
 
 | Document | Contents | Status |
 |---|---|---|
-| `40_overview.md` | Project overview: purpose, components, current status, where to start | Planned |
-| [41_dev/](41_dev/README.md) | Developer manual: setup, build and test, writing plugins, per-WP contribution guide | Contents page only |
-| [42_user/](42_user/README.md) | User manual: scenarios, running, GCS UI, Traffic Monitor, recording and replay | Contents page only |
+| [40_overview.md](40_overview.md) | Project overview: purpose, components, current status, where to start | Written |
+| [41_dev/](41_dev/README.md) | Developer manual: setup, build and test, writing plugins, per-WP contribution guide | Written |
+| [42_user/](42_user/README.md) | User manual: scenarios, running, GCS UI, Traffic Monitor, recording and replay | Written |
 
 - Contracts (bus keys, schemas, bridge protocol, build setup) are defined in the Korean [10_contracts.md](../10_contracts.md) and are not translated. The manuals link to it.
 - Figures are shared with the Korean edition (`../img/manual/`).
