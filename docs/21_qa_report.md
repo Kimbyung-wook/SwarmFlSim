@@ -2511,3 +2511,177 @@ r1의 외부 `MA_FlightCommandStatus`에서도 같은 흐름이 보인다. plan-
 | 여러 RoutePlan을 참조한 MissionPlan과 D-29 시 대기 작업 진행 | 1개 참조만 돌렸다. 앞 작업이 끝나지 않으면 대기 작업이 시작되지 않을 것으로 예상하지만 시험하지 않았다 |
 | 차단 해제 뒤 RoutePlan 재전송 | MissionPlan만 재전송했다 |
 | formation 등 다른 MA, lockstep, 링크 손실 있는 구성 | realtime의 waypoint·flocking, 손실 0만 돌렸다 |
+
+## 27. 19차 시험: D-29·O-23·O-26 재시험 (2026-11-10)
+
+기준은 wp0-contracts 69dc46d이다. IMP-AGT-035(RoutePlan과 계획 작업의 통합, 단독 RoutePlan)와 IMP-LNK-023(프레임 0 송신 시각)이 반영됐다. C++는 다시 빌드했고 Gateway 단위 시험은 84건 통과, 1건 건너뜀이다. 두 변경을 실제 Core·Datalink·Agent·Gateway·agra_lacal 통합 실행으로 본다.
+
+### 27.1 방법
+
+| 실행 | 구성 | 길이 (모의 s) |
+|---|---|---|
+| order2 | `--order-trial`, realtime. waypoint 4대, 8라운드, 라운드마다 (간격 0 / 2 s) × (항로점 1 / 2개)를 돌려 가며 배정, 조건별 8회 | 347.6 |
+| r1 | §26 시간표 + 해제 뒤 RoutePlan 재전송, 단독 RoutePlan 차단·재전송 | 277.6 |
+| ls_order | Gateway·외부 입력을 둔 lockstep rate 1, 4라운드, 조건별 4회 | 187.6 |
+| det, det2 | Gateway 없이 lockstep rate 0. 손실 없음과 손실·지연 있음(GE 손실, 30±8 ms) 각각 2회, 4회. 앞 60 s의 truth·LinkOutcome·GCS 수신 비교 | 61 |
+| reg | 수정 없는 `qa/gw_integ.py` | 168.9 |
+
+첫 order 실행은 모의 22 s에서 PC 절전으로 166 s 끊겨 판정에서 뺐다. Windows 절전 기록(Kernel-Power 506/507)과 벽시계 공백이 일치한다.
+
+```
+uv run python qa/gw_plan.py --out qa/out/gw19/order2 --order-trial
+uv run python qa/gw_plan.py --out qa/out/gw19/r1
+uv run --with mcap python qa/gw_plan.py --mcap qa/out/gw19/r1
+uv run python qa/gw_plan.py --out qa/out/gw19/ls_order --order-trial --lockstep --rounds 4 --base-port 48900
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw19/det2 --base-port 49000 --det-runs 4
+uv run python qa/gw_integ.py --out qa/out/gw19/reg
+```
+
+### 27.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-098 | D-29: RoutePlan·MissionPlan 연속 전송이 항로점 1·2개 모두 COMPLETED | 통과 |
+| TC-QA-099 | O-26: 단독 RoutePlan 뒤 이전 작업이 CANCELLED(preempted) | 통과 |
+| TC-QA-100 | O-23: task-001 순서 ACCEPTED → EXECUTING, 프레임 0 지연 | 통과 (waypoint. flocking은 O-28) |
+| TC-QA-101 | lockstep 프레임 0 처리와 같은 시드 재현 | 조건부 통과 (D-30) |
+| TC-QA-102 | UI·Gateway 발행 전달 지연이 이전과 같음 | 통과 |
+| TC-QA-103 | TC-QA-090 재판정 | 통과 |
+| TC-QA-104 | 차단 해제 뒤 RoutePlan 재전송, Gateway를 둔 lockstep | 통과 |
+| TC-QA-105 | 외부 수신·XSD 회귀 | 통과 |
+
+모든 실행에서 truth 누락 프레임 0, 프로세스 이상 종료와 로그 이상 항목 0, 외부 수신 XSD 실패 0이다. overrun은 r1 0, order2 2, reg 3, ls_order 11이다. 판정에 영향을 준 구간은 없었다.
+
+### 27.3 TC-QA-098 D-29
+
+| 조건 | 실행 | 횟수 | COMPLETED | MissionPlan 먼저 도착 | TaskStatus 열 | 항로점 최소 거리 (m) |
+|---|---|---|---|---|---|---|
+| 연속 전송, 1점 | order2 | 8 | 8 | 3 | ACCEPTED → EXECUTING → COMPLETED | 32.6 ~ 33.0 |
+| 연속 전송, 2점 | order2 | 8 | 8 | 5 | ACCEPTED → EXECUTING ×2 → COMPLETED | 32.6 ~ 33.0 |
+| 2 s 간격, 1점 | order2 | 8 | 8 | 0 | 같음 | 32.5 ~ 33.0 |
+| 2 s 간격, 2점 | order2 | 8 | 8 | 0 | 같음 | 32.3 ~ 33.1 |
+| 연속 전송, 1점 | ls_order | 4 | 4 | 2 | 같음 | |
+| 연속 전송, 2점 | ls_order | 4 | 4 | 2 | 같음 | |
+| 2 s 간격, 1점·2점 | ls_order | 8 | 8 | 0 | 같음 | |
+
+§26에서 연속 전송 8회 중 2회만 COMPLETED였던 것이, 순서가 뒤집힌 8쌍을 포함해 16회 모두 COMPLETED로 끝났다. r1의 RoutePlan·MissionPlan 쌍도 10쌍 중 6쌍이 MissionPlan 먼저 도착했고, 이번에는 도착 뒤 끝까지 진행한 쌍이 모두 COMPLETED이다. D-29는 해소다.
+
+### 27.4 TC-QA-099 O-26
+
+| 시각 (모의 s) | uav-001 | GCS | 외부 |
+|---|---|---|---|
+| 15 | 단독 RoutePlan r-a 수신 (3점) | task-001 CANCELLED(preempted) (15.18) | task-001 CANCELED (15.20) |
+| 15 ~ 100 | 항로 비행, 최소 거리 32.8 / 32.6 / 32.8 m | r-a의 TaskStatus 0 | 0 |
+
+비행 명령 ID는 `uav-001-task-2`로 나왔다. `-route-` 형식의 명령은 0건이다.
+
+### 27.5 TC-QA-100 O-23
+
+r1 task-001의 도착 순서이다.
+
+| 기체 | GCS | 외부 |
+|---|---|---|
+| uav-001·002·003·007 (waypoint) | ACCEPTED → EXECUTING | EXECUTION_PENDING → EXECUTING |
+| uav-003 (대조, 끝까지 수행) | ACCEPTED → EXECUTING | 마지막 값 EXECUTING |
+| uav-004·005·006 (flocking) | ACCEPTED | EXECUTION_PENDING (O-28) |
+
+프레임 0 송신과 이후 프레임의 전달 지연(ms, r1)이다.
+
+| 메시지 | 프레임 0 건수 | 프레임 0 p50 / 최대 | 이후 건수 | 이후 p50 / 최대 |
+|---|---|---|---|---|
+| FlightCapability | 7 | 19.0 / 24.9 | 0 | 없음 (첫 틱에 한 번) |
+| NavigationReport | 7 | 23.8 / 28.0 | 1,909 | 20.1 / 35.9 |
+| TaskStatus | 7 | 22.9 / 30.2 | 44 | 20.5 / 32.1 |
+| SystemStatus | 6 | 20.5 / 25.7 | 3 | 25.2 / 27.0 |
+
+프레임 0 송신 32건은 모두 DELIVERED이다. ls_order에서도 task-001 순서가 같고, 지연은 프레임 0과 이후가 모두 20 ~ 40 ms이다.
+
+### 27.6 TC-QA-101 lockstep 같은 시드
+
+| 구성 | 실행 수 | 프레임 0 송신 (FC / Nav / TS) | 프레임 0 미전달 | truth 궤적 | LinkOutcome (전체 10,412) | GCS 수신 |
+|---|---|---|---|---|---|---|
+| 손실 없음 det | 2 | 7 / 7 / 7 | 0 | 동일 | 동일 | 동일 |
+| 손실 없음 det2 | 4 | 7 / 7 / 7 | 0 | 동일 | 1번 대비 다른 건 4 / 4 / 4 | 2 / 2 / 2 |
+| 손실·지연 det | 2 | 7 / 7 / 7 | 2 (링크 손실) | 동일 | 다름 | 다름 |
+| 손실·지연 det2 | 4 | 7 / 7 / 7 | 2 (링크 손실) | 동일 | 1번 대비 다른 건 7 / 5 / 1 | 4 / 3 / 1 |
+
+프레임 0 처리와 task-001 순서는 정상이고 궤적은 모든 실행에서 비트 단위로 같다. 차이는 전부 첫 SystemStatus의 송신 프레임이다. 같은 기체의 첫 SystemStatus가 실행에 따라 시각 0과 0.02 s로 갈리고(프레임 0 건수 4~6 / 7), 같은 프레임의 다른 메시지 도착 틱도 함께 바뀐다(§27.11 D-30).
+
+### 27.7 TC-QA-102 지상 발행자 지연
+
+GCS `tx`에서 대상 기체 `rx`까지의 관측값(ms, 모의 시각 해상도 20 ms)이다.
+
+| 발행자 | §26 r1 건수 · p50 · 최대 | r1 건수 · p50 · 최대 |
+|---|---|---|
+| Gateway (`gateway-0`) | 26 · 60 · 80 | 28 · 60 · 80 |
+| UI (`ui-qa`) | 2 · 50 · 60 | 2 · 50 · 60 |
+
+LinkOutcome 기준 r1 지연은 p50 48.5, 최대 72.1 ms이고, 지상 발행 메시지의 tx 시각이 0인 건수는 0이다. 시각 0 + `publisher`는 마지막 틱 시각으로 처리되고 있다. MCAP의 `publisher` 구분과 seq도 §26과 같다.
+
+### 27.8 TC-QA-103 TC-QA-090 재판정
+
+| 계획 | r1 내부 변환 | TaskStatus (GCS) | 항로점 최소 거리 (m) |
+|---|---|---|---|
+| plan-w1 (uav-002, 1점) | move_to | ACCEPTED → EXECUTING → COMPLETED (96.96) | 32.9 |
+| plan-w2 (uav-001, 2점) | route | ACCEPTED → EXECUTING ×2 → COMPLETED (150.64) | 33.0 / 32.8 |
+| plan-v1 (uav-001, 1점) | move_to | COMPLETED (180.74) | 33.0 |
+| plan-f1 (uav-004, 1점) | move_to | ACCEPTED → COMPLETED | 0.1 |
+| plan-f2 (uav-005, 2점) | route | REJECTED(unsupported task route), 기존 작업 유지 | 따르지 않음 |
+
+TC-QA-090은 **통과**로 바꾼다. TC-QA-091~096도 r1에서 §26과 같은 결과이다(재전송 중복 0, preempted 교체, 거부 9건, XSD 위반 3건 -ERR, 승인 응답, `publisher`, 링크 차단).
+
+### 27.9 TC-QA-104 재전송과 lockstep
+
+| 입력 | 전달 | 결과 |
+|---|---|---|
+| 차단 중(198 s) uav-002 RoutePlan r-c1 + MissionPlan | 둘 다 DROPPED(FAULT_INJECTED) | 작업 변화 없음 |
+| 해제 뒤(213 s) RoutePlan + MissionPlan 재전송 | 둘 다 DELIVERED | r-w4 CANCELLED(preempted), r-c1 ACCEPTED → EXECUTING, 항로점 거리 2,940 m → 1,543 m (277 s) |
+| 차단 중(225 s) uav-001 단독 RoutePlan r-c2 | DROPPED(FAULT_INJECTED) | 항로 변화 없음 |
+| 해제 뒤(240 s) 단독 RoutePlan 재전송 | DELIVERED | 항로 비행 시작, 첫 항로점 거리 1,158 m → 442 m (277 s) |
+
+Gateway를 둔 lockstep(ls_order)은 외부 입력 32건을 모두 발행했고 계획 16쌍이 §27.3과 같이 끝났다.
+
+### 27.10 TC-QA-105 회귀
+
+| 항목 | §26 reg | reg |
+|---|---|---|
+| 외부 수신 / XSD 통과 | 13,064 / 13,064 | 13,067 / 13,067 |
+| `MA_NavigationReport` / `SystemStatus` | 655 / 9 | 650 / 9 |
+| `MA_FlightCommandStatus` / `MA_FlightCapability` / `MA_TaskStatus` | 5 / 5 / 12 | 5 / 5 / 12 |
+| `MA_PackagePartnerStatusReport` / `MA_PositionReport` | 3,236 / 3,890 | 3,242 / 3,892 |
+| `PO_Activity` / `EA_Activity` / `StrikeActivity` | 5,109 / 137 / 6 | 5,110 / 136 / 6 |
+| Nav 발행률 기본 / 두 기체 차단 / GCS 차단 / 해제 / 재기동 뒤 (건/s) | 5.00 / 3.00 / 0 / 5.00 / 5.15 | 5.00 / 3.00 / 0 / 5.00 / 4.96 |
+| uav-004 DEGRADED / OPERATIONAL (모의 s) | 55.05 / 62.11 | 55.08 / 62.15 |
+| 위치 짝짓기, 변환 오차 | 100%, 0 m | 100%, 0 m |
+
+외부 명령 4건은 모두 DELIVERED이고 Gateway `rejections`·`invalid`·`send_failed`·`internal_error`는 0이다. r1의 외부 수신은 30,475건 모두 XSD 통과이다.
+
+### 27.11 결함
+
+| # | 심각도 | 내용 | 영향 | 위치 |
+|---|---|---|---|---|
+| D-30 | 하 | lockstep 같은 시드에서 첫 SystemStatus의 송신 프레임(0 또는 1)이 실행마다 달라, LinkOutcome·GCS 수신 일부가 같지 않다(DEC-039) | 60 s 동안 LinkOutcome 10,412건 중 1~7건, GCS 수신 1~4건. truth 궤적은 동일 | `agent/src/swarm_agent/runtime.py:353` |
+
+틱 해제(`_try_release`)는 onboard NavigationReport로만 판단하고, onboard SystemStatus는 도착 즉시 보고 대상에 넣는다. 그래서 틱 처리와 도착 순서가 경합하는 것으로 본다(코드 확인 기준, 수정 전 빌드와 대조하지는 않았다). SystemStatus가 바뀌는 다른 시점(고장 주입 등)도 같은 구조이지만 이번 구간에는 변화가 없었다.
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-29 | 해소 | 연속 전송 realtime 16/16, lockstep 8/8 COMPLETED |
+| O-23 | 해소 | waypoint 4대 순서 정상, 프레임 0 지연은 다른 프레임과 같음 |
+| O-26 | 해소 | 단독 RoutePlan 뒤 task-001 CANCELLED(preempted) |
+
+### 27.12 관찰
+
+- O-28: flocking은 EXECUTING을 보내지 않아 외부 마지막 값이 EXECUTION_PENDING으로 남는다(uav-005·006). §25·§26과 같은 동작이다. waypoint 기체에는 남지 않는다.
+- O-29: 2점 route 작업은 항로점을 지날 때 진행률을 담은 EXECUTING을 한 번 더 보낸다(ACCEPTED → EXECUTING ×2 → COMPLETED).
+- O-30: order2는 Agent의 첫 틱이 0.64 s에 처리되어 프레임 0 송신이 없었다(FlightCapability tx 0.64 s, 첫 TaskStatus 1.3 s). realtime 시작 경합으로 보이며, 순서는 ACCEPTED → EXECUTING으로 정상이다. 이 때문에 프레임 0 지연은 r1 값으로 적었다.
+- O-17은 그대로다.
+
+### 27.13 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| D-30의 수정 전 빌드 비교, 고장 주입 등 SystemStatus 변화 시점의 lockstep 재현성 | 현재 빌드의 무고장 60 s만 비교했다 |
+| Gateway를 둔 lockstep의 같은 시드 재현성 | Gateway 발행 시각은 마지막 틱 시각이라 시드로 정해지지 않는다. 판정 대상에서 뺐다 |
+| 같은 `plan_id`에 내용만 다른 계획, 여러 RoutePlan을 참조한 MissionPlan | 이번 범위 밖 |
+| formation 등 다른 MA | realtime·lockstep의 waypoint·flocking만 돌렸다 |

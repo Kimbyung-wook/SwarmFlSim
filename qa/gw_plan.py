@@ -1,4 +1,4 @@
-"""QA 18차 외부 임무 계획·승인 응답 통합 시험 (TC-QA-089~097, DEC-075~077).
+"""QA 18·19차 외부 임무 계획·승인 응답 통합 시험 (TC-QA-089~, DEC-075~077, D-29, O-23, O-26).
 
 Logger·Datalink·Agent·Bridge·Core(realtime, 평지) + agra_lacal CAL Server + Gateway(qa/gw_wrap.py) + 외부 CAL Client.
 기체 7대: uav-001·002·003·007은 waypoint MA, uav-004·005·006은 flocking_basic. 모두 동쪽 8 km move_to(task-001)로 시작한다.
@@ -12,11 +12,14 @@ uav-003·006은 어떤 계획도 받지 않는 대조 기체다. 시뮬레이터
  155  지원 범위 밖·XSD 위반 입력 / 165 유효 계획 uav-001 r-v1           TC-QA-093
  170~182 승인: 요청 주입 → APPROVED·REJECTED·모르는 요청·rx 되돌림     TC-QA-094
  184~193 UI(브리지)와 Gateway가 uav-007에 번갈아 TaskCommand          TC-QA-095
- 195  GCS_LINK_CUT uav-002 15 s / 198 계획 전송 / 213 재전송            TC-QA-096
- 245  종료
+ 195  GCS_LINK_CUT uav-002 15 s / 198 계획 전송 / 213 RoutePlan·MissionPlan 재전송   TC-QA-096
+ 222  GCS_LINK_CUT uav-001 15 s / 225 단독 RoutePlan / 240 재전송       19차
+ 275  종료
 
 uv run python qa/gw_plan.py --out qa/out/gw18/r1
 uv run python qa/gw_plan.py --out qa/out/gw18/order --order-trial   (D-29: RoutePlan·MissionPlan 도착 순서 대조)
+uv run python qa/gw_plan.py --out qa/out/gw19/ls_order --order-trial --lockstep --rounds 4
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw19/det    (Gateway 없이 lockstep 2회 비교, 손실 없음·있음)
 uv run --with mcap python qa/gw_plan.py --mcap qa/out/gw18/r1
 """
 from __future__ import annotations
@@ -29,6 +32,7 @@ import os
 import sys
 import time
 import uuid
+import zlib
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -46,14 +50,15 @@ CONTROL = ["uav-003", "uav-006"]
 BRIDGE_PORT = 48865
 UI_ID = "ui-qa"
 NS = uuid.UUID("9a7e2f6d-1c5b-4d0b-8f8a-5d1c6b0e7c11")
-T_END = 245.0
+T_END = 275.0
+LS_END_S = 60.0     # --lockstep-det 비교 구간
 
 
 def u(s: str) -> str:
     return str(uuid.uuid5(NS, s))
 
 
-def scenario() -> dict:
+def scenario(ge: dict | None = None, latency_ms: float | None = None, jitter_ms: float | None = None) -> dict:
     ents = [{"id": GCS, "kind": "gcs", "side": "blue", "dynamics": "static",
              "initial": {"position": {**at(-2000, 0), "alt_m": 30.0}}, "link_profile": "gcs_default"}]
     for i, e in enumerate(ALL):
@@ -64,13 +69,14 @@ def scenario() -> dict:
                      "payloads": [{"id": "cam0", "type": "camera", "profile": "eo_wide"}],
                      "autonomy": {"ma_plugin": ma, "ma_params": {"group": f"g{i}"} if e in FL else {}},
                      "link_profile": "uav_default", "controlling_gcs": GCS})
+    lat = {} if latency_ms is None else {"latency_ms": latency_ms, "jitter_ms": jitter_ms or 0.0}
     tasks = [{"task_id": "task-001", "assignees": ALL,
               "move_to": {"destination": {**at(3000, 8000), "alt_m": 500.0}, "speed_mps": 22.0}}]
     return {"schema_version": "0.1", "name": "qa-gw-plan", "description": "QA 18차 외부 임무 계획·승인 응답",
             "map": {"origin": at(0, 0), "extent": {"south_deg": 37.4, "north_deg": 37.7, "west_deg": 127.9,
                                                    "east_deg": 128.2}},
             "run": {"mode": "realtime", "frame_hz": 50, "seed": 20261109, "rate": 1.0, "duration_s": 900.0},
-            "link_profiles": [{"name": "uav_default", "ge": NOLOSS}, {"name": "gcs_default", "ge": NOLOSS}],
+            "link_profiles": [{"name": n, "ge": ge or NOLOSS, **lat} for n in ("uav_default", "gcs_default")],
             "entities": ents, "mission_plan": {"plan_id": "plan-qa18", "tasks": tasks}}
 
 
@@ -157,6 +163,8 @@ class PlanObserver(GwObserver):
         self.tx: list[dict] = []
         self.rx: list[dict] = []
         self.ts: list[tuple] = []
+        self.all_lo: list[tuple] = []      # (tx_us, rx_us, src, dst, msg, outcome, seq)
+        self.gcs_hdr: list[tuple] = []     # GCS 수신 (source, msg, seq, hdr_us, crc)
         self.subs.append(self.bus.subscribe(f"swarm/{GCS}/tx/**", self._ptx))
         for pat in ("swarm/*/rx/mp/*", "swarm/*/rx/c2/*"):
             self.subs.append(self.bus.subscribe(pat, self._prx))
@@ -193,9 +201,20 @@ class PlanObserver(GwObserver):
         with self.lock:
             self.rx.append(row)
 
+    def _outcome(self, s) -> None:  # noqa: ANN001
+        super()._outcome(s)
+        link = self.m[2]
+        o = link.LinkOutcome.FromString(s.payload)
+        with self.lock:
+            self.all_lo.append((o.tx_time_us, o.rx_time_us, o.src, o.dst, o.msg_type.rsplit(".", 1)[-1],
+                                link.LinkOutcomeKind.Name(o.outcome).removeprefix("LINK_OUTCOME_KIND_"), o.seq))
+
     def _rx(self, s) -> None:  # noqa: ANN001
         super()._rx(s)
         env = self.m[2].LinkEnvelope.FromString(s.payload)
+        with self.lock:
+            self.gcs_hdr.append((env.header.source, env.msg_type.rsplit(".", 1)[-1], env.header.seq,
+                                 env.header.sim_time_us, zlib.crc32(env.payload)))
         if env.msg_type == "swarm.v1.TaskStatus":
             st = self.c2.TaskStatus.FromString(env.payload)
             with self.lock:
@@ -220,10 +239,17 @@ def main() -> None:
     ap.add_argument("--out")
     ap.add_argument("--base-port", type=int, default=48800)
     ap.add_argument("--order-trial", action="store_true", help="간격 0 / 2 s로 RoutePlan·MissionPlan을 보내 작업 완료를 대조한다")
+    ap.add_argument("--rounds", type=int, default=8)
+    ap.add_argument("--lockstep", action="store_true", help="Gateway·외부 입력을 둔 채 lockstep(rate 1)으로 돌린다")
+    ap.add_argument("--lockstep-det", help="Gateway 없이 lockstep 같은 시드 반복 비교 (결과 폴더)")
+    ap.add_argument("--det-runs", type=int, default=2)
     ap.add_argument("--mcap", help="결과 폴더의 rec.mcap에서 publisher를 집계한다 (uv run --with mcap)")
     a = ap.parse_args()
     if a.mcap:
         mcap_check(Path(a.mcap))
+        return
+    if a.lockstep_det:
+        lockstep_det(ROOT / a.lockstep_det, a.base_port, a.det_runs)
         return
     out = (ROOT / a.out) if not Path(a.out).is_absolute() else Path(a.out)
     ext_dir = out / "ext"
@@ -233,7 +259,7 @@ def main() -> None:
     sp = SCN / "qa_gw_plan.json"
     sp.write_text(json.dumps(scenario(), ensure_ascii=False, indent=1), encoding="utf-8")
     os.environ["PYTHONIOENCODING"] = "utf-8"
-    st = h.Stack(out / "stack", sp, base_port=a.base_port, lockstep=False, record=True, bridge=True,
+    st = h.Stack(out / "stack", sp, base_port=a.base_port, lockstep=a.lockstep, rate=1.0, record=True, bridge=True,
                  bridge_port=BRIDGE_PORT, core_extra=["--terrain-flat", "0"])
     n = [0]
     extra: list = []
@@ -295,6 +321,14 @@ def main() -> None:
             events.append({"sim_s": round(ob.sim_s(), 2), "entity": entity, "route": route, "plan": plan_id,
                            "label": label, "resend": True})
 
+        def replan(entity: str, route: str, plan_id: str | None, label: str) -> None:
+            ev = next(x for x in events if x["route"] == route and "pts" in x)
+            send(f"route:{route}", "MA_RoutePlan", "swarm.mp", route_data(route, entity, ev["pts"]))
+            if plan_id:
+                send(f"plan:{plan_id}", "MA_MissionPlan", "swarm.mp", mission_data(plan_id, entity, [route]))
+            events.append({"sim_s": round(ob.sim_s(), 2), "entity": entity, "route": route, "plan": plan_id,
+                           "label": label, "resend": True})
+
         def approve_inject(src: str, req: str) -> None:
             ob.put_ext(src, "c2", c2_pb2.ApprovalRequest(request_id=req, task_id="task-001", description="qa"), [GCS])
 
@@ -345,22 +379,28 @@ def main() -> None:
             (193, "g2", lambda: send("gw-t2", "MA_TaskCommand", "swarm.c2", task_cmd("gw-t2", "uav-007", "hold"))),
             (195, "cut", lambda: ob.fault("uav-002", "GCS_LINK_CUT", 15.0)),
             (198, "c1", lambda: plan("uav-002", "r-c1", "plan-c1", [(-1000, 3000)], "during_cut")),
-            (213, "c1r", lambda: resend("uav-002", "plan-c1", "r-c1", "after_cut")),
+            (213, "c1r", lambda: replan("uav-002", "r-c1", "plan-c1", "after_cut")),
+            (222, "cut2", lambda: ob.fault("uav-001", "GCS_LINK_CUT", 15.0)),
+            (225, "c2", lambda: plan("uav-001", "r-c2", None, [(1200, 600), (1200, 1500)], "solo_during_cut")),
+            (240, "c2r", lambda: replan("uav-001", "r-c2", None, "solo_after_cut")),
         ]
         t_end = T_END
         if a.order_trial:
-            schedule, t_end = [], 145.0
-            for k in range(4):
-                t = 20.0 + 30.0 * k
-                gap0, gap2 = (("uav-001", "uav-002"), ("uav-003", "uav-007")) if k % 2 == 0 else (
-                    ("uav-003", "uav-007"), ("uav-001", "uav-002"))
-                for e in gap0:
-                    r, pl = f"r-z{k}-{e}", f"p-z{k}-{e}"
-                    schedule.append((t, f"{r}", (lambda e=e, r=r, pl=pl: plan(e, r, pl, [(200, 250)], "gap0"))))
-                for e in gap2:
-                    r, pl = f"r-z{k}-{e}", f"p-z{k}-{e}"
-                    schedule.append((t, f"{r}", (lambda e=e, r=r: plan(e, r, None, [(200, 250)], "gap2"))))
-                    schedule.append((t + 2.0, f"{pl}", (lambda e=e, r=r, pl=pl: resend(e, pl, r, "gap2_plan"))))
+            # 라운드마다 4개 조건(간격 0·2 s × 항로점 1·2개)을 waypoint 4대에 돌려 가며 배정한다
+            schedule, t_end = [], 20.0 + 40.0 * a.rounds + 5.0
+            vehicles = ["uav-001", "uav-002", "uav-003", "uav-007"]
+            conds = [("gap0", 1), ("gap0", 2), ("gap2", 1), ("gap2", 2)]
+            for k in range(a.rounds):
+                t = 20.0 + 40.0 * k
+                for j, e in enumerate(vehicles):
+                    gap, wps = conds[(j + k) % 4]
+                    r, pl, rel = f"r-z{k}-{e}", f"p-z{k}-{e}", [(200.0, 250.0), (400.0, 0.0)][:wps]
+                    lab = f"{gap}_{wps}"
+                    if gap == "gap0":
+                        schedule.append((t, r, (lambda e=e, r=r, pl=pl, rel=rel, lab=lab: plan(e, r, pl, rel, lab))))
+                    else:
+                        schedule.append((t, r, (lambda e=e, r=r, rel=rel, lab=lab: plan(e, r, None, rel, lab))))
+                        schedule.append((t + 2.0, pl, (lambda e=e, r=r, pl=pl: resend(e, pl, r, "gap2_plan"))))
         done: set[str] = set()
         marks: dict[str, float] = {}
         t0 = time.monotonic()
@@ -382,7 +422,7 @@ def main() -> None:
         res["log_issues"] = h.scan_logs(st)[:30]
         snap = ob.snapshot()
         with ob.lock:
-            raw = {"tx": list(ob.tx), "rx": list(ob.rx), "ts": list(ob.ts), "traj": {k: list(v) for k, v in ob.traj.items()},
+            raw = {"all_lo": list(ob.all_lo), "tx": list(ob.tx), "rx": list(ob.rx), "ts": list(ob.ts), "traj": {k: list(v) for k, v in ob.traj.items()},
                    "lo": list(ob.lo), "gcs_rx": list(ob.gcs_rx), "clock": clock, "events": events, "marks": marks}
         ob.close()
     finally:
@@ -397,6 +437,106 @@ def main() -> None:
                       json.loads((out / "gw1.json").read_text(encoding="utf-8")))
     (out / "result.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, default=str))
+
+
+def lat_stats(rows: list[float]) -> dict:
+    if not rows:
+        return {"n": 0}
+    v = sorted(rows)
+    return {"n": len(v), "min": round(v[0], 1), "p50": round(v[len(v) // 2], 1), "p95": round(v[int(len(v) * 0.95)], 1),
+            "max": round(v[-1], 1)}
+
+
+def link_timing(lo: list[tuple]) -> dict:
+    """프레임 0 송신과 이후 프레임의 지연(ms), 지상 발행자 지연을 요약한다"""
+    ok = [x for x in lo if x[5] == "DELIVERED"]
+    out: dict = {}
+    for msg in ("FlightCapability", "NavigationReport", "SystemStatus", "TaskStatus"):
+        f0 = [(x[1] - x[0]) / 1000 for x in ok if x[4] == msg and x[0] == 0]
+        rest = [(x[1] - x[0]) / 1000 for x in ok if x[4] == msg and x[0] > 0]
+        out[msg] = {"frame0": lat_stats(f0), "later": lat_stats(rest)}
+    out["frame0_tx_total"] = sum(1 for x in lo if x[0] == 0)
+    out["frame0_undelivered"] = sum(1 for x in lo if x[0] == 0 and x[5] != "DELIVERED")
+    gr = [x for x in ok if x[2] == GCS and x[4] in ("RoutePlan", "MissionPlan", "ApprovalResponse", "TaskCommand")]
+    out["ground_delay_ms"] = lat_stats([(x[1] - x[0]) / 1000 for x in gr])
+    out["ground_tx_zero"] = sum(1 for x in gr if x[0] == 0)
+    return out
+
+
+def diff_sets(a: list[tuple], b: list[tuple]) -> dict:
+    """두 실행의 기록 차이를 (메시지, 발신, 시각) 단위로 요약한다"""
+    ca, cb = Counter(a), Counter(b)
+    only_a, only_b = list((ca - cb).elements()), list((cb - ca).elements())
+    return {"n_only_a": len(only_a), "n_only_b": len(only_b), "only_a": sorted(only_a)[:6], "only_b": sorted(only_b)[:6]}
+
+
+def frame0_tx(lo: list[tuple]) -> dict:
+    c: Counter = Counter()
+    for x in lo:
+        if x[0] == 0:
+            c[x[4]] += 1
+    return dict(sorted(c.items()))
+
+
+def lockstep_det(base: Path, base_port: int, n_runs: int = 2) -> None:
+    """Gateway 없이 lockstep(rate 0) 같은 시드 2회: truth·LinkOutcome·GCS 수신을 비교한다"""
+    variants = {"noloss": scenario(),
+                "loss": scenario({"p_gb": 0.05, "p_bg": 0.3, "loss_good": 0.0, "loss_bad": 0.5}, 30.0, 8.0)}
+    report: dict = {}
+    for var, sc in variants.items():
+        sp = SCN / f"qa_gw_plan_ls_{var}.json"
+        sp.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
+        runs = []
+        for run in range(1, n_runs + 1):
+            out = base / var / f"run{run}"
+            st = h.Stack(out, sp, base_port=base_port, lockstep=True, rate=0.0, record=False,
+                         core_extra=["--terrain-flat", "0"])
+            try:
+                st.start_one("datalink")
+                st.start_one("agent")
+                time.sleep(st.settle)
+                ob = PlanObserver([st.endpoint()])
+                time.sleep(1.0)
+                st.start_one("core")
+                t0 = time.monotonic()
+                while ob.sim_s() < LS_END_S + 1.0 and time.monotonic() - t0 < 240 and not st.dead():
+                    time.sleep(0.1)
+                snap, dead = ob.snapshot(), st.dead()
+                issues = h.scan_logs(st)[:10]
+                with ob.lock:
+                    data = (list(ob.all_lo), list(ob.gcs_hdr), {k: list(v) for k, v in ob.traj.items()}, list(ob.ts))
+                ob.close()
+            finally:
+                st.down()
+            lim_us, lim_fr = int(LS_END_S * 1e6), int(LS_END_S * 50)
+            lo = sorted(x for x in data[0] if x[0] < lim_us)
+            hdr = sorted(x for x in data[1] if x[3] < lim_us)
+            traj = {k: [x for x in v if x[0] <= lim_fr] for k, v in data[2].items()}
+            first = defaultdict(list)
+            for _t, src, task, state, _r in data[3]:
+                if task == "task-001":
+                    first[src].append(state)
+            runs.append({"lo": lo, "hdr": hdr, "traj": traj,
+                         "info": {"frames": snap["last_frame"], "gap": snap["gap_frames"], "dead": dead, "issues": issues,
+                                  "lo": len(lo), "hdr": len(hdr), "traj_frames": {k: len(v) for k, v in traj.items()},
+                                  "timing": link_timing(lo), "frame0_tx": frame0_tx(lo),
+                                  "task001": {e: first[e] for e in sorted(first)}}})
+        a = runs[0]
+        pairs = {}
+        for i, b in enumerate(runs[1:], 2):
+            c: dict = {"lo_same": a["lo"] == b["lo"], "hdr_same": a["hdr"] == b["hdr"], "traj_same": a["traj"] == b["traj"]}
+            if not c["lo_same"]:
+                c["lo_diff"] = diff_sets(a["lo"], b["lo"])
+            if not c["hdr_same"]:
+                c["hdr_diff"] = diff_sets(a["hdr"], b["hdr"])
+            if not c["traj_same"]:
+                c["traj_first_diff"] = next(((k, x, y) for k in sorted(a["traj"])
+                                             for x, y in zip(a["traj"][k], b["traj"][k]) if x != y), None)
+            pairs[f"1v{i}"] = c
+        report[var] = {"compare": pairs, "runs": [r["info"] for r in runs]}
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "det.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, default=str))
 
 
 def dist(a: tuple, b: tuple) -> float:
@@ -467,10 +607,11 @@ def analyse(res: dict, raw: dict, ext: dict, gw: dict) -> dict:  # noqa: C901, P
                        "task_ids": sorted({k.split("/")[1] for k in ts if k.startswith(e + "/")})}
     S["control"] = ctrl
     S["marks"] = raw["marks"]
+    S["link_timing"] = link_timing(raw["all_lo"])
     trials = []
     idx = {(r["msg"], r.get("id")): i for i, r in reversed(list(enumerate(raw["rx"])))}
     for ev in raw["events"]:
-        if ev["label"] not in ("gap0", "gap2"):
+        if not ev["label"].startswith("gap") or ev.get("resend"):
             continue
         r, pl = ev["route"], ev["route"].replace("r-z", "p-z")
         ir, im = idx.get(("RoutePlan", r)), idx.get(("MissionPlan", pl))
@@ -479,7 +620,8 @@ def analyse(res: dict, raw: dict, ext: dict, gw: dict) -> dict:  # noqa: C901, P
                        ("route_first" if ir < im else "mission_first"),
                        "dt_ms": None if ir is None or im is None else
                        round((raw["rx"][im]["sim_s"] - raw["rx"][ir]["sim_s"]) * 1000),
-                       "states": states, "min_m": next((p["wp"][0]["min_m"] for p in plans if p["route"] == r and "wp" in p), None)})
+                       "states": states, "min_m": next(([w["min_m"] for w in p["wp"]] for p in plans
+                                                        if p["route"] == r and "wp" in p), None)})
     if trials:
         S["trials"] = trials
     return S
