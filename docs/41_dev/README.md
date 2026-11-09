@@ -23,28 +23,28 @@
 | 5 | [`05_fa_plugin.md`](05_fa_plugin.md) | FA 플러그인 작성: VI 제어 모드, 기본 FA | 작성됨 |
 | 6 | [`06_dynamics.md`](06_dynamics.md) | 동역학 모델 추가: 인터페이스, 팩토리, 매개변수, 시험 | 작성됨 |
 | 7 | [`07_messages.md`](07_messages.md) | 메시지와 계약: proto 역할, A-GRA 매핑 옵션, 메시지 추가 절차 | 작성됨 |
-| 8 | `08_wp/` | WP별 기여 안내(아래 표) | 작성 예정 |
+| 8 | `08_wp/` | WP별 기여 안내(아래 표) | 작성됨 |
 | 9 | [`09_contributing.md`](09_contributing.md) | 기여 규칙: ID, TRACE, 커밋, 계약 변경 요청 | 작성됨 |
-| 10 | `10_qa.md` | QA 하니스: `qa/run_qa.py`, 시나리오, 결정성 진단 | 작성 예정 |
+| 10 | [`10_qa.md`](10_qa.md) | QA 하니스: `qa/run_qa.py`, 시나리오, 결정성 진단 | 작성됨 |
 | 11 | [`11_troubleshooting.md`](11_troubleshooting.md) | 문제 해결: 증상 → 원인 → 조치 | 작성됨 |
 
 ### 8장 WP별 파일 (`08_wp/`)
 
 | 파일 | WP | 디렉터리 | 상태 |
 |---|---|---|---|
-| `core.md` | WP1 Sim Core | `core/` | 작성 예정 |
-| `dynamics.md` | WP2 동역학 | `dynamics/` | 작성 예정 |
-| `datalink.md` | WP4 데이터링크 | `datalink/` | 작성 예정 |
-| `agent.md` | WP3 Agent 런타임 | `agent/` | 작성 예정 |
-| `algorithms.md` | WP3 기본 알고리즘 | `algorithms/` | 작성 예정 |
-| `bridge.md` | WP5 WebSocket 브리지 | `bridge/` | 작성 예정 |
-| `ui.md` | WP5 GCS/UI | `ui/` | 작성 예정 |
-| `monitor.md` | WP6 Traffic Monitor | `ui/monitor/` | 작성 예정 |
-| `scenario.md` | WP7 시나리오 | `scenario/` | 작성 예정 |
-| `logger.md` | WP7 기록·재생 | `logger/` | 작성 예정 |
-| `payload.md` | WP8 센서·재머·시뮬레이션 이벤트 | `payload/` | 작성 예정 |
-| `gateway.md` | WP9 A-GRA Gateway | `gateway/` | 작성 예정 |
-| — | QA | `qa/` | 10장으로 대체 |
+| [`core.md`](08_wp/core.md) | WP1 Sim Core | `core/` | 작성됨 |
+| [`dynamics.md`](08_wp/dynamics.md) | WP2 동역학 | `dynamics/` | 작성됨 |
+| [`datalink.md`](08_wp/datalink.md) | WP4 데이터링크 | `datalink/` | 작성됨 |
+| [`agent.md`](08_wp/agent.md) | WP3 Agent 런타임 | `agent/` | 작성됨 |
+| [`algorithms.md`](08_wp/algorithms.md) | WP3 기본 알고리즘 | `algorithms/` | 작성됨 |
+| [`bridge.md`](08_wp/bridge.md) | WP5 WebSocket 브리지 | `bridge/` | 작성됨 |
+| [`ui.md`](08_wp/ui.md) | WP5 GCS/UI | `ui/` | 작성됨 |
+| [`monitor.md`](08_wp/monitor.md) | WP6 Traffic Monitor | `ui/monitor/` | 작성됨 |
+| [`scenario.md`](08_wp/scenario.md) | WP7 시나리오 | `scenario/` | 작성됨 |
+| [`logger.md`](08_wp/logger.md) | WP7 기록·재생 | `logger/` | 작성됨 |
+| [`payload.md`](08_wp/payload.md) | WP8 센서·재머·시뮬레이션 이벤트 | `payload/` | 작성됨 |
+| [`gateway.md`](08_wp/gateway.md) | WP9 A-GRA Gateway | `gateway/` | 작성됨 |
+| — | QA | `qa/` | [10장](10_qa.md)으로 대체 |
 
 ## 그림
 

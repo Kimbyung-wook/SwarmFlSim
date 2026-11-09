@@ -145,7 +145,7 @@ sequenceDiagram
 | `ms` | `loadout()`, `detections()`, `command(msg)`, `activities()` | 탑재 장비 목록, 탐지 결과, 장비 명령(`SensorCommand`, `JammerCommand`, `StrikeCommand`), 장비 상태 |
 | `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | 시나리오의 계획 |
 | `p2p` | `send(msg, to=None)`, `inbox()` | 기체 간 통신. `to`가 없으면 방송. 데이터링크를 거쳐 손실·지연이 있다 |
-| `md` | `record(name, value)` | 분석용 값 기록 |
+| `md` | `record(name, value)` | 분석용 값 기록. 지금은 런타임 메모리에만 남고 버스나 MCAP으로 나가지 않는다 |
 
 - 다른 기체 상태는 `p2p`로 받은 것만 쓴다. `nav()`는 잡음이 포함된 자기 항법값이다.
 - 수신함은 매 프레임 비운다. 쓰지 않아도 호출해 두면 다음 프레임에 쌓이지 않는다.
