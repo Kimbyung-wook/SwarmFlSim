@@ -18,11 +18,11 @@ CUSTOM custom_offsets_m[members 순서].
 import math
 from collections.abc import Sequence
 
-from swarm.v1 import c2_pb2, p2p_pb2, vi_pb2
+from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset, offset_geo
 
-from .common import TaskPilot, every, peer_status
+from .common import PlanWatcher, TaskPilot, every, peer_status
 
 F = c2_pb2
 
@@ -90,13 +90,9 @@ class Formation(MissionAutonomy):
         self.peers: dict[str, p2p_pb2.PeerStatus] = {}
         self._leader_init = False
         self._psi = 0.0
-        plan = ctx.ports.mp.mission_plan()
-        group = p.get("group")
-        if plan is not None:
-            for f in plan.formations:
-                if ctx.entity_id in f.members and (not group or f.group_id == group):
-                    self._set(f)
-                    break
+        self.group = p.get("group")
+        self.plans = PlanWatcher(ctx)
+        self._apply_plan(ctx, self.plans.initial)
 
     def on_params(self, ctx: AgentContext, changed: dict) -> None:
         p = ctx.params
@@ -109,6 +105,15 @@ class Formation(MissionAutonomy):
         self.pilot.hold_radius_m = float(p["hold_radius_m"])
         self.pilot.speed_mps = self.leader_speed
 
+    def _apply_plan(self, ctx: AgentContext, plan: mp_pb2.MissionPlan | None) -> None:
+        """계획의 편대 편성을 적용한다. 이 기체의 편대가 없는 계획은 지금 편대를 건드리지 않는다"""
+        if plan is None:
+            return
+        for f in plan.formations:
+            if ctx.entity_id in f.members and (not self.group or f.group_id == self.group):
+                self._set(f)
+                break
+
     def _set(self, cmd: c2_pb2.FormationCommand) -> None:
         self.cmd = cmd
         self.leader = pick_leader(cmd)
@@ -120,6 +125,7 @@ class Formation(MissionAutonomy):
         return self.cmd is None or self.leader == self._id
 
     def on_step(self, ctx: AgentContext) -> None:
+        self._apply_plan(ctx, self.plans.poll())    # 실행 중 받은 새 계획 (DEC-076)
         other = []
         for m in ctx.ports.c2.inbox():
             if isinstance(m, c2_pb2.FormationCommand):
