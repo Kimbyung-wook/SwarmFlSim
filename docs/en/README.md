@@ -4,7 +4,7 @@
 
 | Document | Contents | Status |
 |---|---|---|
-| `40_overview.md` | Project overview: purpose, components, current status, where to start | Planned |
+| [40_overview.md](40_overview.md) | Project overview: purpose, components, current status, where to start | Written |
 | [41_dev/](41_dev/README.md) | Developer manual: setup, build and test, writing plugins, per-WP contribution guide | Contents page only |
 | [42_user/](42_user/README.md) | User manual: scenarios, running, GCS UI, Traffic Monitor, recording and replay | Contents page only |
 
