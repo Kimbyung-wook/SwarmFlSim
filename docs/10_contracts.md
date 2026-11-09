@@ -97,7 +97,7 @@ flowchart LR
   - 참여자(프로세스) ID도 같은 형식이다. 예: `core-0`, `datalink-0`, `agent-host-1`
 - 인코딩: Zenoh encoding을 `application/protobuf;<전체 메시지 이름>`으로 둔다.
 - 기체 간·지상-기체 간 메시지는 반드시 `tx` → Datalink → `rx`로 흐른다. 런타임은 다른 엔티티의 `rx`에 직접 발행하지 않는다.
-- 한 엔티티의 `tx` 키에 발행자가 여럿이면(GCS 키의 UI와 Gateway) 각 발행자는 `LinkEnvelope.publisher`에 자기 참여자 ID를 채운다. `header.seq`는 발행자·키별로 매긴다. Datalink는 이 필드를 바꾸지 않고 `rx`로 넘긴다. 기체 런타임처럼 발행자가 하나면 비워도 된다 (DEC-077).
+- 한 엔티티의 `tx` 키에 발행자가 여럿이면(GCS 키의 UI와 Gateway) 각 발행자는 `LinkEnvelope.publisher`에 자기 참여자 ID를 채운다. `header.seq`는 발행자·키별로 매긴다. Datalink는 이 필드를 바꾸지 않고 `rx`로 넘긴다. 기체 런타임처럼 발행자가 하나면 비워도 된다. `publisher`가 비어 있으면 `header.sim_time_us == 0`은 유효한 시각 0으로 처리한다. 시각을 모르고 보내는 발행자는 `publisher`를 채워야 한다 (DEC-077, DEC-039, QA O-23).
 - `onboard/**`는 같은 기체 안의 신호다. 데이터링크를 거치지 않는다. FA→MA 간 VI도 같은 기체 안이면 런타임 내부 호출로 처리하고 버스에 싣지 않아도 된다.
 - MA 플러그인은 버스에 직접 접근하지 않는다. 런타임은 `sim/ctrl/`, `truth/`, `link/` 접두어를 플러그인에 노출하지 않는다 (`MA_FORBIDDEN_PREFIXES`).
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
