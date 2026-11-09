@@ -2685,3 +2685,176 @@ Gateway를 둔 lockstep(ls_order)은 외부 입력 32건을 모두 발행했고 
 | Gateway를 둔 lockstep의 같은 시드 재현성 | Gateway 발행 시각은 마지막 틱 시각이라 시드로 정해지지 않는다. 판정 대상에서 뺐다 |
 | 같은 `plan_id`에 내용만 다른 계획, 여러 RoutePlan을 참조한 MissionPlan | 이번 범위 밖 |
 | formation 등 다른 MA | realtime·lockstep의 waypoint·flocking만 돌렸다 |
+
+## 28. 20차 시험: D-30 재시험, lockstep 재현성 (2026-11-10)
+
+기준은 wp0-contracts ef6cf99이다(IMP-AGT-036, eed8d76). lockstep에서 NavigationReport를 뺀 onboard 입력을 `header.frame + 지연` 틱에 처리하도록 바뀌었다(SystemStatus +1, 임무장비 출력·Detection +2). C++를 다시 빌드했다. Agent 단위 시험 `test_agent_onboard_order.py`는 9건 통과, Gateway 단위 시험은 84건 통과·1건 건너뜀이다. 이번 차수는 실제 Core·Zenoh 스택에서 재현성을 본다.
+
+### 28.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 비교 도구 | `qa/gw_plan.py --lockstep-det`. 같은 시드 lockstep(rate 0, 평지)을 반복해 앞 60 s를 1번 실행과 비교한다 |
+| 비교 대상 | truth 궤적(프레임별 전 엔티티), LinkOutcome 전체(송신·수신 시각, 결과, seq), GCS 수신(발신, 메시지, seq, 헤더 시각, 내용 CRC) |
+| SystemStatus 변화 | Core를 일시정지하고 StepFrames로 프레임 1000·2000까지 정확히 간 뒤 SENSOR 고장을 주입했다(uav-004 10 s, uav-002 5 s). 시나리오에 고장 예약 기능이 없어 이 방식을 썼다 |
+| `late_onboard` | Agent 로그에서 "arrived after tick"을 찾았다. 카운터 값은 외부로 나오지 않으며 첫 건만 로그로 나온다 |
+
+| 실행 | 구성 | 횟수 |
+|---|---|---|
+| noloss / loss | §27과 같은 7기 구성. 손실 없음 / GE 손실 + 30±8 ms | 각 8 |
+| fault_noloss / fault_loss | 위 구성 + 프레임 지정 고장 2건 | 각 8 |
+| payload | `qa_s4_engage` | 8 |
+| qa_los / qa_cases | Detection이 나오는 기존 시나리오 | 각 5 |
+| qa_p5_noloss | 임무장비 다종 시나리오, 기존 설정 그대로 | 8 + 앞선 5 |
+| load50 | `qa_s6_load50`(50기) | 3 |
+| gateway | 7기 + CAL Server·Gateway·외부 클라이언트, 외부 입력 없음, rate 2 | 5 |
+| ls_order1·2 | §27 ls_order와 같은 Gateway lockstep | 2 |
+| r1, reg | realtime §26 시간표, 수정 없는 `qa/gw_integ.py` | 각 1 |
+
+```
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw20/det --det-runs 8 --variants noloss,loss,fault_noloss,fault_loss,payload --base-port 49100
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw20/det_load --det-runs 3 --variants load50 --base-port 49100
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw20/det_gw --det-runs 5 --variants gateway --base-port 49200
+uv run python qa/gw_plan.py --ext-prefix qa/out/gw20/det_gw/gateway
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw20/det_scn --det-runs 5 --variants scn:qa_los,scn:qa_cases,scn:qa_p5_noloss --base-port 49100
+uv run python qa/gw_plan.py --out qa/out/gw20/ls_order1 --order-trial --lockstep --rounds 4 --base-port 48900
+uv run python qa/gw_plan.py --out qa/out/gw20/r1
+uv run python qa/gw_integ.py --out qa/out/gw20/reg
+```
+
+### 28.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-106 | 같은 시드 lockstep: 첫 SystemStatus 프레임, LinkOutcome, GCS 수신 (손실 없음·있음) | 통과 |
+| TC-QA-107 | 실행 중 SystemStatus가 바뀌는 조건의 같은 비교 | 통과 |
+| TC-QA-108 | 임무장비 출력·Detection 시나리오의 같은 비교 | 통과 |
+| TC-QA-109 | `late_onboard` 경고 (50기 포함) | 통과 |
+| TC-QA-110 | 프레임 0 처리 순서 (TC-QA-100 회귀) | 통과 |
+| TC-QA-111 | Gateway 외부 수신·XSD (TC-QA-105 회귀) | 통과 |
+| TC-QA-112 | Gateway를 둔 lockstep (TC-QA-104 회귀) | 통과 |
+| TC-QA-113 | Gateway lockstep 같은 시드 재현 | 통과 (외부 입력 없는 구성) |
+
+모든 실행에서 truth 누락 프레임 0, 프로세스 이상 종료 0, 로그 이상 항목 0, 외부 수신 XSD 실패 0이다.
+
+### 28.3 TC-QA-106~108 같은 시드 비교
+
+| 구성 | 실행 | truth 궤적 | LinkOutcome | GCS 수신 | 첫 SystemStatus (전 기체) | 프레임 0 미전달 |
+|---|---|---|---|---|---|---|
+| noloss | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+| loss | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 2 (링크 손실, 8회 동일) |
+| fault_noloss | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+| fault_loss | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 2 (링크 손실, 8회 동일) |
+| payload `qa_s4_engage` | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+| `qa_los` | 5 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+| `qa_cases` | 5 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+| `qa_p5_noloss` | 8 | 동일 | 동일 | 동일 | tx 0.02 s | 0 |
+
+- §27에서 실행마다 4~6 / 7로 갈리던 프레임 0 SystemStatus는 0건이 되고 전 기체가 틱 1로 모였다. D-30은 **해소**다.
+- fault 실행의 SystemStatus 변화 시각은 8회 모두 같다. uav-004는 20.04 s(고장)·30.02 s(해제), uav-002는 40.04 s·45.02 s이다.
+- 앞선 `qa_p5_noloss` 5회 중 1회만 궤적 비교가 "다름"으로 나왔다. 관측기가 그 실행의 프레임 0 truth를 놓쳐 목록 위치가 어긋난 것이었다(LinkOutcome·GCS 수신은 동일). 프레임 번호로 맞춰 다시 비교하도록 고치고 8회를 돌려 전부 동일함을 확인했다(궤적 33,011행, 누락 0).
+
+임무장비 출력의 양이다(1번 실행, 60 s).
+
+| 시나리오 | onboard 출력 | GCS 보고 |
+|---|---|---|
+| `qa_s4_engage` | SensorActivity 18,414, JammerActivity 21,483 | SensorActivity 1,980, JammerActivity 3,600 |
+| `qa_los` | Detection 42,966, SensorActivity 30,690 | SensorActivity 600 |
+| `qa_cases` | Detection 3,100, SensorActivity 3,100, JammerActivity 3,100 | SensorActivity 60, JammerActivity 60 |
+| `qa_p5_noloss` | SensorActivity 15,390, JammerActivity 3,078 | SensorActivity 3,000 |
+
+### 28.4 TC-QA-109 `late_onboard`
+
+| 구성 | Agent 로그 수 | "arrived after tick" |
+|---|---|---|
+| 7기 구성과 임무장비 시나리오 | 63 | 0 |
+| 50기 lockstep (60 s, 실행당 벽시계 약 28~31 s) | 3 | 0 |
+| Gateway lockstep | 7 | 0 |
+| realtime (r1, reg) | 2 | 0 (lockstep 전용 경로) |
+
+50기 3회도 궤적·LinkOutcome·GCS 수신이 서로 같다(첫 SystemStatus tx 0.02 s, 프레임 0 미전달 0).
+
+### 28.5 TC-QA-110 프레임 0 처리 순서
+
+| 구성 | task-001 순서 (GCS / 외부) | 프레임 0 송신 |
+|---|---|---|
+| ls_order1·2 | waypoint 4대 ACCEPTED → EXECUTING / EXECUTION_PENDING → EXECUTING | FC 7, Nav 7, TS 7, 미전달 0 |
+| r1 (realtime) | 같음 | 없음 (O-30). 첫 송신 tx 0.26 s |
+
+lockstep의 프레임 0·이후 지연은 §27과 같다(20 ~ 40 ms).
+
+### 28.6 TC-QA-111 회귀
+
+| 항목 | §27 reg | reg |
+|---|---|---|
+| 외부 수신 / XSD 통과 | 13,067 / 13,067 | 13,070 / 13,070 |
+| `MA_NavigationReport` / `SystemStatus` | 650 / 9 | 651 / 9 |
+| `MA_FlightCommandStatus` / `MA_FlightCapability` / `MA_TaskStatus` | 5 / 5 / 12 | 5 / 5 / 12 |
+| `MA_PackagePartnerStatusReport` / `MA_PositionReport` | 3,242 / 3,892 | 3,242 / 3,892 |
+| `PO_Activity` / `EA_Activity` / `StrikeActivity` | 5,110 / 136 / 6 | 5,112 / 136 / 6 |
+| Nav 발행률 기본 / 두 기체 차단 / GCS 차단 / 해제 / 재기동 뒤 (건/s) | 5.00 / 3.00 / 0 / 5.00 / 4.96 | 5.00 / 3.00 / 0 / 5.00 / 4.97 |
+| uav-004 DEGRADED / OPERATIONAL (모의 s) | 55.08 / 62.15 | 55.12 / 62.10 |
+| 위치 짝짓기, 변환 오차 | 100%, 0 m | 100%, 0 m |
+
+r1도 §26·§27과 같은 결과다. 거부 9건, XSD 위반 3건 -ERR, 승인 응답 전달 9건, 차단 중 DROPPED·해제 뒤 DELIVERED이고, 외부 수신 30,400건 전부 XSD 통과이다. Gateway `rejections`·`invalid`·`send_failed`·`internal_error`는 0이다.
+
+### 28.7 TC-QA-112 Gateway lockstep
+
+| 항목 | §27 ls_order | ls_order1 | ls_order2 |
+|---|---|---|---|
+| 조건별 COMPLETED (연속 1점·2점, 2 s 1점·2점) | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 | 4 / 4 / 4 / 4 |
+| MissionPlan 먼저 도착 (연속 전송 8쌍) | 4 | 4 | 5 |
+| 외부 발행 / 거부 | 32 / 0 | 32 / 0 | 32 / 0 |
+| 외부 XSD 실패 | 0 | 0 | 0 |
+
+**기준선과 달라진 값 (IMP-AGT-036의 의도된 결과)**
+
+| 항목 | §27 ls_order | ls_order1 | 판정 |
+|---|---|---|---|
+| 첫 SystemStatus tx | 0 (일부 0.02 s) | 0.02 s (전 기체) | 의도된 결과. SystemStatus +1틱 |
+| 첫 SensorActivity tx | 0.02 s | 0.04 s | 의도된 결과. 임무장비 출력 +2틱 |
+| 프레임 0 송신 합계 | 27 | 21 | 의도된 결과. 프레임 0 SystemStatus 6건이 틱 1로 이동 |
+| FC·Nav·TaskStatus·PeerStatus·FlightCommandStatus 첫 tx | 0 / 0 / 0 / 0.06 s / 0.02 s | 같음 | 변화 없음 |
+| 모의 20 s까지 메시지별 건수 | 같음 | 같음 | 변화 없음 |
+| 모의 20 s까지 전 기체 궤적 (첫 외부 입력 전) | 기준 | 동일 | 변화 없음 |
+
+realtime(r1, reg)은 `_hold_onboard`를 지나지 않으며 수치 변화가 없다.
+
+### 28.8 TC-QA-113 Gateway lockstep 같은 시드
+
+외부 입력이 없는 구성(`gateway`, 5회)이다.
+
+| 항목 | 결과 |
+|---|---|
+| truth 궤적, LinkOutcome, GCS 수신 | 5회 모두 동일 |
+| 외부 수신 / XSD 통과 | 6,467 / 6,460 / 6,460 / 6,460 / 6,470, 전부 통과 |
+| 외부 MA_PositionReport의 기체별 값 순서 | 1,350 ~ 1,352건 비교, 불일치 0 |
+| 건수 차 | PO_Activity 최대 3, PackagePartner·PositionReport 최대 2 |
+
+건수 차는 정지 시점이 달라 생긴다. 드라이버가 60 s가 지난 뒤 멈추므로 실행마다 마지막 프레임이 3,053 ~ 3,058로 다르다. 공통 구간의 값은 일치한다.
+
+외부 입력이 있는 ls_order1·2는 재현 대상이 아니다. Gateway 발행 시각이 도착 시점의 마지막 틱(ls_order1 20.02 s, ls_order2 20.12 s 등)이라 시드로 정해지지 않는다. 입력을 받은 waypoint 4대의 궤적은 달라졌고 입력을 받지 않은 flocking 3대의 궤적은 같았다. 결과 판정(COMPLETED 수)은 같다.
+
+### 28.9 결함
+
+새 결함 없음.
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-30 | 해소 | 무고장·고장·임무장비·50기 lockstep 비교에서 전부 동일 |
+
+### 28.10 관찰
+
+- O-30 재발: r1은 첫 송신이 0.26 s였다(FlightCapability·Nav·TaskStatus tx 0.26 s, 첫 SystemStatus 1.00 s). §27 order2는 0.64 s였다. realtime 시작 때 Core가 Agent 경로 형성 전에 틱을 시작하는 것으로 보이며, lockstep에서는 나오지 않았다. 순서와 판정에는 영향이 없다. 원인은 확인하지 않았다.
+- O-31: Gateway lockstep(rate 1)의 Core overrun은 7, 28건이다(§27 11건). 누락 프레임 0이고 판정에 영향은 없다. realtime은 r1·reg 각 1건이다.
+- O-28·O-17은 그대로다.
+
+### 28.11 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| `late_onboard`가 실제로 세어지는 경우의 통합 동작 | 이번 실행에서 경고가 한 번도 나오지 않았다. 지연을 강제로 만드는 시험은 하지 않았고, 단위 시험(가짜 하네스)으로만 확인된다 |
+| `late_onboard` 카운터 값 | 첫 건 경고 외에 외부로 나오지 않는다 |
+| Detection을 받은 MA의 행동이 2틱 늦어진 영향의 정량 평가 | 궤적 재현성만 봤다. 수정 전 빌드와 임무 결과를 비교하지 않았다 |
+| 외부 입력이 있는 Gateway lockstep의 재현 | 발행 시각이 시드로 정해지지 않아 재현 대상이 아니다 |
+| 100기 lockstep, 60 s를 넘는 구간 | 50기 60 s까지만 돌렸다 |
