@@ -2211,3 +2211,118 @@ uav-004의 값이다. r3wp도 같은 순서다(외부 도달 55.13 s, 62.10 s).
 | `--no-multicast`의 격리 효과 자체 | 다른 버스를 띄워 시험하지 않았다 |
 | 준비 전 전송의 손실 재현 | 준비 로그 뒤 전송만 시험했다 |
 | 3-DoF 기체의 VI, lockstep에서 VI 보고의 외부 전달 | dof2·realtime만 돌렸다 |
+
+## 25. 17차 시험: D-28 재시험, FlightCommandStatus 상태 흐름 (2026-11-09)
+
+기준은 wp0-contracts 315727c이다. 16차 뒤 바뀐 코드는 `agent/src/swarm_agent/fa.py`뿐이라(IMP-AGT-033) C++는 다시 빌드하지 않았다. 같은 `command_id`·종류의 갱신에 FA가 수행 중이면 EXECUTING, 수행 전이면 ACCEPTED를 돌려주도록 바뀌었다. WP3의 단위 시험 `agent/tests/test_agent_fa_status.py`는 이 환경에서 5건 통과했다. 이번 시험은 실제 Core·Datalink·Agent·Gateway·CAL Server 통합 실행으로 본다.
+
+### 25.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 구성 | §24와 같다(`qa/gw_integ.py`, 기체 5대 + gcs-01, realtime 1배속, 평지, 링크 손실 0, Gateway `--no-multicast`) |
+| 실행 | flock2: flocking_basic. wp: uav-001~004를 waypoint MA로 바꾼 구성(uav-005는 flocking_basic). 첫 flock 실행은 PC 절전으로 약 2시간 끊겼고 드라이버의 벽시계 제한에 걸려 모의 151 s에서 끝나 판정에서 뺐다 |
+| 분석 | `qa/gw_fcs.py`(새 도구). GCS가 받은 FlightCommandStatus를 기체·`command_id`별로 수신 순서와 메시지 시각 순서로 늘어놓고, ACCEPTED < EXECUTING < 종료 순서의 역행, 같은 상태의 연속 반복, 마지막 상태를 센다 |
+
+```
+uv run python qa/gw_integ.py --out qa/out/gw17/flock2
+uv run python qa/gw_integ.py --out qa/out/gw17/wp --mover-ma waypoint
+uv run python qa/gw_fcs.py qa/out/gw17/flock2 qa/out/gw17/wp
+```
+
+### 25.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-085 | flocking: `command_id`별로 역행·반복 없이 EXECUTING 유지, 마지막 상태가 ACCEPTED가 아님 | 통과 |
+| TC-QA-086 | waypoint: 외부 hold·return_to_base 때 이전 명령 취소, 새 명령 수락 흐름이 §24와 같음 (회귀) | 통과 |
+| TC-QA-087 | TC-QA-081 재판정 | 통과 (기대값은 §25.5) |
+| TC-QA-088 | VI 외부 수신·XSD가 §24 수준으로 유지됨 | 통과 |
+
+두 실행 모두 truth 누락 프레임 0, overrun 0이고 프로세스 이상 종료와 로그 이상 항목은 없다. Gateway의 `rejections`·`invalid`·`send_failed`·`internal_error`도 모두 0이다.
+
+### 25.3 TC-QA-085 flocking 상태 흐름
+
+| 항목 | §24 r2 (수정 전) | flock2 (수정 후) |
+|---|---|---|
+| GCS FlightCommandStatus 건수 | 10 | 5 |
+| 기체당 상태 열 | EXECUTING → ACCEPTED | EXECUTING |
+| 역행 (수신 순서 / 메시지 시각 순서) | 기체당 1 | 0 / 0 |
+| 같은 상태 연속 반복 | 0 | 0 |
+| 마지막 상태 | ACCEPTED 5 | EXECUTING 5 |
+| 외부 `MA_FlightCommandStatus` | 10 (ACCEPTED) | 5 (ACCEPTED) |
+| 링크 손실·차단으로 빠진 FlightCommandStatus | 0 | 0 |
+
+- 실행 169 s 내내 매 프레임 같은 ID의 갱신이 들어갔지만 상태 보고는 시작 때 1건뿐이었다.
+- GCS에 ACCEPTED는 오지 않았다. 수락과 수행 시작이 변화 보고 최소 간격(0.1 s) 안에 이어져 최신 값 EXECUTING만 나간다(DEC-056과 같은 동작).
+
+### 25.4 TC-QA-086 waypoint 회귀
+
+GCS가 받은 상태 열이다. 시각은 메시지 시각(모의 s)이다.
+
+| 기체 / 명령 | §24 r3wp | wp | 외부 `MA_FlightCommandStatus` (wp) |
+|---|---|---|---|
+| uav-001 task-1 → hold (30 s) | EXECUTING → CANCELLED(superseded) | EXECUTING → CANCELLED (30.18) | ACCEPTED → CANCELED (30.24) |
+| uav-001 task-2 | EXECUTING | EXECUTING (30.18) | ACCEPTED (30.22) |
+| uav-002 task-1 → return_to_base (30 s) | EXECUTING → CANCELLED | EXECUTING → CANCELLED (30.20) | ACCEPTED → CANCELED (30.26) |
+| uav-002 task-2 | EXECUTING → COMPLETED | EXECUTING (30.20) → COMPLETED (67.70) | ACCEPTED (30.25) → ACCEPTED (67.75) |
+| uav-003 task-1 → hold (재기동 뒤) | EXECUTING → CANCELLED | EXECUTING → CANCELLED (136.50) | ACCEPTED → CANCELED (136.55) |
+| uav-003 task-2 | EXECUTING | EXECUTING (136.50) | ACCEPTED (136.53) |
+| uav-004 task-1 (명령 없음) | EXECUTING | EXECUTING | ACCEPTED |
+
+- 8개 명령, 12건에서 역행 0, 반복 0이다. 마지막 상태는 EXECUTING 4, CANCELLED 3, COMPLETED 1이다.
+- 외부 건수는 13 → 12건이다. 줄어든 1건은 이 구성에서도 flocking인 uav-005의 역행 보고다.
+- `MA_TaskStatus`도 §24와 같다(EXECUTION_PENDING → EXECUTING → COMPLETED/CANCELED). 외부 명령 4건은 모두 DELIVERED다.
+- 요청의 "새 명령 ACCEPTED"는 외부 표현이다. GCS 내부 값은 §24와 마찬가지로 EXECUTING이다.
+
+### 25.5 TC-QA-087 TC-QA-081 재판정
+
+기대값을 MA 구조별로 나눠 적는다. `FlightCommandStatus`는 MA가 FA에 낸 비행 명령의 상태이고, 임무 작업의 상태는 `TaskStatus`다.
+
+| 구성 | 외부 hold·return_to_base에 대한 `MA_FlightCommandStatus` 기대값 | 작업 변화의 확인 수단 | 결과 |
+|---|---|---|---|
+| 작업마다 새 비행 명령을 내는 MA (waypoint) | 이전 명령 CANCELED, 새 명령 ACCEPTED | 같은 시점의 `MA_TaskStatus` | 일치 |
+| 하나의 ID를 계속 갱신하는 MA (flocking) | 추가 메시지 없음. 시작 때 기체당 1건(내부 EXECUTING, 외부 ACCEPTED), 이후 역행·재보고 없음 | `MA_TaskStatus`와 기체 동작 | 일치 |
+
+flocking에서 외부 명령은 비행 명령을 바꾸지 않으므로 FlightCommandStatus에 변화가 없는 것이 맞다. 대신 flock2에서 `ext-hold-1`은 EXECUTION_PENDING → CANCELED, `ext-rtb-1`은 EXECUTION_PENDING → COMPLETED로 외부에 나갔다. 기체 동작도 바뀌었다(hold 기체는 60 s 동안 동쪽으로 55 m, 대조 기체는 1,296 m. 귀환 기체는 출발점 29 m까지 복귀). 따라서 TC-QA-081은 **통과**로 바꾼다.
+
+### 25.6 TC-QA-088 VI 유지
+
+| 항목 | §24 r2 | flock2 | wp |
+|---|---|---|---|
+| 외부 수신 / XSD 통과 | 12,986 / 12,986 | 13,068 / 13,068 | 8,087 / 8,087 |
+| 모의 시간 | 173.6 s | 169.2 s | 169.0 s |
+| `MA_NavigationReport` | 656 | 650 | 649 |
+| `MA_PositionReport` (vi + p2p) | 3,865 | 3,891 | 1,326 |
+| `SystemStatus` | 9 | 9 | 9 |
+| `MA_FlightCommandStatus` | 10 | 5 | 12 |
+| `MA_FlightCapability` | 5 | 5 | 5 |
+| Nav 외부 발행률 기본 / 두 기체 차단 / GCS 차단 / 해제 / 재기동 뒤 (건/s) | 5.00 / 2.92 / 0 / 5.00 / 5.03 | 5.00 / 3.00 / 0 / 5.00 / 4.96 | 5.00 / 3.00 / 0 / 5.00 / 4.96 |
+| uav-004 고장 → 외부 DEGRADED, 해제 → OPERATIONAL (모의 s) | 55.11, 62.06 | 55.08, 62.09 | 55.13, 62.06 |
+| 위치 짝짓기, 변환 오차, truth 대비 오차 | 100%, 0 m, 0 m | 100%, 0 m, 0 m | 100%, 0 m, 0 m |
+
+- 시간이 §24보다 짧은 것은 재기동 Gateway의 준비가 빨라(재기동 뒤 6.2~6.4 s, §24는 10.7 s) 뒤 시간표가 당겨졌기 때문이다.
+- wp의 `MA_PositionReport`가 적은 것은 waypoint MA가 PeerStatus를 보내지 않기 때문이다(uav-005만 보낸다). §24 r3wp와 같다.
+- 준비 로그 뒤 외부 명령은 0.03 s 안에 보냈고 모두 DELIVERED다.
+
+### 25.7 결함 상태 갱신
+
+- 새 결함 없음.
+
+| # | 상태 | 비고 |
+|---|---|---|
+| D-28 | 해소 | 통합 실행에서 역행 0, 마지막 상태 EXECUTING |
+
+### 25.8 관찰
+
+- O-21: GCS에는 ACCEPTED 없이 EXECUTING이 바로 온다. 수락과 수행 시작이 최소 간격 안에 있으면 합쳐지기 때문이다. 수락 단계를 GCS에서 보려면 구조를 바꿔야 한다. 판정에는 영향이 없다.
+- O-22: 서로 다른 `command_id` 사이의 외부 도착 순서는 정해져 있지 않다. wp에서는 새 명령 ACCEPTED가 이전 명령 CANCELED보다 약 20~30 ms 먼저 왔고, §24 r3wp에서는 기체별로 섞였다. 명령별 상태 열에는 영향이 없다.
+- O-17은 그대로다. uav-002 COMPLETED는 외부에 ACCEPTED 재보고로 보인다.
+
+### 25.9 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 수행 전(ACCEPTED) 상태에서 갱신이 오는 경우의 통합 동작 | 통합 실행에서는 그 구간이 최소 간격 안에 있어 GCS로 나오지 않는다. WP3 단위 시험으로만 확인된다 |
+| lockstep에서의 상태 흐름, 다른 MA(formation 등) | realtime의 flocking·waypoint만 돌렸다 |
+| 링크 손실이 있을 때의 상태 열 | 링크 손실 0 구성만 돌렸다. 이번 실행에서 FlightCommandStatus 손실은 0이다 |
