@@ -62,3 +62,5 @@
 | 2026-11-09 | `326bf4b` | — | 문서 E1~E3 영문판 병합. 코드 변화 없음 | — | 해당 없음 | |
 | 2026-11-09 | `c74b252` | DEC-075, DEC-076, DEC-077, OPN-061~063 | 계약 0.15.0: 외부 승인 응답 STD, 외부 `MA_MissionPlan`·`MA_RoutePlan` 수신, `LinkEnvelope.publisher` | 개괄 §8, 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
 | 2026-11-09 | `a6f133b` | — | 문서 변경 기록 4행 반영 병합. 코드 변화 없음 | — | 해당 없음 | |
+| 2026-11-09 | `a2de464` | IMP-UI-076, TC-UI-064, DEC-077 | UI가 보내는 `LinkEnvelope`에 `publisher`를 채움 | 개발 8 ui | 미처리 | |
+| 2026-11-09 | `45f64fc` | TC-GW-019~027, DEC-075~077 | Gateway가 외부 승인 응답과 `MA_RoutePlan`·`MA_MissionPlan`을 받음. `--participant`로 발행자 ID 지정. 지원 범위는 `gateway/README.md` | 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
