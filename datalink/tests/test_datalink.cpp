@@ -1,4 +1,4 @@
-// TC-LNK-001~023: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~026: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -11,6 +11,7 @@
 #include <string>
 #include <tuple>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -162,12 +163,17 @@ struct Rig {
   }
 
   void tx(const std::string& src, std::vector<std::string> dst, std::size_t payload = 32,
-          keys::Iface iface = keys::Iface::P2P, const std::string& msg = "PeerStatus", std::uint64_t sim_time_us = 0) {
+          keys::Iface iface = keys::Iface::P2P, const std::string& msg = "PeerStatus",
+          std::optional<std::uint64_t> sim_time_us = std::nullopt) {
     v1::LinkEnvelope env;
     auto* h = env.mutable_header();
     h->set_source(src);
     h->set_frame(frame);
-    h->set_sim_time_us(sim_time_us);
+    // 시각을 주면 기체 런타임처럼 찍는다. 안 주면 시각을 비운 지상 발행자다 (DEC-077)
+    if (sim_time_us)
+      h->set_sim_time_us(*sim_time_us);
+    else
+      env.set_publisher("rig-ground");
     const std::string key = keys::tx(src, iface, msg);
     h->set_seq(seq[key]++);
     for (auto& d : dst) env.add_dst(d);
@@ -1358,6 +1364,140 @@ void tc023() {
   check(rt.min_rx == 0, "realtime: zero delay keeps tx time");
 }
 
+// ---- TC-LNK-024~026: 프레임 0 송신 시각 (QA O-23, DEC-039, DEC-054, DEC-077) ----
+DatalinkConfig latency_cfg(double latency_ms) {
+  DatalinkConfig cfg;
+  LinkProfile p = clean_profile();
+  p.latency_ms = latency_ms;
+  cfg.profiles["clean"] = p;
+  return cfg;
+}
+
+std::vector<Ent> pair_ents() { return {{"uav-001"}, {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0}}; }
+constexpr keys::Iface kC2 = keys::Iface::C2;
+
+void tc024() {
+  // 정상 순서: 프레임 0(ACCEPTED) 다음 프레임 1(EXECUTING)
+  {
+    Rig r(pair_ents(), latency_cfg(30.0));
+    r.tick();  // T=0
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+    r.tick();  // T=20: 프레임 0 송신 처리
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Executing", 20000);
+    for (int k = 0; k < 4; ++k) r.tick();
+    check(r.rx.size() == 2, "both delivered");
+    if (r.rx.size() == 2) {
+      check(r.rx[0].first.ends_with("/Accepted") && r.rx[1].first.ends_with("/Executing"), "frame 0 arrives first");
+      check(r.rx[0].second.rx_time_us() == 40000 && r.rx[1].second.rx_time_us() == 60000, "lockstep rx times");
+    }
+    check(r.outcomes.size() == 2 && r.outcomes[0].tx_time_us() == 0, "frame 0 keeps tx time 0");
+  }
+  // QA 재현: 프레임 0 송신이 프레임 1 송신보다 늦게, 틱이 진행된 뒤에 도착해도 시각 0을 유지한다
+  {
+    Rig r(pair_ents(), latency_cfg(30.0));
+    for (int k = 0; k < 4; ++k) r.tick(v1::RUN_MODE_REALTIME);  // 마지막 틱 60 ms
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Executing", 20000);
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+    r.tick(v1::RUN_MODE_REALTIME);  // T=80: 둘 다 도착 시각이 지났다
+    check(r.rx.size() == 2, "late frame 0: both delivered");
+    if (r.rx.size() == 2) {
+      check(r.rx[0].first.ends_with("/Accepted") && r.rx[0].second.rx_time_us() == 30000, "late frame 0: first, rx 30 ms");
+      check(r.rx[1].first.ends_with("/Executing") && r.rx[1].second.rx_time_us() == 50000, "frame 1: rx 50 ms");
+    }
+  }
+  // lockstep에서도 늦은 프레임 0이 프레임 1보다 뒤로 가지 않고 DEC-054 하한을 지킨다
+  {
+    Rig r(pair_ents(), latency_cfg(30.0));
+    for (int k = 0; k < 4; ++k) r.tick();
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Executing", 20000);
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+    r.tick();  // T=80
+    check(r.rx.size() == 2 && r.rx[0].first.ends_with("/Accepted"), "lockstep late frame 0: delivered first");
+    for (const auto& [key, env] : r.rx) check(env.rx_time_us() >= 80000, "lockstep late frame 0: rx_time >= T_k");
+  }
+  // 지연 0: 시각 0 송신의 rx도 DEC-054를 지킨다
+  {
+    Rig r(pair_ents(), latency_cfg(0.0));
+    r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+    r.tick();  // T=0: 틱 0에는 처리하지 않는다
+    check(r.rx.empty(), "frame 0 tx not processed at tick 0");
+    r.tick();  // T=20
+    check(r.rx.size() == 1 && r.rx[0].second.rx_time_us() == 20000, "zero delay: rx_time = T_1");
+  }
+}
+
+void tc025() {
+  // publisher가 있고 시각이 0이면 마지막 틱 시각을 쓴다
+  Rig r(pair_ents(), latency_cfg(0.0));
+  for (int k = 0; k < 3; ++k) r.tick();  // 마지막 틱 40 ms
+  r.tx("uav-001", {"uav-002"}, 32, kC2, "TaskCommand");
+  r.tick();
+  check(r.outcomes.size() == 1 && r.outcomes[0].tx_time_us() == 40000, "publisher + time 0: last tick time");
+  check(r.rx.size() == 1 && r.rx[0].second.publisher() == "rig-ground", "publisher forwarded");
+  // publisher가 있어도 시각을 찍었으면 그 시각을 쓴다
+  r.outcomes.clear();
+  v1::LinkEnvelope env;
+  env.mutable_header()->set_source("uav-001");
+  env.mutable_header()->set_sim_time_us(50000);
+  env.mutable_header()->set_seq(99);
+  env.set_publisher("ui-01");
+  env.add_dst("uav-002");
+  env.set_iface(v1::L1_INTERFACE_C2);
+  env.set_msg_type("swarm.v1.TaskCommand");
+  env.set_payload("x");
+  put(r.bus, keys::tx("uav-001", kC2, "TaskCommand"), env);
+  r.tick();
+  check(r.outcomes.size() == 1 && r.outcomes[0].tx_time_us() == 50000, "publisher + time: header time");
+  // publisher가 없고 시각이 0이면 0이 유효한 시각이다
+  r.outcomes.clear();
+  r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+  r.tick();
+  check(r.outcomes.size() == 1 && r.outcomes[0].tx_time_us() == 0, "no publisher + time 0: valid time 0");
+}
+
+std::vector<std::string> run_frame0(bool before_tick0, double latency_ms, double jitter_ms) {
+  DatalinkConfig cfg;
+  LinkProfile p = clean_profile();
+  p.latency_ms = latency_ms;
+  p.jitter_ms = jitter_ms;
+  p.ge = {0.05, 0.3, 0.0, 0.5};
+  cfg.profiles["clean"] = p;
+  Rig r(pair_ents(), cfg, nullptr, 11);
+  auto send0 = [&] {
+    for (int i = 0; i < 20; ++i) {
+      r.tx("uav-001", {"uav-002"}, 32, kC2, "Accepted", 0);
+      r.tx("uav-002", {"uav-001"}, 32, kC2, "Accepted", 0);
+    }
+  };
+  if (before_tick0) send0();
+  r.tick();
+  if (!before_tick0) send0();
+  for (int k = 1; k < 12; ++k) {
+    const std::uint64_t t = (r.frame - 1) * r.dt_us;
+    if (k < 5) r.tx("uav-001", {"uav-002"}, 32, kC2, "Executing", t);
+    r.tick();
+  }
+  std::vector<std::string> out;
+  for (const auto& [key, env] : r.rx)
+    out.push_back(key + " " + std::to_string(env.header().seq()) + " " + std::to_string(env.rx_time_us()));
+  for (const auto& o : r.outcomes)
+    out.push_back(o.src() + ">" + o.dst() + " " + std::to_string(o.seq()) + " " + std::to_string(o.reason()) + " " +
+                  std::to_string(o.tx_time_us()) + " " + std::to_string(o.rx_time_us()));
+  return out;
+}
+
+void tc026() {
+  // 지연 0이면 틱 0에서 처리될 때 rx_time이 달라지므로 도착 경쟁이 그대로 드러난다
+  for (const auto& [latency, jitter] : {std::pair{30.0, 8.0}, std::pair{0.0, 0.0}}) {
+    const auto a = run_frame0(true, latency, jitter), b = run_frame0(true, latency, jitter);
+    const auto c = run_frame0(false, latency, jitter);
+    check(!a.empty(), "trace not empty");
+    check(a == b, "same input, same output");
+    // 틱 0은 기다리지 않으므로 프레임 0 송신은 틱 0보다 먼저도 뒤에도 올 수 있다. 결과는 같아야 한다 (DEC-039)
+    check(a == c, "frame 0 tx before or after tick 0: same output");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1370,7 +1510,7 @@ const Case kCases[] = {
     {"TC-LNK-013", tc013}, {"TC-LNK-014", tc014}, {"TC-LNK-015", tc015},
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
-    {"TC-LNK-023", tc023},
+    {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
 };
 
 }  // namespace

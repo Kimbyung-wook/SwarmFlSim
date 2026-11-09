@@ -61,6 +61,7 @@ flowchart LR
 | IMP-LNK-020 | `run_tick` 전체(틱 계산, rx·outcome 발행, `FrameDone` 발행)를 `run_mu_`(재귀 뮤텍스)로 직렬화. `on_tick`·`on_done`이 다른 스레드에서 불려도 틱 f의 rx가 모두 나간 뒤에 `FrameDone{f}`가 나간다 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-040, DEC-039, QA-016 |
 | IMP-LNK-021 | 송신 개수 장벽: lockstep `FrameDone.sent_count`에 엔티티별 발행한 `swarm/<e>/rx/**` 누적 수(모의 손실로 버린 메시지는 미계수)를 싣고, 틱 f+1은 참여자의 FrameDone{f}와 엔티티별 `swarm/<e>/tx/**` 누적 수신 수가 참여자들이 실은 `sent_count` 합 이상이 될 때까지 대기. `sent_count`가 없으면 개수 조건 없음, realtime·free-run 무영향, Start/Reset 시 카운터 초기화 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-044, DEC-039 |
 | IMP-LNK-022 | lockstep rx 불변식: 틱 k에서 전달하는 rx와 DELIVERED 결과의 `rx_time_us`를 `max(표본 도착 시각, T_k)`로 둔다. 지연 0, 틱 사이 도착, `max_routes_per_tick` 이월이 모두 `deliver_locked` 한 곳을 지난다. realtime·free-run은 표본 도착 시각 그대로 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | REQ-LNK-001, REQ-LNK-004, DEC-054, DEC-045 |
+| IMP-LNK-023 | 프레임 0 송신 시각(QA O-23): `sim_time_us == 0`이고 `publisher`가 있을 때만 시각 없음으로 보고 마지막 틱 시각을 쓴다. `publisher`가 없으면(기체 런타임) 0을 유효한 시각으로 유지한다. 틱 처리 조건에서 `tx_time == 0` 예외를 없애 프레임 0 송신도 `tx < T_k` 규칙으로 틱 1에서 처리한다(틱 0은 기다리지 않아 도착 경쟁이 되므로). 기준 확인: UI는 `publisher`와 clock 시각, Gateway는 `publisher`만 채우고, 기체 런타임은 `publisher`를 비우며 항상 시각을 찍는다. `qa/harness.py`, `qa/gw_integ.py`, `scripts/run_p0_demo.py`는 `publisher` 없이 마지막 틱 시각을 찍는다 | `src/emulator.cpp` | REQ-LNK-001, QA O-23, DEC-039, DEC-054, DEC-077 |
 | IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
@@ -90,6 +91,9 @@ flowchart LR
 | TC-LNK-021 | on_tick·on_done을 다른 스레드에서 동시에 호출(300프레임)해도 틱마다 FrameDone은 rx 뒤에 정확히 1건 (`run_mu_` 직렬화) | `tests/test_datalink.cpp` | IMP-LNK-019, DEC-040 | 통과 (msvc-debug, 2026-11-03) |
 | TC-LNK-022 | 송신 개수 장벽: sent_count 3 > 수신 1이면 대기·3건 채우면 진행, sent_count 없으면 조건 없음, Datalink FrameDone.sent_count = FrameDone 전에 발행한 rx 수, 통신 범위 밖 손실 메시지 미계수, realtime은 대기·sent_count 없음 | `tests/test_datalink.cpp` | IMP-LNK-021, DEC-044 | 통과 (msvc-debug, 2026-11-05) |
 | TC-LNK-023 | lockstep rx 하한: 지연 0, 지연 5 ms(틱 사이 도착), 틱당 2쌍 상한 이월에서 틱 k의 모든 rx와 DELIVERED 결과가 `rx_time_us >= T_k`. realtime은 지연 0이면 송신 시각 그대로(하한 미적용). TC-LNK-005·009 기대값을 DEC-054에 맞춤 | `tests/test_datalink.cpp` | IMP-LNK-022, DEC-054 | 통과 (msvc-debug, 2026-11-06) |
+| TC-LNK-024 | 프레임 0 송신이 프레임 1 송신보다 앞서 도착: 정상 순서, 프레임 0 송신이 뒤늦게 도착한 경우(realtime rx 30 ms < 50 ms, lockstep 먼저 전달), tx 시각 0 유지, 지연 0이면 틱 0에 처리하지 않고 rx_time = T_1 (DEC-054) | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-054 | 통과 (msvc-debug, 2026-11-09) |
+| TC-LNK-025 | `publisher` + 시각 0은 마지막 틱 시각, `publisher` + 시각은 헤더 시각, `publisher` 없음 + 시각 0은 0, `publisher`는 rx로 그대로 전달 | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-077 | 통과 (msvc-debug, 2026-11-09) |
+| TC-LNK-026 | 같은 입력 2회 동일 출력, 프레임 0 송신이 틱 0 앞이든 뒤든 동일 출력(지연 30±8 ms·손실 있음, 지연 0) | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-039 | 통과 (msvc-debug, 2026-11-09) |
 
 ## 제약과 다음 단계
 
