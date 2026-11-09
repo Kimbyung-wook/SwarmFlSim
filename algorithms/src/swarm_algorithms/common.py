@@ -88,12 +88,17 @@ class TaskTracker:
         self.current: c2_pb2.TaskCommand | None = None
         self.home: tuple[float, float, float] | None = None
         self.changed = False  # 현재 작업이 바뀌었으면 True. 호출자가 지운다
+        self.quiet: c2_pb2.TaskCommand | None = None   # 상태를 보고하지 않는 작업(단독 RoutePlan, D-29)
+        self.plan_task_ids: set[str] = set()           # 지금까지 받은 계획의 task_id
         self.plans = PlanWatcher(ctx)
         if self.plans.initial is not None:
+            self.plan_task_ids.update(t.task_id for t in self.plans.initial.tasks)
             self.queue.extend(t for t in self.plans.initial.tasks
                               if t.WhichOneof("task") in supported and not invalid_reason(t))
 
     def status(self, task: c2_pb2.TaskCommand, state: int, progress: float = 0.0, reason: str = "") -> None:
+        if task is self.quiet:
+            return
         st = c2_pb2.TaskStatus(task_id=task.task_id, state=state, progress=progress, reason=reason)
         st.header.correlation_id = task.task_id
         self.ctx.ports.c2.send(st)
@@ -136,6 +141,7 @@ class TaskTracker:
         """실행 중 받은 새 계획 (DEC-076). 이 기체가 수행할 작업이 있을 때만 C2 TaskCommand처럼 현재 작업을 밀어낸다.
 
         시작 전 대기 작업도 함께 교체하고 CANCELLED로 알린다. 새 계획에 같은 task_id가 있으면 내용 교체라 취소로 보고하지 않는다"""
+        self.plan_task_ids.update(t.task_id for t in plan.tasks)
         valid = []
         for t in plan.tasks:
             kind = t.WhichOneof("task")
@@ -152,6 +158,17 @@ class TaskTracker:
                 self.status(t, S.COMMAND_STATE_CANCELLED, reason="preempted")
         self.current = None
         self.queue = deque(valid)
+        self.changed = True
+
+    def references(self, task_id: str) -> bool:
+        """이 ID가 계획의 작업이거나 지금 수행 중인 작업인가"""
+        return task_id in self.plan_task_ids or (self.current is not None and self.current.task_id == task_id)
+
+    def run_quiet(self, task: c2_pb2.TaskCommand) -> None:
+        """상태 보고 없이 바로 수행한다. 현재 작업은 C2처럼 CANCELLED(preempted)로 끝내고 대기 작업은 그대로 둔다 (D-29)"""
+        if self.current is not None:
+            self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
+        self.quiet = self.current = task
         self.changed = True
 
     def update(self, nav: vi_pb2.NavigationReport | None) -> None:
