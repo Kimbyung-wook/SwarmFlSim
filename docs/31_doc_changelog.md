@@ -67,4 +67,4 @@
 | 2026-11-09 | `e334603` | IMP-AGT-034, TC-AGT-075~081, DEC-076, CR-GW-008 | 내장 MA가 실행 중 받은 `MissionPlan`을 반영. 같은 `plan_id`는 무시, 새 `plan_id`는 현재 작업을 교체 | 개발 4, 개발 8 agent, 개발 8 algorithms, 사용자 9 | 미처리 | |
 | 2026-11-09 | `2f0d4e0` | TC-QA-089~097, D-29 | QA 18차: 외부 임무 계획·승인 응답·발행자 ID 통합 확인. RoutePlan과 MissionPlan을 연달아 보내면 작업이 끝나지 않는 결함(D-29) | 사용자 9 | 미처리 | |
 | 2026-11-09 | `95710cd` | IMP-AGT-035, TC-AGT-082~087, D-29, O-26 | waypoint MA: 같은 ID의 계획 작업이 있는 RoutePlan은 따로 비행하지 않음. 단독 RoutePlan의 비행 명령 ID는 `<id>-task-<n>` | 개발 8 algorithms, 사용자 9 | 미처리 | |
-| 2026-11-10 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 미처리 | |
+| 2026-11-09 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 미처리 | |
