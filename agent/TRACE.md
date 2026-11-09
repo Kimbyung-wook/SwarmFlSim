@@ -127,7 +127,7 @@ flowchart LR
 | TC-AGT-073 | flocking(매 프레임 같은 ID) 5 s: GCS가 받은 FlightCommandStatus가 command_id별로 역행·반복 없음 | `tests/test_agent_fa_status.py` | IMP-AGT-033, IMP-AGT-032 | Pass |
 | TC-AGT-074 | lockstep에서 같은 입력 두 번 실행 시 GCS가 받은 FlightCommandStatus가 같음 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
 
-시험 결과(2026-11-09): agent 80, algorithms 52 passed
+시험 결과(2026-11-09): agent 80, algorithms 62 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 

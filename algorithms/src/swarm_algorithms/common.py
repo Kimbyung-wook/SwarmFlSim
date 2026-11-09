@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 
-from swarm.v1 import c2_pb2, common_pb2, p2p_pb2, vi_pb2
+from swarm.v1 import c2_pb2, common_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext
 from swarm_agent.geo import G_MPS2, ned_offset, wrap_pi
 from swarm_agent.racetrack import path_error
@@ -55,10 +55,30 @@ class Goal:
     racetrack: tuple[float, float] | None = None  # (직선 구간 길이 m, 축 방향 deg), DEC-034
 
 
+class PlanWatcher:
+    """MP 포트의 MissionPlan 중 아직 처리하지 않은 plan_id만 내준다 (DEC-076). 같은 plan_id는 내용이 달라도 다시 내주지 않는다.
+
+    포트를 소비하지 않으므로 MA 안의 여러 부품이 각자 하나씩 둔다. 틱 안에서 부르므로 lockstep에서 결정적이다.
+    """
+
+    def __init__(self, ctx: AgentContext):
+        self.ctx = ctx
+        self.initial = ctx.ports.mp.mission_plan()      # 초기화 때 이미 있던 계획
+        self._seen = {self.initial.plan_id} if self.initial is not None else set()
+
+    def poll(self) -> mp_pb2.MissionPlan | None:
+        plan = self.ctx.ports.mp.mission_plan()
+        if plan is None or plan.plan_id in self._seen:
+            return None
+        self._seen.add(plan.plan_id)
+        return plan
+
+
 class TaskTracker:
     """MissionPlan 작업을 순서대로, C2 TaskCommand는 받는 즉시(현재 작업을 밀어내고) 처리한다.
 
-    상태는 TaskStatus로 통제 GCS에 보낸다. 지원하지 않는 작업은 C2면 REJECTED, 계획이면 건너뛴다.
+    상태는 TaskStatus로 통제 GCS에 보낸다. 지원하지 않는 작업은 C2와 실행 중 받은 계획이면 REJECTED,
+    초기 계획이면 건너뛴다. 실행 중 받은 새 계획은 C2처럼 현재 작업을 밀어내고 대기열을 교체한다 (DEC-076).
     """
 
     def __init__(self, ctx: AgentContext, supported: tuple[str, ...] = ("move_to", "hold", "return_to_base")):
@@ -68,9 +88,9 @@ class TaskTracker:
         self.current: c2_pb2.TaskCommand | None = None
         self.home: tuple[float, float, float] | None = None
         self.changed = False  # 현재 작업이 바뀌었으면 True. 호출자가 지운다
-        plan = ctx.ports.mp.mission_plan()
-        if plan is not None:
-            self.queue.extend(t for t in plan.tasks
+        self.plans = PlanWatcher(ctx)
+        if self.plans.initial is not None:
+            self.queue.extend(t for t in self.plans.initial.tasks
                               if t.WhichOneof("task") in supported and not invalid_reason(t))
 
     def status(self, task: c2_pb2.TaskCommand, state: int, progress: float = 0.0, reason: str = "") -> None:
@@ -112,10 +132,35 @@ class TaskTracker:
         self.status(msg, S.COMMAND_STATE_ACCEPTED)
         return True
 
+    def _apply_plan(self, plan: mp_pb2.MissionPlan) -> None:
+        """실행 중 받은 새 계획 (DEC-076). 이 기체가 수행할 작업이 있을 때만 C2 TaskCommand처럼 현재 작업을 밀어낸다.
+
+        시작 전 대기 작업도 함께 교체하고 CANCELLED로 알린다. 새 계획에 같은 task_id가 있으면 내용 교체라 취소로 보고하지 않는다"""
+        valid = []
+        for t in plan.tasks:
+            kind = t.WhichOneof("task")
+            reason = f"unsupported task {kind}" if kind not in self.supported else invalid_reason(t)
+            if reason:
+                self.status(t, S.COMMAND_STATE_REJECTED, reason=reason)
+            else:
+                valid.append(t)
+        if not valid:
+            return
+        ids = {t.task_id for t in valid}
+        for t in ([self.current] if self.current is not None else []) + list(self.queue):
+            if t.task_id not in ids:
+                self.status(t, S.COMMAND_STATE_CANCELLED, reason="preempted")
+        self.current = None
+        self.queue = deque(valid)
+        self.changed = True
+
     def update(self, nav: vi_pb2.NavigationReport | None) -> None:
         if nav is not None and self.home is None:
             p = nav.kinematics.position
             self.home = (p.lat_deg, p.lon_deg, p.alt_m)
+        plan = self.plans.poll()
+        if plan is not None:
+            self._apply_plan(plan)
         if self.current is None and self.queue:
             self.current = self.queue.popleft()
             self.changed = True
