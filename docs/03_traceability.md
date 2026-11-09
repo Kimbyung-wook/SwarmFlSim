@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-054 | WP1, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~011, IMP-INT-001 | TC-LOG-001~010, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073 | WP0, WP9, WP3, WP1 | IMP-API-002, 005, IMP-GW-001~017, IMP-AGT-032~033, IMP-CORE-028 | TC-GW-001~015, TC-QA-069~074, 078~084, TC-AGT-063~074, TC-CORE-043 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073 | WP0, WP9, WP3, WP1 | IMP-API-002, 005, IMP-GW-001~017, IMP-AGT-032~033, IMP-CORE-028 | TC-GW-001~015, TC-QA-069~074, 078~088, TC-AGT-063~074, TC-CORE-043 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -194,6 +194,10 @@
 | TC-QA-082 | DEC-071: GCS 링크 차단 시 VI 외부 발행 감소, 해제 시 회복 | `qa/gw_integ.py` + `qa/gw_vi.py` | DEC-071, DEC-009 |
 | TC-QA-083 | D-27·O-13: `--no-multicast` 기동, 준비 완료 로그 뒤 명령 전달 | `qa/gw_integ.py` + `qa/gw_vi.py` | DEC-068 |
 | TC-QA-084 | TC-QA-069 재판정: VI·C2·P2P·MS 외부 수신 | `qa/gw_integ.py` + `qa/gw_vi.py` | DEC-068, DEC-071 |
+| TC-QA-085 | D-28: flocking에서 FlightCommandStatus가 command_id별 역행·반복 없이 EXECUTING 유지 | `qa/gw_integ.py` + `qa/gw_fcs.py` | DEC-071 |
+| TC-QA-086 | D-28 회귀: waypoint 외부 hold·return_to_base 때 이전 명령 취소, 새 명령 수락 | `qa/gw_integ.py` + `qa/gw_fcs.py` | DEC-071, DEC-068 |
+| TC-QA-087 | TC-QA-081 재판정 | `qa/gw_integ.py` + `qa/gw_fcs.py` | DEC-071 |
+| TC-QA-088 | VI 외부 수신·XSD 유지 | `qa/gw_integ.py` + `qa/gw_fcs.py` | DEC-071, DEC-072 |
 
 ## 시험 결과
 
@@ -297,10 +301,14 @@
 | TC-QA-078 | 통과 | 2026-11-08 | r2: 12,986건 XSD 통과, 기체당 1 Hz 기대값과 일치 |
 | TC-QA-079 | 통과 | 2026-11-08 | 항법 잡음 0 조건. 변환 오차 0 m |
 | TC-QA-080 | 통과 | 2026-11-08 | DEGRADED·OPERATIONAL 전환, 약 70 ms |
-| TC-QA-081 | 조건부 통과 | 2026-11-08 | waypoint MA 통과, flocking은 변화 없음(D-28) |
+| TC-QA-081 | 통과(TC-QA-087로 재판정) | 2026-11-09 | 16차는 조건부 통과(D-28). 17차에서 재판정 |
 | TC-QA-082 | 통과 | 2026-11-08 | 초당 5.0 → 2.9 → 0 → 5.0건 |
 | TC-QA-083 | 통과 | 2026-11-08 | 다른 버스와의 격리 시험은 안 함 |
 | TC-QA-084 | 통과 | 2026-11-08 | 13종 중 9종 발행, 발신자 없는 4종 남음 |
+| TC-QA-085 | 통과 | 2026-11-09 | 통합 실행, 역행 0, 마지막 상태 EXECUTING |
+| TC-QA-086 | 통과 | 2026-11-09 | §24와 같은 흐름 |
+| TC-QA-087 | 통과 | 2026-11-09 | 기대값은 `docs/21_qa_report.md` §25.5 |
+| TC-QA-088 | 통과 | 2026-11-09 | §24 수준 유지 |
 
 ## 프로세스 결정
 
