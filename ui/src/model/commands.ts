@@ -150,7 +150,7 @@ export class C2Commander {
   private readonly seq = new Map<string, number>();
   private taskCounter = 0;
 
-  /** uiId는 task_id를 UI 인스턴스끼리 겹치지 않게 하는 접두어 (DEC-020) */
+  /** uiId는 브리지 hello의 client ID. task_id 접두어(DEC-020)이자 LinkEnvelope.publisher(IMP-UI-076, DEC-077) */
   constructor(
     readonly gcs: string,
     private readonly uiId: string,
@@ -219,6 +219,7 @@ export class C2Commander {
     (msg as { header?: { seq: number } }).header!.seq = seq;
     const envelope = create(LinkEnvelopeSchema, {
       header: { ...this.header(correlationId), seq },
+      publisher: this.uiId, // DEC-077: GCS tx 키는 UI와 Gateway가 함께 쓴다. seq는 발행자·키별
       dst: [...dst],
       iface: L1Interface.C2,
       msgType: schema.typeName,

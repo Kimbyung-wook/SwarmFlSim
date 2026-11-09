@@ -86,6 +86,7 @@
 | IMP-UI-073 | 영상 출처 표기를 Copernicus Sentinel 법적 고지 수정본 문구로: "Contains modified Copernicus Sentinel data 2025-2026 (Sentinel-2 L2A composite)" (EOX 표기 제거, `VITE_IMAGERY_CREDIT`로 변경 가능) | `src/model/mapCredits.ts` | REQ-SIM-003, DEC-059 | TC-UI-059, TC-UI-060 |
 | IMP-UI-074 | 입력 칸·선택 상자에 포커스가 있어도 Esc는 전역 처리(임무 창 닫기, 없으면 선택 해제·자유 시점). 다른 단축키(숫자, H, Ctrl+A)는 입력 칸에서 계속 무시 | `src/model/shortcuts.ts`, `src/App.tsx` | REQ-UI-003 | TC-UI-061, TC-UI-063 |
 | IMP-UI-075 | 타격 지정 양식의 종류 선택 라벨을 매뉴얼과 같은 "유도 객체 종류"로 변경. 탭 이름 "타격 지정", 코드 식별자, proto 필드는 그대로 | `src/components/MissionPanel.tsx` | REQ-UI-003 | TC-UI-062 |
+| IMP-UI-076 | UI가 `swarm/<gcs>/tx/c2/**`로 보내는 모든 `LinkEnvelope`에 `publisher`를 채운다. 값은 브리지 hello의 `client`와 같은 UI 참여자 ID. `header.source`는 GCS ID 그대로, `header.seq`는 UI 인스턴스·키별. 봉투를 만드는 곳은 `C2Commander.wrap` 한 곳 | `src/model/commands.ts` | DEC-077 | TC-UI-064 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -141,6 +142,7 @@
 | TC-UI-061 | 단축키 범위: INPUT·SELECT에서 Esc는 처리, 숫자·H·A는 무시, 입력 칸 밖에서는 모두 처리 (3건) | `ui/src/model/shortcuts.test.ts` | IMP-UI-074 | 통과 |
 | TC-UI-062 | 임무 창 타격 지정 양식에 라벨 "유도 객체 종류"가 있고 이전 라벨은 없으며 탭 이름은 유지 (1건) | `ui/src/components/panels.test.tsx` | IMP-UI-075 | 통과 |
 | TC-UI-063 | 수동(브라우저, 목 소스): 24대 선택 후 우클릭으로 임무 창을 열고 입력 칸에 포커스. `1` 키는 입력 값에만 들어가고 선택은 24대 유지. Esc로 임무 창이 닫히고 포커스는 BODY, 선택은 24대 유지. 콘솔 오류 없음 | 브라우저 확인 | IMP-UI-074 | 통과 |
+| TC-UI-064 | publisher: task·mission·formation·group 봉투 8종이 직렬화 뒤에도 UI ID를 유지, `header.source`는 GCS, seq는 발행자·키별, `BusSource.sendC2`로 나간 바이트에서 publisher 확인 (3건 + 기존 BusSource 송신 시험에 검사 1개 추가, 구현을 빼면 4건 실패 확인) | `ui/src/model/publisher.test.ts`, `ui/src/data/busSource.test.ts` | IMP-UI-076 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -152,4 +154,5 @@
 - 지도 고해상도(DEC-057, 기준 `wp0-contracts` 57c69e6): `npm test` 23파일 156건 통과, `npm run build` 통과. DEM 206 MB(4분 33초), 지형 타일 49,215장 150.7 MB(40~90초). EOX 영상 일괄 받기(z0~13 62,214장)는 약관상 허용이 불명확해 받지 않음 — `fetch_imagery.py`는 `--eox-permission`(서면 허가 후) 또는 `--template` 없이는 타일 수만 계산
 - 지도 영상 자체 합성(DEC-059, 기준 `wp0-contracts` dee8dfb): `npm test` 23파일 157건 통과, `npm run build` 통과. AWS 공개 Sentinel-2 L2A 가을 장면 144개를 20 m 개관으로 받아(약 17.7 GB, 17분) z13 영상 타일 62,203장 618 MB. EOX `fetch_imagery.py`는 `--template` 경로로 남김
 - 문서 교차 검토 UI 수정(기준 `wp0-contracts` 6a85fb0): `npm test` 24파일 161건 통과, `npm run build` 통과. 임무 창 입력 칸의 Esc 동작과 라벨 "유도 객체 종류" 반영
+- LinkEnvelope.publisher(DEC-077, 기준 `wp0-contracts` c74b252, 계약 0.15.0): `npm test` 25파일 164건 통과, `npm run build` 통과. 브리지는 봉투를 그대로 전달하므로 변경 없음
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.
