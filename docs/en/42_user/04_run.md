@@ -1,6 +1,6 @@
 # 4. Running
 
-> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `24fc9be`.
+> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `bbf4d92`.
 
 To start everything at once, the runner in [chapter 2](02_quickstart.md) is the easiest. This chapter covers running other scenarios and starting processes yourself.
 
@@ -84,10 +84,12 @@ sequenceDiagram
 | Mode | Rate | Same-seed reproduction | Used for |
 |---|---|---|---|
 | `realtime` | Fixed at 1. UI rate buttons are off | No | UI operation, demonstrations |
-| `lockstep` | `rate`. 0 is maximum speed | Deterministic | Algorithm comparison, repeated experiments |
+| `lockstep` | `rate`. 0 is maximum speed | Fixed seed. See the limitation below | Algorithm comparison, repeated experiments |
 | `freerun` | `rate`. 0 is maximum speed | No | Running only Core fast |
 
 > Not verified: `freerun` has only a mode-switching test (TC-QA-011) and no record of actual use.
+
+> Known limitation: in same-seed lockstep comparisons (60 s without faults) vehicle trajectories were the same, but some link results and GCS receptions differed between runs (D-30, being fixed). Reproducibility with fault injection or with a Gateway in the setup was not checked.
 
 - The mode is set by the scenario's `run.mode` and can be changed with Core's `--mode` and `--rate`.
 - Rate 0 (maximum speed) is given only with Core's `--rate 0`. The scenario's `run.rate` must be greater than 0.

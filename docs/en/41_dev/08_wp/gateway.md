@@ -1,6 +1,6 @@
 # 8. WP9 A-GRA Gateway (`gateway/`)
 
-> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `24fc9be`.
+> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `bbf4d92`.
 
 ## Responsibilities
 
@@ -27,7 +27,8 @@ As a ground participant on the GCS side, it converts between internal messages a
 |---|---|
 | `--gcs <id>` | Required. GCS entity ID |
 | `--lacal <url>` | Default `ws://127.0.0.1:8765` |
-| `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL service and topics |
+| `--participant <id>` | Publishing participant ID, carried in `LinkEnvelope.publisher`. Default `gateway-0`, entity ID format (DEC-077) |
+| `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL service and topics. The MP receive topic is fixed at `<prefix>.mp` |
 | `--stats-s <s>` | Counter log period, default 10 |
 | `--bus zenoh\|memory` | Default `zenoh`. Without Zenoh it reports how to install it and exits with code 1. `memory` is used only when given explicitly, and no simulator messages arrive |
 | Common bus options | [3.2](../03_architecture.md#32-opening-the-bus) |
@@ -37,7 +38,7 @@ As a ground participant on the GCS side, it converts between internal messages a
 | Direction | Keys |
 |---|---|
 | Subscribe | `swarm/<gcs>/rx/**` only |
-| Publish | `swarm/<gcs>/tx/c2/<msg>` only |
+| Publish | `swarm/<gcs>/tx/c2/<msg>`, `swarm/<gcs>/tx/mp/<msg>` only |
 
 `truth/**`, `onboard/**` and `link/**` are not used.
 
@@ -54,15 +55,18 @@ Runs with InMemoryBus and an in-process CAL Server. The first time, do the insta
 | ID | Contents | Status |
 |---|---|---|
 | CR-GW-001 | External message mapping for position | Resolved (DEC-072) |
-| CR-GW-002 | `ApprovalResponse` as STD | Open (OPN-061) |
-| CR-GW-003 | Representing the task content of external `MA_TaskCommand` | Open (OPN-062). Interim rules in use |
+| CR-GW-002 | `ApprovalResponse` as STD | Resolved (DEC-075) |
+| CR-GW-003 | Representing the position of external tasks | Resolved (DEC-076). Received through mission plan routes |
 | CR-GW-004 | Join the root workspace | Open (no registry entry) |
-| CR-GW-005 | Mark the Gateway in the key list | Open (OPN-063) |
+| CR-GW-005 | Publisher identification on the same GCS key | Resolved (DEC-077) |
 | CR-GW-006 | Update registry §5 | Open (no registry entry) |
+| CR-GW-007 | `TaskPlanID` content of `MA_MissionPlan`, position tasks that are not routes | Open |
+| CR-GW-008 | Baseline MAs reflect a `MissionPlan` received during a run | Resolved (IMP-AGT-034) |
+| CR-GW-009 | Rules to expand plan targets `PackageID` and `ALL` to entities | Open |
 
 ## Known limitations
 
-- External tasks are accepted by the interim rules only for `hold`, `return_to_base` and cancel.
+- External `MA_TaskCommand` is accepted only for `hold`, `return_to_base` and cancel. Tasks that need a position are received through mission plan routes (DEC-076). The supported scope is in [gateway/README.md](../../../../gateway/README.md#임무-계획-수신-dec-076).
 - Commands sent externally before the `ready` log are lost (O-13).
 - `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20).
 
