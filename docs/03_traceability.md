@@ -50,10 +50,10 @@
 | REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064, DEC-066, DEC-067 | WP8 | IMP-PAY-005~006, 008~009, IMP-CORE-022 | TC-PAY-006~011, 015~018, TC-CORE-034, TC-QA-065~068, 075~077 | 구현중 |
 | REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | IMP-PAY-002, 006 | TC-PAY-006, 009, 013 | 구현중 |
 | REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
-| REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093 | 검증완료 |
+| REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~011, IMP-INT-001 | TC-LOG-001~010, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~105, TC-AGT-063~087, TC-CORE-043 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -215,6 +215,14 @@
 | TC-QA-103 | TC-QA-090 재판정 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076 |
 | TC-QA-104 | 차단 해제 뒤 RoutePlan 재전송, Gateway를 둔 lockstep | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076, DEC-009 |
 | TC-QA-105 | 외부 수신·XSD 회귀 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-071, DEC-072 |
+| TC-QA-106 | 같은 시드 lockstep: 첫 SystemStatus 프레임, LinkOutcome, GCS 수신(손실 유무·고장) | `qa/gw_plan.py` | DEC-039, DEC-005 |
+| TC-QA-107 | 실행 중 SystemStatus가 바뀌는 조건의 같은 시드 비교 | `qa/gw_plan.py` | DEC-039, DEC-071 |
+| TC-QA-108 | 임무장비 출력·Detection 시나리오의 같은 시드 비교 | `qa/gw_plan.py` | DEC-039, DEC-051 |
+| TC-QA-109 | `late_onboard` 경고 발생 여부(50기 포함) | `qa/gw_plan.py` | DEC-039 |
+| TC-QA-110 | 프레임 0 처리 순서 회귀(TC-QA-100) | `qa/gw_plan.py` | DEC-039, DEC-071 |
+| TC-QA-111 | Gateway 외부 수신·XSD 회귀(TC-QA-105) | `qa/gw_plan.py` | DEC-071, DEC-072 |
+| TC-QA-112 | Gateway를 둔 lockstep 회귀(TC-QA-104) | `qa/gw_plan.py` | DEC-076, DEC-009 |
+| TC-QA-113 | Gateway lockstep 같은 시드 재현(외부 입력 없음) | `qa/gw_plan.py` | DEC-039, DEC-068 |
 
 ## 시험 결과
 
@@ -338,11 +346,19 @@
 | TC-QA-098 | 통과 | 2026-11-10 | 각 8/8, 16쌍 중 8쌍이 MissionPlan 먼저 도착, lockstep 8/8 |
 | TC-QA-099 | 통과 | 2026-11-10 | 외부 CANCELED |
 | TC-QA-100 | 통과 | 2026-11-10 | waypoint 4대. flocking은 O-28 |
-| TC-QA-101 | 조건부 통과 | 2026-11-10 | 궤적 동일, LinkOutcome 10,412건 중 1~7건 차이(D-30) |
+| TC-QA-101 | 통과(TC-QA-106으로 재판정) | 2026-11-10 | 19차는 조건부 통과(D-30). 20차에서 재판정 |
 | TC-QA-102 | 통과 | 2026-11-10 | 시각 0 처리 0건. UI는 시험 클라이언트 |
 | TC-QA-103 | 통과 | 2026-11-10 | flocking 2점은 설계대로 REJECTED |
 | TC-QA-104 | 통과 | 2026-11-10 | 외부 입력 32건 발행 |
 | TC-QA-105 | 통과 | 2026-11-10 | 13,067건 XSD 통과 |
+| TC-QA-106 | 통과 | 2026-11-10 | noloss·loss·고장 각 8회 동일. D-30 해소 |
+| TC-QA-107 | 통과 | 2026-11-10 | 변화 시각 8회 동일 |
+| TC-QA-108 | 통과 | 2026-11-10 | 4개 시나리오 5~8회 동일 |
+| TC-QA-109 | 통과 | 2026-11-10 | 경고 0건. 실제로 세어지는 경우의 통합 동작은 미확인 |
+| TC-QA-110 | 통과 | 2026-11-10 | waypoint 4대 순서 유지 |
+| TC-QA-111 | 통과 | 2026-11-10 | 13,070건 XSD 통과 |
+| TC-QA-112 | 통과 | 2026-11-10 | 기준선 변화는 IMP-AGT-036의 의도된 결과 |
+| TC-QA-113 | 통과 | 2026-11-10 | 5회 공통 구간 동일. 외부 입력이 있는 구성은 재현 대상 아님 |
 
 ## 프로세스 결정
 

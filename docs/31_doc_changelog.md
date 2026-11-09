@@ -70,3 +70,5 @@
 | 2026-11-09 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
 | 2026-11-10 | `c8c701c` | TC-QA-098~105, D-29, D-30, O-23, O-26 | QA 19차: D-29·O-23·O-26 해소 확인. lockstep 첫 SystemStatus 시점이 실행마다 달라지는 결함(D-30) | — | 해당 없음 | |
 | 2026-11-10 | `eed8d76` | IMP-AGT-036, TC-AGT-088~093, D-30, DEC-039 | lockstep에서 NavigationReport를 뺀 onboard 입력을 메시지 프레임 기준 틱에 처리. SystemStatus는 프레임 + 1, 임무장비 출력과 Detection은 프레임 + 2. `late_onboard` 통계 추가 | 개발 시간 모델·Agent 장 | 미처리 | |
+| 2026-11-10 | `da64b80` | TC-QA-106~113, D-30 | QA 20차: 같은 시드 lockstep 재현 확인, D-30 해소. 외부 입력이 있는 Gateway lockstep은 재현 대상이 아님 | 개발 시험, 사용자 Gateway | 미처리 | |
+| 2026-11-10 | `e6ca7d6` | — | 문서 세션 결과 병합: 미처리 7행 국문·영문 반영 | — | 해당 없음 | |
