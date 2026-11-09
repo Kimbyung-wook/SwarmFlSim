@@ -24,7 +24,7 @@ git submodule update --init third_party/agra_lacal
 cd gateway && uv sync --extra zenoh
 ```
 
-> 주의: `--extra zenoh`를 빼면 Gateway가 인메모리 버스로 뜬다. 오류 없이 실행되고 `ready`까지 나오지만 시뮬레이터 메시지가 하나도 오지 않는다. `counters` 로그에 `rx`가 없으면 이것을 먼저 의심한다.
+> 주의: `--extra zenoh`를 빼면 Gateway는 설치 방법을 알리고 종료 코드 1로 끝난다. 시뮬레이터 없이 확인만 할 때는 `--bus memory`를 명시한다. 이때는 시뮬레이터 메시지가 오지 않는다.
 
 ## 9.2 실행 순서
 

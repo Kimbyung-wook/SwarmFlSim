@@ -1,6 +1,6 @@
 # 8. WP9 A-GRA Gateway (`gateway/`)
 
-> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `7affdae`.
+> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `24fc9be`.
 
 ## Responsibilities
 
@@ -29,6 +29,7 @@ As a ground participant on the GCS side, it converts between internal messages a
 | `--lacal <url>` | Default `ws://127.0.0.1:8765` |
 | `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL service and topics |
 | `--stats-s <s>` | Counter log period, default 10 |
+| `--bus zenoh\|memory` | Default `zenoh`. Without Zenoh it reports how to install it and exits with code 1. `memory` is used only when given explicitly, and no simulator messages arrive |
 | Common bus options | [3.2](../03_architecture.md#32-opening-the-bus) |
 
 ## Subscribed and published keys

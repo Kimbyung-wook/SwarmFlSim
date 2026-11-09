@@ -27,6 +27,7 @@ GCS 쪽 지상 참여자로서 내부 메시지와 외부 UCI 메시지를 변�
 | `--lacal <url>` | 기본 `ws://127.0.0.1:8765` |
 | `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL 서비스와 토픽 |
 | `--stats-s <s>` | 카운터 로그 주기, 기본 10 |
+| `--bus zenoh\|memory` | 기본 `zenoh`. Zenoh가 없으면 설치 방법을 알리고 종료 코드 1로 끝난다. `memory`는 명시했을 때만 쓰고 시뮬레이터 메시지가 오지 않는다 |
 | 공통 버스 옵션 | [3.2](../03_architecture.md#32-버스-열기) |
 
 ## 구독·발행 키

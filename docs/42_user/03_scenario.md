@@ -153,7 +153,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `script_path` | `scripted` 경로. 초기 속도 크기로 따라간다 |
 | `dynamics_params` | 동역학 매개변수 재정의 |
 
-> 미구현: `dof5`, `dof6` (로드맵 P3). 스키마 검증은 통과하지만 Core가 적재를 거부한다. 로그에 `scenario rejected`가 나온다.
+> 미구현: `dof5`, `dof6` (로드맵 P3). `swarm-scenario validate`가 미구현으로 거부한다.
 
 - 시작 고도가 DEM 지형보다 낮은 공중 엔티티는 적재 때 경고하고 시작 프레임에 파괴 처리한다(`--terrain-dem` 사용 시, DEC-060).
 
@@ -239,7 +239,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | 참조 | `controlling_gcs`, `assignees`, `target_id`, `members`, `leader`가 있는 엔티티 | validate |
 | `task_id` | 중복 금지 | validate |
 | 재머 수 | 엔티티당 1개 | Core 적재 |
-| DoF | `dof2`, `dof3`, `scripted`, `static`만 실행 가능 | Core 적재 |
+| DoF | `dof2`, `dof3`, `scripted`, `static`만 실행 가능 | validate |
 | 값 | NaN·무한대·범위 밖 거부 | Core 적재 |
 
 Core가 거부하면 프로세스는 종료하지 않고 `scenario rejected`를 로그에 남긴 뒤 다음 시나리오를 기다린다.

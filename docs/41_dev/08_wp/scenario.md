@@ -34,7 +34,8 @@ uv run pytest scenario/tests
 
 ## 알려진 제약
 
-- `validate`는 Core의 검사를 모두 포함하지 않는다. 25자 초과 ID, 재머 2개, `dof5`·`dof6`는 Core에서 거부된다.
+- `validate`는 Core의 검사를 모두 포함하지 않는다. 25자 초과 ID, 재머 2개는 Core에서 거부된다.
+- `dof5`, `dof6`는 `validate`가 미구현(로드맵 P3)으로 거부한다. 구현되면 `validate.py`의 `IMPLEMENTED_DYNAMICS`에 더한다.
 - `run.rate`는 0보다 커야 한다. 최대 속도는 Core의 `--rate 0`으로 준다.
 
 추적: [scenario/TRACE.md](../../../scenario/TRACE.md).

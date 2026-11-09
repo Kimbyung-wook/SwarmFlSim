@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `7affdae`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `24fc9be`.
 
 ## Responsibilities
 

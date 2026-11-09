@@ -1,6 +1,6 @@
 # 1. Development environment
 
-> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `7affdae`.
+> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `24fc9be`.
 
 - [10_contracts.md §7](../../10_contracts.md#7-빌드-환경과-시험-dec-022) (Korean) is the authority for install commands. This chapter covers how to decide what to install and the failures you are likely to hit.
 
@@ -59,7 +59,6 @@ To run it in one line, use the `cmd /c` form in the [common instructions](../../
 | `libzenohc.so` not found on Linux | Same as above | `LD_LIBRARY_PATH=<prefix>/lib` |
 | Warning, then `logger/` is skipped (MSYS2, Linux) | `MCAP_INCLUDE_DIR` is missing | Fetch the headers as in contract §7.2 "MCAP" and pass them |
 | The Python extension module cannot be loaded | The toolchain used to build differs from the Python one | [Contract §7.4](../../10_contracts.md#74-툴체인별-제약) |
-| `UnicodeEncodeError: 'cp949'` from `--help` | Some script help text contains characters cp949 cannot write | Set `PYTHONUTF8=1` and run again. Or in PowerShell, `$env:PYTHONUTF8=1` |
 
 For other failures see [11. Troubleshooting](11_troubleshooting.md).
 

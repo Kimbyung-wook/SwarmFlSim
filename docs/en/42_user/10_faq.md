@@ -1,6 +1,6 @@
 # 10. Troubleshooting
 
-> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `7affdae`.
+> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `24fc9be`.
 
 Look up by symptom. For build and code-level issues see [developer manual chapter 11](../41_dev/11_troubleshooting.md).
 
@@ -39,7 +39,7 @@ If you used the runner, process logs are in `out/p0_demo/<mode>-<time>/<process>
 | Symptom | Cause | Fix |
 |---|---|---|
 | `validate` is INVALID | Schema or semantic error | Fix the path in the output and run again |
-| `validate` passes but the Core log shows `scenario rejected` | Core checks such as IDs over 25 characters, two jammers, `dof5`/`dof6`, out-of-range values | [3.9](03_scenario.md#39-check-summary) |
+| `validate` passes but the Core log shows `scenario rejected` | Core checks such as IDs over 25 characters, two jammers, out-of-range values | [3.9](03_scenario.md#39-check-summary) |
 | A vehicle disappears right after start | It started below DEM terrain altitude | Raise the starting altitude (DEC-060) |
 | A parameter does not change | The name is wrong, the value is out of range, or the item cannot be changed during a run | See the rejection reason in the UI parameter panel |
 
@@ -47,7 +47,7 @@ If you used the runner, process logs are in `out/p0_demo/<mode>-<time>/<process>
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ready` but no `rx` in `counters` | Installed without `--extra zenoh` and started on the in-memory bus | [9.1](09_gateway.md#91-preparation) |
+| Prints `Zenoh 백엔드를 쓸 수 없습니다` (Zenoh backend unavailable) right at start and exits | Installed without `--extra zenoh` | [9.1](09_gateway.md#91-preparation) |
 | No response to external commands | Sent before `ready` | Send again after `ready` |
 | The bridge and CAL Server do not start together | Both default to port 8765 | Change with `--bridge-port` |
 

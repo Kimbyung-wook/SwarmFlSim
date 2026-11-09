@@ -1,6 +1,6 @@
 # 8. WP7 Scenarios (`scenario/`)
 
-> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `7affdae`.
+> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `24fc9be`.
 
 ## Responsibilities
 
@@ -36,7 +36,8 @@ uv run pytest scenario/tests
 
 ## Known limitations
 
-- `validate` does not include all of Core's checks. IDs over 25 characters, two jammers, and `dof5`/`dof6` are refused by Core.
+- `validate` does not include all of Core's checks. IDs over 25 characters and two jammers are refused by Core.
+- `validate` refuses `dof5` and `dof6` as not implemented (roadmap P3). When they are implemented, add them to `IMPLEMENTED_DYNAMICS` in `validate.py`.
 - `run.rate` must be greater than 0. Maximum speed is given with Core's `--rate 0`.
 
 Traceability: [scenario/TRACE.md](../../../../scenario/TRACE.md).

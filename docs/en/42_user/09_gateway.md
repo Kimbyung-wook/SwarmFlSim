@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `7affdae`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `24fc9be`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -26,7 +26,7 @@ git submodule update --init third_party/agra_lacal
 cd gateway && uv sync --extra zenoh
 ```
 
-> Caution: without `--extra zenoh`, the Gateway starts on the in-memory bus. It runs without error and reaches `ready`, but no simulator messages arrive at all. If the `counters` log has no `rx`, suspect this first.
+> Caution: without `--extra zenoh`, the Gateway reports how to install it and exits with code 1. To check it without the simulator, pass `--bus memory` explicitly. In that case no simulator messages arrive.
 
 ## 9.2 Launch order
 
