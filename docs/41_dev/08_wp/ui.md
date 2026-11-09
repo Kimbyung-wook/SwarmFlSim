@@ -10,12 +10,14 @@
 |---|---|
 | `src/App.tsx` | 최상위, 단축키 |
 | `src/data/` | `DataSource`: `MockSource`, `BusSource`, `BridgeTransport` |
-| `src/model/` | Cesium에 의존하지 않는 상태와 명령: `LiveState`, `selection`, `C2Commander`, `TaskLog`, `camera` |
+| `src/model/` | Cesium에 의존하지 않는 상태와 명령: `LiveState`, `selection`, `C2Commander`, `TaskLog`, `camera`, `shortcuts` |
 | `src/cesium/` | 엔티티 렌더링 |
 | `src/components/` | `MapView`, `Toolbar`, `SelectionPanel`, `CommandPanel`, `MissionPanel`, `ParamPanel` |
 | `src/gen/` | proto 생성물. 커밋하지 않는다 |
 
 프레임마다 React를 다시 그리지 않는다. 지도는 Cesium 렌더 루프에서, 패널은 250 ms마다 갱신한다.
+
+입력 칸에 포커스가 있으면 글자·숫자 단축키는 무시하고 Esc만 처리한다(`model/shortcuts.ts`, IMP-UI-074).
 
 ## 실행
 

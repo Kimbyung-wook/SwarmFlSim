@@ -57,7 +57,6 @@ flowchart TD
 | Linux에서 `libzenohc.so`를 찾지 못한다 | 위와 같다 | `LD_LIBRARY_PATH=<prefix>/lib` |
 | 경고 후 `logger/`가 빠진다 (MSYS2·Linux) | `MCAP_INCLUDE_DIR`가 없다 | 계약 §7.2 "MCAP"대로 헤더를 받아 넘긴다 |
 | Python 확장 모듈을 불러오지 못한다 | 빌드한 툴체인과 Python이 다르다 | [계약 §7.4](../10_contracts.md#74-툴체인별-제약) |
-| `--help`에서 `UnicodeEncodeError: 'cp949'` | 일부 스크립트 도움말에 cp949로 못 쓰는 글자가 있다 | `PYTHONUTF8=1`을 설정하고 실행한다. 또는 PowerShell에서 `$env:PYTHONUTF8=1` |
 
 그 밖의 실패는 [11. 문제 해결](11_troubleshooting.md).
 

@@ -124,7 +124,7 @@ cd gateway && uv run pytest
 ```
 
 - proto 생성물이 없으면 루트에서 2.3의 `gen_proto.py`를 먼저 실행한다.
-- 시험은 프로세스 안에서 띄운 CAL Server와 `InMemoryBus`를 쓴다. `--extra zenoh`를 빼도 시험은 통과하지만, 실행하면 인메모리 버스로 조용히 떠서 시뮬레이터 메시지가 오지 않는다. 실행 방법은 [사용자 매뉴얼 9장](../42_user/09_gateway.md).
+- 시험은 프로세스 안에서 띄운 CAL Server와 `InMemoryBus`를 쓴다. `--extra zenoh`를 빼도 시험은 통과하지만, 실행하면 Gateway가 설치 방법을 알리고 종료 코드 1로 끝난다. 실행 방법은 [사용자 매뉴얼 9장](../42_user/09_gateway.md).
 
 ## 2.7 커밋하지 않는 것
 
