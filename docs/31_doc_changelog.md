@@ -68,3 +68,4 @@
 | 2026-11-09 | `2f0d4e0` | TC-QA-089~097, D-29 | QA 18차: 외부 임무 계획·승인 응답·발행자 ID 통합 확인. RoutePlan과 MissionPlan을 연달아 보내면 작업이 끝나지 않는 결함(D-29) | 사용자 9 | 미처리 | |
 | 2026-11-09 | `95710cd` | IMP-AGT-035, TC-AGT-082~087, D-29, O-26 | waypoint MA: 같은 ID의 계획 작업이 있는 RoutePlan은 따로 비행하지 않음. 단독 RoutePlan의 비행 명령 ID는 `<id>-task-<n>` | 개발 8 algorithms, 사용자 9 | 미처리 | |
 | 2026-11-09 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 미처리 | |
+| 2026-11-10 | `c8c701c` | TC-QA-098~105, D-29, D-30, O-23, O-26 | QA 19차: D-29·O-23·O-26 해소 확인. lockstep 첫 SystemStatus 시점이 실행마다 달라지는 결함(D-30) | — | 해당 없음 | |

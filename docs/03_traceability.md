@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-054 | WP1, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~011, IMP-INT-001 | TC-LOG-001~010, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~097, TC-AGT-063~087, TC-CORE-043 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~105, TC-AGT-063~087, TC-CORE-043 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -207,6 +207,14 @@
 | TC-QA-095 | DEC-077: publisher로 Gateway·UI 봉투 구분 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-077 |
 | TC-QA-096 | DEC-076: GCS 링크 차단 시 DROPPED, 해제 후 재전송 도달 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076, DEC-009 |
 | TC-QA-097 | VI·C2·P2P·MS 외부 수신과 XSD 회귀 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-071, DEC-072 |
+| TC-QA-098 | D-29: RoutePlan·MissionPlan 연속 전송이 항로점 1·2개 모두 COMPLETED | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076 |
+| TC-QA-099 | O-26: 단독 RoutePlan 뒤 이전 작업 CANCELLED(preempted) | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076 |
+| TC-QA-100 | O-23: task-001 ACCEPTED → EXECUTING 순서, 프레임 0 지연 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-039, DEC-071 |
+| TC-QA-101 | lockstep 프레임 0 처리와 같은 시드 재현 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-039, DEC-005 |
+| TC-QA-102 | UI·Gateway 발행 전달 지연 유지 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-077 |
+| TC-QA-103 | TC-QA-090 재판정 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076 |
+| TC-QA-104 | 차단 해제 뒤 RoutePlan 재전송, Gateway를 둔 lockstep | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-076, DEC-009 |
+| TC-QA-105 | 외부 수신·XSD 회귀 | `qa/gw_plan.py` + `qa/gw_ext_client.py` | DEC-071, DEC-072 |
 
 ## 시험 결과
 
@@ -319,7 +327,7 @@
 | TC-QA-087 | 통과 | 2026-11-09 | 기대값은 `docs/21_qa_report.md` §25.5 |
 | TC-QA-088 | 통과 | 2026-11-09 | §24 수준 유지 |
 | TC-QA-089 | 통과 | 2026-11-09 | 항로점 3개 최소 거리 26 m 안팎 |
-| TC-QA-090 | 조건부 통과 | 2026-11-09 | RoutePlan과 같은 틱에 처리되면 작업이 끝나지 않음(D-29) |
+| TC-QA-090 | 통과(TC-QA-103으로 재판정) | 2026-11-10 | 18차는 조건부 통과(D-29). 19차에서 재판정 |
 | TC-QA-091 | 통과 | 2026-11-09 | 외부 MA_TaskStatus까지 일치 |
 | TC-QA-092 | 통과 | 2026-11-09 | 대조 2대 MP 수신 0 |
 | TC-QA-093 | 통과 | 2026-11-09 | 범위 밖 9건 기록, XSD 위반 3건 -ERR |
@@ -327,6 +335,14 @@
 | TC-QA-095 | 통과 | 2026-11-09 | rx와 MCAP. UI는 시험 클라이언트로 대체 |
 | TC-QA-096 | 통과 | 2026-11-09 | FAULT_INJECTED |
 | TC-QA-097 | 통과 | 2026-11-09 | 13,064건 XSD 통과 |
+| TC-QA-098 | 통과 | 2026-11-10 | 각 8/8, 16쌍 중 8쌍이 MissionPlan 먼저 도착, lockstep 8/8 |
+| TC-QA-099 | 통과 | 2026-11-10 | 외부 CANCELED |
+| TC-QA-100 | 통과 | 2026-11-10 | waypoint 4대. flocking은 O-28 |
+| TC-QA-101 | 조건부 통과 | 2026-11-10 | 궤적 동일, LinkOutcome 10,412건 중 1~7건 차이(D-30) |
+| TC-QA-102 | 통과 | 2026-11-10 | 시각 0 처리 0건. UI는 시험 클라이언트 |
+| TC-QA-103 | 통과 | 2026-11-10 | flocking 2점은 설계대로 REJECTED |
+| TC-QA-104 | 통과 | 2026-11-10 | 외부 입력 32건 발행 |
+| TC-QA-105 | 통과 | 2026-11-10 | 13,067건 XSD 통과 |
 
 ## 프로세스 결정
 
