@@ -143,7 +143,7 @@ sequenceDiagram
 | `c2` | `inbox()`, `send(msg)` | 통제 GCS의 작업 수신, `TaskStatus` 등 송신 |
 | `vi` | `nav()`, `capability()`, `system_status()`, `command(cmd)`, `command_status()` | 항법 보고, FA 능력, 기체 상태, 비행 명령과 그 상태 |
 | `ms` | `loadout()`, `detections()`, `command(msg)`, `activities()` | 탑재 장비 목록, 탐지 결과, 장비 명령(`SensorCommand`, `JammerCommand`, `StrikeCommand`), 장비 상태 |
-| `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | 시나리오의 계획 |
+| `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | 시나리오의 계획과 실행 중 받은 계획 |
 | `p2p` | `send(msg, to=None)`, `inbox()` | 기체 간 통신. `to`가 없으면 방송. 데이터링크를 거쳐 손실·지연이 있다 |
 | `md` | `record(name, value)` | 분석용 값 기록. 지금은 런타임 메모리에만 남고 버스나 MCAP으로 나가지 않는다 |
 
@@ -221,6 +221,20 @@ stateDiagram-v2
 | `peer_status(nav, group_id, task_id)` | `PeerStatus` 구성 |
 
 [patrol.py](../../examples/plugins/src/swarm_plugin_examples/patrol.py)는 `self.pilot.step()`만 부르고, 작업이 없을 때의 행동만 직접 정한다.
+
+`TaskTracker`와 `formation`은 실행 중 받은 `MissionPlan`을 틱마다 확인한다(DEC-076). 기준은 [algorithms/TRACE.md](../../algorithms/TRACE.md)의 IMP-AGT-034, IMP-AGT-035다.
+
+| 받은 것 | 동작 |
+|---|---|
+| 이미 본 `plan_id`의 `MissionPlan` | 내용이 달라도 무시 |
+| 새 `plan_id`의 `MissionPlan` | 교체. 현재 작업은 `CANCELLED`(`preempted`), 대기 작업도 `CANCELLED`가 되고 새 계획을 수행한다. 같은 `task_id`면 취소 보고 없이 내용을 바꾼다 |
+| 이 기체 몫의 유효한 작업이 없는 `MissionPlan` | 현재 작업을 밀어내지 않는다. 지원하지 않거나 값이 잘못된 작업은 `REJECTED` |
+| 같은 ID의 계획 작업이 있는 `RoutePlan` (`waypoint`) | 따로 비행하지 않는다. 그 작업이 수행해 도착 순서와 무관하게 `COMPLETED`로 끝난다 |
+| 계획에 없는 단독 `RoutePlan` (`waypoint`) | 바로 비행한다. 수행 중 작업은 `CANCELLED`(`preempted`), 대기 작업은 항로가 끝나면 잇는다. `RoutePlan` 자체의 `TaskStatus`는 없다. 비행 명령 ID는 `<id>-task-<n>` |
+| 값이 잘못된 `RoutePlan` (`waypoint`) | 현재 작업을 건드리지 않고 MD `route_plan_invalid`만 남긴다 |
+
+- 포트는 최신 계획만 들고 있어 한 틱에 두 계획이 닿으면 마지막 것만 수행한다.
+- `formation`은 계획에 이 기체의 편대가 있을 때만 편대를 바꾼다.
 
 ## 4.8 기본 MA
 

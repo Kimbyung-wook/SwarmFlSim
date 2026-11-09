@@ -1,6 +1,6 @@
 # 8. WP5 GCS/UI (`ui/`)
 
-> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `24fc9be`.
+> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `bbf4d92`.
 
 ## Responsibilities
 
@@ -36,7 +36,7 @@ The port is 5173. URL arguments are `source` (`mock` default, `bus`), `bridge`, 
 | Subscribe | `truth/state` (30 Hz), `sim/ctrl/status`, `swarm/<gcs>/rx/**` |
 | Publish | `sim/ctrl/cmd`, `swarm/<gcs>/tx/c2/<msg>` |
 
-It attaches to the bus only through the bridge.
+It attaches to the bus only through the bridge. `publisher` of each `LinkEnvelope` it sends holds the UI participant ID, the same as `client` in the bridge hello (DEC-077).
 
 ## Tests
 

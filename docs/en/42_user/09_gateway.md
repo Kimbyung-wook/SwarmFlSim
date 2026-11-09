@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `24fc9be`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `bbf4d92`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -9,12 +9,12 @@ flowchart LR
     SIM["Datalink"] -- "swarm/gcs-01/rx/**" --> GW["Gateway"]
     GW -- "UCI OMS JSON" --> CAL["CAL Server"]
     CAL --> EXT["External C2"]
-    EXT -- "MA_TaskCommand" --> CAL
+    EXT -- "Task commands · approval responses · mission plans" --> CAL
     CAL --> GW
-    GW -- "swarm/gcs-01/tx/c2/TaskCommand" --> SIM
+    GW -- "swarm/gcs-01/tx/c2/* · tx/mp/*" --> SIM
 ```
 
-The full table of exchanged messages is in [gateway/README.md](../../../gateway/README.md#교환-메시지). It exports vehicle position (`MA_NavigationReport`, `MA_PositionReport`), task status (`MA_TaskStatus`) and flight command status (`MA_FlightCommandStatus`), and receives `MA_TaskCommand`.
+The full table of exchanged messages is in [gateway/README.md](../../../gateway/README.md#교환-메시지). It exports vehicle position (`MA_NavigationReport`, `MA_PositionReport`), task status (`MA_TaskStatus`) and flight command status (`MA_FlightCommandStatus`), and receives `MA_TaskCommand`, `MA_ApprovalRequestStatus`, `MA_RoutePlan` and `MA_MissionPlan`.
 
 ## 9.1 Preparation
 
@@ -66,9 +66,9 @@ Also give the browser UI `ws://127.0.0.1:8770/bus` in `bridge=` of the URL.
 cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1:8765 --no-multicast --connect tcp/127.0.0.1:17600 --connect tcp/127.0.0.1:17601
 ```
 
-The ports in `--connect` follow the runner's `--base-port` (default 17600).
+The ports in `--connect` follow the runner's `--base-port` (default 17600). `--participant <id>` is the Gateway's publisher ID (default `gateway-0`).
 
-**4. Attach external C2.** Connect to the same CAL Server as the `external_c2` service and send `MA_TaskCommand` on the `swarm.c2` topic. An example of a test client implementation is [qa/gw_ext_client.py](../../../qa/gw_ext_client.py).
+**4. Attach external C2.** Connect to the same CAL Server as the `external_c2` service and send `MA_TaskCommand` and `MA_ApprovalRequestStatus` on the `swarm.c2` topic, and `MA_RoutePlan` and `MA_MissionPlan` on the `swarm.mp` topic. An example of a test client implementation is [qa/gw_ext_client.py](../../../qa/gw_ext_client.py).
 
 ## 9.3 Right after start
 
@@ -81,9 +81,9 @@ The Gateway loads the XSD after connecting. It took about 9 seconds in this chec
 | `LA-CAL SUB MA_TaskCommand@swarm.c2 done` | External command subscription complete |
 | `ready at +N s` | Ready in both directions |
 
-## 9.4 Interim rules for external C2
+## 9.4 External `MA_TaskCommand` rules
 
-These are interim rules until mission planning is integrated (CR-GW-003, OPN-062 open).
+These rules are used only for tasks that need no position, and for cancel (DEC-076).
 
 - One `Command` item is one executing vehicle.
 - `CapabilityID.DescriptiveLabel` = `<entity ID>/<task kind>`.
@@ -92,11 +92,39 @@ These are interim rules until mission planning is integrated (CR-GW-003, OPN-062
 - `CommandState` of `CANCEL` means cancel.
 - `TaskID` and `CommandState` must be the same in all items.
 
-Tasks that need position information, such as a move destination, cannot be accepted yet.
+Tasks that need position information, such as a move destination, are received as mission plans in [9.6](#96-mission-plan-reception).
 
 The flow of `MA_TaskStatus` is as follows. Sending `hold` yields `EXECUTION_PENDING` → `EXECUTING`. The vehicle's previous task becomes `CANCELED`.
 
-## 9.5 Counters and rejection
+## 9.5 External approval responses
+
+`MA_ApprovalRequestStatus` is received on `swarm.c2` and sent as `ApprovalResponse` (DEC-075).
+
+- Only messages with `RequestProcessingState` of `COMPLETED` and `ApprovalRequestProcessingState` of `APPROVED` or `REJECTED` are accepted. Other states are rejected.
+- If the Gateway sent out the request, the response goes only to the requesting vehicle. For an unknown request (including after a restart), `dst` is left empty and receivers sort it out by `request_id`.
+
+## 9.6 Mission plan reception
+
+`MA_RoutePlan` and `MA_MissionPlan` are received on `swarm.mp` and sent as `RoutePlan` and `MissionPlan` (DEC-076). The full table of supported and rejected items is in [gateway/README.md](../../../gateway/README.md#임무-계획-수신-dec-076).
+
+- Send `MA_RoutePlan` first, then the `MA_MissionPlan` that references that route. Received routes exist only in Gateway memory (latest 1024), so send them again after a restart.
+- `MA_MissionPlan` becomes one task per referenced route. One route point gives `move_to`, two or more give `route`, and `task_id` is the route ID.
+- The target is one `ApplicableToIDs/SystemID`. `ALL`, `NON` and `PackageID` are rejected (CR-GW-009).
+- Tasks that cannot be expressed as a route, such as area search, cannot be received (CR-GW-007).
+
+Baseline MAs reflect plans received during a run as follows.
+
+| Received | Behavior |
+|---|---|
+| `MissionPlan` with a `plan_id` already seen | Ignored even if the content differs |
+| `MissionPlan` with a new `plan_id` | Replaces. The executing task and waiting tasks become `CANCELLED` and the new plan is executed |
+| `RoutePlan` with a plan task of the same ID (`waypoint`) | Not flown separately. That task executes it. In either sending order of `RoutePlan` and `MissionPlan`, it ends `COMPLETED` |
+| Standalone `RoutePlan` not in a plan (`waypoint`) | Flown at once. The executing task becomes `CANCELLED`, and waiting tasks resume after the route. No task status comes for the `RoutePlan` itself |
+
+- `flocking` rejects `route` tasks with two or more route points.
+- `flocking` does not send `EXECUTING`, so the last value seen externally stays `EXECUTION_PENDING` (O-28).
+
+## 9.7 Counters and rejection
 
 A `counters` log appears every `--stats-s` period.
 

@@ -1,6 +1,6 @@
 # Developer manual
 
-> Source: [docs/41_dev/README.md](../../41_dev/README.md) at commit `24fc9be`.
+> Source: [docs/41_dev/README.md](../../41_dev/README.md) at commit `bbf4d92`.
 
 - Readers: algorithm plugin authors (writing MA/FA in Python) and WP contributors (changing a specific directory while following the test, traceability and contract rules).
 - New to the project? Read the [project overview](../40_overview.md) first.

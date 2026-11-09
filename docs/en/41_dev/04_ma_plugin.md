@@ -1,6 +1,6 @@
 # 4. Writing an MA plugin
 
-> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `24fc9be`.
+> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `bbf4d92`.
 
 An MA (Mission Autonomy) is a Python class that makes the mission decisions for one vehicle or a swarm. It takes tasks and turns them into flight commands and equipment commands.
 
@@ -145,7 +145,7 @@ Plugins communicate with the outside only through `ctx.ports` (DEC-013). They do
 | `c2` | `inbox()`, `send(msg)` | Receives tasks from the controlling GCS, sends `TaskStatus` and others |
 | `vi` | `nav()`, `capability()`, `system_status()`, `command(cmd)`, `command_status()` | Navigation report, FA capability, vehicle status, flight commands and their status |
 | `ms` | `loadout()`, `detections()`, `command(msg)`, `activities()` | Payload list, detection results, equipment commands (`SensorCommand`, `JammerCommand`, `StrikeCommand`), equipment status |
-| `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | Plans from the scenario |
+| `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | Plans from the scenario and plans received during a run |
 | `p2p` | `send(msg, to=None)`, `inbox()` | Vehicle-to-vehicle communication. Broadcast if `to` is absent. Passes through the datalink, with loss and latency |
 | `md` | `record(name, value)` | Records values for analysis. For now they stay in runtime memory and do not go to the bus or MCAP |
 
@@ -223,6 +223,20 @@ The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](.
 | `peer_status(nav, group_id, task_id)` | Builds a `PeerStatus` |
 
 [patrol.py](../../../examples/plugins/src/swarm_plugin_examples/patrol.py) only calls `self.pilot.step()` and decides for itself just what to do when there is no task.
+
+`TaskTracker` and `formation` check every tick for a `MissionPlan` received during the run (DEC-076). The authority is IMP-AGT-034 and IMP-AGT-035 in [algorithms/TRACE.md](../../../algorithms/TRACE.md).
+
+| Received | Behavior |
+|---|---|
+| `MissionPlan` with a `plan_id` already seen | Ignored even if the content differs |
+| `MissionPlan` with a new `plan_id` | Replaces. The current task becomes `CANCELLED` (`preempted`), waiting tasks also become `CANCELLED`, and the new plan is executed. With the same `task_id`, the content changes with no cancel report |
+| `MissionPlan` with no valid task for this vehicle | Does not displace the current task. Unsupported or invalid tasks are `REJECTED` |
+| `RoutePlan` with a plan task of the same ID (`waypoint`) | Not flown separately. That task executes it and ends `COMPLETED` regardless of arrival order |
+| Standalone `RoutePlan` not in a plan (`waypoint`) | Flown at once. The executing task becomes `CANCELLED` (`preempted`), and waiting tasks resume after the route. The `RoutePlan` itself has no `TaskStatus`. The flight command ID is `<id>-task-<n>` |
+| Invalid `RoutePlan` (`waypoint`) | Leaves the current task alone and only records MD `route_plan_invalid` |
+
+- The port holds only the latest plan, so if two plans arrive in one tick only the last is executed.
+- `formation` changes the formation only when the plan has a formation for this vehicle.
 
 ## 4.8 Baseline MAs
 

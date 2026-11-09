@@ -1,6 +1,6 @@
 # 8. WP4 Datalink (`datalink/`)
 
-> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `24fc9be`.
+> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `bbf4d92`.
 
 ## Responsibilities
 
@@ -16,6 +16,8 @@ Applies the link model to vehicle-to-vehicle and ground-to-vehicle messages and 
 | `src/profile.cpp`, `include/swarm/lnk/profile.hpp` | Built-in profiles, overrides |
 
 The evaluation order is alive → fault → jamming → range and SNR → line of sight → token bucket → burst loss → latency.
+
+Only when `sim_time_us == 0` and `publisher` is set is the time treated as absent and the last tick time used. If `publisher` is empty, 0 is kept as a valid time, and a frame 0 send is also processed at tick 1 by the `tx < T_k` rule (IMP-LNK-023, DEC-054, DEC-077).
 
 ## Executable `swarm_datalink`
 

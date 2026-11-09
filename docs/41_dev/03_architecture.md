@@ -10,7 +10,7 @@
 | `swarm_core` | — | 장벽을 관리한다 | `--participant`를 쓰거나 시나리오 `run.participants`를 읽는다 |
 | `swarm_datalink` | `datalink-0` | 참여 | `--no-frame-done`이면 `FrameDone`을 보내지 않는다 |
 | `swarm-agent` | `agent-0` | 참여 | 한 프로세스가 여러 기체를 맡는다. `--entities`로 나눈다 |
-| `swarm_logger`, `swarm-bridge`, Gateway | — | 참여하지 않음 | |
+| `swarm_logger`, `swarm-bridge`, Gateway | — | 참여하지 않음 | Gateway의 `--participant`(기본 `gateway-0`)는 `LinkEnvelope.publisher`용이다 |
 
 - 참여자 ID는 엔티티 ID와 같은 형식이다(`^[a-z][a-z0-9]*(-[a-z0-9]+)+$`).
 - Agent는 `run.participants` 중 `datalink`로 시작하는 ID를 Datalink로 본다. Datalink 참여자 이름은 이 접두어로 시작하게 한다.
@@ -59,7 +59,7 @@ flowchart LR
 
 - 기체 간·지상-기체 간 메시지는 반드시 `tx` → Datalink → `rx`로 간다. 런타임이 다른 엔티티의 `rx`에 직접 발행하지 않는다.
 - MA 플러그인은 버스에 접근하지 않는다. `sim/ctrl/`, `truth/`, `link/` 접두어는 플러그인에 노출되지 않는다(`MA_FORBIDDEN_PREFIXES`, DEC-014).
-- Gateway는 `swarm/<gcs>/rx/**`만 구독하고 `swarm/<gcs>/tx/c2/<msg>`만 발행한다.
+- Gateway는 `swarm/<gcs>/rx/**`만 구독하고 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`만 발행한다.
 - 브라우저는 Zenoh에 직접 붙지 않고 브리지로만 붙는다(DEC-027).
 
 Agent 런타임이 플러그인과 무관하게 GCS로 자동 보고하는 것:
@@ -103,6 +103,8 @@ stateDiagram-v2
 | `realtime` | 벽시계 dt마다. 배속은 1로 고정 | 아님 | UI 조작, 시연 |
 | `lockstep` | 모든 참여자의 `FrameDone(N)`을 받은 뒤. 배속 > 0이면 dt/배속 간격, 0이면 대기 없음 | 시드 고정 | 알고리즘 비교, 회귀 시험 |
 | `freerun` | 배속 > 0이면 dt/배속 간격, 0이면 대기 없음 | 아님 | Core 단독 가속 |
+
+> 알려진 제약: lockstep 같은 시드 2~4회 비교(QA 19차, 무고장 60 s)에서 truth 궤적은 같았지만, 첫 `SystemStatus`의 송신 프레임이 실행마다 달라 `LinkOutcome`과 GCS 수신 일부가 같지 않았다(D-30, 수정 중). 고장 주입 등 `SystemStatus`가 바뀌는 시점과 Gateway를 둔 구성의 재현성은 확인하지 않았다.
 
 ## 3.6 lockstep 한 프레임
 

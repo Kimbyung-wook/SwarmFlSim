@@ -1,6 +1,6 @@
 # 1. Preparation
 
-> Source: [docs/42_user/01_install.md](../../42_user/01_install.md) at commit `24fc9be`.
+> Source: [docs/42_user/01_install.md](../../42_user/01_install.md) at commit `bbf4d92`.
 
 To use the simulator without changing code, you need the outputs below.
 

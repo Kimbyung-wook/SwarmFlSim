@@ -60,13 +60,13 @@
 | 2026-11-09 | `937aab1` | IMP-UI-074~075, TC-UI-061~063 | 입력 칸에서도 Esc 동작, 타격 지정 라벨 "유도 객체 종류" | 사용자 5, 개발 8 ui | 완료 | 국문 반영 `24fc9be`; 영문 반영 `7488ef4` |
 | 2026-11-09 | `e5ade19` | IMP-GW-018~019, TC-GW-016~018 | Gateway가 Zenoh 없으면 오류로 종료, 인메모리는 `--bus memory`로만, cp949 `--help` 정상 | 개발 2, 개발 8 gateway, 사용자 9, 사용자 10 | 완료 | 국문 반영 `24fc9be`; 영문 반영 `7488ef4` |
 | 2026-11-09 | `326bf4b` | — | 문서 E1~E3 영문판 병합. 코드 변화 없음 | — | 해당 없음 | |
-| 2026-11-09 | `c74b252` | DEC-075, DEC-076, DEC-077, OPN-061~063 | 계약 0.15.0: 외부 승인 응답 STD, 외부 `MA_MissionPlan`·`MA_RoutePlan` 수신, `LinkEnvelope.publisher` | 개괄 §8, 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
+| 2026-11-09 | `c74b252` | DEC-075, DEC-076, DEC-077, OPN-061~063 | 계약 0.15.0: 외부 승인 응답 STD, 외부 `MA_MissionPlan`·`MA_RoutePlan` 수신, `LinkEnvelope.publisher` | 개괄 §8, 개발 7, 개발 8 gateway, 사용자 9 | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
 | 2026-11-09 | `a6f133b` | — | 문서 변경 기록 4행 반영 병합. 코드 변화 없음 | — | 해당 없음 | |
-| 2026-11-09 | `a2de464` | IMP-UI-076, TC-UI-064, DEC-077 | UI가 보내는 `LinkEnvelope`에 `publisher`를 채움 | 개발 8 ui | 미처리 | |
-| 2026-11-09 | `45f64fc` | TC-GW-019~027, DEC-075~077 | Gateway가 외부 승인 응답과 `MA_RoutePlan`·`MA_MissionPlan`을 받음. `--participant`로 발행자 ID 지정. 지원 범위는 `gateway/README.md` | 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
-| 2026-11-09 | `e334603` | IMP-AGT-034, TC-AGT-075~081, DEC-076, CR-GW-008 | 내장 MA가 실행 중 받은 `MissionPlan`을 반영. 같은 `plan_id`는 무시, 새 `plan_id`는 현재 작업을 교체 | 개발 4, 개발 8 agent, 개발 8 algorithms, 사용자 9 | 미처리 | |
-| 2026-11-09 | `2f0d4e0` | TC-QA-089~097, D-29 | QA 18차: 외부 임무 계획·승인 응답·발행자 ID 통합 확인. RoutePlan과 MissionPlan을 연달아 보내면 작업이 끝나지 않는 결함(D-29) | 사용자 9 | 미처리 | |
-| 2026-11-09 | `95710cd` | IMP-AGT-035, TC-AGT-082~087, D-29, O-26 | waypoint MA: 같은 ID의 계획 작업이 있는 RoutePlan은 따로 비행하지 않음. 단독 RoutePlan의 비행 명령 ID는 `<id>-task-<n>` | 개발 8 algorithms, 사용자 9 | 미처리 | |
-| 2026-11-09 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 미처리 | |
+| 2026-11-09 | `a2de464` | IMP-UI-076, TC-UI-064, DEC-077 | UI가 보내는 `LinkEnvelope`에 `publisher`를 채움 | 개발 8 ui | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
+| 2026-11-09 | `45f64fc` | TC-GW-019~027, DEC-075~077 | Gateway가 외부 승인 응답과 `MA_RoutePlan`·`MA_MissionPlan`을 받음. `--participant`로 발행자 ID 지정. 지원 범위는 `gateway/README.md` | 개발 7, 개발 8 gateway, 사용자 9 | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
+| 2026-11-09 | `e334603` | IMP-AGT-034, TC-AGT-075~081, DEC-076, CR-GW-008 | 내장 MA가 실행 중 받은 `MissionPlan`을 반영. 같은 `plan_id`는 무시, 새 `plan_id`는 현재 작업을 교체 | 개발 4, 개발 8 agent, 개발 8 algorithms, 사용자 9 | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
+| 2026-11-09 | `2f0d4e0` | TC-QA-089~097, D-29 | QA 18차: 외부 임무 계획·승인 응답·발행자 ID 통합 확인. RoutePlan과 MissionPlan을 연달아 보내면 작업이 끝나지 않는 결함(D-29) | 사용자 9 | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
+| 2026-11-09 | `95710cd` | IMP-AGT-035, TC-AGT-082~087, D-29, O-26 | waypoint MA: 같은 ID의 계획 작업이 있는 RoutePlan은 따로 비행하지 않음. 단독 RoutePlan의 비행 명령 ID는 `<id>-task-<n>` | 개발 8 algorithms, 사용자 9 | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
+| 2026-11-09 | `16678ea` | IMP-LNK-023, TC-LNK-024~026, QA O-23 | Datalink가 기체의 프레임 0 송신 시각을 0으로 유지. `publisher`가 비면 시각 0은 유효 | 개발 7, 개발 8 datalink | 완료 | 국문 반영 `bbf4d92`; 영문 반영 `a57a4bf` |
 | 2026-11-10 | `c8c701c` | TC-QA-098~105, D-29, D-30, O-23, O-26 | QA 19차: D-29·O-23·O-26 해소 확인. lockstep 첫 SystemStatus 시점이 실행마다 달라지는 결함(D-30) | — | 해당 없음 | |
 | 2026-11-10 | `eed8d76` | IMP-AGT-036, TC-AGT-088~093, D-30, DEC-039 | lockstep에서 NavigationReport를 뺀 onboard 입력을 메시지 프레임 기준 틱에 처리. SystemStatus는 프레임 + 1, 임무장비 출력과 Detection은 프레임 + 2. `late_onboard` 통계 추가 | 개발 시간 모델·Agent 장 | 미처리 | |

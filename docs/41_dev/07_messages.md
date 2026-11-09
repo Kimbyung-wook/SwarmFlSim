@@ -26,6 +26,8 @@ flowchart LR
     XSD -->|실패| REJ["로그·카운터, 보내지 않음"]
 ```
 
+외부에서 받는 STD 메시지는 `TaskCommand`, `ApprovalResponse`(`MA_ApprovalRequestStatus`, DEC-075), `RoutePlan`, `MissionPlan`(DEC-076)이다. 받는 범위는 [gateway/README.md](../../gateway/README.md#교환-메시지).
+
 ## 7.2 메시지를 추가하거나 바꾸는 절차
 
 계약을 바꾸는 일이므로 WP0을 거친다. WP 세션이라면 구현하지 말고 계약 변경 요청을 올린다([9장](09_contributing.md#95-계약-변경-요청)).
@@ -56,5 +58,13 @@ C++는 다시 빌드하면 생성된다. UI·Monitor는 `npm test`가 다시 생
 ## 7.4 MCAP과의 관계
 
 MCAP 채널은 버스 키와 1:1이고, 스키마는 protobuf descriptor다(PRP-LOG-001). 새 키는 Logger 수정 없이 기록된다.
+
+## 7.5 `LinkEnvelope`의 발행자와 시각
+
+정확한 문구는 [계약 §3.3](../10_contracts.md#33-규칙)이다.
+
+- 한 엔티티의 `tx` 키에 발행자가 여럿이면(GCS 키의 UI와 Gateway) 각 발행자가 `publisher`에 자기 참여자 ID를 채우고 `header.seq`를 발행자·키별로 매긴다(DEC-077). Datalink는 이 필드를 바꾸지 않고 `rx`로 넘긴다.
+- 기체 런타임처럼 발행자가 하나면 비워도 된다.
+- `publisher`가 비어 있으면 `header.sim_time_us == 0`은 유효한 시각 0이다. 시각을 모르고 보내는 발행자는 `publisher`를 채운다(DEC-039, QA O-23).
 
 다음: [8장](README.md#8장-wp별-파일-08_wp), [9. 기여 규칙](09_contributing.md).

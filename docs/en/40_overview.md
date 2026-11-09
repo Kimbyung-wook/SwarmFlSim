@@ -1,9 +1,9 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `24fc9be`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `bbf4d92`.
 
 - This document is for people seeing the repository for the first time. It covers what the project is, what works today, and where to start.
-- Baseline: contract 0.14.0, roadmap P6 complete (2026-11-09).
+- Baseline: contract 0.15.0, roadmap P6 complete (2026-11-09).
 - The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts. This document links to their sections.
 
 ## 1. Purpose and scope
@@ -26,7 +26,7 @@ Legend: Implemented = code and tests exist. Partial = only part exists. Not impl
 | Dynamics | 2-DoF (unicycle), 3-DoF (point mass, coordinated turn), wind, ground collision | Implemented |
 | Dynamics | 5-DoF and 6-DoF | Not implemented (P3) |
 | Dynamics | RK45 (variable step within a frame) and RK4 integrators, fixed frames at 50–100 Hz | Implemented |
-| Execution | realtime / lockstep (deterministic, fixed seed) / free-run, pause, step, rate | Implemented |
+| Execution | realtime / lockstep (fixed seed) / free-run, pause, step, rate | Implemented. Same-seed lockstep reproduction has a known difference (D-30, being fixed) |
 | Execution | Distributed runs across PCs, hundreds of vehicles | Not verified (P4). The bus options exist and it has been demonstrated on a single PC |
 | Algorithms | 4 baseline MAs (hold, waypoint, formation, flocking), baseline FA (HSA, Waypoint, orbit, racetrack) | Implemented |
 | Algorithms | Vehicle behavior on link loss | Not implemented (P2) |
@@ -38,7 +38,7 @@ Legend: Implemented = code and tests exist. Partial = only part exists. Not impl
 | UI | Role-based permissions | Not implemented (after P6, DEC-020). Only control and observer are distinguished today |
 | Traffic Monitor | Per-entity traffic statistics, loss reasons, sequence timeline, message decoding (live and replay) | Implemented |
 | Recording and replay | MCAP recording of all channels, replay at a chosen rate | Implemented |
-| A-GRA Gateway | Stage 1: publishes vehicle state received by the GCS (VI, C2, P2P, MS) to LA-CAL as UCI messages, with position also published as `MA_PositionReport` (DEC-072). Stage 2: receives external `MA_TaskCommand` (hold, return to base, cancel) | Implemented (P6 complete, DEC-074). Open: approval round trip (OPN-061), external tasks that need a position (OPN-062), publisher identification on GCS keys (OPN-063) |
+| A-GRA Gateway | Stage 1: publishes vehicle state received by the GCS (VI, C2, P2P, MS) to LA-CAL as UCI messages, with position also published as `MA_PositionReport` (DEC-072). Stage 2: receives external `MA_TaskCommand` (hold, return to base, cancel), approval responses `MA_ApprovalRequestStatus`, and mission plans `MA_RoutePlan` and `MA_MissionPlan` (DEC-075, DEC-076) | Implemented (P6 complete, DEC-074). Open: external tasks that are not routes (CR-GW-007), package and `ALL` targets (CR-GW-009) |
 | A-GRA | Full L1 compliance, PX4/ArduPilot SITL | Not implemented (P7, P8) |
 
 ## 3. Components
@@ -156,7 +156,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. Progress status
 
-Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-09.
+Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-10.
 
 | Phase | Completion criterion | Status | Evidence |
 |---|---|---|---|
@@ -166,7 +166,7 @@ Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Stat
 | P3 | Aerosonde 6-DoF follows VI control modes, RK45/RK4 error comparison | Partial | RK45, RK4 and error tests exist. 5-DoF and 6-DoF not implemented |
 | P4 | 300 vehicles distributed across 4 PCs | Not started | QA load test up to 100 vehicles on a single PC |
 | P5 | Scenario with sensors, jammers and simulation events, effect radius evaluation | Features implemented | WP8 Payload integrated into Core, QA end-to-end tests ([21_qa_report.md §14](../21_qa_report.md#14-6차-시험-p5-종단-시험-2026-11-05)) |
-| P6 | Main VI, C2 and P2P interactions exchanged with agra_lacal | Complete | DEC-074. Integrated run confirmed by TC-QA-069~074, 078~084 ([21_qa_report.md §24.12](../21_qa_report.md#2412-p6-완료-판정-의견)). Open: OPN-061~063, 4 UCI messages with no sending code (ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), O-16, O-19 |
+| P6 | Main VI, C2 and P2P interactions exchanged with agra_lacal | Complete | DEC-074. Integrated run confirmed by TC-QA-069~074, 078~084 ([21_qa_report.md §24.12](../21_qa_report.md#2412-p6-완료-판정-의견)). Open: CR-GW-007 (`TaskPlanID` content, external tasks that are not routes), CR-GW-009 (package and `ALL` targets), 4 UCI messages with no sending code (ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), O-16, O-19, D-30 ([§27](../21_qa_report.md#27-19차-시험-d-29o-23o-26-재시험-2026-11-10)) |
 | P7 | Passes the L1 compliance harness | Not started | |
 | P8 | At least one PX4/ArduPilot SITL vehicle integrated | Not started | |
 
@@ -180,7 +180,7 @@ Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Stat
 | GCS | Ground control entity (for example `gcs-01`). The UI and Gateway send commands and receive reports as this entity |
 | Entity | An object in the scenario (vehicle, GCS, target, jammer site, guided object). Example ID: `uav-001` |
 | Participant | A process attached to the bus. In lockstep, Core waits for frame completion from every participant. Example ID: `agent-0` |
-| lockstep | Deterministic run mode in which every participant must report completion each frame before the next frame starts |
+| lockstep | Run mode in which every participant must report completion each frame before the next frame starts. It aims at reproduction with a fixed seed |
 | truth | The true state of the simulation. Vehicle agents cannot see it |
 | STD / EXT / SIM | A-GRA mapping categories of proto messages: standard, exported externally / own extension / simulator-internal only |
 | Guided object | A simulation entity that, once launched, is guided to a target or aim point (`wpn-<launching vehicle>-<sequence>`) |

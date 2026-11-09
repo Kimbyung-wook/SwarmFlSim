@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `24fc9be`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `bbf4d92`.
 
 ## Responsibilities
 
@@ -58,6 +58,7 @@ Performance measurement tools are in `agent/bench/`.
 - `md.record` stays in runtime memory. It does not go to the bus or MCAP.
 - Altitude fields cannot express "unspecified", so `alt_m <= 0` is interpreted as holding the current altitude.
 - Vehicle behavior on link loss is not implemented (roadmap P2).
+- The MP port holds only the latest plan. If two `MissionPlan`s arrive in one tick, only the last is executed.
 - With many vehicles, split them across Agents. List them all in the scenario's `participants`.
 
 Traceability: [agent/TRACE.md](../../../../agent/TRACE.md).

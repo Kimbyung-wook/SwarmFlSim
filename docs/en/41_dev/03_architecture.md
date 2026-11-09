@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `24fc9be`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `bbf4d92`.
 
 - See [overview §3](../40_overview.md#3-components) first for the overall structure. This chapter sets out the execution rules to follow when writing code.
 - [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
@@ -12,7 +12,7 @@
 | `swarm_core` | — | Manages the barrier | Uses `--participant` or reads the scenario's `run.participants` |
 | `swarm_datalink` | `datalink-0` | Participates | With `--no-frame-done` it does not send `FrameDone` |
 | `swarm-agent` | `agent-0` | Participates | One process hosts many vehicles. Split with `--entities` |
-| `swarm_logger`, `swarm-bridge`, Gateway | — | Does not participate | |
+| `swarm_logger`, `swarm-bridge`, Gateway | — | Does not participate | The Gateway's `--participant` (default `gateway-0`) is for `LinkEnvelope.publisher` |
 
 - Participant IDs have the same format as entity IDs (`^[a-z][a-z0-9]*(-[a-z0-9]+)+$`).
 - The Agent treats IDs in `run.participants` that start with `datalink` as the Datalink. Start Datalink participant names with this prefix.
@@ -61,7 +61,7 @@ Rules to follow:
 
 - Vehicle-to-vehicle and ground-to-vehicle messages always go `tx` → Datalink → `rx`. A runtime does not publish directly to another entity's `rx`.
 - MA plugins do not access the bus. The prefixes `sim/ctrl/`, `truth/` and `link/` are not exposed to plugins (`MA_FORBIDDEN_PREFIXES`, DEC-014).
-- The Gateway subscribes only to `swarm/<gcs>/rx/**` and publishes only to `swarm/<gcs>/tx/c2/<msg>`.
+- The Gateway subscribes only to `swarm/<gcs>/rx/**` and publishes only to `swarm/<gcs>/tx/c2/<msg>` and `swarm/<gcs>/tx/mp/<msg>`.
 - Browsers do not attach to Zenoh directly, only through the bridge (DEC-027).
 
 What the Agent runtime automatically reports to the GCS regardless of the plugin:
@@ -105,6 +105,8 @@ stateDiagram-v2
 | `realtime` | Every wall-clock dt. Rate fixed at 1 | No | UI operation, demonstrations |
 | `lockstep` | After `FrameDone(N)` from every participant. At rate > 0 the interval is dt/rate, at 0 there is no wait | With a fixed seed | Algorithm comparison, regression tests |
 | `freerun` | At rate > 0 the interval is dt/rate, at 0 there is no wait | No | Accelerating Core alone |
+
+> Known limitation: in comparisons of 2 to 4 same-seed lockstep runs (QA round 19, 60 s without faults) the truth trajectories were the same, but the frame in which the first `SystemStatus` is sent differs between runs, so some `LinkOutcome` and GCS receptions were not the same (D-30, being fixed). Reproducibility at points where `SystemStatus` changes, such as fault injection, and with a Gateway in the setup was not checked.
 
 ## 3.6 One lockstep frame
 
