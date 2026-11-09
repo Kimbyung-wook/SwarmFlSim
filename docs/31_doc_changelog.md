@@ -65,3 +65,4 @@
 | 2026-11-09 | `a2de464` | IMP-UI-076, TC-UI-064, DEC-077 | UI가 보내는 `LinkEnvelope`에 `publisher`를 채움 | 개발 8 ui | 미처리 | |
 | 2026-11-09 | `45f64fc` | TC-GW-019~027, DEC-075~077 | Gateway가 외부 승인 응답과 `MA_RoutePlan`·`MA_MissionPlan`을 받음. `--participant`로 발행자 ID 지정. 지원 범위는 `gateway/README.md` | 개발 7, 개발 8 gateway, 사용자 9 | 미처리 | |
 | 2026-11-09 | `e334603` | IMP-AGT-034, TC-AGT-075~081, DEC-076, CR-GW-008 | 내장 MA가 실행 중 받은 `MissionPlan`을 반영. 같은 `plan_id`는 무시, 새 `plan_id`는 현재 작업을 교체 | 개발 4, 개발 8 agent, 개발 8 algorithms, 사용자 9 | 미처리 | |
+| 2026-11-09 | `2f0d4e0` | TC-QA-089~097, D-29 | QA 18차: 외부 임무 계획·승인 응답·발행자 ID 통합 확인. RoutePlan과 MissionPlan을 연달아 보내면 작업이 끝나지 않는 결함(D-29) | 사용자 9 | 미처리 | |
