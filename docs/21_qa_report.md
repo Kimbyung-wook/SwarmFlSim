@@ -2326,3 +2326,188 @@ flocking에서 외부 명령은 비행 명령을 바꾸지 않으므로 FlightCo
 | 수행 전(ACCEPTED) 상태에서 갱신이 오는 경우의 통합 동작 | 통합 실행에서는 그 구간이 최소 간격 안에 있어 GCS로 나오지 않는다. WP3 단위 시험으로만 확인된다 |
 | lockstep에서의 상태 흐름, 다른 MA(formation 등) | realtime의 flocking·waypoint만 돌렸다 |
 | 링크 손실이 있을 때의 상태 열 | 링크 손실 0 구성만 돌렸다. 이번 실행에서 FlightCommandStatus 손실은 0이다 |
+
+## 26. 18차 시험: 외부 임무 계획·승인 응답 통합 (2026-11-09)
+
+기준은 wp0-contracts ab0c16b, 계약 0.15.0이다. C++는 `C:/dev/zenoh`로 다시 빌드했고 Gateway는 `--extra zenoh`로 설치했다. Gateway 단위 시험은 이 환경에서 84건 통과, 1건 건너뜀이다. WP9·WP3 시험에 없던 실제 Core·Datalink·Agent·Gateway·agra_lacal 통합 실행으로 DEC-075~077과 IMP-AGT-034를 본다.
+
+### 26.1 방법
+
+| 항목 | 내용 |
+|---|---|
+| 구성 | `qa/gw_plan.py`(새 도구). uav-001·002·003·007은 waypoint, uav-004·005·006은 flocking_basic, gcs-01. realtime 1배속, 평지, 링크 손실 0, Gateway `--no-multicast`, Logger MCAP 기록, 브리지 |
+| 외부 입력 | 외부 CAL Client가 공개 XSD 구조대로 JSON을 직접 만들어 PUB한다(Gateway 변환기를 쓰지 않는다). 받은 메시지도 별도 적재한 XSD로 다시 검증한다 |
+| 대조 기체 | uav-003·006은 계획을 받지 않는다 |
+| 승인 요청 | 시뮬레이터에 ApprovalRequest 발신자가 없어(DEC-075) QA가 `swarm/<uav>/tx/c2/ApprovalRequest`로 주입했다 |
+| UI 발행 | 브리지 프로토콜을 쓰는 시험 클라이언트(`ui-qa`)로 보냈다. 실제 UI 화면은 쓰지 않았다 |
+| 실행 | r1: 모의 247.6 s 전체 시간표. order: 도착 순서 대조 147.6 s(D-29). reg: 수정 없는 `qa/gw_integ.py` 168.7 s(회귀) |
+
+```
+uv run python qa/gw_plan.py --out qa/out/gw18/r1
+uv run --with mcap python qa/gw_plan.py --mcap qa/out/gw18/r1
+uv run python qa/gw_plan.py --out qa/out/gw18/order --order-trial
+uv run python qa/gw_integ.py --out qa/out/gw18/reg
+```
+
+### 26.2 결과 요약
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-089 | 외부 `MA_RoutePlan`이 XSD 통과 → `tx/mp/RoutePlan` → DELIVERED, waypoint 기체가 항로대로 비행 | 통과 |
+| TC-QA-090 | 외부 `MA_MissionPlan`이 1점 move_to, 2점 이상 route로 펴지고 waypoint·flocking이 수행 | 조건부 통과 (D-29) |
+| TC-QA-091 | 같은 `plan_id` 재전송 시 중복 없음, 새 `plan_id`는 CANCELLED(preempted) 후 교체, 외부 `MA_TaskStatus`까지 일치 | 통과 |
+| TC-QA-092 | 다른 기체 대상 계획이 그 기체 동작을 바꾸지 않음 | 통과 |
+| TC-QA-093 | 지원 범위 밖 입력·XSD 위반 거부, 기록, Gateway 계속 동작 | 통과 |
+| TC-QA-094 | 외부 APPROVED·REJECTED → `tx/c2/ApprovalResponse` → DELIVERED, 외부로 되돌아 나가지 않음 | 통과 (요청은 QA 주입) |
+| TC-QA-095 | `publisher`: Gateway·UI 봉투가 `rx`와 MCAP에서 구분됨 | 통과 |
+| TC-QA-096 | GCS 링크 차단 시 DROPPED, 해제 후 재전송 도달 | 통과 |
+| TC-QA-097 | VI·C2·P2P·MS 외부 수신과 XSD가 §24 수준 유지 (회귀) | 통과 |
+
+세 실행 모두 truth 누락 프레임 0, overrun 0이고 프로세스 이상 종료와 로그 이상 항목은 없다. 외부 수신 XSD 실패는 0이다(r1 27,222건, reg 13,064건).
+
+### 26.3 TC-QA-089·090 항로와 임무 계획
+
+항로점 최소 거리는 truth 궤적의 매 프레임 값이다. waypoint의 `acceptance_m`은 80 m이다.
+
+| 계획 | 기체 / MA | 내부 변환 | 전달 | 항로점 최소 거리 (m) | TaskStatus (GCS) |
+|---|---|---|---|---|---|
+| r-a (RoutePlan만, 3점) | uav-001 waypoint | RoutePlan 3점 | DELIVERED | 26.3 / 26.0 / 25.9 | 없음 (설계) |
+| plan-w1 (1점) | uav-002 waypoint | move_to | DELIVERED ×2 | 26.1 | ACCEPTED → 55 s 뒤 CANCELLED(preempted) (D-29) |
+| plan-w2 (2점) | uav-001 waypoint | route | DELIVERED ×2 | 26.3 / 26.0 | ACCEPTED → EXECUTING → CANCELLED(preempted) (D-29) |
+| plan-v1 (1점) | uav-001 waypoint | move_to | DELIVERED ×2 | 32.8 | ACCEPTED → EXECUTING → COMPLETED |
+| plan-f1 (1점) | uav-004 flocking | move_to | DELIVERED ×2 | 0.1 | ACCEPTED → COMPLETED |
+| plan-f2 (2점) | uav-005 flocking | route | DELIVERED ×2 | 397.6 / 745.2 (따르지 않음) | REJECTED(unsupported task route), 외부 DROPPED |
+
+- 변환은 1점 → move_to, 2점 이상 → route로 모두 맞다. `task_id`는 RoutePlanID 라벨이다.
+- flocking은 route를 지원하지 않아 거부한다(설계). 거부된 계획은 기존 작업을 밀어내지 않았다. uav-005는 task-001을 유지하고 10 s당 동쪽 218 m로 계속 갔다.
+
+### 26.4 TC-QA-091 재전송과 교체
+
+| 시각 (모의 s) | 입력 | uav-002 (waypoint) | uav-004 (flocking) |
+|---|---|---|---|
+| 125 | plan-w3 / plan-f3 | r-w3 ACCEPTED → EXECUTING | r-f3 ACCEPTED |
+| 135 | 같은 `plan_id` 재전송 (DELIVERED) | 새 상태·새 비행 명령 0, 속도 21.9 m/s 유지 | 새 상태 0, 속도 21.9 m/s 유지 |
+| 145 | 새 `plan_id` | r-w3 CANCELLED(preempted), r-w4 ACCEPTED → EXECUTING | r-f3 CANCELLED(preempted), r-f4 ACCEPTED |
+| 외부 `MA_TaskStatus` | | r-w3 CANCELED (145.16), r-w4 EXECUTION_PENDING → EXECUTING | r-f3 CANCELED (145.68), r-f4 EXECUTION_PENDING |
+
+GCS 값과 외부 값의 대응은 ACCEPTED → EXECUTION_PENDING, CANCELLED → CANCELED이다. 계획 교체 뒤 r-w4 첫 항로점까지 거리는 2,236 m에서 742 m로 줄었다.
+
+### 26.5 TC-QA-092 다른 기체
+
+| 항목 | uav-003 (waypoint) | uav-006 (flocking) |
+|---|---|---|
+| 받은 MP 메시지 | 0 | 0 |
+| 작업 | task-001만 | task-001만 |
+| 이동 (247.6 s) | 동 5,392 m, 북 675 m | 동 5,272 m, 남 1,321 m |
+
+GCS 발행 RoutePlan·MissionPlan은 모두 `dst`가 대상 기체 1대이고, `rx`도 그 기체에만 왔다. 다른 기체의 RoutePlan을 참조한 MissionPlan은 Gateway가 거부했다(§26.6).
+
+### 26.6 TC-QA-093 거부
+
+| 입력 | XSD | 서버 | Gateway 기록 |
+|---|---|---|---|
+| RoutePlan `ALL` 대상 | 통과 | +OK | rejected: only ApplicableToIDs/SystemID is supported |
+| RoutePlan `PackageID` 대상 | 통과 | +OK | rejected: 같음 |
+| RoutePlan `ForPlanningUseOnly=true` | 통과 | +OK | rejected |
+| RoutePlan 순환 구간 | 통과 | +OK | rejected: segment cycle |
+| RoutePlan `Window` | 통과 | +OK | rejected: unsupported element |
+| MissionPlan `TaskPlanID` | 통과 | +OK | rejected: unsupported element |
+| MissionPlan 받지 않은 RoutePlan | 통과 | +OK | rejected: was not received |
+| MissionPlan 다른 기체의 RoutePlan | 통과 | +OK | rejected: is for uav-001, not uav-002 |
+| 승인 응답 PENDING | 통과 | +OK | rejected: has no internal form |
+| RoutePlan 필수 요소 누락 | 위반 | -ERR | Gateway까지 오지 않음 |
+| MissionPlan 잘못된 UUID | 위반 | -ERR | Gateway까지 오지 않음 |
+| 승인 응답 상태 열거값 위반 | 위반 | -ERR | Gateway까지 오지 않음 |
+
+- Gateway 카운터는 외부 수신 38 = 발행 29 + 거부 9로 맞는다. `invalid`·`send_failed`·`internal_error`는 0이다.
+- 거부 입력 10 s 뒤의 유효 계획 plan-v1은 정상 도달·완료했다.
+
+### 26.7 TC-QA-094 승인 응답
+
+| 요청 | 외부 응답 | Gateway 발행 | `dst` | 전달 |
+|---|---|---|---|---|
+| apr-1 (uav-003, 주입) | APPROVED | `tx/c2/ApprovalResponse` approved=true | uav-003 | DELIVERED |
+| apr-2 (uav-006, 주입) | REJECTED | approved=false | uav-006 | DELIVERED |
+| apr-x (모름) | APPROVED | approved=true | 없음 (브로드캐스트) | 7대 DELIVERED |
+
+- 주입한 요청은 외부에 `MA_ApprovalRequest` 2건으로 나갔다(XSD 통과).
+- `/tap` 기준 `MA_ApprovalRequestStatus`는 외부 서비스 발신 4건뿐이고 Gateway 서비스 발신은 0건이다. 기체 → GCS로 주입한 `ApprovalResponse`도 Gateway가 `skipped_inbound_kind` 1로 건너뛰었다.
+- 요청의 "GCS까지 DELIVERED"는 GCS의 `tx`에서 대상 기체까지의 전달로 판정했다. 승인 응답의 방향이 GCS → 기체이기 때문이다.
+
+### 26.8 TC-QA-095 publisher
+
+| 지점 | TaskCommand `ui-qa` | TaskCommand `gateway-0` | RoutePlan / MissionPlan / ApprovalResponse (`gateway-0`) |
+|---|---|---|---|
+| GCS `tx` 건수 (MCAP) | 2 (seq 1, 2) | 2 (seq 0, 1) | 11 / 13 / 3 |
+| 기체 `rx` 건수 (MCAP) | 2 | 2 | 10 / 12 / 9 |
+| 실시간 `rx` 봉투 | `ui-qa` | `gateway-0` | `gateway-0` |
+
+- 두 발행자가 같은 키에 같은 seq 1을 썼지만 넷 다 DELIVERED이고 uav-007이 순서대로 수행했다. seq는 발행자별로 간다.
+- 차이 1건씩은 §26.9의 DROPPED 2건이다. QA가 주입한 기체 쪽 `ApprovalResponse` 1건은 `publisher`가 비어 있다(주입 코드가 넣지 않음).
+
+### 26.9 TC-QA-096 링크 차단
+
+| 시각 (모의 s) | 입력 | 결과 |
+|---|---|---|
+| 195 | uav-002 GCS_LINK_CUT 15 s | |
+| 198 | RoutePlan r-c1, MissionPlan plan-c1 | 둘 다 DROPPED(FAULT_INJECTED), `rx` 0, 작업 변화 없음 (r-w4 유지) |
+| 213 | 해제 뒤 MissionPlan plan-c1 재전송 | DELIVERED, r-w4 CANCELLED(preempted), r-c1 ACCEPTED → EXECUTING |
+
+r-c1 항로점까지 거리는 213 s의 2,940 m에서 247 s의 2,203 m로 줄었다.
+
+### 26.10 TC-QA-097 회귀
+
+| 항목 | §25 flock2 | reg |
+|---|---|---|
+| 외부 수신 / XSD 통과 | 13,068 / 13,068 | 13,064 / 13,064 |
+| `MA_NavigationReport` / `SystemStatus` | 650 / 9 | 655 / 9 |
+| `MA_FlightCommandStatus` / `MA_FlightCapability` | 5 / 5 | 5 / 5 |
+| `MA_TaskStatus` | | 12 |
+| `MA_PackagePartnerStatusReport` / `MA_PositionReport` | / 3,891 | 3,236 / 3,890 |
+| `PO_Activity` / `EA_Activity` / `StrikeActivity` | | 5,109 / 137 / 6 |
+| Nav 발행률 기본 / 두 기체 차단 / GCS 차단 / 해제 / 재기동 뒤 (건/s) | 5.00 / 3.00 / 0 / 5.00 / 4.96 | 5.00 / 3.00 / 0 / 5.00 / 5.15 |
+| uav-004 DEGRADED / OPERATIONAL (모의 s) | 55.08 / 62.09 | 55.05 / 62.11 |
+| 위치 짝짓기, 변환 오차, truth 대비 오차 | 100%, 0 m, 0 m | 100%, 0 m, 0 m |
+
+외부 명령 4건은 모두 DELIVERED이고 `rejections`·`invalid`·`send_failed`·`internal_error`는 0이다. 1차 Gateway의 `exported`와 `sent`는 5건 차이나는데, Gateway를 강제 종료하는 구간의 마지막 기록 시점 차로 추정한다(건별 확인은 하지 않았다).
+
+### 26.11 D-29 RoutePlan·MissionPlan 도착 순서
+
+waypoint MA는 RoutePlan을 받으면 그 틱에 `<id>-route-<route_id>` 비행 명령을 바로 낸다(`algorithms/src/swarm_algorithms/waypoint.py:36~42`). 같은 틱의 `pilot.step()`이 MissionPlan 작업 명령을 먼저 내므로, 두 메시지가 같은 틱에 처리되거나 MissionPlan이 먼저면 RoutePlan 명령이 작업 명령을 밀어낸다. 작업 명령은 CANCELED, TaskStatus는 다음 계획이 올 때까지 끝나지 않는다. 기체는 같은 항로점으로 날아간다.
+
+Gateway는 RoutePlan을 먼저 발행하지만, 같은 프레임의 `tx`는 Datalink가 키 순으로 정렬한다(`datalink/src/emulator.cpp:355`). 그래서 `.../mp/MissionPlan`이 `.../mp/RoutePlan`보다 앞선다. r1에서는 9쌍 중 5쌍이 MissionPlan 먼저 도착했다.
+
+order 실행: waypoint 기체 4대, 1점 계획 16회, 간격별 8회. 기체를 번갈아 배치했다.
+
+| RoutePlan과 MissionPlan 간격 | COMPLETED | 끝나지 않음 | 항로점 최소 거리 (m) |
+|---|---|---|---|
+| 연속 전송 (간격 약 0) | 2 / 8 (RoutePlan이 20 ms 먼저 도착) | 6 / 8 | 25.9 ~ 33.0 |
+| 2 s | 8 / 8 | 0 / 8 | 32.7 ~ 33.0 |
+
+r1의 외부 `MA_FlightCommandStatus`에서도 같은 흐름이 보인다. plan-w1은 `uav-002-task-2` CANCELED(70.22) 뒤 `route-r-w1`만 남고, r-w1 작업은 항로점 도달(99.94) 뒤에도 ACCEPTED로 남아 125.18에 preempted로 끝났다.
+
+### 26.12 결함
+
+| # | 심각도 | 내용 | 영향 | 위치 |
+|---|---|---|---|---|
+| D-29 | 중 | waypoint MA: RoutePlan과 이를 참조하는 MissionPlan이 같은 틱에 처리되거나 MissionPlan이 먼저 처리되면 RoutePlan 비행 명령이 작업 명령을 밀어내 작업이 COMPLETED로 끝나지 않는다 | 연속 전송 8회 중 6회 재현. 외부에 EXECUTION_PENDING 또는 EXECUTING이 다음 계획까지 남는다. 기체 항로는 맞다 | `algorithms/src/swarm_algorithms/waypoint.py:36` (Datalink 정렬이 조건을 만든다: `datalink/src/emulator.cpp:355`) |
+
+### 26.13 관찰
+
+- O-23: 시작 시 waypoint 4대의 task-001이 GCS에 EXECUTING → ACCEPTED 순서로 도착했다. D-9 범주지만, 대조 기체 uav-003은 외부 마지막 값이 247 s 동안 EXECUTION_PENDING으로 남는다. 원인은 확인하지 않았다.
+- O-24: flocking은 route를 받지 못한다. 2점 이상 RoutePlan을 참조한 MissionPlan은 GCS에 REJECTED, 외부에 DROPPED로 나간다. 외부 측이 MA 종류를 알아야 한다.
+- O-25: flocking의 COMPLETED는 `goal_radius_m` 300 m 기준이다. plan-f1은 95.82 s에 COMPLETED를 보고한 뒤 109.44 s에 항로점 0.1 m까지 갔다.
+- O-26: RoutePlan 단독은 설계대로 TaskStatus가 없다. r-a 뒤 uav-001의 task-001은 비행 명령이 CANCELED인데 GCS와 외부에는 EXECUTING으로 남았다(다음 계획까지 85 s).
+- O-27: 링크 차단으로 RoutePlan이 DROPPED여도 Gateway의 참조표에는 남는다. 해제 뒤 MissionPlan만 재전송해도 작업이 수행된다.
+- O-17은 그대로다. 항로 비행 명령의 완료도 외부에 ACCEPTED 재보고로 보인다.
+
+### 26.14 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 실제 기체가 낸 ApprovalRequest 흐름 | 시뮬레이터에 발신자가 없어 QA가 주입했다 |
+| 실제 UI 화면에서의 발행 | 브리지 프로토콜 시험 클라이언트로 대신했다 |
+| 같은 `plan_id`에 내용만 다른 계획 | 이번 시간표에 없다. 단위 시험 범위다 |
+| 여러 RoutePlan을 참조한 MissionPlan과 D-29 시 대기 작업 진행 | 1개 참조만 돌렸다. 앞 작업이 끝나지 않으면 대기 작업이 시작되지 않을 것으로 예상하지만 시험하지 않았다 |
+| 차단 해제 뒤 RoutePlan 재전송 | MissionPlan만 재전송했다 |
+| formation 등 다른 MA, lockstep, 링크 손실 있는 구성 | realtime의 waypoint·flocking, 손실 0만 돌렸다 |

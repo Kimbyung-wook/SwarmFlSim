@@ -64,6 +64,32 @@ def task_command(system_uuid: str, task_id: str, entities: list[str], kind: str,
     }}
 
 
+def envelope(system_uuid: str, name: str, data: dict) -> dict:
+    return {name: {
+        "SecurityInformation": {"Classification": "U", "OwnerProducer": [{"GovernmentIdentifier": "USA"}]},
+        "MessageHeader": {"SystemID": {"UUID": system_uuid}, "Timestamp": ts(), "SchemaVersion": "006.0.ASK",
+                          "Mode": "SIMULATION"},
+        "MessageData": data,
+    }}
+
+
+async def send_raw(cli, codec, ext, fname: str, c: dict) -> None:  # noqa: ANN001
+    """XSD를 통과하지 않는 메시지도 그대로 보내 서버 응답을 기록한다"""
+    msg = envelope(cli.system_uuid, c["raw"], c["data"])
+    rec = {"file": fname, "tag": c.get("tag", ""), "name": c["raw"], "topic": c["topic"], "t": round(time.time(), 3)}
+    try:
+        codec.to_xml_bytes(msg)
+        rec["xsd_ok"] = True
+    except Exception as e:  # noqa: BLE001
+        rec["xsd_ok"], rec["xsd_err"] = False, str(e)[:200]
+    try:
+        await cli.publish(c["topic"], msg)
+        rec["pub"] = "+OK"
+    except CalError as e:
+        rec["pub"] = f"-ERR {e}"[:200]
+    ext.cmds.append(rec)
+
+
 def label(obj) -> str:  # noqa: ANN001
     return obj.get("DescriptiveLabel", "") if isinstance(obj, dict) else ""
 
@@ -183,6 +209,9 @@ async def main() -> None:
                 continue
             done.add(f.name)
             c = json.loads(f.read_text(encoding="utf-8"))
+            if "raw" in c:          # 18차: 임의 UCI 메시지 (MessageData를 그대로 싣는다)
+                await send_raw(cli, codec, ext, f.name, c)
+                continue
             msg = task_command(cli.system_uuid, c["task_id"], c["entities"], c.get("kind", "hold"),
                                c.get("cancel", False))
             rec = {**c, "t": round(time.time(), 3), "file": f.name}

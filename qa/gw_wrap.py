@@ -72,8 +72,8 @@ async def start_gateway(*a, **k):  # noqa: ANN002, ANN003, ANN201
         while True:
             gw = running.gateway
             P["counters"] = dict(gw.counters)
-            P["rejections"] = [f"{r.status}:{getattr(r, 'proto', '')}:{getattr(r, 'reason', '')}"[:200]
-                               for r in list(gw.rejections)[-20:]]
+            P["rejections"] = [f"{r.status}:{getattr(r, 'uci_name', '') or getattr(r, 'proto', '')}:{getattr(r, 'reason', '')}"[:240]
+                               for r in list(gw.rejections)[-40:]]
             _dump()
             await asyncio.sleep(0.5)
     asyncio.create_task(dumper())
