@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.14.0
+- 계약 버전: 0.15.0
+  - 0.15.0: `ApprovalResponse` STD(`MA_ApprovalRequestStatus`, DEC-075), Gateway 임무 계획 수신 `tx/mp`(DEC-076), `LinkEnvelope.publisher`(DEC-077)
   - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072), Core의 `onboard/<id>/SystemStatus` 발행(DEC-073)
   - 0.13.0: `StrikeActivity` 변화 보고 키를 무장별 (메시지, payload_id, weapon_entity)로 분리(DEC-063)
   - 0.12.0: lockstep rx 불변식 `rx_time_us >= T_k`(DEC-054), 재밍 수신단 기준 명시(DEC-055), 상태 변화 보고 최대 빈도(DEC-056), DEM 파일 형식과 받기 절차(DEC-053)
@@ -79,8 +80,8 @@ flowchart LR
 | `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
 | `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
-| `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS) | Datalink만 |
-| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS) |
+| `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
+| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽) |
 | `onboard/<id>/<msg>` | `NavigationReport`, `SystemStatus`(DEC-073), `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `link/outcome/<src>/<dst>` | `LinkOutcome` | Datalink | Monitor, Logger |
 | `link/state/<a>/<b>` | `LinkState` (a < b 사전순) | Datalink | UI, Monitor |
@@ -96,6 +97,7 @@ flowchart LR
   - 참여자(프로세스) ID도 같은 형식이다. 예: `core-0`, `datalink-0`, `agent-host-1`
 - 인코딩: Zenoh encoding을 `application/protobuf;<전체 메시지 이름>`으로 둔다.
 - 기체 간·지상-기체 간 메시지는 반드시 `tx` → Datalink → `rx`로 흐른다. 런타임은 다른 엔티티의 `rx`에 직접 발행하지 않는다.
+- 한 엔티티의 `tx` 키에 발행자가 여럿이면(GCS 키의 UI와 Gateway) 각 발행자는 `LinkEnvelope.publisher`에 자기 참여자 ID를 채운다. `header.seq`는 발행자·키별로 매긴다. Datalink는 이 필드를 바꾸지 않고 `rx`로 넘긴다. 기체 런타임처럼 발행자가 하나면 비워도 된다 (DEC-077).
 - `onboard/**`는 같은 기체 안의 신호다. 데이터링크를 거치지 않는다. FA→MA 간 VI도 같은 기체 안이면 런타임 내부 호출로 처리하고 버스에 싣지 않아도 된다.
 - MA 플러그인은 버스에 직접 접근하지 않는다. 런타임은 `sim/ctrl/`, `truth/`, `link/` 접두어를 플러그인에 노출하지 않는다 (`MA_FORBIDDEN_PREFIXES`).
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
@@ -174,7 +176,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.14.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.15.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |

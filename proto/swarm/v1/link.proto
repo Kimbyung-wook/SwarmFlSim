@@ -17,6 +17,7 @@ message LinkEnvelope {
   bytes payload = 5;            // msg_type의 직렬화 바이트
   uint32 priority = 6;          // 0이 가장 높음
   uint64 rx_time_us = 7;        // 데이터링크가 전달 시 채움
+  string publisher = 8;         // 발행 참여자 ID. 한 엔티티 키에 발행자가 여럿이면 채운다 (DEC-077)
 }
 
 enum LinkOutcomeKind {
