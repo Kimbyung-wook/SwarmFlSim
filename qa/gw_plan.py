@@ -19,7 +19,9 @@ uav-003·006은 어떤 계획도 받지 않는 대조 기체다. 시뮬레이터
 uv run python qa/gw_plan.py --out qa/out/gw18/r1
 uv run python qa/gw_plan.py --out qa/out/gw18/order --order-trial   (D-29: RoutePlan·MissionPlan 도착 순서 대조)
 uv run python qa/gw_plan.py --out qa/out/gw19/ls_order --order-trial --lockstep --rounds 4
-uv run python qa/gw_plan.py --lockstep-det qa/out/gw19/det    (Gateway 없이 lockstep 2회 비교, 손실 없음·있음)
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw19/det    (lockstep 같은 시드 반복 비교)
+uv run python qa/gw_plan.py --lockstep-det qa/out/gw20/det --det-runs 5 --variants noloss,loss,fault_noloss,fault_loss,payload,load50,gateway
+uv run python qa/gw_plan.py --ext-prefix qa/out/gw20/det_gw/gateway   (외부 수신 위치의 기체별 순서를 앞쪽 공통 구간에서 비교)
 uv run --with mcap python qa/gw_plan.py --mcap qa/out/gw18/r1
 """
 from __future__ import annotations
@@ -165,9 +167,16 @@ class PlanObserver(GwObserver):
         self.ts: list[tuple] = []
         self.all_lo: list[tuple] = []      # (tx_us, rx_us, src, dst, msg, outcome, seq)
         self.gcs_hdr: list[tuple] = []     # GCS 수신 (source, msg, seq, hdr_us, crc)
+        self.onboard: Counter = Counter()
         self.subs.append(self.bus.subscribe(f"swarm/{GCS}/tx/**", self._ptx))
         for pat in ("swarm/*/rx/mp/*", "swarm/*/rx/c2/*"):
             self.subs.append(self.bus.subscribe(pat, self._prx))
+
+    def watch_onboard(self) -> None:
+        def cb(s) -> None:  # noqa: ANN001
+            with self.lock:
+                self.onboard[s.key.rsplit("/", 1)[-1]] += 1
+        self.subs.append(self.bus.subscribe("onboard/*/*", cb))
 
     def _detail(self, env) -> dict:  # noqa: ANN001
         name = env.msg_type.rsplit(".", 1)[-1]
@@ -243,13 +252,18 @@ def main() -> None:
     ap.add_argument("--lockstep", action="store_true", help="Gateway·외부 입력을 둔 채 lockstep(rate 1)으로 돌린다")
     ap.add_argument("--lockstep-det", help="Gateway 없이 lockstep 같은 시드 반복 비교 (결과 폴더)")
     ap.add_argument("--det-runs", type=int, default=2)
+    ap.add_argument("--variants", default="noloss,loss")
+    ap.add_argument("--ext-prefix", help="det_gw 실행들의 외부 수신을 기체별 순서로 비교한다")
     ap.add_argument("--mcap", help="결과 폴더의 rec.mcap에서 publisher를 집계한다 (uv run --with mcap)")
     a = ap.parse_args()
     if a.mcap:
         mcap_check(Path(a.mcap))
         return
+    if a.ext_prefix:
+        ext_prefix(ROOT / a.ext_prefix)
+        return
     if a.lockstep_det:
-        lockstep_det(ROOT / a.lockstep_det, a.base_port, a.det_runs)
+        lockstep_det(ROOT / a.lockstep_det, a.base_port, a.det_runs, a.variants.split(","))
         return
     out = (ROOT / a.out) if not Path(a.out).is_absolute() else Path(a.out)
     ext_dir = out / "ext"
@@ -478,65 +492,240 @@ def frame0_tx(lo: list[tuple]) -> dict:
     return dict(sorted(c.items()))
 
 
-def lockstep_det(base: Path, base_port: int, n_runs: int = 2) -> None:
-    """Gateway 없이 lockstep(rate 0) 같은 시드 2회: truth·LinkOutcome·GCS 수신을 비교한다"""
-    variants = {"noloss": scenario(),
-                "loss": scenario({"p_gb": 0.05, "p_bg": 0.3, "loss_good": 0.0, "loss_bad": 0.5}, 30.0, 8.0)}
+def ext_prefix(d: Path) -> None:
+    """실행 종료 시점이 달라 끝부분 건수가 갈리므로, 기체별 위치 열은 앞쪽 공통 구간에서 비교한다"""
+    runs = []
+    for r in sorted(d.glob("run*")):
+        ext = json.loads((r / "ext" / "ext.json").read_text(encoding="utf-8"))
+        seq = defaultdict(list)
+        names: Counter = Counter()
+        for x in ext["rx"]:
+            names[x[1]] += 1
+            if x[1] == "MA_PositionReport":
+                seq[(x[2], x[6].get("who"))].append((x[6].get("lat"), x[6].get("lon"), x[6].get("alt")))
+        runs.append({"run": r.name, "seq": seq, "names": names, "total": len(ext["rx"])})
+    a = runs[0]
+    out = []
+    for b in runs[1:]:
+        cmp_len = mismatched = 0
+        for k, va in a["seq"].items():
+            vb = b["seq"].get(k, [])
+            n = min(len(va), len(vb))
+            cmp_len += n
+            mismatched += sum(1 for x, y in zip(va[:n], vb[:n]) if x != y)
+        spread = {k: abs(a["names"][k] - b["names"][k]) for k in set(a["names"]) | set(b["names"])
+                  if a["names"][k] != b["names"][k]}
+        out.append({"pair": f"{a['run']}/{b['run']}", "compared": cmp_len, "mismatched": mismatched, "count_gap": spread})
+    print(json.dumps({"totals": [r["total"] for r in runs], "pairs": out}, ensure_ascii=False))
+
+
+def traj_common(a: dict, b: dict) -> dict:
+    """관측기가 첫 프레임을 놓친 실행이 있어 프레임 번호로 맞춰 비교한다"""
+    diff, compared, missing = None, 0, 0
+    for k in sorted(set(a) | set(b)):
+        fa, fb = {x[0]: x[1:] for x in a.get(k, [])}, {x[0]: x[1:] for x in b.get(k, [])}
+        missing += len(set(fa) ^ set(fb))
+        for f in sorted(set(fa) & set(fb)):
+            compared += 1
+            if diff is None and fa[f] != fb[f]:
+                diff = (k, f, fa[f], fb[f])
+    return {"traj_same": diff is None, "traj_compared": compared, "traj_frames_missing": missing,
+            **({"traj_first_diff": diff} if diff else {})}
+
+
+def wait_frame(ob: PlanObserver, frame: int, timeout: float) -> bool:
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        with ob.lock:
+            f = ob.last_frame or 0
+        if f >= frame:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def wait_still(ob: PlanObserver, secs: float = 0.6) -> int:
+    """일시정지 뒤 프레임이 더 오지 않을 때까지 기다린다"""
+    last, t0 = -1, time.monotonic()
+    while time.monotonic() - t0 < secs:
+        with ob.lock:
+            f = ob.last_frame or 0
+        if f != last:
+            last, t0 = f, time.monotonic()
+        time.sleep(0.02)
+    return last
+
+
+def inject_at_frames(ob: PlanObserver, events: list[tuple[int, str, str, float]]) -> list[int]:
+    """시작 직후 일시정지하고 StepFrames로 정확한 프레임까지 간 뒤 고장을 넣는다. 끝나면 재개한다"""
+    assert wait_frame(ob, 20, 60), "시작 대기 실패"
+    ob.pause()
+    at = wait_still(ob)
+    done = []
+    for frame, entity, kind, dur in events:
+        ob.step(frame - at)
+        assert wait_frame(ob, frame, 180), f"프레임 {frame} 대기 실패"
+        at = wait_still(ob)
+        assert at == frame, f"프레임 불일치 {at} != {frame}"
+        ob.fault(entity, kind, dur)
+        time.sleep(0.3)
+        done.append(at)
+    ob.resume()
+    return done
+
+
+LOSS = ({"p_gb": 0.05, "p_bg": 0.3, "loss_good": 0.0, "loss_bad": 0.5}, 30.0, 8.0)
+FAULTS = [(1000, "uav-004", "SENSOR", 10.0), (2000, "uav-002", "SENSOR", 5.0)]
+
+
+def det_variants(names: list[str]) -> dict:
+    out: dict = {}
+    for n in names:
+        v: dict = {"end": LS_END_S, "wall": 240.0, "rate": 0.0, "inject": None, "gateway": False, "path": None}
+        if n in ("noloss", "fault_noloss", "gateway"):
+            v["sc"] = scenario()
+        elif n in ("loss", "fault_loss"):
+            v["sc"] = scenario(*LOSS)
+        elif n == "payload":
+            v["path"] = SCN / "qa_s4_engage.json"
+        elif n == "load50":
+            v["path"], v["wall"] = SCN / "qa_s6_load50.json", 500.0
+        elif n.startswith("scn:"):
+            v["path"] = SCN / f"{n[4:]}.json"
+        else:
+            raise SystemExit(f"unknown variant {n}")
+        if n.startswith("fault"):
+            v["inject"] = FAULTS
+        if n == "gateway":
+            v["gateway"], v["rate"] = True, 2.0
+        out[n] = v
+    return out
+
+
+def run_gateway_side(st: h.Stack, out: Path, base_port: int) -> tuple[list, Path]:
+    ext_dir = out / "ext"
+    (ext_dir / "cmd").mkdir(parents=True, exist_ok=True)
+    for f in (ext_dir / "STOP", ext_dir / "ext.ready", ext_dir / "ext.json"):
+        f.unlink(missing_ok=True)
+    procs = [p0.Proc("gateway.1", [str(GW_PY), str(QA / "gw_wrap.py"), "--gcs", GCS, "--lacal", CAL_URL,
+                                   "--no-multicast", "--connect", st.endpoint(), "--listen",
+                                   f"tcp/127.0.0.1:{base_port + 31}", "--stats-s", "10"], st.out, cwd=ROOT),
+             p0.Proc("ext", [str(GW_PY), str(QA / "gw_ext_client.py"), "--url", CAL_URL, "--admin", CAL_ADMIN,
+                             "--out", str(ext_dir)], st.out, cwd=ROOT)]
+    end = time.monotonic() + 40
+    while not (ext_dir / "ext.ready").exists() and time.monotonic() < end:
+        time.sleep(0.2)
+    assert (ext_dir / "ext.ready").exists(), "외부 클라이언트 준비 실패"
+    while "gateway: ready at" not in (st.out / "gateway.1.log").read_text(encoding="utf-8", errors="replace"):
+        assert time.monotonic() < end, "Gateway 준비 실패"
+        time.sleep(0.2)
+    return procs, ext_dir
+
+
+def lockstep_det(base: Path, base_port: int, n_runs: int, names: list[str]) -> None:
+    """lockstep 같은 시드 반복: truth·LinkOutcome·GCS 수신을 1번 실행과 비교한다"""
     report: dict = {}
-    for var, sc in variants.items():
-        sp = SCN / f"qa_gw_plan_ls_{var}.json"
-        sp.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
+    for var, v in det_variants(names).items():
+        sp = v["path"]
+        if sp is None:
+            sp = SCN / f"qa_gw_plan_ls_{var}.json"
+            sp.write_text(json.dumps(v["sc"], ensure_ascii=False, indent=1), encoding="utf-8")
         runs = []
         for run in range(1, n_runs + 1):
-            out = base / var / f"run{run}"
-            st = h.Stack(out, sp, base_port=base_port, lockstep=True, rate=0.0, record=False,
+            out = base / var.replace("scn:", "") / f"run{run}"
+            st = h.Stack(out, sp, base_port=base_port, lockstep=True, rate=v["rate"], record=False,
                          core_extra=["--terrain-flat", "0"])
+            extra: list = []
+            ext_dir = None
             try:
+                if v["gateway"]:
+                    os.environ["GW_PROBE_OUT"] = str(out / "gw1.json")
+                    extra.append(p0.Proc("calsrv", [str(GW_PY), "-m", "swarm_gateway.lacal_server", "--config",
+                                                    str(QA / "scenarios" / "gw_lacal_server.yaml")], st.out,
+                                         cwd=ROOT / "gateway"))
+                    assert wait_port(18765), "CAL Server 기동 실패"
                 st.start_one("datalink")
                 st.start_one("agent")
+                if v["gateway"]:
+                    gp, ext_dir = run_gateway_side(st, out, base_port)
+                    extra += gp
                 time.sleep(st.settle)
                 ob = PlanObserver([st.endpoint()])
+                ob.watch_onboard()
                 time.sleep(1.0)
                 st.start_one("core")
                 t0 = time.monotonic()
-                while ob.sim_s() < LS_END_S + 1.0 and time.monotonic() - t0 < 240 and not st.dead():
+                injected = inject_at_frames(ob, v["inject"]) if v["inject"] else []
+                while ob.sim_s() < v["end"] + 1.0 and time.monotonic() - t0 < v["wall"] and not st.dead():
                     time.sleep(0.1)
+                wall = round(time.monotonic() - t0, 1)
                 snap, dead = ob.snapshot(), st.dead()
                 issues = h.scan_logs(st)[:10]
                 with ob.lock:
-                    data = (list(ob.all_lo), list(ob.gcs_hdr), {k: list(v) for k, v in ob.traj.items()}, list(ob.ts))
+                    data = (list(ob.all_lo), list(ob.gcs_hdr), {k: list(x) for k, x in ob.traj.items()}, list(ob.ts))
+                    onboard = dict(ob.onboard)
                 ob.close()
+                if ext_dir is not None:
+                    (ext_dir / "STOP").write_text("x", encoding="utf-8")
+                    time.sleep(2.5)
             finally:
+                agent_log = (out / "agent.log").read_text(encoding="utf-8", errors="replace") if (out / "agent.log").exists() else ""
                 st.down()
-            lim_us, lim_fr = int(LS_END_S * 1e6), int(LS_END_S * 50)
+                p0.stop(extra)
+            lim_us, lim_fr = int(v["end"] * 1e6), int(v["end"] * 50)
             lo = sorted(x for x in data[0] if x[0] < lim_us)
             hdr = sorted(x for x in data[1] if x[3] < lim_us)
-            traj = {k: [x for x in v if x[0] <= lim_fr] for k, v in data[2].items()}
+            traj = {k: [x for x in r if x[0] <= lim_fr] for k, r in data[2].items()}
             first = defaultdict(list)
             for _t, src, task, state, _r in data[3]:
                 if task == "task-001":
                     first[src].append(state)
-            runs.append({"lo": lo, "hdr": hdr, "traj": traj,
-                         "info": {"frames": snap["last_frame"], "gap": snap["gap_frames"], "dead": dead, "issues": issues,
-                                  "lo": len(lo), "hdr": len(hdr), "traj_frames": {k: len(v) for k, v in traj.items()},
-                                  "timing": link_timing(lo), "frame0_tx": frame0_tx(lo),
-                                  "task001": {e: first[e] for e in sorted(first)}}})
+            ss_tx = defaultdict(list)
+            for x in lo:
+                if x[4] == "SystemStatus":
+                    ss_tx[x[2]].append(x[0])
+            late = [ln[:200] for ln in agent_log.splitlines() if "arrived after tick" in ln]
+            info = {"frames": snap["last_frame"], "gap": snap["gap_frames"], "dead": dead, "issues": issues, "wall_s": wall,
+                    "lo": len(lo), "hdr": len(hdr), "traj_frames": len(next(iter(traj.values()), [])),
+                    "msg_lo": dict(Counter(x[4] for x in lo)), "onboard": onboard, "late_warn": late, "injected": injected,
+                    "first_ss_us": {k: min(x) for k, x in sorted(ss_tx.items())},
+                    "ss_tx_us": {k: sorted(x) for k, x in sorted(ss_tx.items())},
+                    "timing": link_timing(lo), "frame0_tx": frame0_tx(lo),
+                    "task001": {e: first[e] for e in sorted(first)}}
+            ext_sig = None
+            if ext_dir is not None:
+                ext = json.loads((ext_dir / "ext.json").read_text(encoding="utf-8"))
+                gw = json.loads((out / "gw1.json").read_text(encoding="utf-8"))
+                # 외부 수신 수와, 프레임 0 제외 내부 전달에 대응하는 위치 값의 집합으로 비교한다
+                by = Counter(r[1] for r in ext["rx"])
+                pos = sorted((r[6].get("who"), r[6].get("lat"), r[6].get("lon"), r[6].get("alt"))
+                             for r in ext["rx"] if r[1] == "MA_PositionReport")
+                info["ext"] = {"by_name": dict(sorted(by.items())), "xsd_ok": sum(1 for r in ext["rx"] if r[3]),
+                               "total": len(ext["rx"]), "xsd_fail": ext["xsd_fail"][:3], "errors": ext["errors"][:3],
+                               "gw": {k: x for k, x in gw["counters"].items() if not k.startswith("exported.")}}
+                ext_sig = {"by": by, "pos": pos}
+            runs.append({"lo": lo, "hdr": hdr, "traj": traj, "ext": ext_sig, "info": info})
         a = runs[0]
         pairs = {}
         for i, b in enumerate(runs[1:], 2):
-            c: dict = {"lo_same": a["lo"] == b["lo"], "hdr_same": a["hdr"] == b["hdr"], "traj_same": a["traj"] == b["traj"]}
+            c: dict = {"lo_same": a["lo"] == b["lo"], "hdr_same": a["hdr"] == b["hdr"]}
+            c |= traj_common(a["traj"], b["traj"])
             if not c["lo_same"]:
                 c["lo_diff"] = diff_sets(a["lo"], b["lo"])
             if not c["hdr_same"]:
                 c["hdr_diff"] = diff_sets(a["hdr"], b["hdr"])
-            if not c["traj_same"]:
-                c["traj_first_diff"] = next(((k, x, y) for k in sorted(a["traj"])
-                                             for x, y in zip(a["traj"][k], b["traj"][k]) if x != y), None)
+            if a["ext"] is not None:
+                c["ext_count_same"] = a["ext"]["by"] == b["ext"]["by"]
+                c["ext_pos_same"] = a["ext"]["pos"] == b["ext"]["pos"]
+                if not c["ext_count_same"]:
+                    c["ext_count_diff"] = {k: (a["ext"]["by"].get(k), b["ext"]["by"].get(k))
+                                           for k in set(a["ext"]["by"]) | set(b["ext"]["by"])
+                                           if a["ext"]["by"].get(k) != b["ext"]["by"].get(k)}
             pairs[f"1v{i}"] = c
         report[var] = {"compare": pairs, "runs": [r["info"] for r in runs]}
-    base.mkdir(parents=True, exist_ok=True)
-    (base / "det.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    print(json.dumps(report, ensure_ascii=False, default=str))
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "det.json").write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    print(json.dumps({k: x["compare"] for k, x in report.items()}, ensure_ascii=False, default=str)[:4000])
 
 
 def dist(a: tuple, b: tuple) -> float:
