@@ -86,6 +86,7 @@ sequenceDiagram
 | `freerun` | `rate`. 0은 최대 속도 | 아님 | Core만 빠르게 돌릴 때 |
 
 - 모드는 시나리오 `run.mode`로 정하고, Core의 `--mode`, `--rate`로 바꿀 수 있다.
+- 배속 0(최대 속도)은 Core의 `--rate 0`으로만 준다. 시나리오의 `run.rate`는 0보다 커야 한다.
 
 ## 4.4 lockstep
 
@@ -151,4 +152,4 @@ flowchart LR
 - listen 주소에 `127.0.0.1` 대신 실제 주소나 `0.0.0.0`을 쓴다.
 - 브라우저는 브리지 주소를 URL의 `bridge=`로 준다.
 
-다음: 5장 GCS UI 조작(작성 예정), [7. 데이터링크 상황 만들기](07_link.md).
+다음: [5. GCS UI 조작](05_ui.md), [7. 데이터링크 상황 만들기](07_link.md).

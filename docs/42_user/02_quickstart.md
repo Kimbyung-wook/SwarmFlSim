@@ -22,7 +22,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 3. 지도를 우클릭해 임무 창에서 이동을 고르고 전송한다.
 4. 명령 패널에 기체별 상태가 수행 → 완료로 바뀐다.
 
-UI 조작 전체는 5장(작성 예정), 지금은 [ui/README.md](../../ui/README.md)의 입력 표를 본다.
+UI 조작 전체는 [5장](05_ui.md)을 본다.
 
 ![P0 데모 2D 지도](../img/p0_demo/01_live_2d_20uav.jpg)
 

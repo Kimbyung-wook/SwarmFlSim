@@ -88,4 +88,4 @@ uv run python qa/inject_fault.py --connect tcp/127.0.0.1:17601 --entity uav-003 
 
 ## 7.5 결과 확인
 
-Traffic Monitor의 통계 표와 타임라인에 손실 사유가 나온다. 화면 읽는 법은 [ui/monitor/README.md](../../ui/monitor/README.md), 6장(작성 예정). 지나간 실행은 [8장](08_record_replay.md)으로 재생해 같은 화면에서 본다.
+Traffic Monitor의 통계 표와 타임라인에 손실 사유가 나온다. 화면 읽는 법은 [6장](06_monitor.md). 지나간 실행은 [8장](08_record_replay.md)으로 재생해 같은 화면에서 본다.
