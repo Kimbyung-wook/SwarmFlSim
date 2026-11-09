@@ -8,7 +8,7 @@
 
 | 경로 | 내용 |
 |---|---|
-| `src/swarm_algorithms/common.py` | `TaskTracker`, `TaskPilot`, `peer_status`, `every` |
+| `src/swarm_algorithms/common.py` | `TaskTracker`, `TaskPilot`, `PlanWatcher`, `peer_status`, `every` |
 | `src/swarm_algorithms/hold.py` | `hold` |
 | `src/swarm_algorithms/waypoint.py` | `waypoint` |
 | `src/swarm_algorithms/formation.py` | `formation` |
@@ -33,6 +33,7 @@ uv run pytest algorithms/tests
 ## 알려진 제약
 
 - `flocking`은 Route를 거부한다.
+- 실행 중 받은 `MissionPlan`과 `RoutePlan`의 규칙은 [4.7](../04_ma_plugin.md#47-재사용-부품)에 있다. `RoutePlan`을 수행하는 내장 MA는 `waypoint`뿐이다.
 - 기본 MA는 `track`, `strike`, `jam` 작업을 수행하지 않는다.
 - 다른 기체 정보는 데이터링크로 받은 `PeerStatus`만 쓴다. 링크가 나쁘면 편대 품질이 함께 나빠지는 것은 의도한 동작이다.
 
