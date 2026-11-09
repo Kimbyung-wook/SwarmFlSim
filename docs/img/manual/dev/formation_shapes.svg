@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <title>Formation shapes in the leader FRD frame. L = leader, numbers = follower order k + 1, s = spacing_m</title>
+  <defs>
+    <g id="lead"><polygon points="0,-11 9,8 0,3 -9,8" fill="#c0392b"/></g>
+    <g id="f"><polygon points="0,-9 7,7 0,3 -7,7" fill="#2c6fbb"/></g>
+  </defs>
+  <rect width="900" height="560" fill="#ffffff"/>
+  <g fill="none" stroke="#d5d9df">
+    <rect x="10" y="10" width="285" height="260"/><rect x="307" y="10" width="285" height="260"/><rect x="604" y="10" width="285" height="260"/>
+    <rect x="10" y="290" width="285" height="260"/><rect x="307" y="290" width="285" height="260"/><rect x="604" y="290" width="285" height="260"/>
+  </g>
+  <g font-weight="bold" fill="#222">
+    <text x="24" y="36">LINE</text><text x="321" y="36">COLUMN</text><text x="618" y="36">WEDGE</text>
+    <text x="24" y="316">ECHELON</text><text x="321" y="316">CIRCLE</text><text x="618" y="316">CUSTOM</text>
+  </g>
+
+  <!-- LINE: (0, +-s*rank) -->
+  <g transform="translate(152,140)">
+    <use href="#lead"/>
+    <g transform="translate(55,0)"><use href="#f"/><text x="-4" y="30" fill="#333">1</text></g>
+    <g transform="translate(-55,0)"><use href="#f"/><text x="-4" y="30" fill="#333">2</text></g>
+    <g transform="translate(110,0)"><use href="#f"/><text x="-4" y="30" fill="#333">3</text></g>
+    <g transform="translate(-110,0)"><use href="#f"/><text x="-4" y="30" fill="#333">4</text></g>
+  </g>
+
+  <!-- COLUMN: (-s(k+1), 0) -->
+  <g transform="translate(449,62)">
+    <use href="#lead"/>
+    <g transform="translate(0,48)"><use href="#f"/><text x="16" y="5" fill="#333">1</text></g>
+    <g transform="translate(0,96)"><use href="#f"/><text x="16" y="5" fill="#333">2</text></g>
+    <g transform="translate(0,144)"><use href="#f"/><text x="16" y="5" fill="#333">3</text></g>
+    <g transform="translate(0,192)"><use href="#f"/><text x="16" y="5" fill="#333">4</text></g>
+  </g>
+
+  <!-- WEDGE: (-s*r, +-s*r) -->
+  <g transform="translate(746,76)">
+    <use href="#lead"/>
+    <g transform="translate(62,62)"><use href="#f"/><text x="14" y="5" fill="#333">1</text></g>
+    <g transform="translate(-62,62)"><use href="#f"/><text x="-24" y="5" fill="#333">2</text></g>
+    <g transform="translate(124,124)"><use href="#f"/><text x="-4" y="30" fill="#333">3</text></g>
+    <g transform="translate(-124,124)"><use href="#f"/><text x="-4" y="30" fill="#333">4</text></g>
+  </g>
+
+  <!-- ECHELON: (-s(k+1), s(k+1)) -->
+  <g transform="translate(62,348)">
+    <use href="#lead"/>
+    <g transform="translate(46,46)"><use href="#f"/><text x="14" y="5" fill="#333">1</text></g>
+    <g transform="translate(92,92)"><use href="#f"/><text x="14" y="5" fill="#333">2</text></g>
+    <g transform="translate(138,138)"><use href="#f"/><text x="14" y="5" fill="#333">3</text></g>
+    <g transform="translate(184,184)"><use href="#f"/><text x="-4" y="-14" fill="#333">4</text></g>
+  </g>
+
+  <!-- CIRCLE: (s cos th, s sin th), th = 2 pi k / n -->
+  <g transform="translate(449,425)">
+    <circle r="85" fill="none" stroke="#b9c0c9" stroke-dasharray="5 5"/>
+    <use href="#lead"/>
+    <g transform="translate(0,-85)"><use href="#f"/><text x="14" y="5" fill="#333">1</text></g>
+    <g transform="translate(85,0)"><use href="#f"/><text x="14" y="5" fill="#333">2</text></g>
+    <g transform="translate(0,85)"><use href="#f"/><text x="14" y="5" fill="#333">3</text></g>
+    <g transform="translate(-85,0)"><use href="#f"/><text x="-24" y="5" fill="#333">4</text></g>
+  </g>
+
+  <!-- CUSTOM: custom_offsets_m -->
+  <g transform="translate(746,420)">
+    <use href="#lead"/>
+    <g transform="translate(-90,-40)"><use href="#f"/></g>
+    <g transform="translate(40,60)"><use href="#f"/></g>
+    <g transform="translate(100,-70)"><use href="#f"/></g>
+    <g transform="translate(-40,90)"><use href="#f"/></g>
+    <text x="-112" y="118" fill="#555">custom_offsets_m (members order)</text>
+  </g>
+</svg>

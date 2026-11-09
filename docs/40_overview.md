@@ -147,7 +147,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 | `gateway/` | WP9 | A-GRA Gateway. 독립 uv 프로젝트 | `python -m swarm_gateway` |
 | `third_party/agra_lacal` | WP9 | LA-CAL 서브모듈(수정하지 않음) | — |
 | `qa/` | QA | 시험 하니스, QA 시나리오, 결정성 진단 | `qa/run_qa.py` |
-| `examples/plugins/` | — | 플러그인 예제 패키지. S3에서 만들 예정(DEC-070) | — |
+| `examples/plugins/` | — | 플러그인 예제 패키지(DEC-070). MA 3종, FA 1종 | — |
 | `docs/` | — | 계획·계약·등록부·매뉴얼 | — |
 
 - C++ 실행 파일은 `build/<프리셋>/<디렉터리>/`에 생긴다. Python 진입점은 `uv run <이름>`으로 실행한다.
