@@ -32,6 +32,7 @@ flowchart LR
 | IMP-AGT-020 | 레이스트랙 선회 대기(DEC-034): `HoldTask.racetrack`·`LoiterAction.racetrack`이 있으면 `TaskPilot`이 `CurveCommand.racetrack`을 FA에 보낸다(중심·반경·방향은 작업에서, duration 처리는 원형과 같고 체류 판정은 경로 오차). `leg_length_m < 0`은 REJECTED. flocking Hold는 vector_field 침로로 레이스트랙을 따른다 | `src/swarm_algorithms/common.py`, `flocking.py` | REQ-BHV-002, DEC-034 | Pass (TC-AGT-028) |
 | IMP-AGT-022 | MA 플러그인 `PARAMS` 선언·`on_params`(DEC-035): hold(orbit_radius_m, 변경 시 재명령), waypoint(acceptance_m·hold_radius_m·speed_mps), formation(peer_hz·leader_speed_mps·k_p·corr_max_mps·leader_timeout_s·acceptance_m·hold_radius_m·group), flocking(기존 `_DEFAULTS` 11개 + group, 기체별 값). 계층은 행위·결정, `group`은 `runtime=False`. flocking `_DEFAULTS`는 `PARAMS`에서 만든다 | `src/swarm_algorithms/hold.py`, `waypoint.py`, `formation.py`, `flocking.py` | REQ-CFG-003, DEC-035 | Pass (TC-AGT-034, agent/tests/test_agent_params.py) |
 | IMP-AGT-034 | 실행 중 받은 `MissionPlan` 반영(DEC-076, CR-GW-008): `PlanWatcher`가 MP 포트의 계획 중 처음 보는 `plan_id`만 내주고, `TaskTracker.update`와 `formation.on_step`이 틱마다 확인한다. 같은 `plan_id`는 내용이 달라도 무시. **새 `plan_id`는 교체**: C2 `TaskCommand`가 받는 즉시 현재 작업을 밀어내는 규칙(현재 작업 CANCELLED `preempted`, 같은 `task_id`면 취소 보고 없이 내용 교체)과 맞췄고, 계획은 순서가 있는 작업 묶음이므로 대기열도 새 계획으로 바꾼다(시작 전 작업도 CANCELLED). 이 기체 몫의 유효한 작업이 없는 계획은 C2의 다른 기체 명령·REJECTED처럼 현재 작업을 밀어내지 않는다. 지원하지 않거나 값이 잘못된 작업은 C2처럼 REJECTED(초기 계획은 기존대로 건너뜀). 다른 기체 작업은 `MPPortImpl._own`이 거른다. 편대는 계획에 이 기체의 편대가 있을 때만 바꾼다. 틱 안에서 확인하므로 lockstep 결정성 유지. 포트는 최신 계획만 들고 있어 한 틱에 두 계획이 닿으면 마지막 것만 수행한다 | `src/swarm_algorithms/common.py`, `formation.py` | DEC-076, CR-GW-008, DEC-033, DEC-038 | TC-AGT-075~081 Pass |
+| IMP-AGT-035 | RoutePlan과 작업의 관계(D-29, O-26): `waypoint`는 `RoutePlan`을 틱의 `pilot.step()` 뒤에 본다. **같은 ID의 계획 작업이 있으면 비행하지 않는다**: Gateway는 참조된 RoutePlan의 `route_id`를 `task_id`로 쓰므로(`gateway/.../converters/mp.py` `_route_to_task`) 그 작업이 수행하고, 도착 순서·같은 틱과 무관하게 COMPLETED로 끝난다. RoutePlan이 먼저 오면 뒤따른 계획이 같은 ID로 넘겨받는다. **계획에 없는 단독 RoutePlan**은 기존처럼 바로 비행하되 비행 명령을 직접 내지 않고 상태 보고 없는 작업(`TaskTracker.run_quiet`)으로 돈다. 근거: C2 `TaskCommand`가 받는 즉시 현재 작업을 밀어내는 규칙과 맞춰, 수행 중 작업은 CANCELLED(`preempted`)로 끝낸다(O-26: EXECUTING으로 남지 않음). 대기 작업은 C2처럼 그대로 두고 항로가 끝나면 잇는다. RoutePlan 자체의 TaskStatus는 지금처럼 없다. 값이 잘못된 RoutePlan은 현재 작업을 건드리지 않고 MD `route_plan_invalid`만 남긴다. 비행 명령 ID는 `<id>-route-<route_id>`에서 `<id>-task-<n>`으로 바뀐다 | `src/swarm_algorithms/waypoint.py`, `common.py` | D-29, O-26, DEC-076, DEC-033 | TC-AGT-082~087 Pass |
 
 ## TC
 
@@ -61,5 +62,11 @@ flowchart LR
 | TC-AGT-079 | 다른 기체에 배정된 작업은 제외. 이 기체 몫이 없는 계획은 현재 작업을 밀어내지 않음 | `tests/test_alg_plan_update.py` | IMP-AGT-034 | Pass |
 | TC-AGT-080 | 지원하지 않는 작업 REJECTED, 유효 작업이 없는 계획은 밀어내지 않음. flocking 수신, formation 실행 중 편대 적용·같은 plan_id 재적용 없음 | `tests/test_alg_plan_update.py` | IMP-AGT-034 | Pass |
 | TC-AGT-081 | 같은 입력이면 GCS 수신 메시지와 기체 위치가 같음(waypoint, flocking) | `tests/test_alg_plan_update.py` | IMP-AGT-034 | Pass |
+| TC-AGT-082 | RoutePlan이 먼저 오고 참조 MissionPlan이 뒤따르면 작업이 COMPLETED(1점 move_to, 2점 route) | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
+| TC-AGT-083 | MissionPlan이 먼저 오고 RoutePlan이 뒤따라도 작업이 COMPLETED(1점, 2점) | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
+| TC-AGT-084 | 같은 틱(발행 순서 양쪽)에 받아도 작업이 COMPLETED(1점, 2점) | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
+| TC-AGT-085 | 수행 중 작업이 있을 때 단독 RoutePlan: 작업 CANCELLED(preempted), 항로 비행, 항로 TaskStatus 없음, 끝나면 대기 작업 이어감 | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
+| TC-AGT-086 | 유휴 상태의 단독 RoutePlan 비행, 계획이 끝난 뒤 늦게 온 같은 ID의 RoutePlan은 다시 비행하지 않음 | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
+| TC-AGT-087 | 같은 입력이면 GCS 수신 메시지·FlightCommandStatus·기체 위치가 같음 | `tests/test_alg_route_plan.py` | IMP-AGT-035 | Pass |
 
-시험 결과(2026-11-09): algorithms/tests 62 passed (기존 26 + DEC-038 임무 값 검증 26 + DEC-076 실행 중 계획 10, TC-AGT-040~043은 agent/TRACE.md)
+시험 결과(2026-11-09): algorithms/tests 74 passed (기존 26 + DEC-038 임무 값 검증 26 + DEC-076 실행 중 계획 10 + D-29 RoutePlan 12, TC-AGT-040~043은 agent/TRACE.md)
