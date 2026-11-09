@@ -35,7 +35,7 @@ The full rules are in [01_id_convention.md](../../01_id_convention.md) (Korean).
 
 ## 9.4 Commits and branches
 
-- Put the related IDs in the commit message. Example: `IMP-CORE-003: RK45 적분기 추가 (REQ-DYN-004, DEC-005)`
+- Put the related IDs in the commit message. Example: `IMP-CORE-003: add RK45 integrator (REQ-DYN-004, DEC-005)`
 - Parallel sessions work in their own worktree branched from `wp0-contracts` (DEC-015, DEC-021).
 - Commit only to your own worktree branch. The integrator (PM) does the merging.
 
