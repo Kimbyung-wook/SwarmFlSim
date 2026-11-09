@@ -1,0 +1,35 @@
+# 플러그인 예제 패키지 (DEC-070). 개발자 매뉴얼 4·5장이 이 파일들을 가리킨다.
+# 새 플러그인을 만들 때 이 파일과 src/를 복사해 시작한다.
+[project]
+name = "swarm-plugin-examples"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "swarm-api",
+    "swarm-agent",
+    "swarm-algorithms",  # TaskPilot을 재사용하는 예제(example_patrol)만 쓴다
+    "numpy>=2.0",
+    "protobuf>=5.28",
+]
+
+# 왼쪽 이름을 시나리오의 autonomy.ma_plugin에 쓴다
+[project.entry-points."swarm.ma"]
+example_turn = "swarm_plugin_examples.turn:TurnToHeading"
+example_patrol = "swarm_plugin_examples.patrol:Patrol"
+example_rendezvous = "swarm_plugin_examples.rendezvous:Rendezvous"
+
+# 왼쪽 이름을 시나리오의 autonomy.fa_plugin에 쓴다
+[project.entry-points."swarm.fa"]
+example_hsa = "swarm_plugin_examples.hsa_fa:HsaOnlyFlightAutonomy"
+
+[tool.uv.sources]
+swarm-api = { workspace = true }
+swarm-agent = { workspace = true }
+swarm-algorithms = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/swarm_plugin_examples"]

@@ -9,6 +9,7 @@ members = [
     "swarm-api",
     "swarm-bridge",
     "swarm-flight",
+    "swarm-plugin-examples",
     "swarm-scenario",
 ]
 
@@ -541,6 +542,7 @@ dev = [
     { name = "swarm-algorithms" },
     { name = "swarm-api", extra = ["zenoh"] },
     { name = "swarm-bridge" },
+    { name = "swarm-plugin-examples" },
     { name = "swarm-scenario" },
 ]
 
@@ -554,7 +556,29 @@ dev = [
     { name = "swarm-algorithms", editable = "algorithms" },
     { name = "swarm-api", extras = ["zenoh"], editable = "api/python" },
     { name = "swarm-bridge", editable = "bridge" },
+    { name = "swarm-plugin-examples", editable = "examples/plugins" },
     { name = "swarm-scenario", editable = "scenario" },
+]
+
+[[package]]
+name = "swarm-plugin-examples"
+version = "0.1.0"
+source = { editable = "examples/plugins" }
+dependencies = [
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "swarm-agent" },
+    { name = "swarm-algorithms" },
+    { name = "swarm-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "protobuf", specifier = ">=5.28" },
+    { name = "swarm-agent", editable = "agent" },
+    { name = "swarm-algorithms", editable = "algorithms" },
+    { name = "swarm-api", editable = "api/python" },
 ]
 
 [[package]]

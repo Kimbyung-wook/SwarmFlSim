@@ -8,7 +8,7 @@ package = false
 
 # Python 패키지를 만드는 WP는 여기에 디렉터리를 추가한다 (DEC-021)
 [tool.uv.workspace]
-members = ["api/python", "scenario", "bridge", "agent", "algorithms"]
+members = ["api/python", "scenario", "bridge", "agent", "algorithms", "examples/plugins"]
 
 [tool.uv.sources]
 swarm-api = { workspace = true }
@@ -16,6 +16,7 @@ swarm-scenario = { workspace = true }
 swarm-bridge = { workspace = true }
 swarm-agent = { workspace = true }
 swarm-algorithms = { workspace = true }
+swarm-plugin-examples = { workspace = true }
 
 # 워크스페이스 패키지를 추가하면 dev 그룹과 testpaths에도 넣는다
 [dependency-groups]
@@ -25,9 +26,10 @@ dev = [
     "swarm-bridge",
     "swarm-agent",
     "swarm-algorithms",
+    "swarm-plugin-examples",
     "pytest>=8",
     "grpcio-tools>=1.66",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["api/python/tests", "scenario/tests", "bridge/tests", "agent/tests", "algorithms/tests"]
+testpaths = ["api/python/tests", "scenario/tests", "bridge/tests", "agent/tests", "algorithms/tests", "examples/plugins/tests"]

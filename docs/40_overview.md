@@ -147,7 +147,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 | `gateway/` | WP9 | A-GRA Gateway. 독립 uv 프로젝트 | `python -m swarm_gateway` |
 | `third_party/agra_lacal` | WP9 | LA-CAL 서브모듈(수정하지 않음) | — |
 | `qa/` | QA | 시험 하니스, QA 시나리오, 결정성 진단 | `qa/run_qa.py` |
-| `examples/plugins/` | — | 플러그인 예제 패키지. S3에서 만들 예정(DEC-070) | — |
+| `examples/plugins/` | — | 플러그인 예제 패키지(DEC-070). MA 3종, FA 1종 | — |
 | `docs/` | — | 계획·계약·등록부·매뉴얼 | — |
 
 - C++ 실행 파일은 `build/<프리셋>/<디렉터리>/`에 생긴다. Python 진입점은 `uv run <이름>`으로 실행한다.
@@ -164,7 +164,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 | P3 | Aerosonde 6-DoF가 VI 제어 모드 추종, RK45/RK4 오차 비교 | 부분 | RK45·RK4와 오차 시험은 있다. 5·6-DoF 미구현 |
 | P4 | 4대 PC에 분산해 300대 실행 | 미착수 | 단일 PC에서 100기까지 QA 부하 시험 |
 | P5 | 센서·재머·시뮬레이션 이벤트 시나리오, 효과 반경 판정 | 기능 구현 | WP8 Payload Core 통합, QA 종단 시험([21_qa_report.md §14](21_qa_report.md#14-6차-시험-p5-종단-시험-2026-11-05)) |
-| P6 | VI·C2·P2P 주요 상호작용을 agra_lacal과 교환 | 완료 | DEC-074. 통합 실행 확인 TC-QA-069~074, 078~084([21_qa_report.md §24.12](21_qa_report.md#2412-p6-완료-판정-의견)). 미결: OPN-061~063, 발신 코드가 없는 UCI 4종(ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), D-28, O-16, O-19 |
+| P6 | VI·C2·P2P 주요 상호작용을 agra_lacal과 교환 | 완료 | DEC-074. 통합 실행 확인 TC-QA-069~074, 078~084([21_qa_report.md §24.12](21_qa_report.md#2412-p6-완료-판정-의견)). 미결: OPN-061~063, 발신 코드가 없는 UCI 4종(ApprovalRequest, LeaderUpdate, MA_Entity, StoreLoadout), O-16, O-19 |
 | P7 | L1 컴플라이언스 하네스 통과 | 미착수 | |
 | P8 | PX4/ArduPilot SITL 기체 1대 이상 연동 | 미착수 | |
 

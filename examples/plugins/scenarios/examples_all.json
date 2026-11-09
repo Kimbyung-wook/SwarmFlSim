@@ -1,0 +1,69 @@
+{
+  "schema_version": "0.1",
+  "name": "plugin-examples",
+  "description": "플러그인 예제 4종을 함께 돌리는 시나리오 (DEC-070)",
+  "map": {
+    "origin": { "lat_deg": 37.5, "lon_deg": 128.0, "alt_m": 100.0 },
+    "extent": { "south_deg": 37.3, "north_deg": 37.7, "west_deg": 127.8, "east_deg": 128.2 }
+  },
+  "run": {
+    "mode": "lockstep",
+    "frame_hz": 50,
+    "seed": 7,
+    "rate": 1.0,
+    "participants": ["agent-0", "datalink-0"]
+  },
+  "entities": [
+    {
+      "id": "gcs-01", "kind": "gcs", "side": "blue", "dynamics": "static",
+      "initial": { "position": { "lat_deg": 37.5, "lon_deg": 128.0, "alt_m": 100.0 } },
+      "link_profile": "gcs_default"
+    },
+    {
+      "id": "uav-turn", "kind": "uav", "side": "blue", "dynamics": "dof2",
+      "initial": {
+        "position": { "lat_deg": 37.50, "lon_deg": 127.98, "alt_m": 1200.0 },
+        "velocity_ned_mps": { "x": 22.0, "y": 0.0, "z": 0.0 }
+      },
+      "autonomy": { "ma_plugin": "example_turn", "ma_params": { "heading_deg": 120.0 }, "fa_plugin": "example_hsa" },
+      "link_profile": "uav_default", "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-patrol", "kind": "uav", "side": "blue", "dynamics": "dof2",
+      "initial": {
+        "position": { "lat_deg": 37.52, "lon_deg": 127.98, "alt_m": 1200.0 },
+        "velocity_ned_mps": { "x": 22.0, "y": 0.0, "z": 0.0 }
+      },
+      "autonomy": { "ma_plugin": "example_patrol" },
+      "link_profile": "uav_default", "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-rdv-1", "kind": "uav", "side": "blue", "dynamics": "dof2",
+      "initial": {
+        "position": { "lat_deg": 37.50, "lon_deg": 128.02, "alt_m": 1200.0 },
+        "velocity_ned_mps": { "x": 22.0, "y": 0.0, "z": 0.0 }
+      },
+      "autonomy": { "ma_plugin": "example_rendezvous" },
+      "link_profile": "uav_default", "controlling_gcs": "gcs-01"
+    },
+    {
+      "id": "uav-rdv-2", "kind": "uav", "side": "blue", "dynamics": "dof2",
+      "initial": {
+        "position": { "lat_deg": 37.50, "lon_deg": 128.05, "alt_m": 1200.0 },
+        "velocity_ned_mps": { "x": 22.0, "y": 0.0, "z": 0.0 }
+      },
+      "autonomy": { "ma_plugin": "example_rendezvous" },
+      "link_profile": "uav_default", "controlling_gcs": "gcs-01"
+    }
+  ],
+  "mission_plan": {
+    "plan_id": "plan-examples",
+    "tasks": [
+      {
+        "task_id": "task-move",
+        "assignees": ["uav-patrol"],
+        "move_to": { "destination": { "lat_deg": 37.53, "lon_deg": 127.98, "alt_m": 1200.0 }, "speed_mps": 25.0 }
+      }
+    ]
+  }
+}

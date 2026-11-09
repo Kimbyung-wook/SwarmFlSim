@@ -12,11 +12,11 @@
 | 2 | [`02_quickstart.md`](02_quickstart.md) | 빠른 시작: 데모 실행기로 한 번에 띄우기, 이동 명령, 종료 | 작성됨 |
 | 3 | [`03_scenario.md`](03_scenario.md) | 시나리오 작성: 구조, 엔티티, 자율 플러그인, 링크 프로파일, 임무 계획, 탑재 장비, 검증 | 작성됨 |
 | 4 | [`04_run.md`](04_run.md) | 실행: 프로세스별 실행, 실행 모드와 배속, 지형 옵션, 여러 PC 실행 | 작성됨 |
-| 5 | `05_ui.md` | GCS UI 조작: 선택, 임무 창, 명령 패널, 매개변수, 카메라, 이벤트 전시 | 작성 예정 |
-| 6 | `06_monitor.md` | Traffic Monitor: 화면 읽는 법, 손실 사유, 집계 정의 | 작성 예정 |
+| 5 | [`05_ui.md`](05_ui.md) | GCS UI 조작: 선택, 임무 창, 명령 패널, 매개변수, 카메라, 이벤트 전시 | 작성됨 |
+| 6 | [`06_monitor.md`](06_monitor.md) | Traffic Monitor: 화면 읽는 법, 손실 사유, 집계 정의 | 작성됨 |
 | 7 | [`07_link.md`](07_link.md) | 데이터링크 상황 만들기: 링크 프로파일, 재밍 구역, 고장 주입 | 작성됨 |
 | 8 | [`08_record_replay.md`](08_record_replay.md) | 기록과 재생: `swarm_logger`, 재생 중 표시 | 작성됨 |
-| 9 | `09_gateway.md` | A-GRA Gateway 연동: 교환 메시지, 실행 순서, 외부 C2 규칙 | 작성 예정 |
+| 9 | [`09_gateway.md`](09_gateway.md) | A-GRA Gateway 연동: 교환 메시지, 실행 순서, 외부 C2 규칙 | 작성됨 |
 | 10 | [`10_faq.md`](10_faq.md) | 문제 해결: 증상별 조치 | 작성됨 |
 
 - 지금 바로 실행해 보려면 [20_p0_demo.md](../20_p0_demo.md)를 따른다.

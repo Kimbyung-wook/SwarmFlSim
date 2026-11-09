@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 400" font-family="Arial, Helvetica, sans-serif" font-size="15">
+  <title>Racetrack definition: center, radius_m, leg_length_m, axis_heading_deg, direction</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#333"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2c6fbb"/></marker>
+  </defs>
+  <rect width="860" height="400" fill="#ffffff"/>
+
+  <!-- 축이 진북에서 시계 방향으로 60도. 그림 좌표: 원 1 중심 (560,120), 원 2 중심 (240,305)  -->
+  <g transform="translate(400,205) rotate(-30) scale(0.72)">
+    <line x1="-290" y1="0" x2="290" y2="0" stroke="#9aa3ad" stroke-dasharray="6 5"/>
+    <path d="M -185 -110 L 185 -110 A 110 110 0 0 1 185 110 L -185 110 A 110 110 0 0 1 -185 -110 Z" fill="none" stroke="#2c6fbb" stroke-width="3"/>
+    <line x1="-20" y1="-110" x2="30" y2="-110" stroke="#2c6fbb" stroke-width="3" marker-end="url(#b)"/>
+    <line x1="20" y1="110" x2="-30" y2="110" stroke="#2c6fbb" stroke-width="3" marker-end="url(#b)"/>
+    <circle cx="185" cy="0" r="4" fill="#333"/><circle cx="-185" cy="0" r="4" fill="#333"/>
+    <circle cx="0" cy="0" r="6" fill="#c0392b"/>
+    <line x1="-185" y1="46" x2="185" y2="46" stroke="#333" marker-start="url(#a)" marker-end="url(#a)"/>
+    <line x1="185" y1="0" x2="185" y2="-110" stroke="#333" marker-end="url(#a)"/>
+  </g>
+  <g fill="#222">
+    <text x="412" y="200">center</text>
+    <text x="352" y="262" transform="rotate(-30 352 262)">leg_length_m (L)</text>
+    <text x="486" y="62">radius_m (R)</text>
+    <text x="592" y="100" fill="#555">axis</text>
+    <text x="228" y="125" fill="#2c6fbb">direction = CW</text>
+  </g>
+
+  <!-- 진북과 축 방위 -->
+  <g transform="translate(75,330)">
+    <line x1="0" y1="0" x2="0" y2="-90" stroke="#333" marker-end="url(#a)"/>
+    <text x="-6" y="-97" font-weight="bold">N</text>
+    <line x1="0" y1="0" x2="78" y2="-45" stroke="#333" marker-end="url(#a)"/>
+    <path d="M0 -50 A50 50 0 0 1 43 -25" fill="none" stroke="#c0392b"/>
+    <text x="16" y="-64" fill="#c0392b" font-size="13">axis_heading_deg</text>
+  </g>
+</svg>
