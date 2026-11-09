@@ -228,8 +228,8 @@ def test_tc_agt_009_onboard_ms_and_mp_ports():
     h.bus.put(keys.onboard("uav-001", "Detection"), det.SerializeToString(), "")
     act = ms_pb2.StrikeActivity(payload_id="sta1", state=ms_pb2.STRIKE_STATE_LAUNCHED)
     h.bus.put(keys.onboard("uav-001", "StrikeActivity"), act.SerializeToString(), "")
-    h.core.step(1)
-    seen = [m.DESCRIPTOR.name for s in Spy.instances for _, m in s.seen]
+    h.core.step(3)                     # lockstep: 프레임 0의 임무장비 출력은 틱 2에 처리한다 (D-30)
+    seen =[m.DESCRIPTOR.name for s in Spy.instances for _, m in s.seen]
     assert "Detection" in seen and "StrikeActivity" in seen
     assert v.ports.ms.loadout().stores[0].count == 1
     # ms.command는 onboard/<id>/<msg>로 나간다

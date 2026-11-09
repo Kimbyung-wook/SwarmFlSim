@@ -9,7 +9,7 @@ from swarm_api.bus import protobuf_encoding
 def put_sensor(h: Harness, active: bool, eid: str = "uav-001", hfov: float = 30.0) -> None:
     m = ms_pb2.SensorActivity(payload_id="eo-1", active=active, hfov_deg=hfov)
     m.header.source = eid
-    m.header.frame = h.core.frame  # 헤더만 다른 값은 변화가 아니다
+    m.header.frame = h.core.frame - 2  # 이번 틱에 처리될 프레임 (D-30). 헤더만 다른 값은 변화가 아니다
     h.bus.put(keys.onboard(eid, "SensorActivity"), m.SerializeToString(), protobuf_encoding(m.DESCRIPTOR.full_name))
 
 
@@ -149,7 +149,7 @@ def put_strikes(h: Harness, items: list[tuple[str, int]], eid: str = "uav-001") 
     for weapon, state in items:
         m = S.StrikeActivity(payload_id="wpn-1", weapon_entity=weapon, state=state)
         m.header.source = eid
-        m.header.frame = h.core.frame
+        m.header.frame = h.core.frame - 2
         h.bus.put(keys.onboard(eid, "StrikeActivity"), m.SerializeToString(), protobuf_encoding(m.DESCRIPTOR.full_name))
 
 

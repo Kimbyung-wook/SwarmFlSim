@@ -31,7 +31,7 @@ def names(rx, name: str) -> list:
 def put_status(h: Harness, energy: float, eid: str = "uav-001") -> None:
     m = vi_pb2.SystemStatus(health=vi_pb2.HEALTH_NOMINAL, energy_frac=energy)
     m.header.source = eid
-    m.header.frame = h.core.frame          # 헤더만 다른 값은 변화가 아니다
+    m.header.frame = h.core.frame - 1      # 이번 틱에 처리될 프레임 (D-30). 헤더만 다른 값은 변화가 아니다
     h.bus.put(keys.onboard(eid, "SystemStatus"), m.SerializeToString(), protobuf_encoding(m.DESCRIPTOR.full_name))
 
 
