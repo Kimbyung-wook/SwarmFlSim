@@ -12,6 +12,11 @@ from jsonschema import Draft202012Validator
 KOREA_BOUNDS = {"south_deg": 33.0, "north_deg": 43.1, "west_deg": 124.0, "east_deg": 131.9}
 
 
+# IMP-SCN-011: Core가 받는 동역학 종류. 스키마·proto는 dof5·dof6를 담지만 구현은 로드맵 P3다.
+# P3에서 5·6-DoF가 구현되면 여기에 더한다 (이 한 곳만 고친다)
+IMPLEMENTED_DYNAMICS = frozenset({"dof2", "dof3", "scripted", "static"})
+
+
 @dataclass(frozen=True)
 class Issue:
     path: str  # JSON Pointer (예: /entities/3/id)
@@ -66,6 +71,9 @@ def _semantic(doc: dict[str, Any]) -> list[Issue]:
         if ent["id"] in kinds:
             issues.append(Issue(f"{base}/id", f"중복 ID {ent['id']!r}"))
         kinds.setdefault(ent["id"], ent["kind"])
+        if ent["dynamics"] not in IMPLEMENTED_DYNAMICS:
+            issues.append(Issue(f"{base}/dynamics", f"{ent['dynamics']!r}는 미구현(로드맵 P3)이다. "
+                                                    f"사용 가능: {', '.join(sorted(IMPLEMENTED_DYNAMICS))}"))
         if not _inside(extent, ent["initial"]["position"]):
             issues.append(Issue(f"{base}/initial/position", "맵 범위 밖이다"))
         for j, p in enumerate(ent.get("script_path", [])):

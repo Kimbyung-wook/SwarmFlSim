@@ -14,6 +14,7 @@
 | IMP-SCN-008 | 계약 0.4.0: `HoldTask` 매개변수, `route`(RouteTask)·`RouteWaypoint`(loiter·recon 중 하나)·`TurnDirection` 스키마. 0.5.0: `RacetrackShape`(hold·loiter) | `schema/scenario.schema.json` | DEC-033, DEC-034 |
 | IMP-SCN-009 | 계약 0.6.0: `EntitySpec.dynamics_params` 스키마 | `schema/scenario.schema.json` | DEC-035 |
 | IMP-SCN-010 | P5 페이로드 예제 시나리오: 고정익 5기(카메라 eo_wide·eo_narrow·ir_generic, AGM·AAM·FPV 혼합), 이동 지상 표적 3·공중 표적 1(스크립트), 재머 기지 1(아군 경로 중간을 덮음), 카메라 `overrides` 재정의 1건. 엔티티 ID ≤25자 | `examples/p5_payload_demo_5.json` | DEC-046, DEC-017, DEC-019, REQ-PAY-001 |
+| IMP-SCN-011 | 미구현 동역학 거부: 스키마·proto는 dof5·dof6를 담지만 검증기가 "미구현(로드맵 P3)"로 거부한다. 허용 목록 `IMPLEMENTED_DYNAMICS` 한 곳에서 관리하며 P3에서 5·6-DoF가 구현되면 여기에 더한다 | `src/swarm_scenario/validate.py` | REQ-CFG-002, DEC-005 |
 
 ## 시험
 
@@ -34,5 +35,6 @@
 | TC-SCN-011 | `dynamics_params`·`fa_params`·`ma_params` JSON ⇄ proto 왕복(수·문자열·불리언) | `tests/test_convert.py` | IMP-SCN-009 | Pass |
 | TC-SCN-012 | P5 예제가 스키마·의미 검증을 통과하고 구성(고정익 4~6, 스크립트 표적, 재머), 형식 혼합, 재정의 1건, ID ≤25자, 프로파일·재정의 키가 `payload/profiles`에 있음, 재머가 경로 일부를 덮음 | `tests/test_p5_example.py` | IMP-SCN-010 | Pass |
 | TC-SCN-013 | 변환한 .pb를 `swarm_core`가 적재(11 엔티티, 거부 없음)하고 1000 프레임 진행. 빌드가 없으면 건너뜀 | `tests/test_p5_example.py` | IMP-SCN-010, IMP-CORE-022 | Pass |
+| TC-SCN-014 | dof5·dof6가 `/entities/N/dynamics` 경로와 "미구현(로드맵 P3)" 메시지로 거부되고(`check`도 예외), 구현된 DoF(dof2·dof3·scripted·static)는 통과, 허용 목록에 dof5·dof6 없음 | `tests/test_validate.py` | IMP-SCN-011 | Pass |
 
 시험 결과(2026-11-05): 78 passed (TC-SCN-012~013 추가, 예제 검증 파라미터화 1건 포함)

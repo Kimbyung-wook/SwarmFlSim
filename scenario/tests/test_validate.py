@@ -5,6 +5,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from swarm_scenario import ScenarioError, check, schema, validate
+from swarm_scenario.validate import IMPLEMENTED_DYNAMICS
 from swarm_scenario.cli import main
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -127,3 +128,27 @@ def test_cli_validate(tmp_path, doc, capsys):
     assert main(["validate", str(good)]) == 0
     assert main(["validate", str(good), str(bad)]) == 1
     assert "/run/frame_hz" in capsys.readouterr().out
+
+
+# TC-SCN-014: 미구현 DoF(dof5·dof6)는 검증 단계에서 거부하고, 구현된 DoF는 통과한다 (IMP-SCN-011)
+@pytest.mark.parametrize("dyn", ["dof5", "dof6"])
+def test_unimplemented_dynamics_rejected(doc, dyn):
+    _uav(doc)["dynamics"] = dyn
+    issues = validate(doc)
+    hit = [i for i in issues if i.path == "/entities/1/dynamics"]
+    assert hit and "미구현(로드맵 P3)" in hit[0].message and dyn in hit[0].message, issues
+    with pytest.raises(ScenarioError, match="미구현"):
+        check(doc)
+
+
+@pytest.mark.parametrize("dyn", sorted(IMPLEMENTED_DYNAMICS))
+def test_implemented_dynamics_pass(doc, dyn):
+    ent = _uav(doc)
+    ent["dynamics"] = dyn
+    if dyn == "scripted":
+        ent["script_path"] = [ent["initial"]["position"], {**ent["initial"]["position"], "lat_deg": 37.4}]
+    assert [i for i in validate(doc) if i.path.endswith("/dynamics")] == []
+
+
+def test_dynamics_allowlist_single_place():
+    assert {"dof2", "dof3"} <= IMPLEMENTED_DYNAMICS and not {"dof5", "dof6"} & IMPLEMENTED_DYNAMICS
