@@ -57,6 +57,7 @@ flowchart LR
 | IMP-AGT-030 | 임무장비 상태 변화 보고 최대 빈도(DEC-056): 키별 마지막 송신 모의 시각을 두고 간격이 `round(1e6/activity_max_hz)` µs 미만이면 미뤘다가 다음 허용 틱에 그때 최신 값으로 보냄. 기본 10 Hz, CLI `--activity-max-hz`, 0 이하면 제한 없음. 1 s 경계 전체 보고는 제한과 별개(보낸 시각은 갱신). 판단은 모의 시간이라 결정적 | `src/swarm_agent/runtime.py`, `src/swarm_agent/cli.py` | REQ-PAY-002, DEC-056, DEC-051 | TC-AGT-051, 055~058 Pass |
 | IMP-AGT-031 | 무장별 보고 키(DEC-063): `StrikeActivity` 키를 (메시지, payload_id, weapon_entity)로 분리(비면 "" 그대로), Sensor·Jammer는 (메시지, payload_id). 10 Hz 상한은 새 키별. 종료 상태(IMPACT·MISSED·REJECTED)를 한 번 보낸 키는 상태 저장소에서 지워 1 Hz 전체 보고에서 빠지고, 그 송신 시각도 상한 간격이 지나면 버림. QA-026(같은 프레임 두 무장 변화 중 하나 누락) 해소 | `src/swarm_agent/runtime.py`, `src/swarm_agent/cli.py` | REQ-PAY-002, DEC-063, QA-026 | TC-AGT-059~062 Pass |
 | IMP-AGT-032 | 기체 VI 상태 GCS 자동 보고(DEC-071): 틱 시작(begin_frame 뒤, MA 전)에 `swarm/<id>/tx/vi/<Msg>`로 GCS(DEC-051과 같은 대상·LinkEnvelope·tx 키별 seq)에 보냄. 값의 출처: `FlightCapability`는 `Vehicle.capability`(FA `on_init` 반환)로 첫 틱 1회, `NavigationReport`는 `onboard/<id>/NavigationReport`의 최신 값을 `round(1e6/vi_report_hz)` µs 경계마다(기본 1 Hz, CLI `--vi-report-hz`, 0 이하면 끔), `SystemStatus`는 `onboard/<id>/SystemStatus`를 받을 때, `FlightCommandStatus`는 `VIPort.push_status`(FA `on_command`·`pending_status` 모두 거침)에서 가로채지 않고 복사해 command_id별 변화 보고. 변화 보고는 `--activity-max-hz` 키별 상한(DEC-056)과 최신 값 보내기, 종료 명령 상태(REJECTED·COMPLETED·FAILED·CANCELLED)를 보낸 키는 지움. 주기 전체 보고는 없음. 키별 추적은 `reporting.ChangeReporter`로 묶고 임무장비 보고(IMP-AGT-029~031)도 같은 클래스로 옮김. MA 플러그인과 무관 | `src/swarm_agent/reporting.py`, `runtime.py`, `vehicle.py`, `ports.py`, `cli.py` | DEC-071, OPN-064, DEC-056, DEC-044 | TC-AGT-049, 063~069 Pass |
+| IMP-AGT-033 | 비행 명령 갱신의 상태 역행 방지(D-28): 같은 `command_id`·종류로 갱신하면 `on_command`가 수행 중에는 EXECUTING, 수행 전에는 ACCEPTED를 돌려줌. 새 ID·종류 변경·REJECTED 처리는 그대로. 파이썬 FA 구현은 `DefaultFlightAutonomy`뿐이라 다른 곳은 고칠 것이 없음 | `src/swarm_agent/fa.py` | D-28, DEC-071 | TC-AGT-070~074 Pass |
 
 ## TC
 
@@ -120,8 +121,13 @@ flowchart LR
 | TC-AGT-067 | FlightCapability는 기체마다 첫 틱(0 s)에 1회, 값은 FA on_init 반환과 같음 | `tests/test_agent_vi_report.py` | IMP-AGT-032 | Pass |
 | TC-AGT-068 | MA 플러그인 hold·waypoint·flocking(일괄)·formation·legacy 모두 같은 VI 보고 | `tests/test_agent_vi_report.py` | IMP-AGT-032 | Pass |
 | TC-AGT-069 | lockstep에서 같은 입력 두 번 실행 시 GCS가 받은 VI 보고(메시지·시각·seq·내용)가 같음 | `tests/test_agent_vi_report.py` | IMP-AGT-032 | Pass |
+| TC-AGT-070 | 수행 중 같은 ID 갱신은 EXECUTING 유지, EXECUTING을 다시 내지 않음 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
+| TC-AGT-071 | 수행 전 갱신은 ACCEPTED 유지, 첫 FA 단계에 EXECUTING | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
+| TC-AGT-072 | 새 ID는 이전 명령 CANCELLED 후 ACCEPTED, 같은 ID라도 종류가 바뀌면 ACCEPTED, REJECTED는 그대로 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
+| TC-AGT-073 | flocking(매 프레임 같은 ID) 5 s: GCS가 받은 FlightCommandStatus가 command_id별로 역행·반복 없음 | `tests/test_agent_fa_status.py` | IMP-AGT-033, IMP-AGT-032 | Pass |
+| TC-AGT-074 | lockstep에서 같은 입력 두 번 실행 시 GCS가 받은 FlightCommandStatus가 같음 | `tests/test_agent_fa_status.py` | IMP-AGT-033 | Pass |
 
-시험 결과(2026-11-08): agent 75, algorithms 52 passed
+시험 결과(2026-11-09): agent 80, algorithms 52 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 
