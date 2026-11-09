@@ -2,6 +2,7 @@
 
 - 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
 - 계약 버전: 0.14.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 058ca00 병합)
+- 3차(2026-11-09): 문서 교차 검토 불일치 2건. Zenoh가 없으면 실패 종료, cp949 콘솔의 `--help` (wp0-contracts 6a85fb0 병합)
 - 2차(2026-11-08): DEC-072 구현(CR-GW-001 해소), QA 15차 D-27(`--no-multicast`), O-13(준비 전 구간 로그·문서). DEC-071(Agent의 VI 상태 GCS 보고)은 WP3 몫이며 Gateway는 기존 VI 변환기로 받는다
 - UCI 메시지명과 필드는 공개 XSD(`A-GRA_MessageDefinitions_v6_0_a.xsd`, Distribution A, 스키마 `006.0.ASK`)에서만 가져왔다. Distribution D 표기 문서는 참조하지 않았다.
 - P6 완료 기준 "VI·C2·P2P 주요 상호작용을 agra_lacal과 교환": TC-GW-010(실제 CAL Server 왕복)으로 보인다.
@@ -26,6 +27,8 @@
 | IMP-GW-015 | `uci_also` 매핑: 매핑 표가 `(uci_also)`를 descriptor에서 읽고(`uci_targets` = uci_name + uci_also), 추가 UCI는 UCI 메시지별 `AlsoConverter`(`register_also`, 엔트리 포인트 지원)가 맡는다. 어느 내부 메시지에 쓸지는 descriptor만 정한다. Gateway는 대상마다 따로 변환·검증·발행하고, 하나가 실패해도 나머지를 보낸다(`Outcome.also`) | `src/swarm_gateway/mapping.py`, `converters/base.py`, `gateway.py` | DEC-072, DEC-013 | TC-GW-012~014 통과 |
 | IMP-GW-016 | CLI `--no-multicast` → `BusConfig.multicast_scouting=False` | `src/swarm_gateway/__main__.py`, `README.md` | QA D-27, DEC-026 | TC-GW-009 통과 |
 | IMP-GW-017 | 준비 전 구간 로그: LA-CAL 접속(“not ready yet”), XSD 적재, SUB 완료, ready를 기동 기준 경과 s와 함께 INFO로 남기고 `Running.ready_after_s`에 둔다. README에 준비 전 상태를 적었다. 동작은 바꾸지 않았다(제안 P-GW-001) | `src/swarm_gateway/runner.py`, `README.md` | QA O-13 | TC-GW-015 통과 |
+| IMP-GW-018 | 버스 백엔드 선택: `--bus` 기본값을 `zenoh`로 고정하고 선택지는 `zenoh`, `memory`로 제한한다. 기본 실행에서 Zenoh를 쓸 수 없으면 버스·LA-CAL을 열지 않고 설치 방법을 stderr에 알리며 종료 코드 1로 끝난다. 인메모리 버스는 `--bus memory`를 줄 때만 쓰고 경고를 남긴다 | `src/swarm_gateway/__main__.py`, `README.md` | DEC-026, 문서 교차 검토 | TC-GW-016, TC-GW-017 통과 |
+| IMP-GW-019 | 콘솔 인코딩: 도움말의 `⇄`를 `<->`로 바꾸고, 진입점 시작에서 stdout·stderr를 `errors=replace`로 재설정해 표현할 수 없는 문자가 있어도 인코딩 오류로 끝나지 않게 한다. `PYTHONUTF8` 없이 동작한다 | `src/swarm_gateway/__main__.py` | 문서 교차 검토 | TC-GW-018 통과 |
 | IMP-GW-013 | CAL Server 설정(서비스 `swarm_gateway`, `external_c2`, 토픽 `swarm.*`)과 기동 래퍼(서브모듈 수정 없음) | `config/lacal_server.yaml`, `src/swarm_gateway/lacal_server.py` | DEC-069 | TC-GW-010 통과, 수동 기동 확인 |
 
 ## 시험 (TC)
@@ -46,9 +49,12 @@
 | TC-GW-012 | `uci_also`를 descriptor에서 읽음(NavigationReport·PeerStatus → `MA_PositionReport`), `by_uci`·표 출력, 변환기 결합은 descriptor 기준(TrackShare에는 붙지 않음) | `tests/test_position_report.py` | IMP-GW-015 | 통과 |
 | TC-GW-013 | NavigationReport·PeerStatus 한 건 → uci_name과 `MA_PositionReport` 각각 발행, 같은 토픽(`swarm.vi`/`swarm.p2p`), 별도 적재한 공개 XSD 통과, 위치·속도·자세(yaw 90°)·불확도 값 확인. TC-GW-003·010도 uci_also 포함 15건으로 갱신 | `tests/test_position_report.py`, `test_export.py`, `test_roundtrip.py` | IMP-GW-014, IMP-GW-015 | 통과 |
 | TC-GW-014 | 추가 UCI 실패(kinematics 없음, 위도 95° XSD 위반)는 그 메시지만 거부·기록하고 uci_name 메시지는 나감 | `tests/test_position_report.py` | IMP-GW-015 | 통과 |
+| TC-GW-016 | Zenoh가 없을 때 기본 실행과 `--bus zenoh`는 `open_bus`를 부르지 않고 종료 코드 1, stderr에 `uv sync --extra zenoh`와 `--bus memory` 안내. Zenoh 없는 환경에서는 실제 프로세스로도 확인(Traceback·ready 없음) | `tests/test_cli.py` | IMP-GW-018 | 통과 (프로세스 시험은 Zenoh 설치 시 건너뜀) |
+| TC-GW-017 | `--bus memory`는 Zenoh가 없어도 InMemoryBus로 뜨고 경고를 남긴다. 기본값은 `zenoh`, 그 밖의 값은 사용법 오류(종료 코드 2) | `tests/test_cli.py` | IMP-GW-018 | 통과 |
+| TC-GW-018 | cp949 stdout의 실제 프로세스(`PYTHONUTF8=0`)에서 `--help`가 종료 코드 0으로 끝나고 한글이 그대로 나온다. 표현할 수 없는 문자도 오류 없이 `?`로 나온다 | `tests/test_cli.py` | IMP-GW-019 | 통과 |
 | TC-GW-015 | 실제 CAL Server 접속에서 로그 순서: connected/not ready → XSD → SUB → ready | `tests/test_roundtrip.py` | IMP-GW-017 | 통과 |
 
-시험 결과: `cd gateway && uv run pytest` → 43 passed (2026-11-08, Windows 11, Python 3.12, 계약 0.14.0). 1차는 35 passed (2026-11-07).
+시험 결과: `cd gateway && uv run pytest` → 51 passed (2026-11-09, Windows 11, Python 3.12, Zenoh 미설치 환경). `--extra zenoh` 환경에서는 50 passed, 1 skipped(TC-GW-016의 Zenoh 없는 프로세스 시험). 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
 
 ## 매핑 표 (descriptor에서 생성, `MappingTable.markdown()`)
 
