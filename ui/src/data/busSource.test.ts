@@ -117,6 +117,7 @@ describe("BusSource", () => {
     expect(t.puts[0].key).toBe("swarm/gcs-01/tx/c2/TaskCommand");
     expect(t.puts[0].encoding).toBe(ENVELOPE_ENCODING);
     expect(fromBinary(LinkEnvelopeSchema, t.puts[0].payload).dst).toEqual(["uav-001", "uav-002"]);
+    expect(fromBinary(LinkEnvelopeSchema, t.puts[0].payload).publisher).toBe("ui-x"); // TC-UI-064, DEC-077
     expect(() => src.sendC2(new C2Commander("gcs-02", "ui-x").task("hold", ["uav-001"]))).toThrow(/다른 GCS/);
   });
 });
