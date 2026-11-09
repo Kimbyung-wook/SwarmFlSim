@@ -28,11 +28,12 @@ git submodule update --init third_party/agra_lacal
 ```
 
 ```bash
-cd gateway && uv sync
+cd gateway && uv sync --extra zenoh
 ```
 
 - 루트 워크스페이스에 아직 등록되지 않아 `gateway/`에서 독립 uv 프로젝트로 실행한다(`swarm-api`는 `../api/python` 경로 의존성). proto 생성물이 없으면 저장소 루트에서 `uv run python scripts/gen_proto.py`를 먼저 실행한다.
-- Zenoh 버스를 쓰려면 `uv sync --extra zenoh`.
+- 시뮬레이터와 붙이려면 `--extra zenoh`가 필요하다. 빠뜨리면 Gateway는 설치 방법을 알리고 종료 코드 1로 끝난다. 나중에 `--extra zenoh` 없이 `uv sync`를 다시 하면 Zenoh가 지워진다.
+- 시험만 할 때는 `uv sync`로 충분하다. Zenoh가 없어도 시험은 통과한다(실패 종료 경로의 프로세스 시험까지 돈다).
 
 ## 시험
 
@@ -63,7 +64,8 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--service` | `swarm_gateway` | CAL Server 설정의 service_id |
 | `--topic-prefix` | `swarm` | LA-CAL 토픽 `<prefix>.<iface>` (vi, c2, p2p, ms) |
 | `--inbound-topic` | `<prefix>.c2` | 외부 C2 수신 토픽 |
-| `--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen` | | `BusConfig` 항목 |
+| `--bus` | `zenoh` | `zenoh` 또는 `memory`. `memory`는 프로세스 안 버스라 시뮬레이터 메시지가 오지 않는다. 명시했을 때만 쓰고 경고를 남긴다 |
+| `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen` | | `BusConfig` 항목 |
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
