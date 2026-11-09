@@ -84,6 +84,8 @@
 | IMP-UI-071 | 지도 자료 표기·겹침: 바탕은 늘 내장 Natural Earth II, 로컬 영상은 그 위 레이어(범위 밖이 비지 않음, 최대 줌 13). 로컬 영상이면 EOX Sentinel-2 cloudless 표기(`VITE_IMAGERY_CREDIT`로 변경), 로컬 지형이면 Copernicus DEM 표기를 화면 출처에 고정 | `src/model/mapCredits.ts`, `src/cesium/viewer.ts` | REQ-SIM-003, DEC-057 | TC-UI-057, TC-UI-058 |
 | IMP-UI-072 | Sentinel-2 L2A 자체 합성 영상 타일 스크립트: Earth Search STAC `sentinel-2-c1-l2a`(AWS 공개 COG, 계정 불필요)에서 기간(기본 최근 1년)·계절(`--months`, 기본 9~11월)·장면 구름(`--max-cloud` 30 %) 조건 장면을 MGRS 타일별로 모음 → 후보(`--candidates` 8)의 SCL만 먼저 읽어 유효 화소(`--scl-valid` 4·5·6·11) 계산 → `--method best`(유효 화소를 가장 많이 더하는 장면부터, `--min-gain` 미만이면 멈춤, `--max-scenes` 3) 또는 `median`(화소별 중앙값) → 마지막에 구름·포화가 아닌 화소로 구멍 채움. 밴드는 COG 개관으로 `--src-res`(기본 20 m)만 읽음. MGRS별 int16 반사율 GeoTIFF(`data/s2composite/`, git 미포함) → z13 Web Mercator 재투영·색 보정(`--black`·`--white`·`--gamma`) → z12~z0 축소, TMS `data/tiles/imagery` + `tilemapresource.xml` + `source.json`(출처 연도). 이어 하기, `--list`, `--tiles-only`, 타일 프로세스 GDAL 캐시 64 MB·열린 파일 4개 제한 | `../scripts/make_s2_composite_tiles.py` | REQ-SIM-003, DEC-059 | TC-UI-060 |
 | IMP-UI-073 | 영상 출처 표기를 Copernicus Sentinel 법적 고지 수정본 문구로: "Contains modified Copernicus Sentinel data 2025-2026 (Sentinel-2 L2A composite)" (EOX 표기 제거, `VITE_IMAGERY_CREDIT`로 변경 가능) | `src/model/mapCredits.ts` | REQ-SIM-003, DEC-059 | TC-UI-059, TC-UI-060 |
+| IMP-UI-074 | 입력 칸·선택 상자에 포커스가 있어도 Esc는 전역 처리(임무 창 닫기, 없으면 선택 해제·자유 시점). 다른 단축키(숫자, H, Ctrl+A)는 입력 칸에서 계속 무시 | `src/model/shortcuts.ts`, `src/App.tsx` | REQ-UI-003 | TC-UI-061, TC-UI-063 |
+| IMP-UI-075 | 타격 지정 양식의 종류 선택 라벨을 매뉴얼과 같은 "유도 객체 종류"로 변경. 탭 이름 "타격 지정", 코드 식별자, proto 필드는 그대로 | `src/components/MissionPanel.tsx` | REQ-UI-003 | TC-UI-062 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -136,6 +138,9 @@
 | TC-UI-058 | 수동: `fetch_dem.py`(206 MB, 4분 33초) → `make_terrain_tiles.py`(0~12레벨 49,215장, gzip 150.7 MB) 뒤 `npm run dev`에서 지형 공급자 CesiumTerrainProvider, 툴바 "지도 내장 · 지형 DEM", 타일 높이 대청봉 1688 m(DEM 1694)·한라산 1841·동해 0, 속초 앞바다 저각 시점에서 설악 능선 윤곽 보임, Copernicus DEM 출처 표기. 물 마스크 바이트 누락 시 렌더 정지 → 1바이트 추가로 해소. 영상 경로는 합성 타일(z0~9, EOX 아님)로 확인: 툴바 "지도 로컬 · 지형 DEM", 영상 층 2(NaturalEarthII 위 로컬), 범위 124~131°E·33~43°N 안만 덮음, maximumLevel 13, EOX·DEM 출처 둘 다 표기. EOX 실영상은 약관 불명확으로 받지 않음 | 브라우저 확인 | IMP-UI-069~071 | 통과(영상은 합성 타일) |
 | TC-UI-059 | 영상 표기가 "Contains modified Copernicus Sentinel data <연도>"로 시작하고 EOX·cloudless 문구가 없음 (TC-UI-057 문구 시험 갱신 + 1건) | `ui/src/model/mapCredits.test.ts` | IMP-UI-073 | 통과 |
 | TC-UI-060 | 수동: `make_s2_composite_tiles.py` 기본값(2025-11-06~2026-11-06, 9~11월, 구름 ≤ 30 %, best, 20 m) 실제 실행 — MGRS 95개·후보 장면 2,154개 중 144장면 읽음(1장면 52·2장면 37·3장면 6 타일, 최소 피복 86.8 %), 수신 약 17.7 GB(시스템 전체 수신량, 근사), 합성 1,012 s, 합성 파일 9.1 GB; 타일 z0~13 62,203장 618 MB, 70 s(z13 46,390장). `npm run dev`에서 툴바 "지도 로컬 · 지형 DEM", 영상 층 2, 서울(한강·남산)·부산(김해공항·북항)·제주(한라산) 자연색 확인, 출처에 Copernicus Sentinel 수정본 문구와 Copernicus DEM 표기. 바다는 장면 날짜가 다른 MGRS 경계에서 색 단차·일부 잔여 구름 점이 보임(육지는 이음매 거의 없음). 첫 실행에서 타일 프로세스 31개 × GDAL 캐시(RAM 5 %)로 메모리 부족 → 캐시·열린 파일 제한으로 해소 | 브라우저 확인 | IMP-UI-072, IMP-UI-073 | 통과 |
+| TC-UI-061 | 단축키 범위: INPUT·SELECT에서 Esc는 처리, 숫자·H·A는 무시, 입력 칸 밖에서는 모두 처리 (3건) | `ui/src/model/shortcuts.test.ts` | IMP-UI-074 | 통과 |
+| TC-UI-062 | 임무 창 타격 지정 양식에 라벨 "유도 객체 종류"가 있고 이전 라벨은 없으며 탭 이름은 유지 (1건) | `ui/src/components/panels.test.tsx` | IMP-UI-075 | 통과 |
+| TC-UI-063 | 수동(브라우저, 목 소스): 24대 선택 후 우클릭으로 임무 창을 열고 입력 칸에 포커스. `1` 키는 입력 값에만 들어가고 선택은 24대 유지. Esc로 임무 창이 닫히고 포커스는 BODY, 선택은 24대 유지. 콘솔 오류 없음 | 브라우저 확인 | IMP-UI-074 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -146,4 +151,5 @@
 - 지도 카메라 유지·맞춤 뷰(기준 `wp0-contracts` e622ada, 계약 0.11.0): `npm test` 22개 파일 153건 통과. `npm run build` 통과. DEC-051(Agent의 `*Activity` GCS 자동 보고)은 UI가 이미 `swarm/<gcs>/rx/ms/SensorActivity`만 읽으므로 변경 없음.
 - 지도 고해상도(DEC-057, 기준 `wp0-contracts` 57c69e6): `npm test` 23파일 156건 통과, `npm run build` 통과. DEM 206 MB(4분 33초), 지형 타일 49,215장 150.7 MB(40~90초). EOX 영상 일괄 받기(z0~13 62,214장)는 약관상 허용이 불명확해 받지 않음 — `fetch_imagery.py`는 `--eox-permission`(서면 허가 후) 또는 `--template` 없이는 타일 수만 계산
 - 지도 영상 자체 합성(DEC-059, 기준 `wp0-contracts` dee8dfb): `npm test` 23파일 157건 통과, `npm run build` 통과. AWS 공개 Sentinel-2 L2A 가을 장면 144개를 20 m 개관으로 받아(약 17.7 GB, 17분) z13 영상 타일 62,203장 618 MB. EOX `fetch_imagery.py`는 `--template` 경로로 남김
+- 문서 교차 검토 UI 수정(기준 `wp0-contracts` 6a85fb0): `npm test` 24파일 161건 통과, `npm run build` 통과. 임무 창 입력 칸의 Esc 동작과 라벨 "유도 객체 종류" 반영
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.

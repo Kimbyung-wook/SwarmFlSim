@@ -41,6 +41,7 @@ import { Side } from "./gen/swarm/v1/entity_pb";
 import { commandStateLabel } from "./model/taskLog";
 import type { SelectMode } from "./model/selection";
 import { applySelection, isControllable, pruneSelection } from "./model/selection";
+import { ignoresShortcut } from "./model/shortcuts";
 import { TaskLog } from "./model/taskLog";
 
 /** UI 인스턴스 ID (DEC-020: 여러 UI 동시 접속). 엔티티 ID 규칙을 따른다 */
@@ -301,7 +302,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement) return;
+      if (ignoresShortcut(ev.key, ev.target)) return;
       // ev.code(Digit1)로 읽어 Shift·키보드 배치에 상관없이 숫자를 얻는다
       const digit = ev.code.startsWith("Digit") ? slotFromKey(ev.code.slice(5)) : null;
       if (ev.key === "Escape") {
