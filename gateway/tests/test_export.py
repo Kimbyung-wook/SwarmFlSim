@@ -52,9 +52,7 @@ def _ext_messages():
     algo.header.source = S.UAV
     form = c2_pb2.FormationCommand(group_id="grp-a", members=[S.UAV])
     form.header.source = "gcs-02"
-    resp = c2_pb2.ApprovalResponse(request_id="req-1", approved=True)
-    resp.header.source = "gcs-02"
-    return [det, algo, form, resp]
+    return [det, algo, form]
 
 
 def test_ext_is_never_exported(gateway, bus, sent):
@@ -62,7 +60,7 @@ def test_ext_is_never_exported(gateway, bus, sent):
     for m in _ext_messages():
         S.deliver(bus, m)
     assert sent == []
-    assert gateway.counters["skipped_ext"] == 4
+    assert gateway.counters["skipped_ext"] == 3
     assert gateway.counters["exported"] == 0
 
 

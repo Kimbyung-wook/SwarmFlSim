@@ -24,9 +24,9 @@ services:
             MA_PackagePartnerStatusReport@swarm.p2p, MA_LeaderUpdateRequest@swarm.p2p, MA_Entity@swarm.p2p,
             PO_Activity@swarm.ms, EA_Activity@swarm.ms, StrikeActivity@swarm.ms,
             StoreLoadoutConfiguration@swarm.ms]
-      sub: [MA_TaskCommand@swarm.c2]
+      sub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp]
   external_c2:                # 외부 C2(운용자) 모사, 시험·수동 연동용
     service: 6c0b0f8e-3d2a-4f1b-8e47-91a3c5d7e202
     declared:
-      pub: [MA_TaskCommand@swarm.c2]
+      pub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp]
       sub: [MA_TaskStatus@swarm.c2, MA_NavigationReport@swarm.vi]

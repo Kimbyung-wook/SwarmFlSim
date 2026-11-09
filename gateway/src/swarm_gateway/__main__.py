@@ -9,7 +9,7 @@ import sys
 
 from swarm_api.bus import BusConfig, open_bus, zenoh_available
 
-from .gateway import GatewayConfig
+from .gateway import DEFAULT_PARTICIPANT, GatewayConfig
 from .runner import DEFAULT_SERVICE, start_gateway
 
 
@@ -27,9 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
                                  description="A-GRA Gateway: swarm/<gcs>/rx/** <-> LA-CAL (DEC-068)")
     ap.add_argument("--gcs", required=True, help="GCS 엔티티 ID (예: gcs-01)")
     ap.add_argument("--lacal", default="ws://127.0.0.1:8765", help="CAL Server OWP 주소")
+    ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
+                    help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")
     ap.add_argument("--topic-prefix", default="swarm", help="LA-CAL 토픽 접두어 (<prefix>.<iface>)")
-    ap.add_argument("--inbound-topic", default="", help="외부 C2 수신 토픽 (기본 <prefix>.c2)")
+    ap.add_argument("--inbound-topic", default="", help="외부 C2 수신 토픽 (기본 <prefix>.c2, MP는 <prefix>.mp 고정)")
     ap.add_argument("--bus", choices=("zenoh", "memory"), default="zenoh",
                     help="버스 백엔드 (기본 zenoh). memory는 프로세스 안 버스라 시뮬레이터 메시지가 오지 않는다")
     ap.add_argument("--zenoh-config", default="")
@@ -47,7 +49,7 @@ async def _run(args) -> None:
     bus = open_bus(BusConfig(backend=args.bus, zenoh_config_file=args.zenoh_config, zenoh_mode=args.zenoh_mode,
                              connect=args.connect, listen=args.listen,
                              multicast_scouting=not args.no_multicast))
-    running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, topic_prefix=args.topic_prefix), args.lacal,
+    running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix), args.lacal,
                                   service_id=args.service, inbound_topic=args.inbound_topic)
     try:
         while True:

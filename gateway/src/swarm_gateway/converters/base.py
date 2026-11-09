@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Callable, ClassVar
@@ -32,11 +33,34 @@ class ConversionError(ValueError):
     """변환할 수 없는 값(매핑 없음, 필수 값 없음)"""
 
 
+class BoundedStore:
+    """오래된 항목부터 버리는 표. 수신 경로 계획과 승인 요청자를 기억한다 (프로세스 재기동 시 사라진다)"""
+
+    def __init__(self, limit: int = 1024):
+        self.limit = limit
+        self._items: OrderedDict[str, tuple[int | None, object]] = OrderedDict()
+
+    def put(self, key: str, version: int | None, value: object) -> None:
+        self._items[key] = (version, value)
+        self._items.move_to_end(key)
+        while len(self._items) > self.limit:
+            self._items.popitem(last=False)
+
+    def get(self, key: str, version: int | None = None):
+        """없거나, version을 지정했는데 저장한 판과 다르면 None"""
+        found = self._items.get(key)
+        if found is None or (version is not None and found[0] != version):
+            return None
+        return found[1]
+
+
 @dataclass
 class ConvContext:
     ids: IdMap
     gcs: str
     now: Callable[[], dt.datetime] = field(default=lambda: dt.datetime.now(dt.timezone.utc))
+    routes: BoundedStore = field(default_factory=BoundedStore)      # 수신한 RoutePlan (UUID → 메시지, DEC-076)
+    approvals: BoundedStore = field(default_factory=BoundedStore)   # 내보낸 ApprovalRequest (request_id → 요청 기체)
 
     def ts(self) -> str:
         return uci_timestamp(self.now())
@@ -91,7 +115,7 @@ def register_also(cls: type[AlsoConverter]) -> type[AlsoConverter]:
 
 
 def _load_builtin() -> None:
-    from . import c2, ms, p2p, position, vi  # noqa: F401  내장 변환기 등록
+    from . import c2, mp, ms, p2p, position, vi  # noqa: F401  내장 변환기 등록
 
 
 def _entry_point_classes(include: bool) -> list[type]:

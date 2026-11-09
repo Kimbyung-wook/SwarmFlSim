@@ -2,7 +2,8 @@
 
 Gateway를 LA-CAL 클라이언트(agra_lacal client.lacal_client.LaCalClient)에 묶는다.
 - 1단계: Gateway outbox → client.publish(<prefix>.<iface>, OMS JSON)
-- 2단계: client.subscribe(<외부 C2 STD 메시지>, <inbound topic>) → Gateway.handle_external
+- 2단계: client.subscribe(<외부 C2·MP STD 메시지>, <토픽>) → Gateway.handle_external
+  C2는 <inbound topic>(기본 <prefix>.c2), MP는 <prefix>.mp
 
 준비 전 구간(O-13): LA-CAL 접속(INIT) 뒤 XSD 적재와 SUB가 끝날 때까지는 외부 명령을 받는 구독이 없다.
 그동안 외부가 PUB한 MA_TaskCommand는 서버가 +OK로 답하지만 받는 쪽이 없어 사라진다.
@@ -49,13 +50,15 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
     gw = Gateway(bus, config, codec=codec, sink=client.publish)
     log.info("gateway: XSD loaded, mapping built at +%.2f s", time.monotonic() - t0)
     gw.system_uuid = client.system_uuid
-    topic = inbound_topic or config.topic("c2")
-    for name in gw.import_names():
-        await client.subscribe(name, topic, lambda n, obj: gw.handle_external(n, obj))
-        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", name, topic, time.monotonic() - t0)
+    subscribed = []
+    for entry in gw.import_entries():
+        topic = (inbound_topic or config.topic("c2")) if entry.iface == "c2" else config.topic(entry.iface)
+        await client.subscribe(entry.uci_name, topic, lambda n, obj: gw.handle_external(n, obj))
+        subscribed.append(f"{entry.uci_name}@{topic}")
+        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", entry.uci_name, topic, time.monotonic() - t0)
     gw.start()
     sender = asyncio.create_task(gw.run_sender())
     ready = time.monotonic() - t0
-    log.info("gateway: ready at +%.2f s: inbound %s on %s, bus %s", ready, gw.import_names(), topic,
-             "swarm/%s/rx/**" % config.gcs)
+    log.info("gateway: ready at +%.2f s: inbound %s, bus %s, publisher %s", ready, subscribed,
+             "swarm/%s/rx/**" % config.gcs, config.participant)
     return Running(gw, client, sender, ready)
