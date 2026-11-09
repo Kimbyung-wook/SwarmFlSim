@@ -1,6 +1,6 @@
 # 6. Adding a dynamics model
 
-> Source: [docs/41_dev/06_dynamics.md](../../41_dev/06_dynamics.md) at commit `7affdae`.
+> Source: [docs/41_dev/06_dynamics.md](../../41_dev/06_dynamics.md) at commit `24fc9be`.
 
 Dynamics models are written in C++, placed in `dynamics/` and built together with Core. They are not registered separately as Python plugins are. Because dynamics is C++, it is outside the scope of the [example package](../../../examples/plugins/) (DEC-070), which holds Python plugins. This chapter uses the real `dof2` code and tests as the example.
 
@@ -69,7 +69,7 @@ flowchart LR
 
 1. Create the class in `models.hpp` and `models.cpp`. Declare parameters with a `Params` struct and a `ParamDesc` table (like `kDof2Descs`).
 2. Add a `FieldTable` in [factory.cpp](../../../dynamics/src/factory.cpp) and a branch in `make_model(name, params)`. Add the name to `model_names()`.
-3. `dof5` and `dof6` are reserved. When implementing these models, remove them from `reserved_model_names()`. Reserved models are refused by the Core check.
+3. `dof5` and `dof6` are reserved. When implementing these models, remove them from `reserved_model_names()` and add them to `IMPLEMENTED_DYNAMICS` in `scenario/src/swarm_scenario/validate.py`. Reserved models are refused by scenario validation and the Core check.
 4. Any other name requires changing `DynamicsKind` in `proto` and the scenario schema. Follow the [contract change request](09_contributing.md#95-contract-change-requests) procedure.
 5. If per-airframe defaults are needed, change `kAirframes` in [core/src/wp2_dynamics.cpp](../../../core/src/wp2_dynamics.cpp). The current table has `skywalker_x8` and `aerosonde` and sets speed and bank limits.
 
@@ -111,6 +111,6 @@ Add a new test as a function in `test_dynamics.cpp`, register it in the table, a
 ctest --preset msvc-debug -R "^dyn\."
 ```
 
-> Not implemented: `dof5` and `dof6` models (roadmap P3). Only the names are reserved, and Core refuses them in a scenario.
+> Not implemented: `dof5` and `dof6` models (roadmap P3). Only the names are reserved, and validation and Core refuse them in a scenario.
 
 Next: [7. Messages and contracts](07_messages.md).

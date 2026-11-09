@@ -1,6 +1,6 @@
 # 8. WP5 GCS/UI (`ui/`)
 
-> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `7affdae`.
+> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `24fc9be`.
 
 ## Responsibilities
 
@@ -12,12 +12,14 @@ The map display and control screen. TypeScript, React, CesiumJS. Operation is in
 |---|---|
 | `src/App.tsx` | Top level, shortcuts |
 | `src/data/` | `DataSource`: `MockSource`, `BusSource`, `BridgeTransport` |
-| `src/model/` | State and commands independent of Cesium: `LiveState`, `selection`, `C2Commander`, `TaskLog`, `camera` |
+| `src/model/` | State and commands independent of Cesium: `LiveState`, `selection`, `C2Commander`, `TaskLog`, `camera`, `shortcuts` |
 | `src/cesium/` | Entity rendering |
 | `src/components/` | `MapView`, `Toolbar`, `SelectionPanel`, `CommandPanel`, `MissionPanel`, `ParamPanel` |
 | `src/gen/` | Proto generated code. Not committed |
 
 React is not re-rendered every frame. The map updates in the Cesium render loop, and the panels every 250 ms.
+
+When an input field has focus, letter and number shortcuts are ignored and only Esc is handled (`model/shortcuts.ts`, IMP-UI-074).
 
 ## Running
 

@@ -1,6 +1,6 @@
 # 6. Traffic Monitor
 
-> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `7affdae`.
+> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `24fc9be`.
 
 This screen aggregates and shows the messages passing through the datalink. It only observes and sends no commands. Pass `--monitor` to the runner to start it as well. The UI is in Korean. Labels are written as shown on screen, with the English meaning in parentheses.
 

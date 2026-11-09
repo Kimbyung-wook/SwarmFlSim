@@ -1,6 +1,6 @@
 # 7. Creating datalink conditions
 
-> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `7affdae`.
+> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `24fc9be`.
 
 All vehicle-to-vehicle and ground-to-vehicle messages pass through the Datalink. Adjust latency, loss, bandwidth and jamming with the scenario and fault injection, and view the results in the Traffic Monitor.
 

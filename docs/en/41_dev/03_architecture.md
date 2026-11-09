@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `7affdae`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `24fc9be`.
 
 - See [overview §3](../40_overview.md#3-components) first for the overall structure. This chapter sets out the execution rules to follow when writing code.
 - [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.

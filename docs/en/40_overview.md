@@ -1,6 +1,6 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `7affdae`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `24fc9be`.
 
 - This document is for people seeing the repository for the first time. It covers what the project is, what works today, and where to start.
 - Baseline: contract 0.14.0, roadmap P6 complete (2026-11-09).

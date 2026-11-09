@@ -1,6 +1,6 @@
 # 2. Build and test
 
-> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `7affdae`.
+> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `24fc9be`.
 
 - Run the commands in this chapter from the repository root. Exceptions are written in front of the command.
 - Each area is built and tested separately. If you only change Python, start at 2.3.
@@ -126,7 +126,7 @@ cd gateway && uv run pytest
 ```
 
 - If the proto generated code is missing, run `gen_proto.py` from 2.3 at the root first.
-- The tests use a CAL Server started in-process and `InMemoryBus`. Without `--extra zenoh` the tests still pass, but at run time the Gateway silently starts on the in-memory bus and no simulator messages arrive. For how to run it, see [user manual chapter 9](../42_user/09_gateway.md).
+- The tests use a CAL Server started in-process and `InMemoryBus`. Without `--extra zenoh` the tests still pass, but at run time the Gateway reports how to install it and exits with code 1. For how to run it, see [user manual chapter 9](../42_user/09_gateway.md).
 
 ## 2.7 What is not committed
 

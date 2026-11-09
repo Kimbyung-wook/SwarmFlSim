@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `7affdae`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `24fc9be`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
@@ -155,7 +155,7 @@ Examples in the repository:
 | `script_path` | `scripted` path. Followed at the magnitude of the initial velocity |
 | `dynamics_params` | Dynamics parameter overrides |
 
-> Not implemented: `dof5`, `dof6` (roadmap P3). They pass schema validation but Core refuses to load them. The log shows `scenario rejected`.
+> Not implemented: `dof5`, `dof6` (roadmap P3). `swarm-scenario validate` refuses them as not implemented.
 
 - An air entity whose starting altitude is below the DEM terrain gets a warning at load and is destroyed in the first frame (with `--terrain-dem`, DEC-060).
 
@@ -241,7 +241,7 @@ See the schema for the format of `engagement_criteria`.
 | References | `controlling_gcs`, `assignees`, `target_id`, `members`, `leader` are existing entities | validate |
 | `task_id` | No duplicates | validate |
 | Jammer count | One per entity | Core load |
-| DoF | Only `dof2`, `dof3`, `scripted`, `static` can run | Core load |
+| DoF | Only `dof2`, `dof3`, `scripted`, `static` can run | validate |
 | Values | NaN, infinity and out-of-range values are refused | Core load |
 
 If Core refuses, the process does not exit. It logs `scenario rejected` and waits for the next scenario.
