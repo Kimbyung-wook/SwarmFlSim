@@ -48,6 +48,7 @@
 | `SCN` | Scenario Manager |
 | `LOG` | Logger/Replay |
 | `GW` | A-GRA Gateway |
+| `EXP` | 플러그인 예제 패키지 (`examples/plugins/`, DEC-070) |
 | `INT` | 통합: 여러 WP 프로세스를 실제 버스로 묶는 실행기·통합 시나리오·통합 시험 |
 
 ## 4. 상태 값

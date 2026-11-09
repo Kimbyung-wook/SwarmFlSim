@@ -33,7 +33,7 @@
 | REQ-BHV-001 | PRP-BHV-001, PRP-SIM-003 | DEC-008, DEC-013 | WP3 | IMP-AGT-002~006, 008~009, 011, 013, IMP-INT-003 | TC-AGT-006~013, 015, TC-INT-002~003 | 구현중 |
 | REQ-BHV-002 | PRP-BHV-001, PRP-BHV-003 | DEC-013, DEC-033, DEC-034 | WP3 | IMP-API-010~011, IMP-AGT-011, 013, 016~020, IMP-UI-042~044 | TC-AGT-015~023, TC-UI-026~027 | 구현중 |
 | REQ-BHV-003 | PRP-BHV-001, PRP-BHV-003 | DEC-008 | WP3 | IMP-AGT-014~015 | TC-AGT-016~019 | 구현중 |
-| REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001 | WP3 | IMP-API-005, IMP-AGT-005, 012 | TC-AGT-006, 014 | 구현중 |
+| REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
 | REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006 | WP10, WP3 | IMP-AGT-010 | | 구현중 |
@@ -57,7 +57,7 @@
 
 ## 구현·시험 항목
 
-- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`, `payload/`, `gateway/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
+- WP별 IMP·TC 상세(내용, 위치, 근거, 시험 결과)는 각 디렉터리의 `TRACE.md`에 있다: `core/`, `dynamics/`, `datalink/`, `bridge/`, `ui/`, `ui/monitor/`, `scenario/`, `logger/`, `agent/`, `algorithms/`, `payload/`, `gateway/`, `examples/plugins/`. 위 매트릭스는 그 근거 열(REQ, DEC)로부터 모은 것이다.
 - `검증완료`는 그 REQ의 범위를 구현했고 연결된 TC가 모두 통과한 경우다. 일부만 구현했으면 TC가 통과해도 `구현중`으로 둔다.
 - 아래 첫 표는 WP0(`API`) 항목, 둘째 표는 통합(`INT`) 항목이다. 통합 실행 방법과 확인 화면은 [20_p0_demo.md](20_p0_demo.md)에 있다.
 
