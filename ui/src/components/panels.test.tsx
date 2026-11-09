@@ -15,7 +15,7 @@ import { CommandPanel } from "./CommandPanel";
 import { ParamStore, flockingEntities } from "../model/params";
 import { EntityParamsSchema } from "../gen/swarm/v1/sim_pb";
 import { LiveState, STALL_MS, isStalled } from "../model/liveState";
-import { RouteEditor } from "./MissionPanel";
+import { MissionMenu, RouteEditor } from "./MissionPanel";
 import { addWaypoint, emptyRoute } from "../model/routeDraft";
 import { ParamPanel } from "./ParamPanel";
 import { Toolbar } from "./Toolbar";
@@ -270,5 +270,27 @@ describe("TC-UI-042 참여자 응답 없음 경고와 재생 누락 프레임 (D
     live.onFrameSeq(20n);
     expect(live.missedFrames).toBe(0);
     expect(bar(live)).not.toContain("누락 프레임");
+  });
+});
+
+describe("TC-UI-062 임무 창 라벨", () => {
+  const menu = (targetId: string | null) =>
+    renderToStaticMarkup(
+      <MissionMenu
+        menu={{ point: { latDeg: 37.5, lonDeg: 127, heightM: 50 }, targetId }}
+        targetCount={1}
+        disabledReason={null}
+        defaultAltM={1000}
+        onPreview={() => {}}
+        onSend={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+  it("타격 지정 양식의 종류 라벨은 \"유도 객체 종류\"이고 탭 이름은 그대로다", () => {
+    const html = menu("red-001");
+    expect(html).toContain("<span>유도 객체 종류</span>");
+    expect(html).not.toContain("<span>무장</span>");
+    expect(html).toContain("타격 지정");
   });
 });

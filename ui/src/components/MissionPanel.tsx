@@ -1,3 +1,4 @@
+// IMP-UI-075: 타격 지정의 종류 선택 라벨을 매뉴얼과 같은 "유도 객체 종류"로 (식별자·proto 필드는 그대로)
 // IMP-UI-044: 레이스트랙 선회 대기(반경·직선 길이·축 방향·방향·시간), 항로점 선회의 원형/레이스트랙 선택 (DEC-034)
 // IMP-UI-039: 임무 창. 우클릭 지점의 임무 메뉴(이동·선회 대기·타격·정찰)와 Ctrl+우클릭 항로점 편집 (REQ-UI-003, REQ-UI-004, DEC-033)
 import { useEffect, useState } from "react";
@@ -176,7 +177,7 @@ export function MissionMenu(p: MenuProps) {
         {kind === "strike" && (
           <>
             <div className="row">
-              <span>무장</span>
+              <span>유도 객체 종류</span>
               <select value={weapon} onChange={(e) => setWeapon(e.target.value as WeaponType)}>
                 {WEAPON_TYPES.map((w) => (
                   <option key={w} value={w}>{WEAPON_LABEL[w]} ({w})</option>
