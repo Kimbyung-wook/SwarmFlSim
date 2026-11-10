@@ -1,6 +1,6 @@
 # 8. WP3 Baseline algorithms (`algorithms/`)
 
-> Source: [docs/41_dev/08_wp/algorithms.md](../../../41_dev/08_wp/algorithms.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/08_wp/algorithms.md](../../../41_dev/08_wp/algorithms.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
@@ -16,7 +16,7 @@ Holds the baseline MA plugins and shared parts. The runtime is handled by [agent
 | `src/swarm_algorithms/formation.py` | `formation` |
 | `src/swarm_algorithms/flocking.py` | `flocking`, `flocking_basic` |
 
-`TaskPilot` in `common.py` is the center of task execution, so start reading there.
+When reading the code, start with `TaskPilot` in `common.py`, which handles task execution.
 
 ## Executable
 
@@ -35,8 +35,8 @@ uv run pytest algorithms/tests
 ## Known limitations
 
 - `flocking` rejects Route.
-- The rules for `MissionPlan` and `RoutePlan` received during a run are in [4.7](../04_ma_plugin.md#47-reusable-parts). `waypoint` is the only baseline MA that executes `RoutePlan`.
-- Baseline MAs do not execute `track`, `strike` or `jam` tasks.
+- The rules for `MissionPlan` and `RoutePlan` received during a run are in [4.7](../04_ma_plugin.md#47-reusable-parts). `waypoint` is the only baseline MA that flies a `RoutePlan`.
+- Baseline MAs do not support `track`, `strike` or `jam` tasks.
 - For other vehicles' information they use only `PeerStatus` received over the datalink. Formation quality degrading along with a poor link is intended behavior.
 
 Traceability: [algorithms/TRACE.md](../../../../algorithms/TRACE.md).

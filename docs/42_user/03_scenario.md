@@ -169,7 +169,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `flocking`, `flocking_basic` | Reynolds 군집과 목표점 이동 | `move_to`, `hold`, `return_to_base`, `search_area`. `route`는 `REJECTED` |
 
 - FA는 `default`만 있다. 생략하면 `default`를 쓴다.
-- 지원하지 않는 작업은 `TaskStatus` REJECTED로 돌아온다. 기본 MA는 `track`, `strike`, `jam` 작업을 수행하지 않는다.
+- 지원하지 않는 작업은 `TaskStatus` REJECTED로 돌아온다. 기본 MA는 `track`, `strike`, `jam` 작업을 지원하지 않는다.
 - 매개변수는 `ma_params`, `fa_params`에 쓴다. 이름과 범위는 실행 중 UI의 매개변수 패널에서 볼 수 있다. 없는 이름이나 범위 밖 값은 적용되지 않고 거부 사유가 남는다.
 
 자주 쓰는 매개변수:
@@ -187,7 +187,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 
 ## 3.7 임무 계획 (mission_plan)
 
-`tasks`의 각 작업은 `task_id`, `assignees`와 작업 종류 키 하나를 갖는다.
+`tasks`의 각 작업에는 `task_id`, `assignees`와 작업 종류 키 하나를 쓴다.
 
 | 작업 키 | 내용 |
 |---|---|
@@ -197,7 +197,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `route` | 항로점 목록. 항로점마다 `position`, `speed_mps`, `acceptance_radius_m`, 행위(`loiter`, `recon`) |
 | `return_to_base` | 시작 위치로 귀환 |
 
-`formations`는 `group_id`, `members`, `leader`, `shape`(`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`를 갖는다. `custom`은 `custom_offsets_m` 개수가 `members`와 같아야 한다.
+`formations`는 `group_id`, `members`, `leader`, `shape`(`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`를 쓴다. `custom`은 `custom_offsets_m` 개수가 `members`와 같아야 한다.
 
 ## 3.8 탑재 장비 (payloads)
 

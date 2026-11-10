@@ -1,6 +1,6 @@
 # 8. Recording and replay
 
-> Source: [docs/42_user/08_record_replay.md](../../42_user/08_record_replay.md) at commit `bbf4d92`.
+> Source: [docs/42_user/08_record_replay.md](../../42_user/08_record_replay.md) at commit `f7bcbac`.
 
 All bus messages are recorded to one MCAP file and published to the bus again at the original time intervals. During replay, UI and Monitor use the same screens as live.
 

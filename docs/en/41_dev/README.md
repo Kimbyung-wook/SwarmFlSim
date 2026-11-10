@@ -1,10 +1,10 @@
 # Developer manual
 
-> Source: [docs/41_dev/README.md](../../41_dev/README.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/README.md](../../41_dev/README.md) at commit `f7bcbac`.
 
 - Readers: algorithm plugin authors (writing MA/FA in Python) and WP contributors (changing a specific directory while following the test, traceability and contract rules).
 - New to the project? Read the [project overview](../40_overview.md) first.
-- [10_contracts.md](../../10_contracts.md) (Korean) is the authority for contracts (keys, schemas, protocols, build setup). This manual links to its sections.
+- [10_contracts.md](../../10_contracts.md) (Korean) is the authority for contracts (keys, schemas, protocols, build setup).
 - Writing plan: [30_doc_plan.md](../../30_doc_plan.md) (Korean) §4.
 
 ## Reading order

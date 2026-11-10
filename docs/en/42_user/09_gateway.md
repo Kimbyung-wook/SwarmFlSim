@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `bbf4d92`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `f7bcbac`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -68,11 +68,11 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 
 The ports in `--connect` follow the runner's `--base-port` (default 17600). `--participant <id>` is the Gateway's publisher ID (default `gateway-0`).
 
-**4. Attach external C2.** Connect to the same CAL Server as the `external_c2` service and send `MA_TaskCommand` and `MA_ApprovalRequestStatus` on the `swarm.c2` topic, and `MA_RoutePlan` and `MA_MissionPlan` on the `swarm.mp` topic. An example of a test client implementation is [qa/gw_ext_client.py](../../../qa/gw_ext_client.py).
+**4. Attach external C2.** Connect to the same CAL Server as the `external_c2` service and send `MA_TaskCommand` and `MA_ApprovalRequestStatus` on the `swarm.c2` topic, and `MA_RoutePlan` and `MA_MissionPlan` on the `swarm.mp` topic. A test client implementation is in [qa/gw_ext_client.py](../../../qa/gw_ext_client.py).
 
 ## 9.3 Right after start
 
-The Gateway loads the XSD after connecting. It took about 9 seconds in this check. Commands sent externally during that time are lost, since nobody is receiving them even though the server answers `+OK` (O-13). External C2 should send commands after the `ready` line appears.
+The Gateway loads the XSD after connecting. It took about 9 seconds in a test run. Commands sent externally during that time are lost, since nobody is receiving them even though the server answers `+OK` (O-13). External C2 should send commands after the `ready` line appears.
 
 | Log | Meaning |
 |---|---|
@@ -94,7 +94,7 @@ These rules are used only for tasks that need no position, and for cancel (DEC-0
 
 Tasks that need position information, such as a move destination, are received as mission plans in [9.6](#96-mission-plan-reception).
 
-The flow of `MA_TaskStatus` is as follows. Sending `hold` yields `EXECUTION_PENDING` → `EXECUTING`. The vehicle's previous task becomes `CANCELED`.
+Sending `hold` yields `EXECUTION_PENDING` → `EXECUTING` in `MA_TaskStatus`. The vehicle's previous task becomes `CANCELED`.
 
 ## 9.5 External approval responses
 
@@ -136,9 +136,11 @@ A `counters` log appears every `--stats-s` period.
 | `ext_rx` | Commands received externally |
 | `ext_published` | Commands published to the bus |
 
-- Messages failing XSD validation or conversion are not exported and are left in logs and counters. The Gateway keeps running.
+- Messages failing XSD validation or conversion are not exported and are recorded in logs and counters. The Gateway keeps running.
 - Even if one position mapping message fails, the other mapped messages are exported.
 
-> Known limitation: `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20). In this check the messages were forwarded anyway.
+> Known limitation: `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20). In a test run the messages were forwarded anyway.
+
+> In lockstep, external input breaks same-seed reproduction. The Gateway publishes at the tick in which the input arrived, so the trajectories of the vehicles that received it differ between runs. Without external input, trajectories, link results and GCS receptions match.
 
 Next: [10. Troubleshooting](10_faq.md).

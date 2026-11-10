@@ -1,8 +1,8 @@
 # 5. Writing an FA plugin
 
-> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `f7bcbac`.
 
-An FA (Flight Autonomy) turns the MA's flight commands into dynamics control output. The default FA is enough in most cases. Write your own when comparing other guidance and control laws.
+An FA (Flight Autonomy) turns the MA's flight commands into dynamics control output. Use the default FA as it is, and write your own only when comparing other guidance and control laws.
 
 The example is [hsa_fa.py](../../../examples/plugins/src/swarm_plugin_examples/hsa_fa.py) (`example_hsa`). It is the smallest FA, handling only HSA, and its tests are in [test_plugin_examples.py](../../../examples/plugins/tests/test_plugin_examples.py).
 
@@ -104,7 +104,7 @@ example_hsa = "swarm_plugin_examples.hsa_fa:HsaOnlyFlightAutonomy"
 "autonomy": { "ma_plugin": "example_turn", "fa_plugin": "example_hsa", "fa_params": { "k_heading": 0.8 } }
 ```
 
-`example_hsa` answers Waypoint and Curve with `REJECTED`, so tasks are not executed if it is used with the `waypoint` MA. When changing the FA, first check that it supports the modes the MA uses.
+`example_hsa` answers Waypoint and Curve with `REJECTED`, so tasks do not run if it is used with the `waypoint` MA. When changing the FA, first check that it supports the modes the MA uses.
 
 ## 5.5 Tests
 

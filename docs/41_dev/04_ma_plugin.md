@@ -182,7 +182,7 @@ class Rendezvous(BatchMissionAutonomy):
 
 - `NavBatch`: `ids`, `lat_lon_alt`(N×3), `velocity_ned`(N×3), `valid`(N). 행 `i`가 `ctxs[i]`다.
 - 송수신은 `ctxs[i].ports`로 기체마다 따로 한다.
-- `NavBatch`에서 **자기 행만** 쓴다. 다른 행을 이웃 정보로 쓰면 데이터링크 모의를 건너뛰게 된다(DEC-008). [rendezvous.py](../../examples/plugins/src/swarm_plugin_examples/rendezvous.py)가 그 형태다.
+- `NavBatch`에서 **자기 행만** 쓴다. 다른 행을 이웃 정보로 쓰면 데이터링크 모의를 건너뛰게 된다(DEC-008). [rendezvous.py](../../examples/plugins/src/swarm_plugin_examples/rendezvous.py)가 이렇게 쓴다.
 - 일괄 MA의 `on_init`, `on_shutdown`은 `ctxs`를, `on_params`는 기체 하나의 `ctx`를 받는다.
 
 ## 4.6 작업과 TaskStatus
@@ -233,7 +233,7 @@ stateDiagram-v2
 | 계획에 없는 단독 `RoutePlan` (`waypoint`) | 바로 비행한다. 수행 중 작업은 `CANCELLED`(`preempted`), 대기 작업은 항로가 끝나면 잇는다. `RoutePlan` 자체의 `TaskStatus`는 없다. 비행 명령 ID는 `<id>-task-<n>` |
 | 값이 잘못된 `RoutePlan` (`waypoint`) | 현재 작업을 건드리지 않고 MD `route_plan_invalid`만 남긴다 |
 
-- 포트는 최신 계획만 들고 있어 한 틱에 두 계획이 닿으면 마지막 것만 수행한다.
+- 포트는 최신 계획만 들고 있어 한 틱에 두 계획이 닿으면 마지막 것만 실행한다.
 - `formation`은 계획에 이 기체의 편대가 있을 때만 편대를 바꾼다.
 
 ## 4.8 기본 MA

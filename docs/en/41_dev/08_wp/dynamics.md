@@ -1,6 +1,6 @@
 # 8. WP2 Dynamics (`dynamics/`)
 
-> Source: [docs/41_dev/08_wp/dynamics.md](../../../41_dev/08_wp/dynamics.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/08_wp/dynamics.md](../../../41_dev/08_wp/dynamics.md) at commit `f7bcbac`.
 
 ## Responsibilities
 

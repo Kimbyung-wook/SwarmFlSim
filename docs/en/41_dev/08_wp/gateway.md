@@ -1,10 +1,10 @@
 # 8. WP9 A-GRA Gateway (`gateway/`)
 
-> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
-As a ground participant on the GCS side, it converts between internal messages and external UCI messages (DEC-068, DEC-069). It is a standalone uv project outside the root workspace. The operating procedure is in [chapter 9](../../42_user/09_gateway.md) of the user manual, the design in [gateway/README.md](../../../../gateway/README.md).
+A ground participant on the GCS side that converts between internal messages and external UCI messages (DEC-068, DEC-069). It is a standalone uv project outside the root workspace. The operating procedure is in [chapter 9](../../42_user/09_gateway.md) of the user manual, the design in [gateway/README.md](../../../../gateway/README.md).
 
 ## Structure
 

@@ -1,9 +1,8 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f7bcbac`.
 
-- See [overview §3](../40_overview.md#3-components) first for the overall structure. This chapter sets out the execution rules to follow when writing code.
-- [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
+See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 
 ## 3.1 Processes and participants
 
@@ -106,7 +105,7 @@ stateDiagram-v2
 | `lockstep` | After `FrameDone(N)` from every participant. At rate > 0 the interval is dt/rate, at 0 there is no wait | With a fixed seed | Algorithm comparison, regression tests |
 | `freerun` | At rate > 0 the interval is dt/rate, at 0 there is no wait | No | Accelerating Core alone |
 
-> Known limitation: in comparisons of 2 to 4 same-seed lockstep runs (QA round 19, 60 s without faults) the truth trajectories were the same, but the frame in which the first `SystemStatus` is sent differs between runs, so some `LinkOutcome` and GCS receptions were not the same (D-30, being fixed). Reproducibility at points where `SystemStatus` changes, such as fault injection, and with a Gateway in the setup was not checked.
+> With the same seed, lockstep gives the same truth trajectories, `LinkOutcome` and GCS receptions on every run. This was checked over the first 60 s without faults, with fault injection, with payloads, with 50 vehicles, and with a Gateway and no external input ([QA §28](../../21_qa_report.md#28-20차-시험-d-30-재시험-lockstep-재현성-2026-11-10), Korean). A Gateway lockstep run with external input is not reproducible: the Gateway publishes at the tick in which the input arrived, and the seed does not decide that tick.
 
 ## 3.6 One lockstep frame
 
@@ -134,6 +133,7 @@ sequenceDiagram
 
 - At tick 0 no rx is consumed. Vehicle-to-vehicle messages are consumed at least one tick later on top of the model latency (DEC-040, DEC-045).
 - rx produced by the Datalink at tick f is consumed from the next tick on.
+- Onboard inputs other than `NavigationReport` are not processed on arrival. They wait for the tick derived from the message frame and are processed before that tick starts: frame + 1 for `SystemStatus`, frame + 2 for payload output (`*Activity`) and `Detection` (IMP-AGT-036). An input that arrives after its tick logs one warning, counts in the internal statistic `late_onboard` and is processed on the next tick. This did not happen in integrated runs. realtime and free-run process inputs on arrival.
 - `sent_count` is the cumulative number of samples published so far. The receiver waits until it has received that many (DEC-044). It applies only to `swarm/**`.
 - Use only `ctx.rng` for random numbers. Depending on wall clocks, dictionary order or thread races breaks determinism.
 - If a participant does not respond for more than 5 s of wall-clock time, it appears in `SimStatus.waiting_participants`. A participant that left after start cannot rejoin. Recovery is Reset+Start (DEC-038, DEC-041).
@@ -147,7 +147,7 @@ sequenceDiagram
 ## 3.8 Per-vehicle parameters
 
 - Value precedence: owner default → airframe table (dynamics only) → scenario (`dynamics_params`, `fa_params`, `ma_params`) → `SimCommand.set_params` during the run.
-- Owners are dynamics (Core), FA and MA. Invalid items are not silently dropped. The reason (`unknown`, `type`, `range`, `choice`, `not_runtime`) is left in `EntityParams.rejected`.
+- Owners are dynamics (Core), FA and MA. Invalid items are not silently dropped. The reason (`unknown`, `type`, `range`, `choice`, `not_runtime`) is recorded in `EntityParams.rejected`.
 - Details are in [contract §3.3, per-vehicle parameters](../../10_contracts.md#33-규칙).
 
 ## 3.9 Coordinates and units

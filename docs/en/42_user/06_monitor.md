@@ -1,6 +1,6 @@
 # 6. Traffic Monitor
 
-> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `bbf4d92`.
+> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `f7bcbac`.
 
 This screen aggregates and shows the messages passing through the datalink. It only observes and sends no commands. Pass `--monitor` to the runner to start it as well. The UI is in Korean. Labels are written as shown on screen, with the English meaning in parentheses.
 
@@ -60,7 +60,7 @@ How to create and remove the causes is in [chapter 7](07_link.md).
 | Counts by reason | Cumulative |
 
 - The denominator is per-receiver outcomes. A broadcast counts as one loss for each same-side receiver it does not reach (DEC-032).
-- `거리 밖 제외` (Exclude out of range) removes `OUT_OF_RANGE` from the numerator and denominator. Use it to drop pairs that are simply too far apart and look only at link quality.
+- `거리 밖 제외` (Exclude out of range) removes `OUT_OF_RANGE` from the numerator and denominator. Use it to drop pairs that are too far apart to connect and look only at link quality.
 - `송신 기준` (By sender) and `수신 기준` (By receiver) change the aggregation basis of the table.
 - `통계 초기화` (Reset statistics) clears the cumulative values.
 
@@ -70,7 +70,7 @@ How to create and remove the causes is in [chapter 7](07_link.md).
 - Narrow down with the interface (`c2`, `vi`, `ms`, `mp`, `md`, `p2p`), message type and result chips.
 - When filters are on, the bar grows to two rows and `필터 해제` (Clear filters) appears.
 - Filters apply to the timeline and echo. Only the entity filter applies to the statistics table.
-- Clicking a name in the tree opens the details, not the filter.
+- Clicking a name in the tree opens its details. Set filters with the checkboxes.
 
 ## 6.5 Details and timeline
 

@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
@@ -60,6 +60,7 @@ Performance measurement tools are in `agent/bench/`.
 - Vehicle behavior on link loss is not implemented (roadmap P2).
 - The MP port holds only the latest plan. If two `MissionPlan`s arrive in one tick, only the last is executed.
 - With many vehicles, split them across Agents. List them all in the scenario's `participants`.
+- Processing ticks for lockstep onboard inputs follow [3.6](../03_architecture.md#36-one-lockstep-frame). The `late_onboard` value is not exposed. Only the first warning reaches the log.
 
 Traceability: [agent/TRACE.md](../../../../agent/TRACE.md).
 

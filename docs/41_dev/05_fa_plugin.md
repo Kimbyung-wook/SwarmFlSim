@@ -1,6 +1,6 @@
 # 5. FA 플러그인 작성
 
-FA(Flight Autonomy)는 MA의 비행 명령을 동역학 제어 출력으로 바꾼다. 대부분은 기본 FA로 충분하다. 다른 유도·제어 법칙을 비교할 때 직접 쓴다.
+FA(Flight Autonomy)는 MA의 비행 명령을 동역학 제어 출력으로 바꾼다. 기본 FA를 그대로 쓰고, 다른 유도·제어 법칙을 비교할 때만 직접 쓴다.
 
 예제는 [hsa_fa.py](../../examples/plugins/src/swarm_plugin_examples/hsa_fa.py)(`example_hsa`)다. HSA만 처리하는 가장 작은 FA이고 시험은 [test_plugin_examples.py](../../examples/plugins/tests/test_plugin_examples.py)에 있다.
 
@@ -102,7 +102,7 @@ example_hsa = "swarm_plugin_examples.hsa_fa:HsaOnlyFlightAutonomy"
 "autonomy": { "ma_plugin": "example_turn", "fa_plugin": "example_hsa", "fa_params": { "k_heading": 0.8 } }
 ```
 
-`example_hsa`는 Waypoint와 Curve를 `REJECTED`로 답하므로 `waypoint` MA와 함께 쓰면 작업이 수행되지 않는다. FA를 바꿀 때는 MA가 쓰는 모드를 지원하는지 먼저 본다.
+`example_hsa`는 Waypoint와 Curve를 `REJECTED`로 답하므로 `waypoint` MA와 함께 쓰면 작업이 실행되지 않는다. FA를 바꿀 때는 MA가 쓰는 모드를 지원하는지 먼저 본다.
 
 ## 5.5 시험
 

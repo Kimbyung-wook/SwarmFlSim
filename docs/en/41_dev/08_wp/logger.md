@@ -1,6 +1,6 @@
 # 8. WP7 Recording and replay (`logger/`)
 
-> Source: [docs/41_dev/08_wp/logger.md](../../../41_dev/08_wp/logger.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/08_wp/logger.md](../../../41_dev/08_wp/logger.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
@@ -42,7 +42,7 @@ The TC-LOG items are gathered in one executable.
 
 - If the Logger does not exit normally, the file is not closed.
 - The replayer does not adapt to receiver speed (DEC-042).
-- Above the queue limit, messages are dropped and the count is left.
+- Above the queue limit, messages are dropped and the count is kept.
 
 Traceability: [logger/TRACE.md](../../../../logger/TRACE.md).
 
