@@ -167,6 +167,9 @@ def shape(traj: list[tuple], t0: float, t1: float, c: tuple[float, float] | None
     net = math.hypot(r[-1][1] - r[0][1], r[-1][2] - r[0][2])
     res = {"t": [round(t0, 1), round(t1, 1)], "net_m": round(net), "north_m": round(r[-1][1] - r[0][1]),
            "net_speed": round(net / max(r[-1][0] - r[0][0], 0.02), 1)}
+    alts = [p[3] for p in traj if t0 <= p[0] / 50.0 <= t1]
+    if alts:
+        res |= {"alt_min": round(min(alts), 1), "alt_max": round(max(alts), 1)}
     if c:
         d = [math.hypot(x[1] - c[0], x[2] - c[1]) for x in r]
         res |= {"rmin": round(min(d)), "rmax": round(max(d))}
