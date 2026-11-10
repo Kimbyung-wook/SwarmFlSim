@@ -1,6 +1,6 @@
 # 2. Quick start
 
-> Source: [docs/42_user/02_quickstart.md](../../42_user/02_quickstart.md) at commit `f0729ee`.
+> Source: [docs/42_user/02_quickstart.md](../../42_user/02_quickstart.md) at commit `f7bcbac`.
 
 The demo runner starts all processes at once. It runs an example scenario with 20 vehicles and one GCS in realtime. The configuration diagram is in [20_p0_demo.md §1](../../20_p0_demo.md#1-구성) (Korean).
 

@@ -1,6 +1,6 @@
 # 10. Troubleshooting
 
-> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `f0729ee`.
+> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `f7bcbac`.
 
 Look up by symptom. For build and code-level issues see [developer manual chapter 11](../41_dev/11_troubleshooting.md).
 

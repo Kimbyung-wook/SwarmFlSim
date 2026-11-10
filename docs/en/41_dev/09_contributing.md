@@ -1,6 +1,6 @@
 # 9. Contribution rules
 
-> Source: [docs/41_dev/09_contributing.md](../../41_dev/09_contributing.md) at commit `f0729ee`.
+> Source: [docs/41_dev/09_contributing.md](../../41_dev/09_contributing.md) at commit `f7bcbac`.
 
 Work in the repository is divided into WPs (work packages), and everything from requirements to tests is traced by ID.
 

@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `f0729ee`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `f7bcbac`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
@@ -171,8 +171,8 @@ Write registered names in `ma_plugin` and `fa_plugin`. List the names with `uv r
 | `flocking`, `flocking_basic` | Reynolds swarming and movement to a goal point | `move_to`, `hold`, `return_to_base`, `search_area`. `route` is `REJECTED` |
 
 - The only FA is `default`. It is used if omitted.
-- Unsupported tasks return `TaskStatus` REJECTED. Baseline MAs do not execute `track`, `strike` or `jam` tasks.
-- Write parameters in `ma_params` and `fa_params`. Names and ranges can be seen in the UI parameter panel during a run. Unknown names and out-of-range values are not applied and leave a rejection reason.
+- Unsupported tasks return `TaskStatus` REJECTED. Baseline MAs do not support `track`, `strike` or `jam` tasks.
+- Write parameters in `ma_params` and `fa_params`. Names and ranges can be seen in the UI parameter panel during a run. Unknown names and out-of-range values are not applied, and a rejection reason is recorded.
 
 Common parameters:
 
@@ -199,7 +199,7 @@ Each task in `tasks` has a `task_id`, `assignees` and one task-kind key.
 | `route` | List of route points. For each point `position`, `speed_mps`, `acceptance_radius_m`, action (`loiter`, `recon`) |
 | `return_to_base` | Returns to the starting position |
 
-`formations` has `group_id`, `members`, `leader`, `shape` (`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`. For `custom`, the number of `custom_offsets_m` must equal `members`.
+Each `formations` entry has `group_id`, `members`, `leader`, `shape` (`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`. For `custom`, the number of `custom_offsets_m` must equal `members`.
 
 ## 3.8 Onboard payloads (payloads)
 

@@ -1,6 +1,6 @@
 # User manual
 
-> Source: [docs/42_user/README.md](../../42_user/README.md) at commit `f0729ee`.
+> Source: [docs/42_user/README.md](../../42_user/README.md) at commit `f7bcbac`.
 
 - Readers: researchers and operators who write scenarios, run the simulator, operate the UI and replay recordings without changing code.
 - New to the project? Read the [project overview](../40_overview.md) first. For building, follow [chapters 1 and 2](../41_dev/README.md) of the developer manual.

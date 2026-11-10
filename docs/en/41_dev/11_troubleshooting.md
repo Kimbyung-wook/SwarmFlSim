@@ -1,6 +1,6 @@
 # 11. Troubleshooting
 
-> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `f0729ee`.
+> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `f7bcbac`.
 
 - For install and build failures, see [1.4](01_setup.md#14-common-failures) first. Symptoms from the user's point of view are in [user manual chapter 10](../42_user/10_faq.md).
 - Where process logs are depends on how you ran things. The demo runner collects them in `out/p0_demo/<mode>-<time>/<process>.log`.

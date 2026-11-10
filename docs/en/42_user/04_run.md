@@ -1,8 +1,8 @@
 # 4. Running
 
-> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `f0729ee`.
+> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `f7bcbac`.
 
-To start everything at once, the runner in [chapter 2](02_quickstart.md) is the easiest. This chapter covers running other scenarios and starting processes yourself.
+To start everything at once, use the runner in [chapter 2](02_quickstart.md). To run another scenario, go to 4.1. To start processes yourself, go to 4.2.
 
 ## 4.1 Running your own scenario with the runner
 

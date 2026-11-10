@@ -1,6 +1,6 @@
 # 8. WP8 Payload (`payload/`)
 
-> Source: [docs/41_dev/08_wp/payload.md](../../../41_dev/08_wp/payload.md) at commit `f0729ee`.
+> Source: [docs/41_dev/08_wp/payload.md](../../../41_dev/08_wp/payload.md) at commit `f7bcbac`.
 
 ## Responsibilities
 

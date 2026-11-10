@@ -1,9 +1,8 @@
 # 7. Messages and contracts
 
-> Source: [docs/41_dev/07_messages.md](../../41_dev/07_messages.md) at commit `f0729ee`.
+> Source: [docs/41_dev/07_messages.md](../../41_dev/07_messages.md) at commit `f7bcbac`.
 
-- The table in [contract §4](../../10_contracts.md#4-protobuf-스키마) (Korean) is the authority for the role of each proto file. This chapter gives the procedures for working with messages.
-- The code generation flow is in [2.1](02_build_test.md#21-code-generation).
+The table in [contract §4](../../10_contracts.md#4-protobuf-스키마) (Korean) is the authority for the role of each proto file. The code generation flow is in [2.1](02_build_test.md#21-code-generation).
 
 ## 7.1 The three message categories
 

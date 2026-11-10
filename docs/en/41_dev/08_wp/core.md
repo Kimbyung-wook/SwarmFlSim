@@ -1,10 +1,10 @@
 # 8. WP1 Sim Core (`core/`)
 
-> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `f0729ee`.
+> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
-Handles the frame scheduler (realtime, lockstep, freerun), entity state, dynamics integration, fault state, and scenario loading and distribution. It is the sole producer of the true state (truth) and the owner of the lockstep barrier. Payload evaluation calls the `payload/` library.
+Handles the frame scheduler (realtime, lockstep, freerun), entity state, dynamics integration, fault state, and scenario loading and distribution. Only Core produces the true state (truth), and Core manages the lockstep barrier. Payload evaluation calls the `payload/` library.
 
 ## Structure
 

@@ -1,10 +1,10 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `f0729ee`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `f7bcbac`.
 
-- This document is for people seeing the repository for the first time. It covers what the project is, what works today, and where to start.
+- To run it right away, go to §6. What is implemented is in §2, and progress in §8.
 - Baseline: contract 0.15.0, roadmap P6 complete (2026-11-09).
-- The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts. This document links to their sections.
+- The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts.
 
 ## 1. Purpose and scope
 

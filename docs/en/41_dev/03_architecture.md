@@ -1,9 +1,8 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f0729ee`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f7bcbac`.
 
-- See [overview §3](../40_overview.md#3-components) first for the overall structure. This chapter sets out the execution rules to follow when writing code.
-- [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
+See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 
 ## 3.1 Processes and participants
 
@@ -148,7 +147,7 @@ sequenceDiagram
 ## 3.8 Per-vehicle parameters
 
 - Value precedence: owner default → airframe table (dynamics only) → scenario (`dynamics_params`, `fa_params`, `ma_params`) → `SimCommand.set_params` during the run.
-- Owners are dynamics (Core), FA and MA. Invalid items are not silently dropped. The reason (`unknown`, `type`, `range`, `choice`, `not_runtime`) is left in `EntityParams.rejected`.
+- Owners are dynamics (Core), FA and MA. Invalid items are not silently dropped. The reason (`unknown`, `type`, `range`, `choice`, `not_runtime`) is recorded in `EntityParams.rejected`.
 - Details are in [contract §3.3, per-vehicle parameters](../../10_contracts.md#33-규칙).
 
 ## 3.9 Coordinates and units

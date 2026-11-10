@@ -1,6 +1,6 @@
 # 4. Writing an MA plugin
 
-> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `f0729ee`.
+> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `f7bcbac`.
 
 An MA (Mission Autonomy) is a Python class that makes the mission decisions for one vehicle or a swarm. It takes tasks and turns them into flight commands and equipment commands.
 
@@ -184,7 +184,7 @@ class Rendezvous(BatchMissionAutonomy):
 
 - `NavBatch`: `ids`, `lat_lon_alt` (N×3), `velocity_ned` (N×3), `valid` (N). Row `i` is `ctxs[i]`.
 - Send and receive per vehicle through `ctxs[i].ports`.
-- Use **only your own row** of `NavBatch`. Using other rows as neighbor information bypasses the datalink emulation (DEC-008). [rendezvous.py](../../../examples/plugins/src/swarm_plugin_examples/rendezvous.py) has that form.
+- Use **only your own row** of `NavBatch`. Using other rows as neighbor information bypasses the datalink emulation (DEC-008). [rendezvous.py](../../../examples/plugins/src/swarm_plugin_examples/rendezvous.py) does this.
 - A batch MA's `on_init` and `on_shutdown` take `ctxs`, and `on_params` takes one vehicle's `ctx`.
 
 ## 4.6 Tasks and TaskStatus
@@ -222,7 +222,7 @@ The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](.
 | `every(ctx, hz)` | Periodic check with a different phase per vehicle |
 | `peer_status(nav, group_id, task_id)` | Builds a `PeerStatus` |
 
-[patrol.py](../../../examples/plugins/src/swarm_plugin_examples/patrol.py) only calls `self.pilot.step()` and decides for itself just what to do when there is no task.
+[patrol.py](../../../examples/plugins/src/swarm_plugin_examples/patrol.py) only calls `self.pilot.step()` and decides for itself only what to do when there is no task.
 
 `TaskTracker` and `formation` check every tick for a `MissionPlan` received during the run (DEC-076). The authority is IMP-AGT-034 and IMP-AGT-035 in [algorithms/TRACE.md](../../../algorithms/TRACE.md).
 

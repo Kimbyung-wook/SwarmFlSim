@@ -1,6 +1,6 @@
 # 8. WP5 GCS/UI (`ui/`)
 
-> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `f0729ee`.
+> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `f7bcbac`.
 
 ## Responsibilities
 
@@ -44,7 +44,7 @@ It attaches to the bus only through the bridge. `publisher` of each `LinkEnvelop
 cd ui && npm test
 ```
 
-Unit tests of `model/` and `data/` are the core. Map operations such as drag and right-click are not in the automatic tests and are checked in a browser.
+Most tests are unit tests of `model/` and `data/`. Map operations such as drag and right-click are not in the automatic tests and are checked in a browser.
 
 ## Known limitations
 

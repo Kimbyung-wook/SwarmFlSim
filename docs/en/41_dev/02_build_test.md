@@ -1,9 +1,8 @@
 # 2. Build and test
 
-> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `f0729ee`.
+> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `f7bcbac`.
 
-- Run the commands in this chapter from the repository root. Exceptions are written in front of the command.
-- Each area is built and tested separately. If you only change Python, start at 2.3.
+Each area is built and tested separately, so if you only change Python, start at 2.3. Run the commands from the repository root. Exceptions are written in front of the command.
 
 ## 2.1 Code generation
 
