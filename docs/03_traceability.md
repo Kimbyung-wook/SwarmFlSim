@@ -39,7 +39,7 @@
 | REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006 | WP10, WP3 | IMP-AGT-010 | TC-QA-114~118 | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
-| REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~038 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~113 | 구현중 |
+| REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~038 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~113, TC-QA-119~126 | 구현중 |
 | REQ-LNK-004 | PRP-LNK-001, PRP-LNK-002 | DEC-008 | WP4 | IMP-LNK-001, 008 | TC-LNK-001, 004~006, 008~009, 011 | 구현중 |
 | REQ-CFG-001 | PRP-CFG-001 | DEC-029, DEC-050 | WP5, WP7 | IMP-API-008~010, IMP-CORE-006~007, 025, IMP-SCN-001, 003, 006~008, 011 | TC-CORE-009, 011~012, 039, TC-SCN-001~002, 004~010, 014 | 구현중 |
 | REQ-CFG-002 | PRP-CFG-001 |  | WP7 | IMP-SCN-001~004 | TC-SCN-001~007 | 구현중 |
@@ -228,6 +228,14 @@
 | TC-QA-116 | 프레임당 메시지 수와 종류(버스 전체, Agent 입출력) | `qa/perf_p1.py` | DEC-079, OPN-067 |
 | TC-QA-117 | CPU 코어 사용량과 GIL 포화 판단 | `qa/perf_p1.py` | DEC-079, OPN-067 |
 | TC-QA-118 | 선택지별 예상 배속(Agent 분할 실측, 나머지 추정) | `qa/perf_p1.py` | DEC-079, OPN-067 |
+| TC-QA-119 | 기본 정책 `GCS_LINK_CUT`: 약 5 s 뒤 선회, 복구 뒤 유지, 새 명령으로 종료 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-120 | 기본 정책 재밍 구역 진입(GCS 재밍) | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-121 | `RESUME_ON_RECOVERY`: 복구 시 중단 작업 재개 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-122 | `CONTINUE`: 두절·복구와 무관하게 작업 지속 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-123 | 정책 지정 경로·우선순위, MA별 동작 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-124 | 한 기체 두절의 다른 기체 영향 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-125 | lockstep 같은 시드 재현성(Heartbeat·불완전 링크·두절·재밍) | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-126 | Heartbeat 유입 뒤 기존 시나리오 영향 | `qa/p2_lostlink.py` | DEC-078 |
 
 ## 시험 결과
 
@@ -369,6 +377,14 @@
 | TC-QA-116 | 측정 | 2026-11-10 | waypoint 314건/프레임, flocking 2,330건/프레임 |
 | TC-QA-117 | 측정 | 2026-11-10 | flocking은 GIL 포화, waypoint는 프레임의 70% |
 | TC-QA-118 | 측정 | 2026-11-10 | 4분할 2.76배 실측, 일괄화+FA C++ 약 11배 추정. 8분할은 D-31로 측정 불가 |
+| TC-QA-119 | 통과 | 2026-11-10 | 상실은 마지막 Heartbeat 수신 후 5.06 s, 선회 반경 312 m, 130 s 새 명령으로 종료 |
+| TC-QA-120 | 통과 | 2026-11-10 | 상실은 마지막 수신 후 5.06 s, 새 명령까지 선회 유지. GCS만 덮는 구역은 상실 없음 |
+| TC-QA-121 | 통과 | 2026-11-10 | 지정 3경로와 항로 모두 복구 직후 재개. 작업 없는 기체는 D-32 |
+| TC-QA-122 | 통과 | 2026-11-10 | 지정 3경로와 재밍 통과 모두 상실 없이 지속 |
+| TC-QA-123 | 통과 | 2026-11-10 | 작업 정책이 `ma_params`를 앞섬. hold·formation·flocking 확인, 3 s 두절은 상실 아님 |
+| TC-QA-124 | 통과 | 2026-11-10 | 독립 기체 궤적·링크 결과 동일. 같은 무리·편대 영향은 O-37 |
+| TC-QA-125 | 통과 | 2026-11-10 | 5개 구성 각 5회 LinkOutcome·GCS 수신·상태·궤적 동일 |
+| TC-QA-126 | 영향 항목 | 2026-11-10 | `qa_s3_link`, `qa_p5_near`, `qa_p5_range`의 기대 변경. `continue` 권고 |
 
 ## 프로세스 결정
 
