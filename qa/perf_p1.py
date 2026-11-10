@@ -36,6 +36,7 @@ class Cfg:
     scn: str = "d3"             # m | mf | d3 | d3f
     ma: str = ""                # 비우면 시나리오 그대로
     logger: bool = False
+    state_off: bool = False     # Datalink --state-period 0 (link/state 1 Hz 전 쌍 발행을 끈다)
     agents: int = 1             # 0이면 Agent 없음
     mode: str = "plain"         # perf_agent --perf-mode
     nosub: bool = False         # Agent가 기체를 맡지 않음(틱→FrameDone만)
@@ -78,6 +79,8 @@ C = [
     # 구독 축소 (자기 ControlOutput 수신 제거)
     Cfg("d3_w_nar", narrow=True), Cfg("d3_w_nar_ti", narrow=True, mode="timers"),
     # P 코어 고정 민감도 (i9-14900HX, 논리 0~15가 P)
+    Cfg("d3_w_nols", state_off=True), Cfg("d3_w_nols_P", state_off=True, pcore=True), Cfg("d3_nofa_nols_P", ma="hold", mode="no_fa", state_off=True, pcore=True),
+    Cfg("d3_w_nols_tl", state_off=True, timeline=True),
     Cfg("d3_w_P", pcore=True), Cfg("d3_f_P", scn="d3f", pcore=True), Cfg("d3_hold_P", ma="hold", pcore=True),
     Cfg("d3_nofa_P", ma="hold", mode="no_fa", pcore=True), Cfg("d3_nosub_P", nosub=True, pcore=True), Cfg("d3_noagent_P", agents=0, pcore=True),
     Cfg("d3_w_ti_P", mode="timers", timeline=True, pcore=True), Cfg("d3_f_ti_P", scn="d3f", mode="timers", timeline=True, pcore=True),
@@ -270,6 +273,10 @@ def timeline(ev: list, c: Cfg, f0: int, f1: int) -> dict:
     r = {"n": len(tot), "tick_to_datalink_done": q(dl), "tick_to_agent_done": q(ag),
          "last_done_to_next_tick(core)": q(core), "frame_total": q(tot)}
     r["agent_is_last_pct"] = round(100 * sum(1 for a, d in zip(ag, dl) if a > d) / len(tot), 1)
+    # 프레임이 길게 끊기는 비중 (평균과 p50의 차이가 어디서 오는지 본다). 임계값은 ms
+    for lim in (5, 10, 25):
+        big = [x for x in tot if x * 1e3 >= lim]
+        r[f"frames_ge_{lim}ms"] = {"n": len(big), "ms_per_frame": round(1e3 * sum(big) / len(tot), 3)}
     return r
 
 
@@ -300,7 +307,7 @@ def run_one(c: Cfg, out: Path, base: int) -> dict:
     try:
         if c.logger:
             procs["logger"] = p0.Proc("logger", [p0.exe(BUILD, "logger", "swarm_logger"), "record", "--out", str(out / "rec.mcap"), *net.args("logger")], out)
-        procs["datalink"] = p0.Proc("datalink", [p0.exe(BUILD, "datalink", "swarm_datalink"), "--participant", "datalink-0", *feed, *net.args("datalink")], out)
+        procs["datalink"] = p0.Proc("datalink", [p0.exe(BUILD, "datalink", "swarm_datalink"), "--participant", "datalink-0", *feed, *(["--state-period", "0"] if c.state_off else []), *net.args("datalink")], out)
         for i, name in enumerate(agents):
             ents = ["--entities", "__none__"] if c.nosub else (["--entities", ",".join(uavs[i::c.agents])] if c.agents > 1 else [])
             perf = ["--perf-mode", c.mode, "--perf-warm", str(c.warm), "--perf-frames", str(c.meas)]

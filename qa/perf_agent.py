@@ -24,7 +24,7 @@ ap.add_argument("--perf-out", default="")
 ap.add_argument("--perf-warm", type=int, default=250)
 ap.add_argument("--perf-frames", type=int, default=1250)
 ap.add_argument("--perf-switch", type=float, default=0.0, help="sys.setswitchinterval. 0이면 기본값")
-ap.add_argument("--perf-narrow", action="store_true", help="onboard/<id>/*를 받는 메시지별 구독으로 바꾼다 (자기 ControlOutput 수신 제거 효과 측정)")
+ap.add_argument("--perf-narrow", action="store_true", help="DEC-081 뒤에는 효과 없음(런타임이 메시지별로 구독한다). onboard/<id>/*를 받는 메시지별 구독으로 바꾼다 (자기 ControlOutput 수신 제거 효과 측정)")
 A, REST = ap.parse_known_args()
 
 from swarm_api import Sample  # noqa: E402
@@ -71,6 +71,8 @@ def key_class(key: str) -> str:
         return "done"
     if key.startswith("onboard/"):
         return "onboard:" + key.rsplit("/", 1)[1]
+    if key.startswith("onboard_batch/"):  # DEC-081
+        return "batch:" + key.split("/")[1]
     if key.startswith("swarm/"):
         p = key.split("/")
         return f"swarm:{p[2]}:{p[3]}:{p[-1]}" if len(p) >= 5 else "swarm:?"
@@ -200,7 +202,7 @@ if A.perf_mode in ("timers", "no_fa"):
     rtm.AgentRuntime._handle = handle
 
     for name in ("_release_rx", "_release_onboard", "_report_activity", "_send_done", "publish_onboard", "send_link",
-                 "_apply_params", "_publish_params_due", "_step"):
+                 "_apply_params", "_publish_params_due", "_step", "_publish_controls", "_on_nav_batch"):
         setattr(rtm.AgentRuntime, name, timed(name, getattr(rtm.AgentRuntime, name)))
     vehmod.Vehicle.begin_frame = timed("begin_frame", vehmod.Vehicle.begin_frame)
     DefaultFlightAutonomy.step = timed("fa_step", DefaultFlightAutonomy.step)

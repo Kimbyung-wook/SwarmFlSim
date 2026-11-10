@@ -36,7 +36,7 @@
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
-| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079, DEC-080, DEC-081 | WP10, WP1, WP3 | IMP-AGT-010, IMP-AGT-040, IMP-CORE-029~030 | TC-QA-114~118, TC-AGT-118~125, TC-CORE-044~045 | 구현중 |
+| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079, DEC-080, DEC-081 | WP10, WP1, WP3 | IMP-AGT-010, IMP-AGT-040, IMP-CORE-029~030 | TC-QA-114~118, TC-QA-133~136, TC-AGT-118~125, TC-CORE-044~045 | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126 | 구현중 |
@@ -236,6 +236,16 @@
 | TC-QA-124 | 한 기체 두절의 다른 기체 영향 | `qa/p2_lostlink.py` | DEC-078 |
 | TC-QA-125 | lockstep 같은 시드 재현성(Heartbeat·불완전 링크·두절·재밍) | `qa/p2_lostlink.py` | DEC-078 |
 | TC-QA-126 | Heartbeat 유입 뒤 기존 시나리오 영향 | `qa/p2_lostlink.py` | DEC-078 |
+| TC-QA-127 | 일괄화 실스택 완주 8구성 | `qa/batch_e2e.py` | DEC-081 |
+| TC-QA-128 | 일괄 키 규칙, 옛 기체별 키 없음 | `qa/batch_e2e.py` | DEC-081 |
+| TC-QA-129 | 같은 시드 lockstep truth·항법·제어 바이트 동일 | `qa/batch_e2e.py` | DEC-005, DEC-039, DEC-081 |
+| TC-QA-130 | 일괄화 뒤 P5 도구 회귀 | `qa/p5_e2e.py` 등 | DEC-081 |
+| TC-QA-131 | 일괄화 뒤 P6 도구 회귀 | `qa/gw_plan.py`, `qa/gw_integ.py` | DEC-081 |
+| TC-QA-132 | 일괄화 뒤 lockstep late_onboard 경고 | `qa/p2_lostlink.py` | DEC-081 |
+| TC-QA-133 | 일괄화 뒤 3-DoF 100대 배속 | `qa/perf_p1.py` | DEC-079, DEC-080, DEC-081 |
+| TC-QA-134 | 일괄화 전후 단계별·프레임 분해 | `qa/perf_p1.py`, `qa/perf_agent.py` | DEC-081 |
+| TC-QA-135 | 일괄화 전후 메시지·CPU | `qa/perf_p1.py` | DEC-081 |
+| TC-QA-136 | FA C++ 이관 뒤 배속 재추정, §29 추정 검증 | §31.7 | OPN-068 |
 
 ## 시험 결과
 
@@ -385,6 +395,16 @@
 | TC-QA-124 | 통과 | 2026-11-10 | 독립 기체 궤적·링크 결과 동일. 같은 무리·편대 영향은 O-37 |
 | TC-QA-125 | 통과 | 2026-11-10 | 5개 구성 각 5회 LinkOutcome·GCS 수신·상태·궤적 동일 |
 | TC-QA-126 | 통과 | 2026-11-10 | 시나리오 3건 `continue` 반영 뒤 `p5_e2e`, `jam_late`, `dl_restart_jam`, TC-QA-039, TC-QA-003·018·024 재실행 통과 (§30.11) |
+| TC-QA-127 | 통과 | 2026-11-10 | 8구성 각 3회 끝까지, 프레임 누락 0, 이상 종료 0 |
+| TC-QA-128 | 통과 | 2026-11-10 | 프레임당 NavigationBatch 1건, 참여자당 ControlBatch 1건, 항목 수 일치, 옛 키 0건 |
+| TC-QA-129 | 통과 | 2026-11-10 | 8구성 3회 truth·NavigationBatch·ControlBatch 바이트 동일, 이벤트 순서 동일 |
+| TC-QA-130 | 통과 | 2026-11-10 | `p5_e2e` lockstep·realtime·range·link cut, `jam_late`, `dl_restart_jam`, TC-QA-039, strike 도구, `p2_lostlink` cut·det, TC-QA-003·018·024 |
+| TC-QA-131 | 통과 | 2026-11-10 | `gw_plan` r1·order-trial·lockstep-det, `gw_integ`. XSD 실패 0 |
+| TC-QA-132 | 미통과 | 2026-11-10 | D-33. 15회 중 5회 경고, 재현성 비교는 전부 동일 |
+| TC-QA-133 | 측정 | 2026-11-10 | waypoint 기본 10.21배, P 고정 9.87배, Logger 켬 9.05배 (§31.4) |
+| TC-QA-134 | 측정 | 2026-11-10 | FA·제어 발행 6.3→0.44 ms, 항법 수신 4.5→0.83 ms (§31.5) |
+| TC-QA-135 | 측정 | 2026-11-10 | 프레임당 314건→125건, Agent 입력 204→약 7건 (§31.6) |
+| TC-QA-136 | 추정 | 2026-11-10 | FA C++ 기본 약 12.6배, P 고정 약 12.4배. §29의 일괄화 5.4배·기본 6~8배는 과소 (§31.7) |
 
 ## 프로세스 결정
 

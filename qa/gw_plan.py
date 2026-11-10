@@ -178,6 +178,16 @@ class PlanObserver(GwObserver):
                 self.onboard[s.key.rsplit("/", 1)[-1]] += 1
         self.subs.append(self.bus.subscribe("onboard/*/*", cb))
 
+        def batch(s) -> None:  # noqa: ANN001  # DEC-081: 일괄 메시지는 항목 수를 옛 메시지 이름으로 센다
+            from swarm.v1 import fa_pb2, vi_pb2
+            if s.key.endswith("NavigationBatch"):
+                name, n = "NavigationReport", len(vi_pb2.NavigationBatch.FromString(s.payload).reports)
+            else:
+                name, n = "ControlOutput", len(fa_pb2.ControlBatch.FromString(s.payload).controls)
+            with self.lock:
+                self.onboard[name] += n
+        self.subs.append(self.bus.subscribe("onboard_batch/**", batch))
+
     def _detail(self, env) -> dict:  # noqa: ANN001
         name = env.msg_type.rsplit(".", 1)[-1]
         row: dict = {"msg": name, "publisher": env.publisher, "seq": env.header.seq, "dst": list(env.dst),

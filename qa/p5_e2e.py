@@ -107,13 +107,13 @@ class P5Observer(h.Observer):
 
     def trace_io(self) -> None:
         self.lo_full, self.ctrl = [], []
-        self.subs.append(self.bus.subscribe("onboard/*/ControlOutput", self._ctrl))
+        self.subs.append(self.bus.subscribe("onboard_batch/ControlBatch/*", self._ctrl))
 
     def _ctrl(self, s) -> None:  # noqa: ANN001
         from swarm.v1 import fa_pb2
-        c = fa_pb2.ControlOutput.FromString(s.payload)
+        batch = fa_pb2.ControlBatch.FromString(s.payload)  # DEC-081: 항목의 기체 ID는 header.source
         with self.lock:
-            self.ctrl.append((c.header.frame, s.key.split("/")[1], bytes(s.payload)))
+            self.ctrl.extend((c.header.frame, c.header.source, c.SerializeToString(deterministic=True)) for c in batch.controls)
 
     def _stk(self, s) -> None:  # noqa: ANN001
         a = self.ms.StrikeActivity.FromString(s.payload)
