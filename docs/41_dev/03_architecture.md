@@ -104,7 +104,7 @@ stateDiagram-v2
 | `lockstep` | 모든 참여자의 `FrameDone(N)`을 받은 뒤. 배속 > 0이면 dt/배속 간격, 0이면 대기 없음 | 시드 고정 | 알고리즘 비교, 회귀 시험 |
 | `freerun` | 배속 > 0이면 dt/배속 간격, 0이면 대기 없음 | 아님 | Core 단독 가속 |
 
-> 알려진 제약: lockstep 같은 시드 2~4회 비교(QA 19차, 무고장 60 s)에서 truth 궤적은 같았지만, 첫 `SystemStatus`의 송신 프레임이 실행마다 달라 `LinkOutcome`과 GCS 수신 일부가 같지 않았다(D-30, 수정 중). 고장 주입 등 `SystemStatus`가 바뀌는 시점과 Gateway를 둔 구성의 재현성은 확인하지 않았다.
+> 같은 시드 lockstep은 truth 궤적, `LinkOutcome`, GCS 수신이 실행마다 같다. 무고장, 고장 주입, 임무장비, 50기 구성과 외부 입력이 없는 Gateway 구성을 앞 60 s까지 비교해 확인했다([QA §28](../21_qa_report.md#28-20차-시험-d-30-재시험-lockstep-재현성-2026-11-10)). 외부 입력이 있는 Gateway lockstep은 재현 대상이 아니다. Gateway 발행 시각이 입력이 도착한 시점의 틱이라 시드로 정해지지 않는다.
 
 ## 3.6 lockstep 한 프레임
 
@@ -132,6 +132,7 @@ sequenceDiagram
 
 - 틱 0에서는 rx를 소비하지 않는다. 기체 간 메시지는 모델 지연에 더해 최소 1틱 늦게 소비된다(DEC-040, DEC-045).
 - 틱 f에서 Datalink가 낸 rx는 다음 틱부터 소비된다.
+- `NavigationReport`를 뺀 onboard 입력은 도착 즉시 처리하지 않고 메시지 프레임 기준 틱의 시작 전에 처리한다. `SystemStatus`는 프레임 + 1, 임무장비 출력(`*Activity`)과 `Detection`은 프레임 + 2다(IMP-AGT-036). 처리 틱이 지나 도착하면 경고를 한 번 남기고 내부 통계 `late_onboard`에 세며 다음 틱에 처리한다. 통합 실행에서는 발생하지 않았다. realtime과 free-run은 도착 즉시 처리한다.
 - `sent_count`는 지금까지 발행한 샘플의 누적 수다. 수신 측은 이 수만큼 받을 때까지 기다린다(DEC-044). 대상은 `swarm/**`뿐이다.
 - 난수는 `ctx.rng`만 쓴다. 벽시계, 딕셔너리 순서, 스레드 경합에 의존하면 결정성이 깨진다.
 - 참여자 응답이 벽시계 5 s 넘게 없으면 `SimStatus.waiting_participants`에 실린다. 시작 후 이탈한 참여자의 재합류는 지원하지 않는다. 복구는 Reset+Start다(DEC-038, DEC-041).

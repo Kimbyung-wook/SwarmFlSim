@@ -58,6 +58,7 @@ uv run pytest agent/tests
 - 링크 상실 시 기체 행동은 미구현이다(로드맵 P2).
 - MP 포트는 최신 계획만 들고 있다. 한 틱에 `MissionPlan` 두 개가 닿으면 마지막 것만 수행된다.
 - 기체 수가 많으면 Agent를 나눈다. 시나리오의 `participants`에 모두 적는다.
+- lockstep의 onboard 입력 처리 틱은 [3.6](../03_architecture.md#36-lockstep-한-프레임)을 따른다. `late_onboard` 값은 외부로 나오지 않고 첫 건의 경고만 로그에 남는다.
 
 추적: [agent/TRACE.md](../../../agent/TRACE.md).
 
