@@ -6,7 +6,7 @@
 flowchart LR
     CMD["sim/ctrl/cmd"] --> CORE
     DONE["sim/clock/done/&lt;p&gt;"] --> CORE
-    CO["onboard/&lt;id&gt;/ControlOutput"] --> CORE
+    CO["onboard_batch/ControlBatch/&lt;participant&gt;"] --> CORE
     subgraph CORE["SimCore (core/)"]
         SCH["프레임 스케줄러<br/>REALTIME · LOCKSTEP · FREERUN"]
         ES["EntityStore (SoA)"]
@@ -20,15 +20,15 @@ flowchart LR
     WP2["swarm_dynamics (dynamics/)<br/>dof2 · dof3 · rk4 · rk45 · FlatTerrain"] --> DP
     CORE --> TICK["sim/clock/tick"]
     CORE --> TRUTH["truth/state · truth/event/kill"]
-    CORE --> NAV["onboard/&lt;id&gt;/NavigationReport"]
+    CORE --> NAV["onboard_batch/NavigationBatch"]
     CORE --> ST["sim/ctrl/status"]
 ```
 
-- 프레임 N: truth·NavigationReport·tick(N) 발행 → 참여자 응답(ControlOutput, lockstep이면 FrameDone(N)) → 진행 조건 충족 시 [t_N, t_N+dt] 적분 → N+1.
+- 프레임 N: truth·NavigationBatch·tick(N) 발행 → 참여자 응답(ControlBatch, lockstep이면 FrameDone(N)) → 진행 조건 충족 시 [t_N, t_N+dt] 적분 → N+1.
 - 진행 조건: LOCKSTEP은 모든 참여자의 FrameDone(N). REALTIME은 dt마다(배속 1 고정). LOCKSTEP·FREERUN은 배속 > 0이면 dt/배속마다, 0이면 대기 없음.
 - 한 프레임 이상 늦으면 따라잡지 않고 기준 시각을 다시 잡으며 `frame_overruns`를 올린다.
 - PAUSED에서 StepFrames(n)은 배속 기한 없이 n 프레임 진행한다. LOCKSTEP 장벽은 그대로 적용한다.
-- ControlOutput은 엔티티별 최신값을 다음 적분에 반영하고(영차 유지), `map_control`이 false면 버리고 이전 입력을 유지한다.
+- ControlBatch의 항목은 엔티티별 최신값을 다음 적분에 반영하고(영차 유지), `map_control`이 false면 버리고 이전 입력을 유지한다.
 - 동역학: swarm_core는 `wp2_provider`(WP2 팩토리)를 쓴다. DynamicsKind → `dyn::make_model`, airframe → 모델 파라미터 표, 적분기 `--integrator rk4|rk45`(기본 rk45). 목 공급자(`mock::provider`)는 시험용이다.
 - 지면 충돌: 프레임 시작에 지면 위(g > 0)인 엔티티에만 `make_ground_event`를 건다. 적분기가 교차를 찾으면 그 시점 상태로 멈추고 kill(cause=ground)을 발행한다. 이벤트 Header는 교차 시각과 프레임 N+1(처음 죽은 채 발행되는 프레임)이다.
 - 고장: ENGINE은 명령을 그대로 둔 채 적분 입력의 속도 명령만 모델 최소값으로 바꾼다. 해제(`clear`, `duration_s` 경과)되면 마지막 명령으로 돌아간다. NAV는 NavigationReport를 멈춘다. Reset이 모든 고장을 푼다.
@@ -40,7 +40,7 @@ flowchart LR
 | IMP-CORE-001 | swarm::Bus의 Zenoh 백엔드 ZenohBus (zenoh-cpp 1.10.2, zenoh-c). peer/client 모드, connect/listen, json5 설정 | `include/swarm/core/zenoh_bus.hpp`, `src/zenoh_bus.cpp` | PRP-NET-001, DEC-002, REQ-NET-001 | TC-CORE-001 통과 Superseded by IMP-API-007 (`bus/`로 이관, DEC-026) |
 | IMP-CORE-002 | 프레임 스케줄러: 50–100 Hz 고정 프레임, REALTIME/LOCKSTEP/FREERUN, lockstep 장벽, 시드 고정 rng, sim/clock/tick 발행, sim/ctrl/cmd 처리, sim/ctrl/status 발행 | `include/swarm/core/sim_core.hpp`, `src/sim_core.cpp` | DEC-005, REQ-SIM-002, REQ-DYN-003, PRP-SIM-002, DEC-014 | TC-CORE-002~006, 009, 010 통과 |
 | IMP-CORE-003 | 엔티티 저장소(SoA, 상태·입력 연속 버퍼), truth/state(TruthFrame) 발행. STATIC과 모델 없는 SCRIPTED는 초기 위치 고정 | `include/swarm/core/entity_store.hpp`, `src/entity_store.cpp`, `src/sim_core.cpp` | DEC-006, REQ-PRF-001, PRP-SIM-003 | TC-CORE-002, 007 통과 |
-| IMP-CORE-004 | onboard/&lt;id&gt;/ControlOutput 구독 → `map_control` → 동역학 입력, onboard/&lt;id&gt;/NavigationReport 발행(UAV·FPV·자율 플러그인 지정 엔티티). 잡음 훅 `CoreConfig::nav_noise` | `src/sim_core.cpp` | DEC-013, PRP-SIM-003, REQ-DYN-001 | TC-CORE-005, 007, 008 통과 |
+| IMP-CORE-004 | 제어 입력 → `map_control` → 동역학 입력, 항법 발행(UAV·FPV·자율 플러그인 지정 엔티티). 키는 DEC-081로 일괄 메시지로 바뀌었다(IMP-CORE-029, 030). 잡음 훅 `CoreConfig::nav_noise` | `src/sim_core.cpp` | DEC-013, PRP-SIM-003, REQ-DYN-001 | TC-CORE-005, 007, 008 통과 |
 | IMP-CORE-005 | 시험용 등속 2-DoF 목 모델(구면 지구)과 RK4 목 적분기. DynamicsProvider로 주입 | `include/swarm/core/mock_dynamics.hpp`, `src/mock_dynamics.cpp`, `include/swarm/core/dynamics_provider.hpp` | DEC-006, IMP-API-006 | TC-CORE-007, 008 통과 |
 | IMP-CORE-006 | 실행 파일 swarm_core, 최소 시나리오 JSON 파서(EntitySpec proto JSON), 내장 시나리오(고정익 20 + GCS 1), 격추 고장(InjectFault KILL → truth/event/kill) | `src/main.cpp`, `include/swarm/core/scenario.hpp`, `src/scenario.cpp` | REQ-CFG-001, DEC-005, DEC-014 | TC-CORE-009, 011 통과 |
 | IMP-CORE-007 | proto 시나리오: `LoadScenario.scenario`(`swarm.v1.Scenario`) 적재, `RunSpec.participants`를 lockstep 장벽에 반영, 파일 입력(`.pb` 또는 proto JSON, 최소 JSON 호환). 버스는 `open_bus`로 연다 | `include/swarm/core/scenario.hpp`, `src/scenario.cpp`, `src/sim_core.cpp`, `src/main.cpp` | DEC-024, DEC-025, DEC-026 | TC-CORE-012 통과 |
@@ -64,6 +64,8 @@ flowchart LR
 | IMP-CORE-026 | DEM 지형(평지 제외)에서 공중 엔티티(UAV·공중 표적·미사일·FPV)의 시작 고도가 그 위치 지형보다 낮으면 적재 때 엔티티마다 `warning: <id> starts below DEM terrain: alt A m < terrain H m ...`를 남기고(적재는 계속), 실행하면 시작 프레임 적분 전에 kill(cause=ground, sim_time 0, frame 1)한다. reset 때 다시 계산한다. 지상 엔티티는 제외(기존 지면 위 판정 유지) | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-060, IMP-CORE-009, IMP-CORE-023, QA-024 | TC-CORE-041 |
 | IMP-CORE-027 | `--terrain-flat`과 `--terrain-dem`을 함께 주면 거부하지 않고 DEM을 쓰며 `warning: both --terrain-flat and --terrain-dem given; using DEM, flat value X m ignored (DEC-061)`을 남긴다. 인자 순서와 무관하다 | `src/main.cpp`, `CMakeLists.txt` | DEC-061, IMP-CORE-023, QA-025 | TC-CORE-042 |
 | IMP-CORE-028 | 기체(onboard 런타임이 있는 엔티티: UAV·FPV·플러그인 지정)마다 `onboard/<id>/SystemStatus` 발행. 프레임 발행 때 엔티티 ID 순으로, health·subsystems가 바뀌었거나 모의 시간 1 s 경계(프레임 0 포함)를 지났으면 낸다. 헤더는 모의 시각·프레임·source=<id>·키별 seq. 죽은 기체는 FAILED로 바뀔 때 한 번만 내고 주기 발행을 멈춘다. **subsystem 대응**(늘 이 순서로 4개): `engine`=ENGINE, `nav`=NAV, `sensor`=SENSOR(그 기체의 모든 센서, DEC-047), `link`=LINK_CUT이면 FAILED·GCS_LINK_CUT만이면 DEGRADED. 고장이면 FAILED, 아니면 NOMINAL, 죽으면 모두 FAILED. **전체 health**: 죽었거나 engine 고장이면 FAILED, 다른 고장이 있으면 DEGRADED, 없으면 NOMINAL. **energy_frac**: 2/3-DoF·스크립트 모델에 에너지(연료·배터리) 상태가 없어 1.0. 링크 차단 고장은 효과는 Datalink가 내고 Core는 이 보고용으로 기간·해제만 기록한다. 모의 시간·프레임으로만 정해 lockstep 결정적이다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-073, DEC-047, DEC-071, IMP-CORE-011 | TC-CORE-043, TC-CORE-016 |
+| IMP-CORE-029 | 기체별 `onboard/<id>/NavigationReport`를 `onboard_batch/NavigationBatch` 프레임당 1건으로 대체. truth 뒤·tick 앞에 낸다. `reports`는 기체 ID 순이고 각 항목 `header.source`가 기체 ID, 항목 seq는 기체별로 이어진다. 배치 `header.source`는 Core 참여자 ID, seq는 실행마다 0부터. 항법 고장·사망 기체는 그 프레임에서 빠지고 대상이 없어도 빈 배치를 낸다. `nav_noise` 난수도 ID 순으로 뽑아 시나리오의 엔티티 나열 순서와 무관하다(나열이 ID 순이 아닌 시나리오는 이전과 잡음 값이 다르다) | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-081, DEC-080, REQ-PRF-002, DEC-013, DEC-005 | TC-CORE-044, 002, 005, 007, 013, 016 |
+| IMP-CORE-030 | `onboard/*/ControlOutput` 구독을 `onboard_batch/ControlBatch/*` 구독으로 대체. 수신 때는 참여자(키 끝)별로 배치를 쌓기만 하고, 다음 적분 때 참여자 이름 순·참여자 안 수신 순으로 풀어 기체별 최신 항목을 `map_control`한다. 기체 ID는 항목 `header.source`다. 모르는 ID·빈 ID·모델 없는 엔티티 항목은 그 항목만 건너뛰고, 깨진 배치는 버린다. 두 참여자가 같은 기체를 보내면 이름이 뒤인 쪽이 이겨 도착 순서와 무관하다 | `src/sim_core.cpp`, `include/swarm/core/sim_core.hpp` | DEC-081, DEC-080, REQ-PRF-002, DEC-005, DEC-039 | TC-CORE-045, 005, 008, 013 |
 | IMP-CORE-014 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_core가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 Shutdown 후 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-005, DEC-026 | TC-INT-001 확인 |
 
 ## TC
@@ -113,6 +115,8 @@ flowchart LR
 | TC-CORE-041 | 능선 DEM 정점(1200 m) 위치의 UAV 500 m·공중 표적 300 m: 적재 경고 2건(ID·고도·지형 높이), 적재만으로는 kill 없음, 시작 후 kill(cause=ground) 2건(sim_time 0, frame 1), 프레임 1부터 죽은 채 제자리. 지형 위 UAV·지형 아래 지상 표적은 살아 있음. reset 뒤 재시작도 같음 | `tests/test_core.cpp` | IMP-CORE-026 | 통과 (msvc-debug, 2026-11-06) |
 | TC-CORE-042 | 실행 파일: `--terrain-flat 30 --terrain-dem ridge.json`과 반대 순서 둘 다 DEC-061 경고와 `terrain=dem 101x101`을 출력하고 20 프레임 진행 (ctest `core.TC-CORE-042.flat_first`, `.dem_first`) | `CMakeLists.txt` | IMP-CORE-027 | 통과 (msvc-debug, 2026-11-06) |
 | TC-CORE-043 | SystemStatus: 프레임 0·50·100에 uav-000, uav-001 순(시나리오 순서와 무관), GCS 제외, 적재만으로는 없음, NOMINAL·energy 1.0·subsystem 4개, seq. NAV 0.5 s 주입 다음 프레임에 그 기체만 DEGRADED(nav FAILED), 25프레임 뒤 만료로 NOMINAL. 다중 고장(ENGINE+SENSOR+GCS_LINK_CUT 한 프레임 → 1건 FAILED, LINK_CUT 추가 → link FAILED, ENGINE 해제 → DEGRADED). 1 s 경계 주기 발행에 고장 상태 유지. KILL → FAILED 1건(같은 프레임 안 ID 순), 이후 주기 발행 없음. 같은 입력 2회 키·바이트 동일 | `tests/test_core.cpp` | IMP-CORE-028 | 통과 (msvc-debug, Zenoh 포함, 2026-11-08) |
+| TC-CORE-044 | NavigationBatch: 프레임당 1건(프레임 0..10 → 11건), 배치·항목 header, ID 순(시나리오 순서 uav-001·gcs-01·uav-000과 무관), GCS 제외, 기체별 `NavigationReport` 키 미발행. NAV 고장 기체 제외, 전원 제외여도 빈 배치, 해제 뒤 복귀(빠진 동안 seq 미사용), 사망 제외, reset 뒤 seq 0. 잡음 훅 사용 시 엔티티 나열 순서를 뒤집어도 배치 바이트 동일 | `tests/test_core.cpp` | IMP-CORE-029 | 통과 (msvc-debug, Zenoh 포함, 2026-11-10) |
+| TC-CORE-045 | ControlBatch: 참여자 둘의 배치 모두 적용, 같은 배치의 모르는 ID·빈 ID·모델 없는 GCS만 건너뜀, 기체별 옛 키·깨진 배치 무시. 수신만으로는 미적용이고 다음 적분에서 적용, 한 참여자의 같은 프레임 안 나중 배치 우선(불일치 계수·이전 입력 유지). lockstep에서 두 참여자가 같은 기체를 보낼 때 도착 순서를 바꿔도 truth 바이트 동일, 이름이 뒤인 참여자 값 적용 | `tests/test_core.cpp` | IMP-CORE-030 | 통과 (msvc-debug, Zenoh 포함, 2026-11-10) |
 
 ## 제약과 후속
 

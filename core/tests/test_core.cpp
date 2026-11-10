@@ -4,6 +4,8 @@
 // TC-CORE-036~039: DEM 지형 충돌·가시선, JamZone 재발행, ID·재머 적재 검증 (DEC-053, DEC-052, DEC-050, DEC-049)
 // TC-CORE-041: DEM 아래 시작 공중 엔티티 적재 경고·시작 프레임 kill (DEC-060)
 // TC-CORE-043: onboard/<id>/SystemStatus 변화·1 Hz 발행, 다중 고장, 결정성 (DEC-073)
+// TC-CORE-044~045: 항법·제어 일괄 메시지 (DEC-081)
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -54,12 +56,30 @@ void put(Bus& bus, const std::string& key, const T& msg) {
           protobuf_encoding(msg.GetDescriptor()->full_name()));
 }
 
+// Agent의 일괄 제어 (DEC-081). 항목의 header.source가 기체 ID다
+void put_controls(Bus& bus, const std::string& participant,
+                  const std::vector<std::pair<std::string, v1::ControlOutput>>& controls) {
+  v1::ControlBatch b;
+  for (const auto& [id, c] : controls) {
+    auto* out = b.add_controls();
+    *out = c;
+    out->mutable_header()->set_source(id);
+  }
+  put(bus, keys::control_batch(participant), b);
+}
+
+void put_control(Bus& bus, const std::string& id, const v1::ControlOutput& c,
+                 const std::string& participant = "agent-host-1") {
+  put_controls(bus, participant, {{id, c}});
+}
+
 // 버스에서 받은 메시지를 모은다
 struct Recorder {
   std::vector<v1::ClockTick> ticks;
   std::vector<v1::TruthFrame> truths;
   std::vector<v1::SimStatus> statuses;
-  std::vector<v1::NavigationReport> navs;
+  std::vector<v1::NavigationReport> navs;  // 배치를 풀어 수신 순으로 모은다
+  std::vector<v1::NavigationBatch> nav_batches;
   std::vector<v1::TruthEvent> events;
   std::vector<v1::EntityParams> params;
   std::vector<std::string> truth_bytes;
@@ -75,7 +95,11 @@ struct Recorder {
     subs.push_back(
         bus.subscribe(keys::kSimCtrlStatus, [this](const Sample& s) { statuses.push_back(decode<v1::SimStatus>(s)); }));
     subs.push_back(
-        bus.subscribe("onboard/*/NavigationReport", [this](const Sample& s) { navs.push_back(decode<v1::NavigationReport>(s)); }));
+        bus.subscribe(std::string(keys::kNavigationBatch), [this](const Sample& s) {
+          CHECK(s.encoding == "application/protobuf;swarm.v1.NavigationBatch");
+          nav_batches.push_back(decode<v1::NavigationBatch>(s));
+          for (const auto& r : nav_batches.back().reports()) navs.push_back(r);
+        }));
     subs.push_back(bus.subscribe("truth/event/**", [this](const Sample& s) { events.push_back(decode<v1::TruthEvent>(s)); }));
     subs.push_back(bus.subscribe("sim/param/**", [this](const Sample& s) {
       params.push_back(decode<v1::EntityParams>(s));
@@ -239,7 +263,7 @@ void test_lockstep_determinism() {
       v1::ControlOutput c;
       c.mutable_kinematic()->set_speed_mps(25.0 + 0.1 * static_cast<double>(tick.frame()));
       c.mutable_kinematic()->set_heading_rate_rps(0.05);
-      put(bus, keys::onboard("uav-001", "ControlOutput"), c);
+      put_control(bus, "uav-001", c);
       v1::FrameDone d;
       d.set_participant("agent-host-1");
       d.set_frame(tick.frame());
@@ -330,11 +354,11 @@ void test_control_input() {
   v1::ControlOutput c;
   c.mutable_kinematic()->set_speed_mps(25.0);
   c.mutable_kinematic()->set_heading_rate_rps(std::numbers::pi / 2 / 10.0);  // 10 s에 90°
-  put(bus, keys::onboard("uav-001", "ControlOutput"), c);
+  put_control(bus, "uav-001", c);
   v1::ControlOutput bad;
   bad.mutable_actuator()->set_throttle(1.0);
   for (int i = 0; i < 500; ++i) {
-    if (i == 250) put(bus, keys::onboard("uav-001", "ControlOutput"), bad);
+    if (i == 250) put_control(bus, "uav-001", bad);
     sim.poll(t);
   }
   CHECK(sim.control_mismatches() == 1);
@@ -532,6 +556,7 @@ void test_wp2_lockstep_determinism() {
     // 참여자: 기체마다 다른 선회 명령(2-DoF는 heading_rate, 3-DoF는 bank)을 보내고 완료를 알린다
     auto sub = bus.subscribe(keys::kClockTick, [&](const Sample& s) {
       const auto tick = decode<v1::ClockTick>(s);
+      std::vector<std::pair<std::string, v1::ControlOutput>> controls;
       for (int i = 1; i <= 20; ++i) {
         char id[16];
         std::snprintf(id, sizeof id, "uav-%03d", i);
@@ -541,8 +566,9 @@ void test_wp2_lockstep_determinism() {
         k->set_heading_rate_rps(0.01 * i * std::sin(0.01 * static_cast<double>(tick.frame())));
         k->set_bank_rad(0.02 * i);
         k->set_climb_rate_mps(i % 3 - 1.0);
-        put(bus, keys::onboard(id, "ControlOutput"), c);
+        controls.emplace_back(id, c);
       }
+      put_controls(bus, "agent-host-1", controls);
       v1::FrameDone d;
       d.set_participant("agent-host-1");
       d.set_frame(tick.frame());
@@ -992,7 +1018,7 @@ void test_params_lockstep() {
       v1::ControlOutput c;
       c.mutable_kinematic()->set_speed_mps(25.0);
       c.mutable_kinematic()->set_heading_rate_rps(0.5);
-      put(bus, keys::onboard("uav-001", "ControlOutput"), c);
+      put_control(bus, "uav-001", c);
       v1::FrameDone d;
       d.set_participant("agent-host-1");
       d.set_frame(tick.frame());
@@ -2037,6 +2063,181 @@ void test_system_status() {
   CHECK(!a.empty() && a == b);
 }
 
+// TC-CORE-044: NavigationBatch (IMP-CORE-029, DEC-081). 프레임당 1건, ID 순, 항목 header.source가 기체 ID,
+// 항법 고장·사망 기체 제외, 전원 제외여도 빈 배치, 기체별 키 미발행, reset 뒤 seq 재시작
+void test_nav_batch() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  std::size_t legacy = 0;
+  auto legacy_sub = bus.subscribe("onboard/*/NavigationReport", [&](const Sample&) { ++legacy; });
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  auto sc = one_uav();
+  v1::EntitySpec u0 = sc.entities[0];
+  u0.set_id("uav-000");
+  sc.entities.push_back(u0);  // 시나리오 순서: uav-001, gcs-01, uav-000
+  CHECK(sim.load(sc));
+  CHECK(rec.nav_batches.empty());
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 10);
+
+  auto sources = [](const v1::NavigationBatch& b) {
+    std::string out;
+    for (const auto& r : b.reports()) out += r.header().source() + ",";
+    return out;
+  };
+  CHECK(rec.nav_batches.size() == 11);
+  for (std::size_t f = 0; f < rec.nav_batches.size(); ++f) {
+    const auto& b = rec.nav_batches[f];
+    CHECK(b.header().frame() == f && b.header().sim_time_us() == f * 20000);
+    CHECK(b.header().seq() == f && b.header().source() == "core-0");
+    CHECK(sources(b) == "uav-000,uav-001,");
+    for (const auto& r : b.reports()) {
+      CHECK(r.header().frame() == f && r.header().sim_time_us() == f * 20000 && r.header().seq() == f);
+      CHECK(r.has_kinematics() && r.kinematics().position().lat_deg() > 36.9);
+    }
+  }
+  CHECK(legacy == 0);
+
+  auto last_sources = [&] { return sources(rec.nav_batches.back()); };
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_NAV));
+  run_frames(sim, 1);
+  CHECK(last_sources() == "uav-001,");
+  CHECK(rec.nav_batches.back().reports(0).header().seq() == 11);
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_NAV));
+  const auto before = rec.nav_batches.size();
+  run_frames(sim, 2);
+  CHECK(rec.nav_batches.size() == before + 2 && rec.nav_batches.back().reports_size() == 0);  // 빈 배치도 낸다
+  CHECK(rec.nav_batches.back().header().frame() == 13);
+  sim.submit(fault_cmd("uav-000", v1::FAULT_KIND_NAV, 0.0, true));
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_NAV, 0.0, true));
+  sim.submit(fault_cmd("uav-001", v1::FAULT_KIND_KILL));
+  run_frames(sim, 1);
+  CHECK(last_sources() == "uav-000,");
+  CHECK(rec.nav_batches.back().reports(0).header().seq() == 11);  // 빠진 동안 seq를 쓰지 않는다
+
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(Clock::now());
+  rec.nav_batches.clear();
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 1);
+  CHECK(!rec.nav_batches.empty() && rec.nav_batches[0].header().seq() == 0 && sources(rec.nav_batches[0]) == "uav-000,uav-001,");
+  CHECK(legacy == 0);
+
+  // 잡음 난수는 ID 순으로 쓴다: 시나리오 나열 순서를 바꿔도 배치가 바이트까지 같다
+  auto noisy = [](bool reversed) {
+    InMemoryBus b;
+    Recorder r(b);
+    core::CoreConfig cfg = quiet();
+    cfg.nav_noise = [](const std::string&, v1::NavigationReport& nav, std::mt19937_64& rng) {
+      std::normal_distribution<double> n(0.0, 3.0);
+      nav.mutable_kinematics()->mutable_position()->set_alt_m(nav.kinematics().position().alt_m() + n(rng));
+    };
+    core::SimCore s(b, core::mock::provider(), cfg);
+    core::Scenario sn = one_uav();
+    sn.entities.pop_back();
+    for (const char* id : {"uav-002", "uav-003"}) {
+      v1::EntitySpec e = sn.entities[0];
+      e.set_id(id);
+      sn.entities.push_back(e);
+    }
+    if (reversed) std::reverse(sn.entities.begin(), sn.entities.end());
+    CHECK(s.load(sn));
+    s.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50, 42));
+    run_frames(s, 20);
+    std::string out;
+    for (const auto& m : r.nav_batches) out += m.SerializeAsString();
+    return out;
+  };
+  const auto forward = noisy(false), reversed = noisy(true);
+  CHECK(!forward.empty() && forward == reversed);
+}
+
+// TC-CORE-045: ControlBatch 구독 (IMP-CORE-030, DEC-081). 참여자별 배치 모두 적용, 모르는 ID·모델 없는 기체·빈 ID 무시,
+// 깨진 배치·기체별 옛 키 무시, 다음 적분에서 적용, 같은 프레임 안 최신값, lockstep에서 두 참여자 도착 순서와 무관
+v1::ControlOutput speed_cmd(double v) {
+  v1::ControlOutput c;
+  c.mutable_kinematic()->set_speed_mps(v);
+  return c;
+}
+
+void test_control_batch() {
+  InMemoryBus bus;
+  Recorder rec(bus);
+  core::SimCore sim(bus, core::mock::provider(), quiet());
+  auto sc = one_uav();
+  v1::EntitySpec u0 = sc.entities[0];
+  u0.set_id("uav-000");
+  sc.entities.push_back(u0);
+  CHECK(sim.load(sc));
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 1);
+
+  // 참여자 둘이 각자 기체를 맡는다. 잘못된 항목이 섞여도 나머지는 적용된다
+  put_controls(bus, "agent-0", {{"uav-999", speed_cmd(5.0)}, {"", speed_cmd(5.0)}, {"gcs-01", speed_cmd(5.0)}, {"uav-000", speed_cmd(15.0)}});
+  put_control(bus, "uav-001", speed_cmd(35.0), "agent-1");
+  run_frames(sim, 1000);
+  CHECK(sim.control_mismatches() == 0);
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-000")) - 15.0) < 0.5);
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 35.0) < 0.5);
+
+  // 기체별 옛 키와 깨진 배치는 무시한다
+  put(bus, keys::onboard("uav-001", "ControlOutput"), speed_cmd(5.0));
+  const std::uint8_t garbage[] = {0xff, 0xff, 0xff};
+  bus.put(keys::control_batch("agent-0"), garbage, "application/protobuf;swarm.v1.ControlBatch");
+  run_frames(sim, 500);
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 35.0) < 0.5);
+
+  // 입력은 poll 때 적분에 쓰인다. 받기만 해서는 아무 일도 없다
+  v1::ControlOutput bad;
+  bad.mutable_actuator()->set_throttle(1.0);
+  put_control(bus, "uav-001", bad, "agent-1");
+  CHECK(sim.control_mismatches() == 0);
+  run_frames(sim, 1);
+  CHECK(sim.control_mismatches() == 1);
+
+  // 같은 프레임의 한 참여자 안에서는 나중 배치가 이긴다(좋은 입력 뒤 나쁜 입력 → 불일치 1건, 이전 입력 유지)
+  put_control(bus, "uav-001", speed_cmd(5.0), "agent-1");
+  put_control(bus, "uav-001", bad, "agent-1");
+  run_frames(sim, 500);
+  CHECK(sim.control_mismatches() == 2);
+  CHECK(std::abs(ground_speed(entity(rec.truths.back(), "uav-001")) - 35.0) < 0.5);
+
+  // 두 참여자가 같은 기체를 보내면 이름이 뒤인 쪽이 이긴다. lockstep에서 도착 순서가 달라도 truth가 같다
+  auto lockstep = [](bool a_first) {
+    InMemoryBus b;
+    Recorder r(b);
+    core::SimCore s(b, core::mock::provider(), quiet({"agent-a", "agent-b"}));
+    auto sub = b.subscribe(keys::kClockTick, [&](const Sample& smp) {
+      const auto tick = decode<v1::ClockTick>(smp);
+      auto send = [&](const char* who, double v) {
+        put_control(b, "uav-001", speed_cmd(v), who);
+        v1::FrameDone d;
+        d.set_participant(who);
+        d.set_frame(tick.frame());
+        put(b, keys::clock_done(who), d);
+      };
+      if (a_first) {
+        send("agent-a", 15.0);
+        send("agent-b", 35.0);
+      } else {
+        send("agent-b", 35.0);
+        send("agent-a", 15.0);
+      }
+    });
+    CHECK(s.load(one_uav()));
+    ready(b, "agent-a");
+    ready(b, "agent-b");
+    s.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50, 42));
+    const auto t = Clock::now();
+    for (int i = 0; i < 3000 && s.frame() < 1000; ++i) s.poll(t);
+    CHECK(s.frame() == 1000);
+    CHECK(std::abs(ground_speed(entity(r.truths.back(), "uav-001")) - 35.0) < 0.5);
+    return r.truth_bytes.back();
+  };
+  const auto a = lockstep(true), b = lockstep(false);
+  CHECK(!a.empty() && a == b);
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -2076,6 +2277,8 @@ int main() {
   test_load_validation_ids_jammers();
   test_dem_below_start();
   test_system_status();
+  test_nav_batch();
+  test_control_batch();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
