@@ -384,7 +384,7 @@
 | TC-QA-123 | 통과 | 2026-11-10 | 작업 정책이 `ma_params`를 앞섬. hold·formation·flocking 확인, 3 s 두절은 상실 아님 |
 | TC-QA-124 | 통과 | 2026-11-10 | 독립 기체 궤적·링크 결과 동일. 같은 무리·편대 영향은 O-37 |
 | TC-QA-125 | 통과 | 2026-11-10 | 5개 구성 각 5회 LinkOutcome·GCS 수신·상태·궤적 동일 |
-| TC-QA-126 | 영향 항목 | 2026-11-10 | `qa_s3_link`, `qa_p5_near`, `qa_p5_range`의 기대 변경. `continue` 권고 |
+| TC-QA-126 | 통과 | 2026-11-10 | 시나리오 3건 `continue` 반영 뒤 `p5_e2e`, `jam_late`, `dl_restart_jam`, TC-QA-039, TC-QA-003·018·024 재실행 통과 (§30.11) |
 
 ## 프로세스 결정
 

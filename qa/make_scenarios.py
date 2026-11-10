@@ -130,6 +130,10 @@ def s3_link() -> dict:
     # 80 km 떨어진 기체: 지도 밖은 아니고 사거리 밖
     far = uav("uav-013", 0.0, 35_000.0)
     sc["entities"].append(far)
+    # 링크 영향이 시험 목적이므로 링크 상실 행동은 끈다 (DEC-078, 21_qa_report §30.8)
+    for e in sc["entities"]:
+        if e["kind"] == "uav":
+            e["autonomy"]["ma_params"]["lost_link_policy"] = "continue"
     return sc
 
 

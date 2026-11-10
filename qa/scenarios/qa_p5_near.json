@@ -71,7 +71,8 @@
    "autonomy": {
     "ma_plugin": "flocking_basic",
     "ma_params": {
-     "group": "alpha"
+     "group": "alpha",
+     "lost_link_policy": "continue"
     }
    },
    "link_profile": "uav_default",
@@ -115,7 +116,8 @@
    "autonomy": {
     "ma_plugin": "flocking_basic",
     "ma_params": {
-     "group": "alpha"
+     "group": "alpha",
+     "lost_link_policy": "continue"
     }
    },
    "link_profile": "uav_default",
@@ -155,7 +157,8 @@
    "autonomy": {
     "ma_plugin": "flocking_basic",
     "ma_params": {
-     "group": "alpha"
+     "group": "alpha",
+     "lost_link_policy": "continue"
     }
    },
    "link_profile": "uav_default",
@@ -201,7 +204,8 @@
    "autonomy": {
     "ma_plugin": "flocking_basic",
     "ma_params": {
-     "group": "alpha"
+     "group": "alpha",
+     "lost_link_policy": "continue"
     }
    },
    "link_profile": "uav_default",
@@ -235,7 +239,8 @@
    "autonomy": {
     "ma_plugin": "flocking_basic",
     "ma_params": {
-     "group": "alpha"
+     "group": "alpha",
+     "lost_link_policy": "continue"
     }
    },
    "link_profile": "uav_default",

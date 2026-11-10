@@ -3199,3 +3199,21 @@ TC-QA-106~108 방식으로 LinkOutcome, GCS 수신, 기체 tx의 FlightCommandSt
 | `lost_link_timeout_s`와 `--heartbeat-hz` 변경 | 기본값만 확인했다 (끔은 §30.8) |
 | 6-DoF, 지형 | 3-DoF·평지만 썼다 |
 | `qa/p5_e2e.py` 등 기존 도구 재실행 | A/B 비교로 대체했다 |
+
+### 30.11 §30.8 권고 반영 뒤 재실행 (2026-11-10)
+
+`qa_s3_link`, `qa_p5_near`, `qa_p5_range`의 전 UAV에 `ma_params.lost_link_policy = continue`를 넣었다. 생성기 `qa/make_scenarios.py`, `qa/make_p5_variants.py`도 같게 고쳐 다시 생성해도 유지된다. `qa/p2_lostlink.py --case regress`는 시나리오의 지정을 지우고 모드별로 넣으므로 §30.8 비교는 그대로 재현된다. 링크 상실 행동의 시연은 `qa/p2_lostlink.py`가 맡는다. 결과는 `qa/out/p2/rerun/`(git 제외)이다.
+
+| TC | 도구, 구성 | 결과 | 판정 |
+|---|---|---|---|
+| TC-QA-036 계열 | `qa/p5_e2e.py --scenario qa_p5_near --fault`, lockstep 최대 배속 | 프레임 27,552 발사, 28,018 도달, tgt-003 파괴. SENSOR 고장 중 탐지 0, 해제 뒤 재개. 프레임 누락 0 | 통과 |
+| TC-QA-036 계열 | 같은 시나리오, realtime 1배속 | 프레임 27,583 발사, 28,048 도달, tgt-003 파괴. 프레임 누락 0, 로그 이상 없음 | 통과 |
+| TC-QA-042 | `qa/jam_late.py`, realtime | 늦은 구독자 3명이 0.06~0.76 s에 활성 구역 수신, 주기 1.0 s. KILL 뒤 붙은 2명은 구역 0건 | 통과 |
+| TC-QA-049 | `qa/dl_restart_jam.py`, realtime | 재시작 2회 모두 0.18 s, 0.12 s 안에 재두절. 그 뒤 구역 안 수신 전달 0 (JAMMED 1,320건, 1,785건) | 통과 |
+| TC-QA-039 거리 | `qa_p5_range`, lockstep 32,000 프레임 | 5대 첫 OUT_OF_RANGE 프레임 25,580~25,925. 그 뒤 전달 0, GCS 수신 0 | 통과 |
+| TC-QA-039 고장 | 예제 시나리오(변경 없음), uav-004, 120 s 두절, lockstep | 두절 중 수신 0 (FAULT_INJECTED 130건). 마지막 버림 뒤 0.12 s에 재수신 | 통과 |
+| TC-QA-003, 018, 024 | `qa/run_qa.py --only 003,018,024`, `qa_s3_link` | PASS. 시드 2종 궤적 불일치 0 | 통과 |
+
+- `qa_p5_near` lockstep의 Agent 로그에 `probe.json` 교체 PermissionError 1건이 있다. QA 프로브가 쓰는 중에 관찰자가 파일을 읽은 Windows 파일 경합이며 결과 파일은 정상이다. 제품 코드와 무관하다.
+- `qa_p5_near` 발사 프레임은 Heartbeat 도입 전 기록(sim 551 s)과 같은 범위다.
+- 다시 돌리지 않은 것: `qa/recovery_stack.py`, `qa/diag_determinism.py`, `qa/r4_det.sh`, 각 도구의 `--ui`·`--bridge` 경로.

@@ -446,12 +446,14 @@ REG = {"qa_s3_link": 300.0, "qa_p5_near": 640.0, "qa_p5_noloss": 640.0, "qa_p5_n
 def reg_one(out: Path, name: str, mode: str, port: int) -> dict:
     src = SCN / f"{name}.json"
     sc: dict | Path = src
-    if mode == "cont":
-        j = json.loads(src.read_text(encoding="utf-8"))
-        for e in j["entities"]:
-            if e.get("kind") == "uav":
-                e["autonomy"].setdefault("ma_params", {})["lost_link_policy"] = "continue"
-        sc = j
+    j = json.loads(src.read_text(encoding="utf-8"))
+    for e in j["entities"]:
+        if e.get("kind") == "uav":  # 시나리오 파일의 지정(§30.8 뒤 continue)과 무관하게 모드대로 비교한다
+            params = e["autonomy"].setdefault("ma_params", {})
+            params.pop("lost_link_policy", None)
+            if mode == "cont":
+                params["lost_link_policy"] = "continue"
+    sc = j
     st, ob = stack(out, sc, port, 0.0, hb_off=mode == "off")
     t0, end = time.monotonic(), REG[name]
     try:
