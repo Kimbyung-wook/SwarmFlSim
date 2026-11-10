@@ -11,6 +11,7 @@
 #include <google/protobuf/util/json_util.h>
 
 #include "swarm/api/keys.hpp"
+#include "swarm/v1/c2.pb.h"
 
 namespace swarm::lnk {
 namespace {
@@ -384,6 +385,7 @@ void Datalink::run_tick() {
       for (std::size_t i = cfg_.max_pending; i < pending_.size(); ++i) overflow_locked(std::move(pending_[i]));
       pending_.resize(cfg_.max_pending);
     }
+    heartbeats_locked(out);
     deliver_locked(out);
     flush_overflow_locked(out);
     publish_states_locked(out);
@@ -446,6 +448,27 @@ void Datalink::load_locked(const v1::Scenario& sc) {
       n.has_pos = true;
     }
   }
+  // DEC-078: controlling_gcs, 비면 시나리오의 첫 GCS(ID 정렬). Agent의 통제 GCS 규칙과 같다
+  std::vector<std::string> gcs_ids;
+  for (const auto& e : sc.entities())
+    if (e.kind() == v1::ENTITY_KIND_GCS && keys::is_valid_entity_id(e.id())) gcs_ids.push_back(e.id());
+  std::sort(gcs_ids.begin(), gcs_ids.end());
+  heartbeats_.clear();
+  for (const auto& e : sc.entities()) {
+    const bool vehicle = e.kind() == v1::ENTITY_KIND_UAV || e.kind() == v1::ENTITY_KIND_FPV ||
+                         !e.autonomy().ma_plugin().empty() || !e.autonomy().fa_plugin().empty();
+    if (!vehicle || e.kind() == v1::ENTITY_KIND_GCS || !keys::is_valid_entity_id(e.id())) continue;
+    const std::string gcs = !e.controlling_gcs().empty() ? e.controlling_gcs() : gcs_ids.empty() ? std::string() : gcs_ids[0];
+    if (gcs.empty()) continue;
+    if (!std::binary_search(gcs_ids.begin(), gcs_ids.end(), gcs)) {
+      log(e.id() + ": controlling_gcs '" + gcs + "' is not a GCS, no heartbeat");
+      continue;
+    }
+    heartbeats_.push_back(HeartbeatLink{gcs, e.id(), 0});
+  }
+  std::sort(heartbeats_.begin(), heartbeats_.end(), [](const HeartbeatLink& a, const HeartbeatLink& b) {
+    return std::tie(a.gcs, a.uav) < std::tie(b.gcs, b.uav);
+  });
   if (sc.has_run() && sc.run().seed() != 0) seed_ = sc.run().seed();
   required_.clear();
   if (sc.has_run())
@@ -469,6 +492,8 @@ void Datalink::reset_locked() {
   rx_sent_.clear();
   peer_sent_.clear();
   next_state_us_ = now_us_;
+  next_heartbeat_us_ = 0;
+  for (auto& hb : heartbeats_) hb.sequence = 0;
 }
 
 Datalink::Node& Datalink::node_locked(const std::string& id) {
@@ -677,6 +702,39 @@ void Datalink::deliver_locked(std::vector<Out>& out) {
     env.set_rx_time_us(rx_us);
     out.push_back(Out{"swarm/" + f.dst + "/rx/" + f.suffix, env.SerializeAsString(), encoding_of<v1::LinkEnvelope>()});
     outcome_locked(f.src, f.dst, *f.env, f.size, v1::DROP_REASON_NONE, f.tx_time_us, rx_us, out);
+  }
+}
+
+// DEC-078: GCS Heartbeat. 틱에 묶어 발생시키고(tx 시각 = T_k) 일반 메시지와 같은 route_locked로 판정한다. 이 틱의 입력을
+// 처리한 뒤 (GCS, 기체) 순으로 넣으므로 채널 난수 순서가 결정적이다. tx 키를 거치지 않아 DEC-044 장벽과 무관하고,
+// 처리량 상한·입력 큐 폭주에도 밀리지 않는다
+void Datalink::heartbeats_locked(std::vector<Out>& out) {
+  if (cfg_.heartbeat_hz <= 0.0 || heartbeats_.empty() || now_us_ < next_heartbeat_us_) return;
+  const auto period_us = std::max<std::uint64_t>(1, static_cast<std::uint64_t>(std::llround(1e6 / cfg_.heartbeat_hz)));
+  next_heartbeat_us_ = (now_us_ / period_us + 1) * period_us;  // 주기 격자에 맞춰 누적 오차가 없다
+
+  const std::string msg(v1::GcsHeartbeat::descriptor()->name());
+  const std::string suffix = std::string(keys::to_string(keys::Iface::C2)) + "/" + msg;
+  for (auto& hb : heartbeats_) {
+    ++hb.sequence;  // 링크 판정 전에 올린다. 끊긴 구간은 수신 측에서 번호 공백으로 보인다
+    v1::GcsHeartbeat beat;
+    auto* h = beat.mutable_header();
+    h->set_source(hb.gcs);
+    h->set_frame(frame_);
+    h->set_sim_time_us(now_us_);
+    h->set_seq(hb.sequence);
+    beat.set_sequence(hb.sequence);
+
+    v1::LinkEnvelope env;
+    *env.mutable_header() = *h;
+    env.set_publisher(cfg_.participant_id);
+    env.add_dst(hb.uav);
+    env.set_iface(v1::L1_INTERFACE_C2);
+    env.set_msg_type(v1::GcsHeartbeat::descriptor()->full_name());
+    env.set_payload(beat.SerializeAsString());
+    const std::size_t size = env.ByteSizeLong();
+    Pending p{now_us_, hb.gcs, keys::tx(hb.gcs, keys::Iface::C2, msg), hb.sequence, 0, suffix, size, std::move(env)};
+    route_locked(p, hb.uav, out);
   }
 }
 

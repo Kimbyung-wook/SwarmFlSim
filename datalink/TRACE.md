@@ -62,6 +62,7 @@ flowchart LR
 | IMP-LNK-021 | 송신 개수 장벽: lockstep `FrameDone.sent_count`에 엔티티별 발행한 `swarm/<e>/rx/**` 누적 수(모의 손실로 버린 메시지는 미계수)를 싣고, 틱 f+1은 참여자의 FrameDone{f}와 엔티티별 `swarm/<e>/tx/**` 누적 수신 수가 참여자들이 실은 `sent_count` 합 이상이 될 때까지 대기. `sent_count`가 없으면 개수 조건 없음, realtime·free-run 무영향, Start/Reset 시 카운터 초기화 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | DEC-044, DEC-039 |
 | IMP-LNK-022 | lockstep rx 불변식: 틱 k에서 전달하는 rx와 DELIVERED 결과의 `rx_time_us`를 `max(표본 도착 시각, T_k)`로 둔다. 지연 0, 틱 사이 도착, `max_routes_per_tick` 이월이 모두 `deliver_locked` 한 곳을 지난다. realtime·free-run은 표본 도착 시각 그대로 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp` | REQ-LNK-001, REQ-LNK-004, DEC-054, DEC-045 |
 | IMP-LNK-023 | 프레임 0 송신 시각(QA O-23): `sim_time_us == 0`이고 `publisher`가 있을 때만 시각 없음으로 보고 마지막 틱 시각을 쓴다. `publisher`가 없으면(기체 런타임) 0을 유효한 시각으로 유지한다. 틱 처리 조건에서 `tx_time == 0` 예외를 없애 프레임 0 송신도 `tx < T_k` 규칙으로 틱 1에서 처리한다(틱 0은 기다리지 않아 도착 경쟁이 되므로). 기준 확인: UI는 `publisher`와 clock 시각, Gateway는 `publisher`만 채우고, 기체 런타임은 `publisher`를 비우며 항상 시각을 찍는다. `qa/harness.py`, `qa/gw_integ.py`, `scripts/run_p0_demo.py`는 `publisher` 없이 마지막 틱 시각을 찍는다 | `src/emulator.cpp` | REQ-LNK-001, QA O-23, DEC-039, DEC-054, DEC-077 |
+| IMP-LNK-024 | GCS Heartbeat: 시나리오 적재 시 (GCS, 기체) 쌍을 만든다(`controlling_gcs`, 비면 ID 정렬 첫 GCS. Agent 규칙과 동일, 기체는 UAV·FPV 또는 자율 플러그인 지정 엔티티). 틱에 묶어 시뮬레이션 시각 주기(기본 1 Hz, `--heartbeat-hz`, 0이면 끔, 틱당 최대 1회)로 발생하고 tx 시각은 T_k다. `sequence`는 쌍별 1부터, 링크 판정 전에 증가한다. 일반 메시지와 같은 `route_locked`로 판정해 `swarm/<uav>/rx/c2/GcsHeartbeat`와 `link/outcome`을 낸다. `swarm/<gcs>/tx/**`에 발행하지 않아 DEC-044 tx 장벽 밖이고 입력 큐 상한의 영향을 받지 않는다. rx는 `sent_count`에 든다 | `include/swarm/lnk/emulator.hpp`, `src/emulator.cpp`, `src/main.cpp` | REQ-LNK-003, DEC-078, DEC-039, DEC-044, DEC-054 |
 | IMP-LNK-015 | Windows에서 별도 프로세스 그룹으로 띄운 swarm_datalink가 Ctrl+Break(SIGBREAK)를 받으면 SIGINT와 같이 정상 종료 (P0 데모 실행기) | `src/main.cpp` | DEC-026 |
 
 ## 시험 (TC)
@@ -94,6 +95,9 @@ flowchart LR
 | TC-LNK-024 | 프레임 0 송신이 프레임 1 송신보다 앞서 도착: 정상 순서, 프레임 0 송신이 뒤늦게 도착한 경우(realtime rx 30 ms < 50 ms, lockstep 먼저 전달), tx 시각 0 유지, 지연 0이면 틱 0에 처리하지 않고 rx_time = T_1 (DEC-054) | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-054 | 통과 (msvc-debug, 2026-11-09) |
 | TC-LNK-025 | `publisher` + 시각 0은 마지막 틱 시각, `publisher` + 시각은 헤더 시각, `publisher` 없음 + 시각 0은 0, `publisher`는 rx로 그대로 전달 | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-077 | 통과 (msvc-debug, 2026-11-09) |
 | TC-LNK-026 | 같은 입력 2회 동일 출력, 프레임 0 송신이 틱 0 앞이든 뒤든 동일 출력(지연 30±8 ms·손실 있음, 지연 0) | `tests/test_datalink.cpp` | IMP-LNK-023, DEC-039 | 통과 (msvc-debug, 2026-11-09) |
+| TC-LNK-027 | Heartbeat 발생: 2 Hz에서 1초에 기체당 3회, 틱 시각 고정, key·iface·msg_type·payload, `sequence` 1부터, `controlling_gcs`와 첫 GCS 규칙, 없는 GCS·비기체 제외, tx 미발행, outcome 1건, `sent_count` 반영, Reset 시 번호 재시작, 0 Hz 끔, 기본 1 Hz | `tests/test_datalink.cpp` | IMP-LNK-024, DEC-078 | 통과 (msvc-debug, 2026-11-10) |
+| TC-LNK-028 | Heartbeat 링크 판정: `GCS_LINK_CUT`·`LINK_CUT`·재밍·거리 초과에서 끊기고 해제 시 재개, 사망 시 끊김, 다른 기체는 영향 없음, 끊긴 구간에도 `sequence` 증가 | `tests/test_datalink.cpp` | IMP-LNK-024, REQ-LNK-003, DEC-078 | 통과 (msvc-debug, 2026-11-10) |
+| TC-LNK-029 | Heartbeat 결정성: 지연·지터·GE 손실·토큰 버킷과 일반 C2가 섞일 때 같은 시드 2회의 rx·outcome 동일, 다른 시드는 다름, lockstep `rx_time >= T_k`, FrameDone 매 틱 | `tests/test_datalink.cpp` | IMP-LNK-024, DEC-039, DEC-054 | 통과 (msvc-debug, 2026-11-10) |
 
 ## 제약과 다음 단계
 
