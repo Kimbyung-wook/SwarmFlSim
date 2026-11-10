@@ -132,6 +132,7 @@ _ENUMS = {
     "RunMode": sim_pb2.RunMode,
     "FormationShape": c2_pb2.FormationShape,
     "TurnDirection": vi_pb2.TurnDirection,
+    "LostLinkPolicy": c2_pb2.LostLinkPolicy,
 }
 
 

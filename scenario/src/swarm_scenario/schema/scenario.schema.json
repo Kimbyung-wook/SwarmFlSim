@@ -38,6 +38,7 @@
     "RunMode": { "enum": ["realtime", "lockstep", "freerun"] },
     "FormationShape": { "enum": ["line", "column", "wedge", "echelon", "circle", "custom"] },
     "TurnDirection": { "enum": ["cw", "ccw"] },
+    "LostLinkPolicy": { "enum": ["hold_until_command", "resume_on_recovery", "continue"] },
 
     "Geodetic": {
       "type": "object",
@@ -244,6 +245,7 @@
       "properties": {
         "task_id": { "type": "string", "minLength": 1 },
         "assignees": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/EntityId" } },
+        "lost_link_policy": { "$ref": "#/$defs/LostLinkPolicy" },
         "move_to": {
           "type": "object",
           "additionalProperties": false,

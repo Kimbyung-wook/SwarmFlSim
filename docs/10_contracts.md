@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.15.0
+- 계약 버전: 0.16.0
+  - 0.16.0: `GcsHeartbeat` EXT, `TaskCommand.lost_link_policy` EXT, Datalink의 Heartbeat 발생, MA 링크 상실 행동 (DEC-078)
   - 0.15.0: `ApprovalResponse` STD(`MA_ApprovalRequestStatus`, DEC-075), Gateway 임무 계획 수신 `tx/mp`(DEC-076), `LinkEnvelope.publisher`(DEC-077)
   - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072), Core의 `onboard/<id>/SystemStatus` 발행(DEC-073)
   - 0.13.0: `StrikeActivity` 변화 보고 키를 무장별 (메시지, payload_id, weapon_entity)로 분리(DEC-063)
@@ -137,6 +138,11 @@ flowchart LR
   - `NavigationReport`는 모의 시간 기준 주기로 보낸다. 기본 1 Hz이고 Agent 런타임 CLI `--vi-report-hz`로 바꾼다(0이면 끈다).
   - `SystemStatus`(Core가 `onboard/<id>/SystemStatus`로 바뀔 때와 1 Hz로 발행, DEC-073)·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
   - Datalink를 거치므로 GCS 링크 상태가 반영된다. UI·Gateway는 `swarm/<gcs>/rx/vi/<Msg>`만 읽는다.
+- GCS Heartbeat와 링크 상실 행동 (DEC-078)
+  - Datalink가 GCS마다 자기가 통제하는 기체(`controlling_gcs`, 비면 시나리오의 첫 GCS)로 `GcsHeartbeat`를 모의 시간 기준 주기로 발생시킨다. 기본 1 Hz이고 CLI `--heartbeat-hz`로 바꾼다(0이면 끈다).
+  - Heartbeat는 일반 tx와 같은 링크 판정(생존·고장·재밍·거리·가시선·손실·지연)을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 전달되고 `link/outcome`을 남긴다. `swarm/<gcs>/tx/**`에는 발행하지 않으므로 lockstep 송신 개수 장벽(DEC-044)의 대상이 아니다.
+  - MA는 C2 포트로 받은 Heartbeat로만 링크 상실을 판단한다 (DEC-013). 첫 Heartbeat를 받은 뒤부터 감시하고, 마지막 수신 후 MA 변수 `lost_link_timeout_s`(기본 5 s, 모의 시간)가 지나면 상실로 판단한다.
+  - 정책은 `TaskCommand.lost_link_policy`로 작업마다 정하고, `UNSPECIFIED`면 MA 변수 `lost_link_policy`(기본 `hold_until_command`)를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
   - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
@@ -176,7 +182,7 @@ flowchart LR
 | 방향 | 텍스트 프레임 | 의미 |
 |---|---|---|
 | C → S | `{"op":"hello","client":"ui-01","role":"control","gcs":"gcs-01"}` | 첫 메시지. `role`: `control`(발행 가능) / `observer`(구독만). `gcs`: 이 UI가 맡은 GCS 엔티티 |
-| S → C | `{"op":"welcome","protocol":1,"contract":"0.15.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
+| S → C | `{"op":"welcome","protocol":1,"contract":"0.16.0"}` | 접속 승인. `contract`는 브리지가 쓰는 `CONTRACT_VERSION` |
 | C → S | `{"op":"sub","id":1,"key":"truth/**","max_hz":10}` | 구독. `max_hz` 0이면 제한 없음. 같은 키는 주기 안에서 마지막 메시지만 보낸다 |
 | C → S | `{"op":"unsub","id":1}` | 구독 해제 |
 | S → C | `{"op":"error","code":"forbidden","msg":"..."}` | 오류. `code`: `bad_request`, `forbidden`, `unsupported` |
@@ -208,7 +214,7 @@ flowchart LR
 | `common.proto` | Header, 좌표, 영역, CommandState | - |
 | `entity.proto` | EntityKind, Side, DynamicsKind, EntityState, EntitySpec(`dynamics_params`), ParamLayer, ParamSpec | - |
 | `vi.proto` | FlightCommand(HSA/Waypoint/Curve), FlightCommandStatus, FlightCapability, NavigationReport, SystemStatus | STD |
-| `c2.proto` | TaskCommand, TaskStatus, ApprovalRequest (STD) / FormationCommand, GroupAssignment, ApprovalResponse, TaskCommand.route(RouteTask) (EXT) | STD/EXT |
+| `c2.proto` | TaskCommand, TaskStatus, ApprovalRequest (STD) / FormationCommand, GroupAssignment, ApprovalResponse, TaskCommand.route(RouteTask), GcsHeartbeat, TaskCommand.lost_link_policy (EXT) | STD/EXT |
 | `p2p.proto` | PeerStatus, LeaderUpdate, TrackShare (STD) / PeerAlgorithmMessage (EXT) | STD/EXT |
 | `ms.proto` | Sensor/Jammer/Strike Command·Activity, StoreLoadout (STD) / Detection (EXT) | STD/EXT |
 | `mp.proto` | MissionPlan, RoutePlan, EngagementCriteria | STD |

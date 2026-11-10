@@ -152,6 +152,8 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-075 | `ApprovalResponse`를 STD로 바꾸고 `uci_name = "MA_ApprovalRequestStatus"`를 단다. Gateway는 외부 승인 응답을 받아 `swarm/<gcs>/tx/c2/ApprovalResponse`로 보낸다. 시뮬레이터가 승인 요청을 내는 경로는 이 결정에 넣지 않는다 | OPN-061, WP9 CR-GW-002, DEC-014, DEC-068, 사용자 답변: "STD로 변경" | Confirmed |
 | DEC-076 | Gateway 2단계에 임무 계획 수신을 더한다. 외부 `MA_MissionPlan`·`MA_RoutePlan`(STD)을 내부 `MissionPlan`·`RoutePlan`으로 바꿔 `swarm/<gcs>/tx/mp/<Msg>`로 보낸다. 위치가 필요한 외부 작업은 이 경로로 받는다. `MA_TaskCommand`의 임시 규칙(CapabilityID Label, hold·return_to_base·취소)은 유지한다. Agent는 기존 MP 포트로 받는다 | OPN-062, WP9 CR-GW-003, DEC-068, DEC-013, 사용자 답변: "지금 MP 연동" | Confirmed |
 | DEC-077 | `LinkEnvelope`에 `publisher`(발행 참여자 ID)를 더한다. 한 엔티티의 `tx` 키에 발행자가 여럿이면 각 발행자가 채우고, `header.seq`는 발행자·키별로 매긴다. Datalink는 그대로 전달하고 Logger는 봉투째 기록한다. 키 구조는 바꾸지 않는다 | OPN-063, WP9 CR-GW-005, QA O-14, DEC-068, 사용자 답변: "헤더에 발행자 ID" | Confirmed |
+| DEC-078 | GCS 링크 상실 판단과 행동. (1) 지상→기체 주기 메시지가 없으므로 `GcsHeartbeat`(EXT, C2)를 둔다. (2) Datalink가 GCS마다 통제 기체로 모의 시간 1 Hz(CLI 변경 가능)로 발생시키고 일반 메시지와 같은 링크 판정을 적용한다. 송신 개수 장벽(DEC-044)을 쓰지 않아 lockstep 결정성이 유지되고 UI 없이도 동작한다. (3) MA는 C2 포트의 Heartbeat로만 판단한다. 첫 수신 후 감시, 타임아웃 기본 5 s. (4) 정책 3가지: `HOLD_UNTIL_COMMAND`(기본. 제자리 선회, 복구 뒤에도 새 명령까지 유지), `RESUME_ON_RECOVERY`(제자리 선회, 복구 시 작업 재개), `CONTINUE`(상실·복구와 무관하게 지속). 작업마다 `TaskCommand.lost_link_policy`로 정하고 없으면 MA 변수를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다. 계약 0.16.0 | OPN-066, REQ-LNK-003, DEC-013, DEC-014, DEC-044, docs/00_proposal.md §3, 사용자 답변: "Heartbeat 같은 것을 보내는게 있을 것 같은데", "제자리 선회 대기", "기본은 선회 유지로 하고, 특정 임무에 따라서 이전 작업을 재개하거나 두절/링크 복구에 상관없이 임무를 지속" | Confirmed |
+| DEC-079 | 로드맵 P1은 기준 3항목(3-DoF 편대 기본 알고리즘, Traffic Monitor 기본 화면, 가속 벤치마크)에 더해 성능 개선까지 끝나야 완료로 판정한다. 측정값(3-DoF 100대 0.97배속, flocking 100대 0.45배속, docs/21_qa_report.md §10.4)은 REQ-PRF-002 목표(3-DoF 100대 ≥10배)에 못 미친다. 개선 범위와 도달 수치는 병목 측정 뒤 OPN-067에서 정한다 | OPN-067, REQ-PRF-002, 사용자 답변: "성능 개선까지 해야 완료" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -222,6 +224,8 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-063 | 같은 GCS 키에 UI와 Gateway가 함께 발행할 때의 발행자 구분(WP9 CR-GW-005). `header.seq`가 발행자별로 따로 매겨져 Datalink·Logger가 source만으로 구분할 수 없다. 선택: (A) `LinkEnvelope` 헤더에 발행 참여자 ID를 더한다(계약 변경) (B) Gateway를 별도 지상 엔티티(예: `gw-01`)로 시나리오에 둔다 (C) 현행 유지, 구분하지 않는다. 제안: A | Resolved by DEC-077 |
 | OPN-064 | 기체 VI 상태의 GCS 보고 경로(QA D-26). 통합 실행에서 Agent가 GCS로 VI를 보내지 않아 외부 시스템이 기체 위치를 모른다. 선택: (A) Agent 런타임이 FA의 VI 상태를 `swarm/<id>/tx/vi/<msg>`로 GCS에 보낸다. `NavigationReport`는 시나리오에서 정하는 주기(기본 1 Hz)로, `SystemStatus`·`FlightCommandStatus`는 바뀔 때, `FlightCapability`는 시작할 때 한 번 보낸다. Datalink를 거치므로 링크 상태가 반영된다 (B) MA 플러그인이 보낼지 정한다 (C) GCS가 `truth/**`에서 얻는다(DEC-013 위반). 제안: A | Resolved by DEC-071 |
 | OPN-065 | `onboard/<id>/SystemStatus` 발행 주체(WP3 DEC-071 구현 확인 사항). Agent는 이 키를 받아 GCS에 변화 보고하지만, 지금은 아무도 발행하지 않아 통합 실행에서 SystemStatus가 나가지 않는다. 선택: (A) Core가 발행한다. 활성 고장(DEC-047)에서 health·subsystems, 동역학 상태에서 energy_frac를 만들어 바뀔 때와 1 Hz(모의 시간)로 낸다 (B) Payload 라이브러리가 낸다(센서·재머 subsystem만 앎) (C) Agent FA가 낸다(고장 정보를 truth 없이 알 수 없음). 제안: A | Resolved by DEC-073 |
+| OPN-066 | GCS 링크 상실 판단의 입력과 기본 행동. 지상→기체 주기 메시지가 없고 MA는 링크·truth를 볼 수 없다(DEC-013) | Resolved by DEC-078 |
+| OPN-067 | P1 성능 개선의 방법과 완료 수치. Python Agent 병목 측정 후 선택지(프로세스 분할, 일괄 처리, 메시지 축소 등)와 REQ-PRF-002 달성 가능성을 제시한다 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

@@ -96,6 +96,24 @@ message TaskCommand {
     RouteTask route = 12;  // EXT (DEC-033)
   }
   bool cancel = 11;  // true면 task_id 작업 취소
+  LostLinkPolicy lost_link_policy = 13;  // EXT (DEC-078). UNSPECIFIED면 MA 변수 lost_link_policy를 따른다
+}
+
+// GCS 링크 상실 시 작업 처리 (DEC-078)
+enum LostLinkPolicy {
+  LOST_LINK_POLICY_UNSPECIFIED = 0;
+  LOST_LINK_POLICY_HOLD_UNTIL_COMMAND = 1;  // 상실 시 제자리 선회. 복구 뒤에도 새 명령까지 선회 유지
+  LOST_LINK_POLICY_RESUME_ON_RECOVERY = 2;  // 상실 시 제자리 선회. 복구되면 중단한 작업 재개
+  LOST_LINK_POLICY_CONTINUE = 3;            // 상실·복구와 무관하게 작업 지속
+}
+
+// 통제 GCS → 기체 C2 링크 생존 신호 (DEC-078). Datalink가 발생시킨다
+message GcsHeartbeat {
+  option (mapping) = MAPPING_CLASS_EXT;
+  option (l1) = L1_INTERFACE_C2;
+
+  Header header = 1;   // source = GCS 엔티티
+  uint32 sequence = 2;  // GCS·기체 쌍별 1부터 증가
 }
 
 message TaskStatus {
