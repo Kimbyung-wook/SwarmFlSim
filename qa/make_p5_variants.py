@@ -34,6 +34,9 @@ def main() -> None:
     v["qa_p5_noloss"] = d
     d = copy.deepcopy(base)
     d["link_profiles"] = [{"name": "gcs_default", "max_range_m": 12000.0}]
+    for e in d["entities"]:  # 거리 초과 링크 두절이 시험 목적이므로 링크 상실 행동은 끈다 (DEC-078, 21_qa_report §30.8)
+        if e.get("kind") == "uav":
+            e["autonomy"].setdefault("ma_params", {})["lost_link_policy"] = "continue"
     v["qa_p5_range"] = d
     for name, doc in v.items():
         doc["name"] = name

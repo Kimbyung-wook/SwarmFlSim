@@ -167,6 +167,9 @@ def shape(traj: list[tuple], t0: float, t1: float, c: tuple[float, float] | None
     net = math.hypot(r[-1][1] - r[0][1], r[-1][2] - r[0][2])
     res = {"t": [round(t0, 1), round(t1, 1)], "net_m": round(net), "north_m": round(r[-1][1] - r[0][1]),
            "net_speed": round(net / max(r[-1][0] - r[0][0], 0.02), 1)}
+    alts = [p[3] for p in traj if t0 <= p[0] / 50.0 <= t1]
+    if alts:
+        res |= {"alt_min": round(min(alts), 1), "alt_max": round(max(alts), 1)}
     if c:
         d = [math.hypot(x[1] - c[0], x[2] - c[1]) for x in r]
         res |= {"rmin": round(min(d)), "rmax": round(max(d))}
@@ -446,12 +449,14 @@ REG = {"qa_s3_link": 300.0, "qa_p5_near": 640.0, "qa_p5_noloss": 640.0, "qa_p5_n
 def reg_one(out: Path, name: str, mode: str, port: int) -> dict:
     src = SCN / f"{name}.json"
     sc: dict | Path = src
-    if mode == "cont":
-        j = json.loads(src.read_text(encoding="utf-8"))
-        for e in j["entities"]:
-            if e.get("kind") == "uav":
-                e["autonomy"].setdefault("ma_params", {})["lost_link_policy"] = "continue"
-        sc = j
+    j = json.loads(src.read_text(encoding="utf-8"))
+    for e in j["entities"]:
+        if e.get("kind") == "uav":  # 시나리오 파일의 지정(§30.8 뒤 continue)과 무관하게 모드대로 비교한다
+            params = e["autonomy"].setdefault("ma_params", {})
+            params.pop("lost_link_policy", None)
+            if mode == "cont":
+                params["lost_link_policy"] = "continue"
+    sc = j
     st, ob = stack(out, sc, port, 0.0, hb_off=mode == "off")
     t0, end = time.monotonic(), REG[name]
     try:
