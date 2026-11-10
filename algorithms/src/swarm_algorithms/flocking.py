@@ -11,6 +11,7 @@
   duration_s가 있으면 원 위(|d − R| < max(0.25R, 50 m))에 처음 든 뒤 그 시간이 지나면 COMPLETED.
   레이스트랙(DEC-034)이면 같은 중심·반경·방향으로 vector_field 레이스트랙 침로를 쓴다(체류 판정은 경로 오차).
   Route는 지원하지 않는다(REJECTED).
+  링크 상실 선회(DEC-078)는 그 자리를 중심으로 한 같은 Hold 벡터장이다.
 - params: group(같은 group_id 이웃만), cruise_mps(22), neighbor_radius_m(600), separation_m(80),
   w_sep(1.5), w_align(0.5), w_coh(0.02), peer_hz(5), stale_s(2), goal_radius_m(300),
   hold_radius_m(300), wander_deg(0, ctx.rng로 침로 흔들기)
@@ -26,7 +27,7 @@ from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch, ParamDef, Pa
 from swarm_agent.geo import ned_offset
 from swarm_agent.racetrack import path_error, vector_field_course
 
-from .common import Goal, TaskTracker, every, peer_status
+from .common import LOST_LINK_PARAMS, Goal, LostLinkGuard, TaskTracker, every, peer_status
 
 S = common_pb2
 _B, _D = ParamLayer.BEHAVIOR, ParamLayer.DECISION
@@ -43,8 +44,9 @@ PARAMS = (
     ParamDef("hold_radius_m", 300.0, _B, "m", 1.0, 1e5, "Hold 기본 선회 반경"),
     ParamDef("wander_deg", 0.0, _B, "deg", 0.0, 180.0, "침로 흔들기 표준편차"),
     ParamDef("group", "", _D, "", description="같은 group_id 이웃만 사용, 빈 값 = 전체", runtime=False),
+    *LOST_LINK_PARAMS,
 )
-_DEFAULTS = {d.name: d.default for d in PARAMS if isinstance(d.default, float)}
+_DEFAULTS = {d.name: d.default for d in PARAMS if isinstance(d.default, float) and d not in LOST_LINK_PARAMS}
 _SUPPORTED = ("move_to", "hold", "return_to_base", "search_area")
 
 
@@ -57,6 +59,8 @@ class _Agent:
         self.alt0: float | None = None
         self.goal: Goal | None = None
         self.hold_since: float | None = None  # hold 원 위에 처음 든 모의 시각
+        self.link = LostLinkGuard(ctx, self.tracker)
+        self.suspended: tuple[Goal | None, float | None, float] = (None, None, 0.0)  # 상실로 중단한 (목표, hold_since, 시각)
 
 
 class Flocking(BatchMissionAutonomy):
@@ -78,14 +82,24 @@ class Flocking(BatchMissionAutonomy):
 
         # 1. 기체별 수신 처리 (자기 포트만)
         for c, a in zip(ctxs, agents):
-            for m in c.ports.c2.inbox():
+            msgs = list(c.ports.c2.inbox())
+            for m in msgs:
                 a.tracker.handle(m)
             for m in c.ports.p2p.inbox():
                 if isinstance(m, p2p_pb2.PeerStatus) and (not a.group or m.group_id == a.group):
                     a.table[m.header.source] = m
             c.ports.vi.command_status()
-            a.tracker.update(c.ports.vi.nav())
-            if a.tracker.changed:
+            own = c.ports.vi.nav()
+            a.tracker.update(own)
+            action = a.link.update(msgs, own is not None)
+            if action == "hold":
+                p = own.kinematics.position
+                a.suspended = (a.goal, a.hold_since, c.sim_time_s)
+                a.goal, a.hold_since = Goal("", "hold", p.lat_deg, p.lon_deg, p.alt_m, has_center=True), None
+            elif action == "resume":
+                a.goal, since, t = a.suspended
+                a.hold_since = since + c.sim_time_s - t if since is not None else None  # 중단한 시간은 체류로 치지 않는다
+            if a.tracker.changed and not a.link.held:
                 a.tracker.changed = False
                 a.goal = a.tracker.goal()
                 a.hold_since = None

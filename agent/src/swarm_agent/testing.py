@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from google.protobuf import struct_pb2
 
-from swarm.v1 import entity_pb2, fa_pb2, link_pb2, mp_pb2, sim_pb2, truth_pb2, vi_pb2
+from swarm.v1 import c2_pb2, entity_pb2, fa_pb2, link_pb2, mp_pb2, sim_pb2, truth_pb2, vi_pb2
 from swarm_api import InMemoryBus, Sample, keys, protobuf_encoding
 
 from .geo import ned_offset, offset_geo
@@ -163,6 +163,17 @@ class FakeDatalink:
                 continue
             self.bus.put(keys.rx(d, keys.Iface(iface), msg), data, s.encoding)
             self.delivered += 1
+
+    def heartbeat(self, gcs: str, dst: Sequence[str], rx_time_us: int = 0, sequence: int = 0) -> None:
+        """Datalink가 발생시킨 GcsHeartbeat를 swarm/<uav>/rx/c2로 바로 낸다. tx를 거치지 않는다 (DEC-078)"""
+        hb = c2_pb2.GcsHeartbeat(sequence=sequence)
+        hb.header.source = gcs
+        env = link_pb2.LinkEnvelope(dst=list(dst), iface=1, msg_type=hb.DESCRIPTOR.full_name,
+                                    payload=hb.SerializeToString(), rx_time_us=rx_time_us)
+        env.header.source = gcs
+        for d in dst:
+            self.bus.put(keys.rx(d, keys.Iface.C2, "GcsHeartbeat"), env.SerializeToString(),
+                         protobuf_encoding(env.DESCRIPTOR.full_name))
 
     def close(self) -> None:
         self._sub.close()

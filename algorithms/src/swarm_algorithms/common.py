@@ -1,22 +1,36 @@
-"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017): 작업 추적, 작업 → 비행 구간, PeerStatus.
+"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038): 작업 추적, 작업 → 비행 구간, PeerStatus, 링크 상실 행동.
 
 플러그인은 ctx.ports로만 송수신한다 (DEC-013). 여기 함수들도 ctx 밖의 상태를 보지 않는다.
 """
 
 import math
 from collections import deque
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, common_pb2, mp_pb2, p2p_pb2, vi_pb2
-from swarm_api import AgentContext
+from swarm_api import AgentContext, ParamDef, ParamLayer
 from swarm_agent.geo import G_MPS2, ned_offset, wrap_pi
 from swarm_agent.racetrack import path_error
 
 S = common_pb2
 PILOT_TASKS = ("move_to", "hold", "return_to_base", "search_area", "route")
+
+# 링크 상실 행동 변수 (DEC-078). 내장 MA는 PARAMS에 이 묶음을 더한다
+LOST_LINK_POLICIES = {
+    "hold_until_command": c2_pb2.LOST_LINK_POLICY_HOLD_UNTIL_COMMAND,
+    "resume_on_recovery": c2_pb2.LOST_LINK_POLICY_RESUME_ON_RECOVERY,
+    "continue": c2_pb2.LOST_LINK_POLICY_CONTINUE,
+}
+LOST_LINK_PARAMS = (
+    ParamDef("lost_link_timeout_s", 5.0, ParamLayer.DECISION, "s", 0.1, 86400.0,
+             "마지막 GcsHeartbeat 수신 후 링크 상실로 판단할 모의 시간"),
+    ParamDef("lost_link_policy", "hold_until_command", ParamLayer.DECISION,
+             description="작업에 정책이 없을 때의 링크 상실 행동", choices=tuple(LOST_LINK_POLICIES)),
+)
 
 
 def area_centroid(area) -> tuple[float, float]:
@@ -74,6 +88,134 @@ class PlanWatcher:
         return plan
 
 
+class LinkMonitor:
+    """C2 포트로 받은 GcsHeartbeat로만 GCS 링크 상실을 판단한다 (DEC-078, DEC-013).
+
+    첫 Heartbeat 뒤부터 감시한다. 마지막 수신 후 lost_link_timeout_s를 넘으면 상실, 다시 받으면 복구다. 시각은 틱의 모의 시간이고
+    메시지 순서와 무관하므로 lockstep에서 결정적이다. 행동을 직접 정하는 사용자 MA는 이 부품만 써도 된다.
+    """
+
+    def __init__(self, ctx: AgentContext):
+        self.ctx = ctx
+        self.last_us: int | None = None     # 마지막 수신 틱의 모의 시각
+        self.lost = False
+
+    def update(self, msgs: Iterable[Message]) -> str:
+        """이번 틱의 C2 메시지를 보고 "lost" | "recovered" | "" 를 돌려준다"""
+        now_us = round(self.ctx.sim_time_s * 1e6)
+        heard = any(isinstance(m, c2_pb2.GcsHeartbeat) for m in msgs)
+        if heard:
+            self.last_us = now_us
+        if self.last_us is None:
+            return ""
+        event = ""
+        if self.lost and heard:
+            self.lost, event = False, "recovered"
+        elif not self.lost and now_us - self.last_us > round(float(self.ctx.params.get("lost_link_timeout_s", 5.0)) * 1e6):
+            self.lost, event = True, "lost"
+        if event:
+            self.ctx.ports.md.record("link_state", event)
+        return event
+
+
+class LostLinkGuard:
+    """링크 상실 정책(DEC-078)을 판단한다. MA는 update()의 결과대로 비행만 바꾼다.
+
+    - "hold": 이번 틱에 제자리 선회를 시작한다. 끝날 때까지 작업 진행과 대기 작업 시작을 멈춘다
+    - "resume": 선회를 끝내고 중단한 비행(없으면 평소 동작)으로 돌아간다
+
+    정책은 상실 순간의 현재 작업 lost_link_policy, 없으면(UNSPECIFIED, 작업 없음) MA 변수 lost_link_policy다.
+    선회 중 받은 새 작업 명령은 링크 상태와 무관하게 선회를 끝낸다. 새 작업은 취소 명령이 아니라 수락된 TaskCommand·실행 중 계획·단독 RoutePlan이다.
+    tracker가 없는 MA와 작업 밖의 명령(FormationCommand)은 release()로 알린다. ctx.ports.md에 link_state·lost_link_policy·lost_link_action을 남긴다.
+    """
+
+    def __init__(self, ctx: AgentContext, tracker: "TaskTracker | None" = None):
+        self.ctx = ctx
+        self.tracker = tracker
+        self.monitor = LinkMonitor(ctx)
+        self.held = False
+        self.policy = c2_pb2.LOST_LINK_POLICY_UNSPECIFIED     # 지금 선회의 정책
+        self._released = False
+        self._commands = 0
+        self._orbits = 0
+
+    @property
+    def lost(self) -> bool:
+        return self.monitor.lost
+
+    def resolve_policy(self) -> int:
+        task = self.tracker.current if self.tracker is not None else None
+        if task is not None and task.lost_link_policy != c2_pb2.LOST_LINK_POLICY_UNSPECIFIED:
+            return task.lost_link_policy
+        default = LOST_LINK_POLICIES["hold_until_command"]
+        return LOST_LINK_POLICIES.get(str(self.ctx.params.get("lost_link_policy", "")), default)
+
+    def release(self) -> None:
+        """tracker가 세지 않는 새 명령을 받았다"""
+        self._released = True
+
+    def _action(self, name: str) -> None:
+        self.ctx.ports.md.record("lost_link_action", name)
+
+    def _leave(self, why: str) -> str:
+        self.held = False
+        if self.tracker is not None:
+            self.tracker.paused = False
+        self._action(why)
+        return "resume"
+
+    def update(self, msgs: Iterable[Message], nav_ok: bool = True) -> str:
+        """이번 틱의 C2 메시지(TaskTracker가 처리한 뒤)를 받아 "hold" | "resume" | "" 를 돌려준다"""
+        if not nav_ok:
+            return ""
+        commands = self.tracker.commands if self.tracker is not None else 0
+        fresh = self._released or commands != self._commands
+        self._released, self._commands = False, commands
+        event = self.monitor.update(msgs)
+        if self.held:
+            if fresh:
+                return self._leave("command")
+            if event == "recovered":
+                if self.policy == c2_pb2.LOST_LINK_POLICY_RESUME_ON_RECOVERY:
+                    return self._leave("resume")
+                self._action("keep_hold")
+            return ""
+        if event != "lost":
+            return ""
+        policy = self.resolve_policy()
+        self.ctx.ports.md.record("lost_link_policy", next(k for k, v in LOST_LINK_POLICIES.items() if v == policy))
+        if policy == c2_pb2.LOST_LINK_POLICY_CONTINUE:
+            self._action("continue")
+            return ""
+        if fresh:                       # 같은 틱에 받은 새 명령이 우선한다
+            self._action("command")
+            return ""
+        self.held, self.policy = True, policy
+        if self.tracker is not None:
+            self.tracker.paused = True
+        self._action("hold")
+        return "hold"
+
+    def orbit_here(self, nav: vi_pb2.NavigationReport, radius_m: float, speed_mps: float | None = None) -> None:
+        """지금 위치·고도를 중심으로 선회한다. 반경은 그 속력의 최소 선회 반경 × 1.3 이상"""
+        k = nav.kinematics
+        self._orbits += 1
+        cmd = vi_pb2.FlightCommand(command_id=f"{self.ctx.entity_id}-lost-link-{self._orbits}")
+        v = speed_mps if speed_mps is not None else math.hypot(k.velocity_ned_mps.x, k.velocity_ned_mps.y)
+        o = cmd.curve.orbit
+        o.center.CopyFrom(k.position)
+        o.radius_m = max(radius_m, 1.3 * turn_radius(max(v, 12.0)))
+        o.direction = vi_pb2.TURN_DIRECTION_CW
+        if speed_mps is not None:
+            o.speed_mps = speed_mps
+        self.ctx.ports.vi.command(cmd)
+
+
+def assigned_task(ctx: AgentContext, msg: Message) -> bool:
+    """이 기체에 온 새 작업 명령인가(취소 제외). 작업을 수행하지 않는 MA가 선회를 끝낼 때 쓴다"""
+    return isinstance(msg, c2_pb2.TaskCommand) and not msg.cancel and ctx.entity_id in msg.assignees
+
+
 class TaskTracker:
     """MissionPlan 작업을 순서대로, C2 TaskCommand는 받는 즉시(현재 작업을 밀어내고) 처리한다.
 
@@ -90,6 +232,8 @@ class TaskTracker:
         self.changed = False  # 현재 작업이 바뀌었으면 True. 호출자가 지운다
         self.quiet: c2_pb2.TaskCommand | None = None   # 상태를 보고하지 않는 작업(단독 RoutePlan, D-29)
         self.plan_task_ids: set[str] = set()           # 지금까지 받은 계획의 task_id
+        self.commands = 0                              # 수락한 새 명령 수 (LostLinkGuard가 본다)
+        self.paused = False                            # 링크 상실 선회 중: 대기 작업을 시작하지 않는다
         self.plans = PlanWatcher(ctx)
         if self.plans.initial is not None:
             self.plan_task_ids.update(t.task_id for t in self.plans.initial.tasks)
@@ -134,8 +278,13 @@ class TaskTracker:
             self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
         self.current = msg
         self.changed = True
+        self._new_command()
         self.status(msg, S.COMMAND_STATE_ACCEPTED)
         return True
+
+    def _new_command(self) -> None:
+        self.commands += 1
+        self.paused = False
 
     def _apply_plan(self, plan: mp_pb2.MissionPlan) -> None:
         """실행 중 받은 새 계획 (DEC-076). 이 기체가 수행할 작업이 있을 때만 C2 TaskCommand처럼 현재 작업을 밀어낸다.
@@ -159,6 +308,7 @@ class TaskTracker:
         self.current = None
         self.queue = deque(valid)
         self.changed = True
+        self._new_command()
 
     def references(self, task_id: str) -> bool:
         """이 ID가 계획의 작업이거나 지금 수행 중인 작업인가"""
@@ -170,6 +320,7 @@ class TaskTracker:
             self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
         self.quiet = self.current = task
         self.changed = True
+        self._new_command()
 
     def update(self, nav: vi_pb2.NavigationReport | None) -> None:
         if nav is not None and self.home is None:
@@ -178,7 +329,7 @@ class TaskTracker:
         plan = self.plans.poll()
         if plan is not None:
             self._apply_plan(plan)
-        if self.current is None and self.queue:
+        if self.current is None and self.queue and not self.paused:
             self.current = self.queue.popleft()
             self.changed = True
             self.status(self.current, S.COMMAND_STATE_ACCEPTED)
@@ -390,6 +541,7 @@ class TaskPilot:
                  speed_mps: float | None = None, supported: tuple[str, ...] = PILOT_TASKS):
         self.ctx = ctx
         self.tracker = TaskTracker(ctx, supported)
+        self.link = LostLinkGuard(ctx, self.tracker)
         self.acceptance_m = acceptance_m
         self.hold_radius_m = hold_radius_m
         self.speed_mps = speed_mps  # 작업에 속도가 없을 때
@@ -400,6 +552,7 @@ class TaskPilot:
         self.leg_i = 0
         self._cmd_id = ""
         self._on_station_since: float | None = None
+        self._station_s = 0.0               # 지금 orbit 구간에서 이미 채운 체류 시간(링크 상실로 중단된 분)
         self._angle = 0.0
         self._last_bearing: float | None = None
 
@@ -409,10 +562,12 @@ class TaskPilot:
 
     def step(self, c2_msgs: list[Message] | None = None) -> None:
         ports = self.ctx.ports
-        for m in ports.c2.inbox() if c2_msgs is None else c2_msgs:
+        msgs = list(ports.c2.inbox() if c2_msgs is None else c2_msgs)
+        for m in msgs:
             self.tracker.handle(m)
         nav = ports.vi.nav()
         self.tracker.update(nav)
+        action = self.link.update(msgs, nav is not None)
         task = self.tracker.current
         for st in ports.vi.command_status():
             if task is None or st.command_id != self._cmd_id or self.cmd_task.get(st.command_id) is not task:
@@ -426,14 +581,27 @@ class TaskPilot:
                 self.legs, self.leg_i, self._cmd_id = [], 0, ""
                 self.tracker.finish(S.COMMAND_STATE_FAILED, st.reason)
                 self.tracker.changed = False
+        if action == "hold":
+            self.enter_lost_link_hold(nav)
+        if self.link.held:
+            return
         if self.tracker.changed and nav is not None:
             self.tracker.changed = False
             self.legs, self.leg_i, self._cmd_id = [], 0, ""
             if self.tracker.current is not None:
                 self.legs = self._plan(self.tracker.current, nav)
                 self._command(nav)
+        elif action == "resume" and self.leg is not None:
+            self._command(nav, resume=True)
         elif nav is not None and self.leg is not None and self.leg.kind == "orbit" and self._cmd_id:
             self._track_orbit(nav)
+
+    def enter_lost_link_hold(self, nav: vi_pb2.NavigationReport) -> None:
+        """링크 상실 선회 시작. 사용자 MA는 덮어써서 다른 행동으로 바꿀 수 있다. 진행 중 구간과 체류 시간은 재개를 위해 남긴다"""
+        if self._on_station_since is not None:
+            self._station_s += self.ctx.sim_time_s - self._on_station_since
+        self._on_station_since, self._cmd_id = None, ""
+        self.link.orbit_here(nav, self.hold_radius_m, self.speed_mps)
 
     # ---- 구간 계획 ----
 
@@ -524,10 +692,10 @@ class TaskPilot:
                 self._angle += abs(float(wrap_pi(b - self._last_bearing)))
             self._last_bearing = b
         if self._on_station_since is not None and orbit_done(
-                leg, self.ctx.sim_time_s - self._on_station_since, self._angle):
+                leg, self._station_s + self.ctx.sim_time_s - self._on_station_since, self._angle):
             self._next_leg(nav)
 
-    def _command(self, nav: vi_pb2.NavigationReport) -> None:
+    def _command(self, nav: vi_pb2.NavigationReport, resume: bool = False) -> None:
         leg = self.leg
         self._n += 1
         cmd = vi_pb2.FlightCommand(command_id=f"{self.ctx.entity_id}-task-{self._n}")
@@ -544,7 +712,9 @@ class TaskPilot:
             o.direction = leg.direction
             if speed is not None:
                 o.speed_mps = speed
-            self._on_station_since, self._angle, self._last_bearing = None, 0.0, None
+            if not resume:
+                self._station_s, self._angle = 0.0, 0.0
+            self._on_station_since, self._last_bearing = None, None
         else:
             wp = cmd.waypoint.waypoints.add(acceptance_radius_m=leg.acceptance)
             wp.position.lat_deg, wp.position.lon_deg, wp.position.alt_m = leg.lat, leg.lon, leg.alt
