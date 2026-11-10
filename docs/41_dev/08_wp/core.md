@@ -2,7 +2,7 @@
 
 ## 책임
 
-프레임 스케줄러(realtime, lockstep, freerun), 엔티티 상태, 동역학 적분, 고장 상태, 시나리오 적재와 배포를 맡는다. 실제 상태(truth)의 유일한 생산자이자 lockstep 장벽의 주인이다. 임무장비 판정은 `payload/` 라이브러리를 호출한다.
+프레임 스케줄러(realtime, lockstep, freerun), 엔티티 상태, 동역학 적분, 고장 상태, 시나리오 적재와 배포를 맡는다. 실제 상태(truth)는 Core만 만들고, lockstep 장벽도 Core가 관리한다. 임무장비 판정은 `payload/` 라이브러리를 호출한다.
 
 ## 구조
 

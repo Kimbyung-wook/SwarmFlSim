@@ -34,7 +34,7 @@ cd ui && npm run dev
 | 구독 | `truth/state`(30 Hz), `sim/ctrl/status`, `swarm/<gcs>/rx/**` |
 | 발행 | `sim/ctrl/cmd`, `swarm/<gcs>/tx/c2/<msg>` |
 
-브리지를 통해서만 버스에 붙는다. 보내는 `LinkEnvelope`의 `publisher`에는 브리지 hello의 `client`와 같은 UI 참여자 ID를 채운다(DEC-077).
+브리지로만 버스에 붙는다. 보내는 `LinkEnvelope`의 `publisher`에는 브리지 hello의 `client`와 같은 UI 참여자 ID를 채운다(DEC-077).
 
 ## 시험
 

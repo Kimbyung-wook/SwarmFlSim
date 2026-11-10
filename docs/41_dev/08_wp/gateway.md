@@ -2,7 +2,7 @@
 
 ## 책임
 
-GCS 쪽 지상 참여자로서 내부 메시지와 외부 UCI 메시지를 변환한다(DEC-068, DEC-069). 루트 워크스페이스에 없는 독립 uv 프로젝트다. 운용 절차는 사용자 매뉴얼 [9장](../../42_user/09_gateway.md), 설계는 [gateway/README.md](../../../gateway/README.md).
+GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변환한다(DEC-068, DEC-069). 루트 워크스페이스에 없는 독립 uv 프로젝트다. 운용 절차는 사용자 매뉴얼 [9장](../../42_user/09_gateway.md), 설계는 [gateway/README.md](../../../gateway/README.md).
 
 ## 구조
 

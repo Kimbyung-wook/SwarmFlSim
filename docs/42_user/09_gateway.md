@@ -66,11 +66,11 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 
 `--connect`의 포트는 실행기의 `--base-port`(기본 17600)를 따른다. `--participant <id>`는 Gateway의 발행자 ID다(기본 `gateway-0`).
 
-**4. 외부 C2를 붙인다.** 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 보낸다. 시험용 클라이언트의 구현 예는 [qa/gw_ext_client.py](../../qa/gw_ext_client.py)다.
+**4. 외부 C2를 붙인다.** 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 보낸다. 시험용 클라이언트 구현은 [qa/gw_ext_client.py](../../qa/gw_ext_client.py)에 있다.
 
 ## 9.3 시작 직후
 
-Gateway는 접속 뒤 XSD를 적재한다. 이번 확인에서 약 9초 걸렸다. 그동안 외부가 보낸 명령은 서버가 `+OK`로 답해도 받는 쪽이 없어 사라진다(O-13). 외부 C2는 `ready` 줄이 나온 뒤 명령을 보낸다.
+Gateway는 접속 뒤 XSD를 적재한다. 확인 실행에서 약 9초 걸렸다. 그동안 외부가 보낸 명령은 서버가 `+OK`로 답해도 받는 쪽이 없어 사라진다(O-13). 외부 C2는 `ready` 줄이 나온 뒤 명령을 보낸다.
 
 | 로그 | 뜻 |
 |---|---|
@@ -92,7 +92,7 @@ Gateway는 접속 뒤 XSD를 적재한다. 이번 확인에서 약 9초 걸렸�
 
 이동 목적지처럼 위치 정보가 필요한 작업은 [9.6](#96-임무-계획-수신)의 임무 계획으로 받는다.
 
-`MA_TaskStatus`의 흐름은 다음과 같다. `hold`를 보내면 `EXECUTION_PENDING` → `EXECUTING`이 온다. 기체가 맡고 있던 이전 작업은 `CANCELED`가 된다.
+`hold`를 보내면 `MA_TaskStatus`로 `EXECUTION_PENDING` → `EXECUTING`이 온다. 기체가 맡고 있던 이전 작업은 `CANCELED`가 된다.
 
 ## 9.5 외부 승인 응답
 
@@ -137,7 +137,7 @@ Gateway는 접속 뒤 XSD를 적재한다. 이번 확인에서 약 9초 걸렸�
 - XSD 검증이나 변환에 실패한 메시지는 내보내지 않고 로그와 카운터에 남긴다. Gateway는 계속 돈다.
 - 위치 대응 메시지 하나가 실패해도 다른 대응 메시지는 내보낸다.
 
-> 알려진 제약: `config/lacal_server.yaml`의 `declared.pub`에 `MA_PositionReport`가 없다(O-20). 이번 확인에서는 메시지가 그대로 전달됐다.
+> 알려진 제약: `config/lacal_server.yaml`의 `declared.pub`에 `MA_PositionReport`가 없다(O-20). 확인 실행에서는 메시지가 그대로 전달됐다.
 
 > lockstep으로 돌려도 외부 입력이 있으면 같은 시드 결과가 같지 않다. Gateway 발행 시각이 입력이 도착한 시점의 틱이라 입력을 받은 기체의 궤적이 실행마다 달라진다. 외부 입력이 없는 구성은 궤적, 링크 결과, GCS 수신이 같다.
 
