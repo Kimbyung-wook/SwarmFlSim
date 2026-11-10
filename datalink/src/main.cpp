@@ -26,6 +26,7 @@ constexpr const char* kUsage = R"(usage: swarm_datalink [options]
   --terrain-flat <m>       평지 지형 고도 (기본 0). 가시선 판정에 쓴다
   --no-los                 가시선 판정을 끈다
   --state-period <s>       link/state 발행 주기, 시뮬레이션 초 (기본 1, 0이면 끔)
+  --heartbeat-hz <hz>      GCS Heartbeat 주기, 시뮬레이션 시각 기준 (기본 1, 0이면 끔)
   --quiet                  로그를 끈다
 )";
 
@@ -79,6 +80,7 @@ int main(int argc, char** argv) {
     else if (a == "--terrain-flat") terrain_flat_m = std::stod(next());
     else if (a == "--no-los") los = false;
     else if (a == "--state-period") cfg.state_period_s = std::stod(next());
+    else if (a == "--heartbeat-hz") cfg.heartbeat_hz = std::stod(next());
     else if (a == "--quiet") quiet = true;
     else if (bus::parse_bus_arg(bus_cfg, a, next)) continue;
     else {

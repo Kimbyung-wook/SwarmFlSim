@@ -1,4 +1,4 @@
-// TC-LNK-001~026: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~029: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -21,6 +21,7 @@
 #include "swarm/lnk/channel.hpp"
 #include "swarm/lnk/emulator.hpp"
 #include "swarm/lnk/profile.hpp"
+#include "swarm/v1/c2.pb.h"
 
 using namespace swarm;
 using namespace swarm::lnk;
@@ -78,6 +79,7 @@ struct Ent {
   double alt_m = 1000.0;
   std::string profile = "clean";
   bool alive = true;
+  std::string controlling_gcs;
 };
 
 struct Rig {
@@ -112,6 +114,7 @@ struct Rig {
     }));
     if (!cfg.profiles.count("clean")) cfg.profiles["clean"] = clean_profile();
     if (cfg.state_period_s == 1.0) cfg.state_period_s = 0.0;
+    if (cfg.heartbeat_hz == 1.0) cfg.heartbeat_hz = 0.0;  // Heartbeat 시험만 주기를 지정한다
     dl = std::make_unique<Datalink>(bus, terrain, cfg);
 
     v1::Scenario sc;
@@ -124,6 +127,7 @@ struct Rig {
       s->set_kind(x.kind);
       s->set_side(x.side);
       s->set_link_profile(x.profile);
+      s->set_controlling_gcs(x.controlling_gcs);
       auto* p = s->mutable_initial()->mutable_position();
       p->set_lat_deg(kLat0 + x.north_m / kMPerDegLat);
       p->set_lon_deg(kLon0);
@@ -1498,6 +1502,172 @@ void tc026() {
   }
 }
 
+// ---- TC-LNK-027~029: GCS Heartbeat (DEC-078, REQ-LNK-003) ----
+const char* const kHbSuffix = "/rx/c2/GcsHeartbeat";
+
+DatalinkConfig hb_cfg(double hz) {
+  DatalinkConfig cfg;
+  cfg.heartbeat_hz = hz;
+  return cfg;
+}
+
+std::vector<const v1::LinkEnvelope*> beats_of(const Rig& r, const std::string& uav) {
+  std::vector<const v1::LinkEnvelope*> v;
+  const std::string key = "swarm/" + uav + kHbSuffix;
+  for (const auto& [k, env] : r.rx)
+    if (k == key) v.push_back(&env);
+  return v;
+}
+
+void tc027() {
+  check(DatalinkConfig{}.heartbeat_hz == 1.0, "default 1 Hz");
+  // gcs-02를 먼저 선언해도 첫 GCS는 ID 정렬로 gcs-01이다
+  std::vector<Ent> ents = {{"gcs-02", v1::ENTITY_KIND_GCS},
+                           {"gcs-01", v1::ENTITY_KIND_GCS},
+                           {"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0},
+                           {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 2000.0, 1000.0, "clean", true, "gcs-02"},
+                           {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 3000.0, 1000.0, "clean", true, "gcs-99"},
+                           {"tgt-001", v1::ENTITY_KIND_GROUND_TARGET, v1::SIDE_BLUE, 1000.0, 0.0, ""}};
+  Rig r(ents, hb_cfg(2.0));
+  std::size_t tx_seen = 0;
+  r.subs.push_back(r.bus.subscribe("swarm/*/tx/**", [&](const Sample&) { ++tx_seen; }));
+  for (int k = 0; k <= 50; ++k) r.tick();  // T = 0, 500, 1000 ms
+
+  const auto a = beats_of(r, "uav-001"), b = beats_of(r, "uav-002");
+  check(a.size() == 3 && b.size() == 3, "2 Hz: 3 beats per vehicle in 1 s");
+  check(beats_of(r, "uav-003").empty(), "unknown controlling_gcs: no beat");
+  check(beats_of(r, "tgt-001").empty() && beats_of(r, "gcs-01").empty(), "only vehicles receive");
+  check(r.rx.size() == 6 && r.outcomes.size() == 6, "one rx and one outcome per beat");
+  check(r.count(v1::DROP_REASON_NONE) == 6, "all delivered");
+  check(tx_seen == 0, "not published on tx");
+  for (std::size_t i = 0; i < a.size() && a.size() == 3; ++i) {
+    const std::uint64_t t = i * 500000;
+    check(a[i]->header().source() == "gcs-01", "first GCS by sorted id");
+    check(a[i]->iface() == v1::L1_INTERFACE_C2 && a[i]->msg_type() == "swarm.v1.GcsHeartbeat", "iface and msg_type");
+    check(a[i]->rx_time_us() == t && a[i]->header().sim_time_us() == t, "bound to tick time");
+    v1::GcsHeartbeat beat;
+    check(beat.ParseFromString(a[i]->payload()), "payload parses");
+    check(beat.sequence() == i + 1 && beat.header().source() == "gcs-01", "sequence from 1");
+  }
+  if (b.size() == 3) check(b[0]->header().source() == "gcs-02", "controlling_gcs");
+  // 송신 개수 장벽은 rx 쪽만 센다 (DEC-044)
+  check(!r.dones.empty() && r.dones.back().sent_count().at("uav-001") == 3, "beats counted in rx sent_count");
+
+  // 틱 시각이 되돌아가면(Reset) 번호를 1부터 다시 시작한다
+  r.rx.clear();
+  r.frame = 0;
+  r.tick();
+  const auto again = beats_of(r, "uav-001");
+  v1::GcsHeartbeat beat;
+  check(again.size() == 1 && beat.ParseFromString(again[0]->payload()) && beat.sequence() == 1, "sequence restarts on reset");
+
+  Rig off(ents, hb_cfg(0.0));
+  for (int k = 0; k <= 50; ++k) off.tick();
+  check(off.rx.empty() && off.outcomes.empty(), "0 Hz: off");
+}
+
+void tc028() {
+  Rig r({{"gcs-01", v1::ENTITY_KIND_GCS},
+         {"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 2000.0}},
+        hb_cfg(50.0));  // dt 20 ms: 틱마다 발생
+  // 한 틱을 돌리고 uav-001 쪽 사유를 돌려준다. uav-002는 항상 전달되어야 한다
+  auto step = [&](const char* label) {
+    r.rx.clear();
+    r.outcomes.clear();
+    r.tick();
+    v1::DropReason reason = static_cast<v1::DropReason>(-1);
+    for (const auto& o : r.outcomes) {
+      if (o.dst() == "uav-001") reason = o.reason();
+      if (o.dst() == "uav-002") check(o.reason() == v1::DROP_REASON_NONE, label);
+    }
+    check(beats_of(r, "uav-002").size() == 1, label);
+    check(beats_of(r, "uav-001").size() == (reason == v1::DROP_REASON_NONE ? 1u : 0u), label);
+    return reason;
+  };
+  auto expect_outage = [&](v1::DropReason want, const char* label) {
+    check(step(label) == want, label);
+    check(step(label) == want, label);
+  };
+  auto last_seq = [&] {
+    v1::GcsHeartbeat beat;
+    const auto v = beats_of(r, "uav-001");
+    return v.empty() || !beat.ParseFromString(v[0]->payload()) ? 0u : beat.sequence();
+  };
+
+  check(step("baseline") == v1::DROP_REASON_NONE, "baseline delivered");
+  const std::uint32_t before = last_seq();
+
+  r.fault("uav-001", v1::FAULT_KIND_GCS_LINK_CUT);
+  expect_outage(v1::DROP_REASON_FAULT_INJECTED, "GCS_LINK_CUT stops beats");
+  r.fault("uav-001", v1::FAULT_KIND_GCS_LINK_CUT, 0.0, true);
+  check(step("GCS_LINK_CUT cleared") == v1::DROP_REASON_NONE, "GCS_LINK_CUT clear resumes");
+  check(last_seq() == before + 3, "sequence advances through outage");
+
+  r.fault("uav-001", v1::FAULT_KIND_LINK_CUT);
+  expect_outage(v1::DROP_REASON_FAULT_INJECTED, "LINK_CUT stops beats");
+  r.fault("uav-001", v1::FAULT_KIND_LINK_CUT, 0.0, true);
+  check(step("LINK_CUT cleared") == v1::DROP_REASON_NONE, "LINK_CUT clear resumes");
+
+  r.jam("jam-01", 1000.0, 200.0, true);
+  expect_outage(v1::DROP_REASON_JAMMED, "jam zone stops beats");
+  r.jam("jam-01", 1000.0, 200.0, false);
+  check(step("jam cleared") == v1::DROP_REASON_NONE, "jam clear resumes");
+
+  r.ent("uav-001").north_m = 30000.0;
+  r.truth();
+  expect_outage(v1::DROP_REASON_OUT_OF_RANGE, "out of range stops beats");
+  r.ent("uav-001").north_m = 1000.0;
+  r.truth();
+  check(step("back in range") == v1::DROP_REASON_NONE, "back in range resumes");
+
+  r.ent("uav-001").alive = false;
+  r.truth();
+  expect_outage(v1::DROP_REASON_NODE_DEAD, "dead vehicle gets no beats");
+}
+
+std::vector<std::string> run_heartbeat(std::uint64_t seed, std::size_t& violations) {
+  DatalinkConfig cfg = hb_cfg(10.0);
+  LinkProfile p = clean_profile();
+  p.latency_ms = 5.0;
+  p.jitter_ms = 3.0;
+  p.ge = {0.1, 0.3, 0.0, 0.5};
+  p.bandwidth_bps = 200000.0;
+  p.bucket_bytes = 2000;
+  cfg.profiles["clean"] = p;
+  Rig r({{"gcs-01", v1::ENTITY_KIND_GCS},
+         {"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 1000.0},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 2000.0}},
+        cfg, nullptr, seed);
+  for (int k = 0; k < 200; ++k) {
+    const std::uint64_t t_k = r.frame * r.dt_us;
+    const std::size_t rx0 = r.rx.size();
+    r.tick();
+    for (std::size_t i = rx0; i < r.rx.size(); ++i)
+      if (r.rx[i].second.rx_time_us() < t_k) ++violations;
+    r.tx("gcs-01", {"uav-001"}, 32, keys::Iface::C2, "TaskCommand", t_k);
+  }
+  check(r.dones.size() == 200, "FrameDone every tick");
+  check(!beats_of(r, "uav-001").empty(), "beats delivered");
+  check(r.count(v1::DROP_REASON_BURST_LOSS) > 0, "channel loss applies to beats");
+  std::vector<std::string> out;
+  for (const auto& [key, env] : r.rx)
+    out.push_back(key + " " + std::to_string(env.header().seq()) + " " + std::to_string(env.rx_time_us()));
+  for (const auto& o : r.outcomes)
+    out.push_back(o.src() + ">" + o.dst() + " " + o.msg_type() + " " + std::to_string(o.seq()) + " " +
+                  std::to_string(o.reason()) + " " + std::to_string(o.tx_time_us()) + " " + std::to_string(o.rx_time_us()));
+  return out;
+}
+
+void tc029() {
+  std::size_t violations = 0;
+  const auto a = run_heartbeat(21, violations), b = run_heartbeat(21, violations), c = run_heartbeat(22, violations);
+  check(!a.empty(), "trace not empty");
+  check(a == b, "same seed, same rx and outcome");
+  check(a != c, "different seed differs");
+  check(violations == 0, "lockstep rx_time >= T_k");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1511,6 +1681,7 @@ const Case kCases[] = {
     {"TC-LNK-016", [] { tc016(); tc016_delay(); }},
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
     {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
+    {"TC-LNK-027", tc027}, {"TC-LNK-028", tc028}, {"TC-LNK-029", tc029},
 };
 
 }  // namespace
