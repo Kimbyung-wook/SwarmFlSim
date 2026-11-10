@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.16.0
+- 계약 버전: 0.17.0
+  - 0.17.0: 항법·제어 일괄 `NavigationBatch`·`ControlBatch`, 키 `onboard_batch/**`. 기체별 `NavigationReport`·`ControlOutput`의 `onboard` 발행을 대체 (DEC-081)
   - 0.16.0: `GcsHeartbeat` EXT, `TaskCommand.lost_link_policy` EXT, Datalink의 Heartbeat 발생, MA 링크 상실 행동 (DEC-078)
   - 0.15.0: `ApprovalResponse` STD(`MA_ApprovalRequestStatus`, DEC-075), Gateway 임무 계획 수신 `tx/mp`(DEC-076), `LinkEnvelope.publisher`(DEC-077)
   - 0.14.0: Agent의 VI 상태 GCS 자동 보고(DEC-071), 메시지 옵션 `uci_also`(한 내부 메시지 → UCI 메시지 여러 개, DEC-072), Core의 `onboard/<id>/SystemStatus` 발행(DEC-073)
@@ -62,8 +63,8 @@ flowchart LR
     DL -- "swarm/gcs-01/rx/**" --> UI
     DL -- "link/outcome/** · link/state/**" --> MON
 
-    CORE -- "onboard/uav-001/NavigationReport · Detection" --> RT1
-    RT1 -- "onboard/uav-001/ControlOutput · *Command" --> CORE
+    CORE -- "onboard_batch/NavigationBatch · onboard/uav-001/Detection" --> RT1
+    RT1 -- "onboard_batch/ControlBatch/agent-0 · onboard/uav-001/*Command" --> CORE
     CORE -- "sim/clock/tick" --> RT1
     CORE -- "sim/clock/tick" --> DL
     UI -- "sim/ctrl/cmd" --> CORE
@@ -83,7 +84,9 @@ flowchart LR
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽) |
-| `onboard/<id>/<msg>` | `NavigationReport`, `SystemStatus`(DEC-073), `Detection`, `*Activity`, `ControlOutput`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
+| `onboard/<id>/<msg>` | `SystemStatus`(DEC-073), `Detection`, `*Activity`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
+| `onboard_batch/NavigationBatch` | `NavigationBatch` (DEC-081) | Core | Agent 런타임, Logger |
+| `onboard_batch/ControlBatch/<participant>` | `ControlBatch` (DEC-081) | Agent 런타임 | Core, Logger |
 | `link/outcome/<src>/<dst>` | `LinkOutcome` | Datalink | Monitor, Logger |
 | `link/state/<a>/<b>` | `LinkState` (a < b 사전순) | Datalink | UI, Monitor |
 | `truth/state` | `TruthFrame` | Core | Datalink, UI, Monitor, Logger |

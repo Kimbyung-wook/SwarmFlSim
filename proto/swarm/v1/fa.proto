@@ -40,3 +40,11 @@ message ControlOutput {
     ActuatorCmd actuator = 4;
   }
 }
+
+// Agent → Core, 프레임당 참여자별 1건 (DEC-081). controls[i].header.source가 기체 ID다
+message ControlBatch {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  repeated ControlOutput controls = 2;
+}

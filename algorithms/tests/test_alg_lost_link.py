@@ -1,4 +1,6 @@
-"""TC-AGT-095~113: GCS 링크 상실 행동 (IMP-AGT-038, DEC-078, DEC-013, DEC-039)"""
+"""TC-AGT-095~117: GCS 링크 상실 행동 (IMP-AGT-038, DEC-078, DEC-013, DEC-039)"""
+
+import math
 
 import pytest
 
@@ -430,6 +432,68 @@ def test_tc_agt_110_lockstep_deterministic_and_arrival_order():
     a, b, c = run_det(True), run_det(True), run_det(False)
     assert a == b == c
     assert any(r[1] == "link_state" for r in a[1][0])
+
+
+def course_err_deg(h, deg, eid=A):
+    return abs((math.degrees(h.core.bodies[eid].course) - deg + 180.0) % 360.0 - 180.0)
+
+
+def test_tc_agt_114_resume_idle_never_commanded_returns_to_course():
+    """D-32: 명령을 받은 적 없는 기체는 복구하면 상실 전 침로·속도·고도로 돌아간다"""
+    h = lost_waypoint(RESUME, params={"lost_link_policy": "resume_on_recovery"}, task=False)
+    alt = h.core.bodies[A].alt
+    assert fa(h)._kind == "orbit"
+    h.run_s(20.0)
+    assert course_err_deg(h, 0.0) > 1.0
+    beat(h)
+    h.core.step(2)
+    assert fa(h)._kind == "hsa" and md(h, "lost_link_action") == ["hold", "resume"]
+    beating(h, 25)
+    assert fa(h)._kind == "hsa" and course_err_deg(h, 0.0) < 1.0 and abs(h.core.bodies[A].alt - alt) < 5.0
+
+
+def test_tc_agt_115_resume_idle_after_completed_task_returns_to_loiter():
+    """끝난 작업의 도착점 둘레 선회로 돌아가고, 끝난 작업을 다시 보고하지 않는다"""
+    h = Harness(make_scenario(1, "waypoint", {**FAST, "lost_link_policy": "resume_on_recovery"}, course_deg=0.0))
+    h.core.step(2)
+    send_c2(h.bus, "gcs-01", move("near", 600, 0), [A])
+    beating(h, 40)
+    assert h.task_states("near")[-1] == DONE and fa(h)._kind == "loiter"
+    h.core.step(60)
+    assert fa(h)._kind == "orbit"
+    h.run_s(15.0)
+    beat(h)
+    h.core.step(2)
+    assert fa(h)._kind == "waypoint" and not fa(h)._cmd_id.startswith(f"{A}-lost-link")
+    beating(h, 60)
+    assert fa(h)._kind == "loiter" and far_from(h, (600.0, 0.0)) < 400.0
+    assert h.task_states("near").count(DONE) == 1
+
+
+def test_tc_agt_116_resume_after_task_cancelled_in_hold_does_not_fly_to_it():
+    """선회 중 취소된 작업의 목표로 가지 않고 상실 순간의 침로로 돌아간다"""
+    h = lost_waypoint(RESUME)
+    send_c2(h.bus, "gcs-01", c2_pb2.TaskCommand(task_id="far", assignees=[A], cancel=True), [A])
+    h.run_s(10.0)
+    assert fa(h)._kind == "orbit" and h.task_states("far")[-1] == CAN
+    beat(h)
+    h.core.step(2)
+    assert fa(h)._kind == "hsa" and h.rt.vehicles[A].ma.pilot.tracker.current is None
+
+
+def test_tc_agt_117_idle_restore_repeats_and_until_command_keeps_orbit():
+    h = lost_waypoint(params={"lost_link_policy": "resume_on_recovery"}, task=False)
+    for n in (1, 2):
+        beat(h)
+        h.core.step(2)
+        assert fa(h)._kind == "hsa" and abs(math.degrees(fa(h)._hdg)) < 1.0   # 두 번째도 처음 상실 전 침로
+        beat(h)
+        h.core.step(110)
+        assert fa(h)._kind == "orbit" and fa(h)._cmd_id == f"{A}-lost-link-{n + 1}"
+    u = lost_waypoint(task=False)          # hold_until_command는 복구해도 선회 유지
+    beat(u)
+    u.core.step(2)
+    assert fa(u)._kind == "orbit" and md(u, "lost_link_action") == ["hold", "keep_hold"]
 
 
 class MonitorOnly(MissionAutonomy):

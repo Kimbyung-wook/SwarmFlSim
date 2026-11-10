@@ -80,6 +80,14 @@ inline std::string onboard(const std::string& id, std::string_view msg) {
   return "onboard/" + check_entity_id(id) + "/" + std::string(msg);
 }
 
+// 항법·제어 일괄 (DEC-081). Core·Agent 런타임 전용
+inline constexpr std::string_view kNavigationBatch = "onboard_batch/NavigationBatch";
+inline constexpr std::string_view kControlBatchAll = "onboard_batch/ControlBatch/*";
+
+inline std::string control_batch(std::string_view participant) {
+  return "onboard_batch/ControlBatch/" + std::string(participant);
+}
+
 inline std::string link_outcome(const std::string& src, const std::string& dst) {
   return "link/outcome/" + check_entity_id(src) + "/" + check_entity_id(dst);
 }

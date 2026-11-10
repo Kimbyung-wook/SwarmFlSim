@@ -166,7 +166,7 @@ def test_tc_agt_008_no_truth_no_ctrl_exposure():
         assert all(m.DESCRIPTOR.full_name.split(".")[-1] not in ("SimCommand", "TruthFrame") for _, m in spy.seen)
     ports = h.rt.vehicles["uav-001"].ctx.ports
     assert not any(hasattr(ports, a) for a in ("bus", "_rt", "runtime"))
-    assert MA_FORBIDDEN_PREFIXES == ("sim/ctrl/", "truth/", "link/")
+    assert MA_FORBIDDEN_PREFIXES == ("sim/ctrl/", "truth/", "link/", "onboard_batch/")
 
 
 def test_tc_agt_009_link_envelope_tx():

@@ -136,7 +136,7 @@ flowchart LR
 | TC-AGT-093 | 처리할 틱이 지난 뒤 도착한 입력은 `late_onboard`로 세고 잃지 않음 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
 | TC-AGT-094 | Heartbeat가 rx 시각 규칙대로 C2 포트에 보이고 MP로 가지 않음 | `tests/test_agent_heartbeat.py` | IMP-AGT-037 | Pass |
 
-시험 결과(2026-11-10): agent 90, algorithms 98 passed
+시험 결과(2026-11-10): agent 90, algorithms 102 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 
