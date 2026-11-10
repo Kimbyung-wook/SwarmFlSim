@@ -155,6 +155,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-078 | GCS 링크 상실 판단과 행동. (1) 지상→기체 주기 메시지가 없으므로 `GcsHeartbeat`(EXT, C2)를 둔다. (2) Datalink가 GCS마다 통제 기체로 모의 시간 1 Hz(CLI 변경 가능)로 발생시키고 일반 메시지와 같은 링크 판정을 적용한다. 송신 개수 장벽(DEC-044)을 쓰지 않아 lockstep 결정성이 유지되고 UI 없이도 동작한다. (3) MA는 C2 포트의 Heartbeat로만 판단한다. 첫 수신 후 감시, 타임아웃 기본 5 s. (4) 정책 3가지: `HOLD_UNTIL_COMMAND`(기본. 제자리 선회, 복구 뒤에도 새 명령까지 유지), `RESUME_ON_RECOVERY`(제자리 선회, 복구 시 작업 재개), `CONTINUE`(상실·복구와 무관하게 지속). 작업마다 `TaskCommand.lost_link_policy`로 정하고 없으면 MA 변수를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다. 계약 0.16.0 | OPN-066, REQ-LNK-003, DEC-013, DEC-014, DEC-044, docs/00_proposal.md §3, 사용자 답변: "Heartbeat 같은 것을 보내는게 있을 것 같은데", "제자리 선회 대기", "기본은 선회 유지로 하고, 특정 임무에 따라서 이전 작업을 재개하거나 두절/링크 복구에 상관없이 임무를 지속" | Confirmed |
 | DEC-079 | 로드맵 P1은 기준 3항목(3-DoF 편대 기본 알고리즘, Traffic Monitor 기본 화면, 가속 벤치마크)에 더해 성능 개선까지 끝나야 완료로 판정한다. 측정값(3-DoF 100대 0.97배속, flocking 100대 0.45배속, docs/21_qa_report.md §10.4)은 REQ-PRF-002 목표(3-DoF 100대 ≥10배)에 못 미친다. 개선 범위와 도달 수치는 병목 측정 뒤 OPN-067에서 정한다 | OPN-067, REQ-PRF-002, 사용자 답변: "성능 개선까지 해야 완료" | Confirmed |
 | DEC-080 | P1 성능 개선의 방향. (1) 항법·제어 메시지를 기체별에서 프레임당 일괄로 바꾸고 기본 FA를 C++로 옮긴다. 측정 추정은 3-DoF 100대 약 11배(8~13, P 코어 고정, 구현 전 추정)다. (2) 판정 대상은 3-DoF 100대 waypoint이고 flocking은 P1 완료 조건에서 뺀다. flocking 값(0.27배, P 고정 0.45배)은 REQ-PRF-002 미충족 별도 과제로 남긴다. (3) 완료 수치와 측정 조건은 구현 후 실측을 보고 정한다. Agent 분할(실측 2.76배 포화)은 우선순위를 낮춘다 | OPN-067, DEC-079, REQ-PRF-002, docs/21_qa_report.md §29, 사용자 답변: "일괄화 + FA C++", "P1 완료 조건에서 제외", "구현 후 실측 보고 결정" | Confirmed |
+| DEC-081 | 성능 개선 1단계. Core의 기체별 `onboard/<id>/NavigationReport`와 Agent의 기체별 `onboard/<id>/ControlOutput`을 프레임당 일괄 메시지로 대체한다. `onboard_batch/NavigationBatch`(Core → Agent, 프레임당 1건), `onboard_batch/ControlBatch/<participant>`(Agent → Core, 프레임·참여자당 1건). Python FA도 같은 경로를 쓴다. 전체 기체 항법을 담으므로 `onboard_batch/`는 MA 금지 접두사다(DEC-013). 일괄화 후 실측하고 FA C++ 위치는 그 값으로 OPN-068에서 정한다. 계약 0.17.0 | DEC-080, OPN-067, DEC-013, docs/21_qa_report.md §29.7 | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -227,6 +228,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-065 | `onboard/<id>/SystemStatus` 발행 주체(WP3 DEC-071 구현 확인 사항). Agent는 이 키를 받아 GCS에 변화 보고하지만, 지금은 아무도 발행하지 않아 통합 실행에서 SystemStatus가 나가지 않는다. 선택: (A) Core가 발행한다. 활성 고장(DEC-047)에서 health·subsystems, 동역학 상태에서 energy_frac를 만들어 바뀔 때와 1 Hz(모의 시간)로 낸다 (B) Payload 라이브러리가 낸다(센서·재머 subsystem만 앎) (C) Agent FA가 낸다(고장 정보를 truth 없이 알 수 없음). 제안: A | Resolved by DEC-073 |
 | OPN-066 | GCS 링크 상실 판단의 입력과 기본 행동. 지상→기체 주기 메시지가 없고 MA는 링크·truth를 볼 수 없다(DEC-013) | Resolved by DEC-078 |
 | OPN-067 | P1 성능 개선의 방법과 완료 수치. Python Agent 병목 측정 후 선택지(프로세스 분할, 일괄 처리, 메시지 축소 등)와 REQ-PRF-002 달성 가능성을 제시한다 | Resolved by DEC-080 |
+| OPN-068 | 기본 FA의 C++ 이전 위치. 선택: (A) Core 안에서 실행하고 Agent는 `FlightCommand`를 보낸다 (B) Agent 프로세스의 네이티브 확장. 제안: A(세 툴체인에서 Python 확장 빌드가 필요 없다). 1단계(DEC-081) 실측 후 정한다 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

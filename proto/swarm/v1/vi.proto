@@ -109,6 +109,15 @@ message NavigationReport {
   double position_sigma_m = 3;
 }
 
+// Core → Agent, 프레임당 1건 (DEC-081). reports[i].header.source가 기체 ID이고 ID 순이다
+// 항법 고장 등으로 이번 프레임에 항법이 없는 기체는 빠진다
+message NavigationBatch {
+  option (mapping) = MAPPING_CLASS_SIM;
+
+  Header header = 1;
+  repeated NavigationReport reports = 2;
+}
+
 enum Health {
   HEALTH_UNSPECIFIED = 0;
   HEALTH_NOMINAL = 1;

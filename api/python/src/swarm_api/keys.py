@@ -64,6 +64,15 @@ def onboard(entity_id: str, msg: str) -> str:
     return f"onboard/{check_entity_id(entity_id)}/{msg}"
 
 
+# 항법·제어 일괄 (DEC-081). Core·Agent 런타임 전용이고 MA는 접근하지 않는다
+NAVIGATION_BATCH = "onboard_batch/NavigationBatch"
+CONTROL_BATCH_ALL = "onboard_batch/ControlBatch/*"
+
+
+def control_batch(participant: str) -> str:
+    return f"onboard_batch/ControlBatch/{participant}"
+
+
 # 데이터링크 관측
 def link_outcome(src: str, dst: str) -> str:
     return f"link/outcome/{check_entity_id(src)}/{check_entity_id(dst)}"
@@ -102,4 +111,4 @@ def keyexpr_matches(expr: str, key: str) -> bool:
 
 
 # MA 플러그인 런타임이 직접 구독·발행하면 안 되는 접두어 (DEC-013, DEC-014, PRP-SIM-003)
-MA_FORBIDDEN_PREFIXES = ("sim/ctrl/", "truth/", "link/")
+MA_FORBIDDEN_PREFIXES = ("sim/ctrl/", "truth/", "link/", "onboard_batch/")
