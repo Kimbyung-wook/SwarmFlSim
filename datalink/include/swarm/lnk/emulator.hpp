@@ -33,6 +33,7 @@ struct DatalinkConfig {
   std::string participant_id = "datalink-0";  // FrameDone 발행 ID. 비우면 FrameDone을 보내지 않는다
   std::uint64_t seed = 0;                     // LoadScenario.run.seed, Start.seed가 0이 아니면 덮어쓴다
   double state_period_s = 1.0;                // link/state 발행 주기(시뮬레이션 시각). 0이면 발행하지 않는다
+  double heartbeat_hz = 1.0;                  // GCS Heartbeat 주기(시뮬레이션 시각, DEC-078). 0이면 끈다. 틱당 최대 1회
   double degraded_margin_db = 6.0;            // SNR이 snr_min + 이 값보다 낮으면 DEGRADED
   double degraded_loss_rate = 0.1;            // 최근 구간 손실률이 이 값 이상이면 DEGRADED
   double los_step_m = 100.0;
@@ -119,6 +120,13 @@ class Datalink {
     std::shared_ptr<const v1::LinkEnvelope> env;
   };
 
+  // GCS → 통제 기체 Heartbeat 쌍 (DEC-078)
+  struct HeartbeatLink {
+    std::string gcs;
+    std::string uav;
+    std::uint32_t sequence = 0;
+  };
+
   struct Fault {
     std::string entity;
     v1::FaultKind kind;
@@ -160,6 +168,7 @@ class Datalink {
   void flush_overflow_locked(std::vector<Out>& out);
   void deliver_locked(std::vector<Out>& out);
   void publish_states_locked(std::vector<Out>& out);
+  void heartbeats_locked(std::vector<Out>& out);
   void outcome_locked(const std::string& src, const std::string& dst, const v1::LinkEnvelope& env, std::size_t size,
                       v1::DropReason reason, std::uint64_t tx_us, std::uint64_t rx_us, std::vector<Out>& out);
   void log(const std::string& msg) const;
@@ -202,6 +211,8 @@ class Datalink {
   std::map<std::string, std::uint64_t> rx_sent_;  // 엔티티 → 발행한 swarm/<e>/rx/** 누적 수
   std::map<std::string, std::map<std::string, std::uint64_t>> peer_sent_;  // 참여자 → 마지막 FrameDone.sent_count
   std::uint64_t next_state_us_ = 0;
+  std::vector<HeartbeatLink> heartbeats_;  // (GCS, 기체) 순 정렬
+  std::uint64_t next_heartbeat_us_ = 0;
   std::uint32_t state_seq_ = 0;
   mutable std::map<std::string, bool> warned_;
 

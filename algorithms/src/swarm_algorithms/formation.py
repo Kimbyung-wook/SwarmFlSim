@@ -9,6 +9,8 @@
 - 추종기: 슬롯 = 리더 위치 + R(리더 침로)·오프셋(FRD). 목표 속도 = 리더 속도 + k_p·(슬롯 − 자기),
   보정은 corr_max_mps로 제한한다. HSA로 매 프레임 갱신한다.
   리더 상태가 leader_timeout_s보다 오래되면 현재 침로를 유지한다.
+- 링크 상실(DEC-078): 리더는 수행 중 작업의 정책, 추종기와 작업 없는 리더는 MA 변수 lost_link_policy를 따른다(FormationCommand에 정책이 없다).
+  선회 중 새 편대 명령이나 자기에게 온 작업 명령을 받으면 선회를 끝낸다.
 
 오프셋(FRD, s = spacing_m, k = 추종기 순번 0..): LINE (0, ±s·⌈(k+1)/2⌉), COLUMN (−s(k+1), 0),
 WEDGE (−s·r, ±s·r), r = ⌊k/2⌋+1, ECHELON (−s(k+1), s(k+1)), CIRCLE 리더 둘레 반경 s 등간격,
@@ -22,7 +24,7 @@ from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset, offset_geo
 
-from .common import PlanWatcher, TaskPilot, every, peer_status
+from .common import LOST_LINK_PARAMS, PlanWatcher, TaskPilot, assigned_task, every, peer_status
 
 F = c2_pb2
 
@@ -72,6 +74,7 @@ class Formation(MissionAutonomy):
         ParamDef("acceptance_m", 80.0, ParamLayer.DECISION, "m", 1.0, 100000.0, "리더 경유점 도달 판정 반경"),
         ParamDef("hold_radius_m", 400.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "리더 Hold 기본 선회 반경"),
         ParamDef("group", "", ParamLayer.DECISION, "", description="따를 편대 group_id, 빈 값 = 소속 첫 편대", runtime=False),
+        *LOST_LINK_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
@@ -119,6 +122,7 @@ class Formation(MissionAutonomy):
         self.leader = pick_leader(cmd)
         self.offsets = slot_offsets(cmd, self.leader)
         self._leader_init = False
+        self.pilot.link.release()
 
     @property
     def is_leader(self) -> bool:
@@ -149,7 +153,12 @@ class Formation(MissionAutonomy):
             self.pilot.step(other)
         else:
             ctx.ports.vi.command_status()
-            if nav is not None:
+            link = self.pilot.link
+            if any(assigned_task(ctx, m) for m in other):
+                link.release()
+            if link.update(other, nav is not None) == "hold":
+                link.orbit_here(nav, self.pilot.hold_radius_m)
+            if nav is not None and not link.held:
                 self._follow(ctx, nav)
 
         if nav is not None and self.cmd is not None and every(ctx, self.peer_hz):

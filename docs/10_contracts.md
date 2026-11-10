@@ -139,7 +139,7 @@ flowchart LR
   - `SystemStatus`(Core가 `onboard/<id>/SystemStatus`로 바뀔 때와 1 Hz로 발행, DEC-073)·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
   - Datalink를 거치므로 GCS 링크 상태가 반영된다. UI·Gateway는 `swarm/<gcs>/rx/vi/<Msg>`만 읽는다.
 - GCS Heartbeat와 링크 상실 행동 (DEC-078)
-  - Datalink가 GCS마다 자기가 통제하는 기체(`controlling_gcs`, 비면 시나리오의 첫 GCS)로 `GcsHeartbeat`를 모의 시간 기준 주기로 발생시킨다. 기본 1 Hz이고 CLI `--heartbeat-hz`로 바꾼다(0이면 끈다).
+  - Datalink가 GCS마다 자기가 통제하는 기체(`controlling_gcs`, 비면 ID순 첫 GCS)로 `GcsHeartbeat`를 모의 시간 기준 주기로 발생시킨다. 기본 1 Hz이고 CLI `--heartbeat-hz`로 바꾼다(0이면 끈다).
   - Heartbeat는 일반 tx와 같은 링크 판정(생존·고장·재밍·거리·가시선·손실·지연)을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 전달되고 `link/outcome`을 남긴다. `swarm/<gcs>/tx/**`에는 발행하지 않으므로 lockstep 송신 개수 장벽(DEC-044)의 대상이 아니다.
   - MA는 C2 포트로 받은 Heartbeat로만 링크 상실을 판단한다 (DEC-013). 첫 Heartbeat를 받은 뒤부터 감시하고, 마지막 수신 후 MA 변수 `lost_link_timeout_s`(기본 5 s, 모의 시간)가 지나면 상실로 판단한다.
   - 정책은 `TaskCommand.lost_link_policy`로 작업마다 정하고, `UNSPECIFIED`면 MA 변수 `lost_link_policy`(기본 `hold_until_command`)를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다.
