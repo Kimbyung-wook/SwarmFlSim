@@ -122,7 +122,7 @@ class LostLinkGuard:
     """링크 상실 정책(DEC-078)을 판단한다. MA는 update()의 결과대로 비행만 바꾼다.
 
     - "hold": 이번 틱에 제자리 선회를 시작한다. 끝날 때까지 작업 진행과 대기 작업 시작을 멈춘다
-    - "resume": 선회를 끝내고 중단한 비행(없으면 평소 동작)으로 돌아간다
+    - "resume": 선회를 끝내고 중단한 비행으로 돌아간다. 작업이 없으면 상실 전 비행 상태로 돌아간다 (D-32)
 
     정책은 상실 순간의 현재 작업 lost_link_policy, 없으면(UNSPECIFIED, 작업 없음) MA 변수 lost_link_policy다.
     선회 중 받은 새 작업 명령은 링크 상태와 무관하게 선회를 끝낸다. 새 작업은 취소 명령이 아니라 수락된 TaskCommand·실행 중 계획·단독 RoutePlan이다.
@@ -532,6 +532,8 @@ class TaskPilot:
     - hold: orbit 1개. center가 없으면 작업 시작 위치·고도, radius가 없으면 hold_radius_m, 방향이 없으면 CW.
       duration_s가 있으면 원 위에서 그 시간을 보낸 뒤 완료, 없으면 다음 명령까지
     - search_area: 정찰 원(원 영역, 다각형은 외접 원) orbit 1개, 1바퀴 뒤 완료
+    - 작업 없이 복구하면 상실 전 비행 상태로 돌아간다(D-32): 상실 때 작업이 없었으면 마지막 비행 명령, 그런 명령이 없거나
+      선회 중 작업이 취소됐으면 상실 순간의 침로·속도·고도
     - route: 항로점마다 goto(그 점의 alt_m·speed_mps·acceptance) + 행위 orbit(loiter: duration,
       recon: duration 또는 1바퀴). loop면 끝없이 반복. progress = 이번 바퀴에서 마친 항로점 / 전체
     - orbit 반경은 그 속력의 최소 선회 반경 × 1.3 이상으로 둔다. "원 위"는 |거리 − 반경| < max(0.25·반경, 50 m)
@@ -551,6 +553,8 @@ class TaskPilot:
         self.legs: list[Leg] = []
         self.leg_i = 0
         self._cmd_id = ""
+        self._last_cmd: vi_pb2.FlightCommand | None = None    # 마지막으로 낸 구간 명령
+        self._idle_cmd: vi_pb2.FlightCommand | None = None    # 작업 없이 복구할 때 낼 명령 (D-32)
         self._on_station_since: float | None = None
         self._station_s = 0.0               # 지금 orbit 구간에서 이미 채운 체류 시간(링크 상실로 중단된 분)
         self._angle = 0.0
@@ -579,6 +583,7 @@ class TaskPilot:
                 self._next_leg(nav)
             elif st.state in (S.COMMAND_STATE_REJECTED, S.COMMAND_STATE_FAILED):
                 self.legs, self.leg_i, self._cmd_id = [], 0, ""
+                self._last_cmd = None
                 self.tracker.finish(S.COMMAND_STATE_FAILED, st.reason)
                 self.tracker.changed = False
         if action == "hold":
@@ -595,13 +600,40 @@ class TaskPilot:
             self._command(nav, resume=True)
         elif nav is not None and self.leg is not None and self.leg.kind == "orbit" and self._cmd_id:
             self._track_orbit(nav)
+        if action == "resume" and self.tracker.current is None and not self.tracker.queue:
+            self._restore_idle()
 
     def enter_lost_link_hold(self, nav: vi_pb2.NavigationReport) -> None:
         """링크 상실 선회 시작. 사용자 MA는 덮어써서 다른 행동으로 바꿀 수 있다. 진행 중 구간과 체류 시간은 재개를 위해 남긴다"""
         if self._on_station_since is not None:
             self._station_s += self.ctx.sim_time_s - self._on_station_since
         self._on_station_since, self._cmd_id = None, ""
+        idle = self.tracker.current is None and self._last_cmd is not None
+        self._idle_cmd = self._last_cmd if idle else self._hold_course_command(nav)
         self.link.orbit_here(nav, self.hold_radius_m, self.speed_mps)
+
+    @staticmethod
+    def _hold_course_command(nav: vi_pb2.NavigationReport) -> vi_pb2.FlightCommand:
+        """지금 침로·속도·고도를 유지하는 명령"""
+        k = nav.kinematics
+        cmd = vi_pb2.FlightCommand()
+        cmd.hsa.altitude_m = k.position.alt_m
+        v = math.hypot(k.velocity_ned_mps.x, k.velocity_ned_mps.y)
+        if v > 1.0:
+            cmd.hsa.heading_deg = math.degrees(math.atan2(k.velocity_ned_mps.y, k.velocity_ned_mps.x))
+            cmd.hsa.speed_mps = v
+        return cmd
+
+    def _restore_idle(self) -> None:
+        """선회 명령이 FA에 남지 않도록 상실 전 비행 상태를 다시 명령한다"""
+        if self._idle_cmd is None:
+            return
+        self._n += 1
+        cmd = vi_pb2.FlightCommand()
+        cmd.CopyFrom(self._idle_cmd)
+        cmd.command_id = f"{self.ctx.entity_id}-task-{self._n}"
+        self._last_cmd, self._idle_cmd = cmd, None
+        self.ctx.ports.vi.command(cmd)
 
     # ---- 구간 계획 ----
 
@@ -722,6 +754,7 @@ class TaskPilot:
                 wp.speed_mps = speed
         self.cmd_task[cmd.command_id] = self.tracker.current
         self._cmd_id = cmd.command_id
+        self._last_cmd = cmd
         self.ctx.ports.vi.command(cmd)
 
 

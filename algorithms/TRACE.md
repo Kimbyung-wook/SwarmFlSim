@@ -34,6 +34,7 @@ flowchart LR
 | IMP-AGT-034 | 실행 중 받은 `MissionPlan` 반영(DEC-076, CR-GW-008): `PlanWatcher`가 MP 포트의 계획 중 처음 보는 `plan_id`만 내주고, `TaskTracker.update`와 `formation.on_step`이 틱마다 확인한다. 같은 `plan_id`는 내용이 달라도 무시. **새 `plan_id`는 교체**: C2 `TaskCommand`가 받는 즉시 현재 작업을 밀어내는 규칙(현재 작업 CANCELLED `preempted`, 같은 `task_id`면 취소 보고 없이 내용 교체)과 맞췄고, 계획은 순서가 있는 작업 묶음이므로 대기열도 새 계획으로 바꾼다(시작 전 작업도 CANCELLED). 이 기체 몫의 유효한 작업이 없는 계획은 C2의 다른 기체 명령·REJECTED처럼 현재 작업을 밀어내지 않는다. 지원하지 않거나 값이 잘못된 작업은 C2처럼 REJECTED(초기 계획은 기존대로 건너뜀). 다른 기체 작업은 `MPPortImpl._own`이 거른다. 편대는 계획에 이 기체의 편대가 있을 때만 바꾼다. 틱 안에서 확인하므로 lockstep 결정성 유지. 포트는 최신 계획만 들고 있어 한 틱에 두 계획이 닿으면 마지막 것만 수행한다 | `src/swarm_algorithms/common.py`, `formation.py` | DEC-076, CR-GW-008, DEC-033, DEC-038 | TC-AGT-075~081 Pass |
 | IMP-AGT-035 | RoutePlan과 작업의 관계(D-29, O-26): `waypoint`는 `RoutePlan`을 틱의 `pilot.step()` 뒤에 본다. **같은 ID의 계획 작업이 있으면 비행하지 않는다**: Gateway는 참조된 RoutePlan의 `route_id`를 `task_id`로 쓰므로(`gateway/.../converters/mp.py` `_route_to_task`) 그 작업이 수행하고, 도착 순서·같은 틱과 무관하게 COMPLETED로 끝난다. RoutePlan이 먼저 오면 뒤따른 계획이 같은 ID로 넘겨받는다. **계획에 없는 단독 RoutePlan**은 기존처럼 바로 비행하되 비행 명령을 직접 내지 않고 상태 보고 없는 작업(`TaskTracker.run_quiet`)으로 돈다. 근거: C2 `TaskCommand`가 받는 즉시 현재 작업을 밀어내는 규칙과 맞춰, 수행 중 작업은 CANCELLED(`preempted`)로 끝낸다(O-26: EXECUTING으로 남지 않음). 대기 작업은 C2처럼 그대로 두고 항로가 끝나면 잇는다. RoutePlan 자체의 TaskStatus는 지금처럼 없다. 값이 잘못된 RoutePlan은 현재 작업을 건드리지 않고 MD `route_plan_invalid`만 남긴다. 비행 명령 ID는 `<id>-route-<route_id>`에서 `<id>-task-<n>`으로 바뀐다 | `src/swarm_algorithms/waypoint.py`, `common.py` | D-29, O-26, DEC-076, DEC-033 | TC-AGT-082~087 Pass |
 | IMP-AGT-038 | GCS 링크 상실 행동(DEC-078): `LinkMonitor`는 C2 포트의 `GcsHeartbeat`로만 판단한다(첫 수신 뒤 감시, 마지막 수신 후 `lost_link_timeout_s` 초과면 상실, 모의 시간). `LostLinkGuard`는 상실 순간 현재 작업의 `lost_link_policy`, 없으면 MA 변수로 정책을 정하고 선회 시작·재개를 알린다. 선회 중에는 작업 진행과 대기 작업 시작을 멈추고, 수락된 새 작업 명령은 링크 상태와 무관하게 선회를 끝낸다(취소는 아님). 재개는 중단한 구간과 체류 시간을 잇는다. `LOST_LINK_PARAMS`를 waypoint, formation, flocking, hold에 적용한다. formation 추종기는 MA 변수만 쓴다. 사용자 MA는 `LinkMonitor`만 쓰거나 `TaskPilot.enter_lost_link_hold`를 덮어쓸 수 있다. MD: `link_state`(lost, recovered), `lost_link_policy`, `lost_link_action`(hold, keep_hold, resume, command, continue). 선회 명령 ID는 `<기체>-lost-link-<n>` | `src/swarm_algorithms/common.py`, `waypoint.py`, `formation.py`, `flocking.py`, `hold.py` | DEC-078, DEC-013, DEC-039, DEC-045, REQ-LNK-003 | TC-AGT-095~113 Pass |
+| IMP-AGT-039 | 작업 없이 복구할 때 상실 전 비행 상태 복원(D-32, DEC-078): RESUME·새 명령으로 선회를 끝낼 때 현재 작업과 대기 작업이 없으면 `TaskPilot`이 비행을 다시 명령한다. 상실 때 작업이 없었으면 마지막 구간 명령(끝난 작업이면 그 도착점 둘레 선회로 돌아감, FA 거부 명령 제외), 명령이 없었거나 선회 중 작업이 취소됐으면 상실 순간의 침로·속도·고도(HSA) | `src/swarm_algorithms/common.py` | D-32, DEC-078 | TC-AGT-114~117 Pass |
 
 ## TC
 
@@ -88,5 +89,9 @@ flowchart LR
 | TC-AGT-111 | 사용자 MA가 `LinkMonitor`만 쓰거나 선회 행동을 대체 | `tests/test_alg_lost_link.py` | IMP-AGT-038 | Pass |
 | TC-AGT-112 | 상실 틱에 시작된 대기 작업도 선회가 먼저, 복구 후 시작 | `tests/test_alg_lost_link.py` | IMP-AGT-038 | Pass |
 | TC-AGT-113 | flocking 선회 중 취소는 선회 목표를 유지 | `tests/test_alg_lost_link.py` | IMP-AGT-038 | Pass |
+| TC-AGT-114 | D-32: 명령을 받은 적 없는 기체는 복구 후 상실 전 침로·고도로 돌아감 | `tests/test_alg_lost_link.py` | IMP-AGT-039 | Pass |
+| TC-AGT-115 | 끝난 작업의 도착점 둘레 선회로 돌아가고 작업을 다시 보고하지 않음 | `tests/test_alg_lost_link.py` | IMP-AGT-039 | Pass |
+| TC-AGT-116 | 선회 중 취소된 작업의 목표로 가지 않고 상실 순간 침로로 돌아감 | `tests/test_alg_lost_link.py` | IMP-AGT-039 | Pass |
+| TC-AGT-117 | 작업 없는 복구의 반복, HOLD_UNTIL_COMMAND는 복구해도 선회 유지 | `tests/test_alg_lost_link.py` | IMP-AGT-039 | Pass |
 
-시험 결과(2026-11-10): algorithms/tests 98 passed (기존 74 + DEC-078 링크 상실 행동 24)
+시험 결과(2026-11-10): algorithms/tests 102 passed (기존 74 + DEC-078 링크 상실 행동 24 + D-32 4)
