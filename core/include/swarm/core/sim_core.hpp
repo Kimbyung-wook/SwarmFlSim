@@ -1,13 +1,15 @@
 // IMP-CORE-002: 프레임 스케줄러와 실행 모드 (DEC-005, REQ-SIM-002, REQ-DYN-003, PRP-SIM-002)
-// IMP-CORE-004: onboard/<id>/ControlOutput → 동역학 입력, onboard/<id>/NavigationReport 발행
+// IMP-CORE-004: 제어 입력 → 동역학 입력, 항법 발행
+// IMP-CORE-029: 프레임당 onboard_batch/NavigationBatch 1건 발행 (DEC-081)
+// IMP-CORE-030: onboard_batch/ControlBatch/<participant> 구독 → 동역학 입력 (DEC-081)
 // IMP-CORE-009: 지면 교차 이벤트로 엔티티를 죽이고 truth/event/kill(cause=ground)을 발행한다
 // IMP-CORE-013: 동역학 매개변수. SetParams는 poll 시작(프레임 경계)에 적용하고 sim/param/<id>/dynamics를 발행한다 (DEC-035)
 // IMP-CORE-011: InjectFault. KILL, ENGINE(속도 명령 최소), NAV(NavigationReport 중단), SENSOR(기록만).
-//               LINK_CUT·GCS_LINK_CUT은 Datalink(WP4)가 처리하므로 Core는 무시한다
+//               LINK_CUT·GCS_LINK_CUT의 효과는 Datalink(WP4)가 내고 Core는 SystemStatus용으로 기록만 한다 (IMP-CORE-028)
 //
 // 프레임 N의 순서
-//   1. truth/state, onboard/<id>/NavigationReport, sim/clock/tick(N)을 발행한다 (시각 t_N의 상태)
-//   2. 참여자는 tick(N)을 받아 ControlOutput을 보내고, lockstep이면 sim/clock/done/<p>에 FrameDone(N)을 보낸다
+//   1. truth/state, onboard_batch/NavigationBatch, sim/clock/tick(N)을 발행한다 (시각 t_N의 상태)
+//   2. 참여자는 tick(N)을 받아 ControlBatch를 보내고, lockstep이면 sim/clock/done/<p>에 FrameDone(N)을 보낸다
 //   3. 진행 조건(lockstep 장벽, 배속 기한)을 만족하면 받은 입력으로 [t_N, t_N+dt]를 적분하고 N+1로 넘어간다
 #pragma once
 
@@ -88,7 +90,8 @@ class SimCore {
  private:
   struct Inbox {
     std::vector<v1::SimCommand> commands;
-    std::map<std::string, v1::ControlOutput> controls;  // 엔티티별 최신값
+    // IMP-CORE-030: 참여자별 수신 순 ControlBatch. 적분 때 참여자 이름 순으로 합쳐 도착 순서와 무관하게 한다
+    std::map<std::string, std::vector<v1::ControlBatch>> control_batches;
     std::vector<v1::FrameDone> dones;
     // IMP-CORE-022: 임무장비 명령 (onboard/<id>/{Sensor,Jammer,Strike}Command). 프레임 적분 때 payload에 넘긴다
     std::vector<payload::Addressed<v1::SensorCommand>> sensor_cmds;
@@ -155,8 +158,8 @@ class SimCore {
   };
   std::vector<BelowStart> below_start_;
   std::vector<double> u_scratch_;
-  std::vector<std::string> nav_keys_;
   std::vector<std::uint32_t> nav_seq_;
+  std::uint32_t nav_batch_seq_ = 0;
   std::vector<std::string> participants_;
   // IMP-CORE-022: 임무장비·무장 계산기 (WP8, DEC-046). 시나리오를 적재할 때 만든다
   std::unique_ptr<payload::PayloadSystem> payload_;

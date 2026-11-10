@@ -3,6 +3,7 @@
 // IMP-CORE-024: 활성 재밍 구역 1 s 재발행 (DEC-052)
 // IMP-CORE-026: DEM 아래 시작 공중 엔티티 경고·시작 프레임 kill (DEC-060)
 // IMP-CORE-028: onboard/<id>/SystemStatus 발행 (DEC-073)
+// IMP-CORE-029·030: 항법·제어 일괄 메시지 (DEC-081)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -35,7 +36,7 @@ bool parse(const Sample& s, T& msg) {
   return msg.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size()));
 }
 
-// onboard/<id>/ControlOutput → <id>
+// onboard/<id>/<msg> → <id>
 std::string onboard_entity(const std::string& key) {
   const auto a = key.find('/');
   const auto b = key.find('/', a + 1);
@@ -54,13 +55,13 @@ SimCore::SimCore(Bus& bus, DynamicsProvider provider, CoreConfig cfg)
     if (!parse(s, cmd)) return;
     submit(cmd);
   }));
-  subs_.push_back(bus_.subscribe("onboard/*/ControlOutput", [this](const Sample& s) {
-    v1::ControlOutput c;
-    if (!parse(s, c)) return;
-    {
-      std::lock_guard lock(inbox_mu_);
-      inbox_.controls[onboard_entity(s.key)] = std::move(c);
-    }
+  // IMP-CORE-030: 배치 전체를 받아 두고 적분 때 푼다 (DEC-081)
+  subs_.push_back(bus_.subscribe(std::string(keys::kControlBatchAll), [this](const Sample& s) {
+    v1::ControlBatch b;
+    if (!parse(s, b)) return;
+    std::string participant = s.key.substr(s.key.rfind('/') + 1);
+    std::lock_guard lock(inbox_mu_);
+    inbox_.control_batches[std::move(participant)].push_back(std::move(b));
   }));
   auto sub_cmd = [this](const char* pattern, auto member, auto tag) {
     using M = decltype(tag);
@@ -141,8 +142,6 @@ bool SimCore::load(const Scenario& sc) {
   store_ = std::move(store);
   payload_ = std::move(pay);
   participants_.assign(parts.begin(), parts.end());
-  nav_keys_.clear();
-  for (std::size_t i = 0; i < store_.size(); ++i) nav_keys_.push_back(keys::onboard(store_.id(i), "NavigationReport"));
   sys_keys_.clear();
   for (std::size_t i = 0; i < store_.size(); ++i) sys_keys_.push_back(keys::onboard(store_.id(i), "SystemStatus"));
   id_order_.resize(store_.size());
@@ -200,6 +199,7 @@ void SimCore::reset_run_state() {
   }
   faults_.clear();
   nav_seq_.assign(store_.size(), 0);
+  nav_batch_seq_ = 0;
   frame_ = 0;
   sim_time_us_ = 0;
   frame_published_ = false;
@@ -220,7 +220,7 @@ void SimCore::reset_run_state() {
   sys_seq_.assign(store_.size(), 0);
   next_sys_us_ = 0;  // 첫 발행 프레임(0)에 낸다
   std::lock_guard lock(inbox_mu_);
-  inbox_.controls.clear();
+  inbox_.control_batches.clear();
   inbox_.dones.clear();
   inbox_.sensor_cmds.clear();
   inbox_.jammer_cmds.clear();
@@ -555,22 +555,29 @@ void SimCore::clear_waiting(Clock::time_point now) {
 }
 
 void SimCore::integrate_frame() {
-  std::map<std::string, v1::ControlOutput> controls;
+  std::map<std::string, std::vector<v1::ControlBatch>> control_batches;
   std::vector<payload::Addressed<v1::SensorCommand>> sensor_cmds;
   std::vector<payload::Addressed<v1::JammerCommand>> jammer_cmds;
   std::vector<payload::Addressed<v1::StrikeCommand>> strike_cmds;
   {
     std::lock_guard lock(inbox_mu_);
-    controls.swap(inbox_.controls);
+    control_batches.swap(inbox_.control_batches);
     sensor_cmds.swap(inbox_.sensor_cmds);
     jammer_cmds.swap(inbox_.jammer_cmds);
     strike_cmds.swap(inbox_.strike_cmds);
   }
-  for (const auto& [id, c] : controls) {
-    const auto idx = store_.find(id);
-    if (!idx || !store_.model(*idx)) continue;
+  // IMP-CORE-030: 기체별 최신값을 고른다. 참여자는 이름 순, 한 참여자 안은 수신 순이다. 모르는 ID는 건너뛴다.
+  // 두 참여자가 같은 기체를 보내면 이름이 뒤인 쪽이 이겨 도착 순서와 무관하다 (DEC-081, DEC-005, DEC-039)
+  std::vector<const v1::ControlOutput*> latest(store_.size(), nullptr);
+  for (const auto& [participant, batches] : control_batches)
+    for (const auto& batch : batches)
+      for (const auto& c : batch.controls()) {
+        const auto idx = store_.find(c.header().source());
+        if (idx && store_.model(*idx)) latest[*idx] = &c;
+      }
+  for (std::size_t i = 0; i < latest.size(); ++i) {
     // 형식이 맞지 않는 입력은 버리고 이전 입력을 유지한다
-    if (!store_.model(*idx)->map_control(c, store_.u(*idx))) ++control_mismatches_;
+    if (latest[i] && !store_.model(i)->map_control(*latest[i], store_.u(i))) ++control_mismatches_;
   }
 
   const double t0 = static_cast<double>(sim_time_us_) * 1e-6, dt = dt_us_ * 1e-6;
@@ -734,9 +741,17 @@ void SimCore::publish_truth() {
 void SimCore::publish_frame() {
   publish_truth();
 
-  for (std::size_t i = 0; i < store_.size(); ++i) {
+  // IMP-CORE-029: 프레임당 1건, 기체 ID 순. 대상이 없어도 빈 배치를 낸다 (DEC-081).
+  // 잡음 난수도 ID 순으로 뽑아 시나리오의 엔티티 나열 순서와 무관하다
+  v1::NavigationBatch batch;
+  auto* bh = batch.mutable_header();
+  bh->set_sim_time_us(sim_time_us_);
+  bh->set_frame(frame_);
+  bh->set_source(cfg_.participant_id);
+  bh->set_seq(nav_batch_seq_++);
+  for (const std::size_t i : id_order_) {
     if (!store_.has_onboard(i) || !store_.alive(i) || fault_active(i, v1::FAULT_KIND_NAV)) continue;
-    v1::NavigationReport nav;
+    auto& nav = *batch.add_reports();
     auto* h = nav.mutable_header();
     h->set_sim_time_us(sim_time_us_);
     h->set_frame(frame_);
@@ -744,8 +759,8 @@ void SimCore::publish_frame() {
     h->set_seq(nav_seq_[i]++);
     store_.kinematics(i, *nav.mutable_kinematics());
     if (cfg_.nav_noise) cfg_.nav_noise(store_.id(i), nav, rng_);
-    publish(nav_keys_[i], nav);
   }
+  publish(std::string(keys::kNavigationBatch), batch);
   publish_system_status();
 
   v1::ClockTick tick;
