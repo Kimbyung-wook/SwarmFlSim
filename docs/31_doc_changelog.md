@@ -83,3 +83,4 @@
 | 2026-11-10 | `bc75a8f` | IMP-CORE-029~030, TC-CORE-044~045, DEC-081 | Core 항법·제어 일괄 메시지(`onboard_batch/NavigationBatch`, `onboard_batch/ControlBatch/<참여자>`). 기체별 `onboard/<id>/NavigationReport`·`ControlOutput` 키 폐기 | 플러그인 개발, 개발 시험 | 미처리 | |
 | 2026-11-10 | `9633bac` | IMP-AGT-040, TC-AGT-118~125, DEC-081 | Agent 일괄 메시지 전환. 틱당 ControlBatch 1건을 FrameDone 전에 발행 | 플러그인 개발, 개발 시험 | 미처리 | |
 | 2026-11-10 | `f6b87bd` | TC-QA-127~136, D-33, DEC-081 | QA 23차: 일괄화 실스택 통과, 3-DoF 100대 기본 10.21배·Logger 켬 9.05배 측정, D-33 등록 | 개발 시험 | 미처리 | |
+| 2026-11-10 | `cb45a2a` | DEC-082, OPN-068 | FA C++ 보류, P1 완료 수치(3-DoF 100대 Logger 켬 ≥10배) | 개발 시험 | 미처리 | |
