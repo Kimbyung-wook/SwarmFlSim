@@ -1,6 +1,6 @@
 # 6. Adding a dynamics model
 
-> Source: [docs/41_dev/06_dynamics.md](../../41_dev/06_dynamics.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/06_dynamics.md](../../41_dev/06_dynamics.md) at commit `f0729ee`.
 
 Dynamics models are written in C++, placed in `dynamics/` and built together with Core. They are not registered separately as Python plugins are. Because dynamics is C++, it is outside the scope of the [example package](../../../examples/plugins/) (DEC-070), which holds Python plugins. This chapter uses the real `dof2` code and tests as the example.
 

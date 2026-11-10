@@ -1,6 +1,6 @@
 # 1. Development environment
 
-> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `bbf4d92`.
+> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `f0729ee`.
 
 - [10_contracts.md §7](../../10_contracts.md#7-빌드-환경과-시험-dec-022) (Korean) is the authority for install commands. This chapter covers how to decide what to install and the failures you are likely to hit.
 

@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `bbf4d92`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `f0729ee`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -140,5 +140,7 @@ A `counters` log appears every `--stats-s` period.
 - Even if one position mapping message fails, the other mapped messages are exported.
 
 > Known limitation: `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20). In this check the messages were forwarded anyway.
+
+> In lockstep, external input breaks same-seed reproduction. The Gateway publishes at the tick in which the input arrived, so the trajectories of the vehicles that received it differ between runs. Without external input, trajectories, link results and GCS receptions match.
 
 Next: [10. Troubleshooting](10_faq.md).
