@@ -1,7 +1,8 @@
 """시험용 가짜 Core·Datalink와 시나리오 생성기 (IMP-AGT-009).
 
 InMemoryBus 위에서 Agent 런타임을 단독으로 시험한다. 실제 swarm_core·swarm_datalink를 대신한다.
-- FakeCore: 2-DoF 운동학(속도 1차 지연, 선회율, 상승률)으로 적분하고 truth/state, NavigationReport, ClockTick 발행
+- FakeCore: 2-DoF 운동학(속도 1차 지연, 선회율, 상승률)으로 적분하고 truth/state, NavigationBatch, ClockTick 발행.
+  ControlBatch를 기체별로 풀어 적분에 쓴다 (DEC-081)
 - FakeDatalink: swarm/*/tx/** → swarm/<dst>/rx/** 즉시 전달. dst가 비면 송신자를 뺀 모든 엔티티
 """
 
@@ -66,14 +67,14 @@ class FakeCore:
         self.controls: dict[str, fa_pb2.ControlOutput] = {}
         self.done: dict[str, int] = {}
         self.control_frames: dict[str, int] = {}
-        self._subs = [bus.subscribe("onboard/*/ControlOutput", self._on_control),
+        self.nav_outage: set[str] = set()     # NavigationBatch에서 뺄 기체 (항법 고장)
+        self._subs = [bus.subscribe(keys.CONTROL_BATCH_ALL, self._on_control),
                       bus.subscribe("sim/clock/done/*", self._on_done)]
 
     def _on_control(self, s: Sample) -> None:
-        eid = s.key.split("/")[1]
-        c = fa_pb2.ControlOutput.FromString(s.payload)
-        self.controls[eid] = c
-        self.control_frames[eid] = c.header.frame
+        for c in fa_pb2.ControlBatch.FromString(s.payload).controls:
+            self.controls[c.header.source] = c
+            self.control_frames[c.header.source] = c.header.frame
 
     def _on_done(self, s: Sample) -> None:
         d = sim_pb2.FrameDone.FromString(s.payload)
@@ -98,11 +99,14 @@ class FakeCore:
             st = tf.entities.add(id=b.id, alive=True)
             st.kinematics.CopyFrom(self.kinematics(b))
         self._put(keys.TRUTH_STATE, tf)
-        for b in self.bodies.values():
-            nav = vi_pb2.NavigationReport()
-            nav.header.frame, nav.header.sim_time_us, nav.header.source = self.frame, t_us, b.id
-            nav.kinematics.CopyFrom(self.kinematics(b))
-            self._put(keys.onboard(b.id, "NavigationReport"), nav)
+        batch = vi_pb2.NavigationBatch()
+        batch.header.frame, batch.header.sim_time_us, batch.header.source = self.frame, t_us, "core"
+        for eid in sorted(self.bodies):
+            if eid not in self.nav_outage:
+                nav = batch.reports.add()
+                nav.header.frame, nav.header.sim_time_us, nav.header.source = self.frame, t_us, eid
+                nav.kinematics.CopyFrom(self.kinematics(self.bodies[eid]))
+        self._put(keys.NAVIGATION_BATCH, batch)
         self._put(keys.CLOCK_TICK, sim_pb2.ClockTick(frame=self.frame, sim_time_us=t_us, dt_us=self.dt_us,
                                                      mode=self.mode))
 

@@ -3,10 +3,11 @@
 한 프로세스가 여러 기체를 호스팅한다. 프레임 처리 순서(sim/clock/tick 하나당):
   1. 기체마다 수신 버퍼를 넘기고 ctx(frame, 시각, dt)를 갱신한다
   2. MA: 기체별 on_step(ID 순), 일괄 MA on_step_batch(플러그인 이름 순)
-  3. FA: 이번 프레임에 항법 보고를 받은 기체만 step → onboard/<id>/ControlOutput
+  3. FA: 이번 프레임 NavigationBatch에 있는 기체만 step → 틱당 1건 onboard_batch/ControlBatch/<participant> (DEC-081)
   4. lockstep이면 sim/clock/done/<participant>에 FrameDone
 
-구독하는 키: sim/clock/tick, sim/ctrl/cmd·sim/ctrl/scenario(런타임만, MA에 노출하지 않음, DEC-037), 기체마다 onboard/<id>/*,
+구독하는 키: sim/clock/tick, sim/ctrl/cmd·sim/ctrl/scenario(런타임만, MA에 노출하지 않음, DEC-037),
+onboard_batch/NavigationBatch(런타임만, MA에 노출하지 않음, DEC-013), 기체마다 ONBOARD_INBOUND의 onboard/<id>/<msg>,
 swarm/<id>/rx/**. truth/**와 link/**는 구독하지 않는다 (PRP-SIM-003).
 """
 
@@ -21,7 +22,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from google.protobuf.message import Message
 
-from swarm.v1 import entity_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
+from swarm.v1 import entity_pb2, fa_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
 from swarm_api import BatchMissionAutonomy, Bus, NavBatch, Sample, keys
 from swarm_api.keys import Iface
 
@@ -44,9 +45,8 @@ L1_ENUM = {
 }
 _PRIORITY = {"c2": 0, "p2p": 1}
 
-# onboard/<id>/<msg> 중 런타임이 받는 것. 나머지(자기가 낸 ControlOutput 등)는 무시한다
-ONBOARD_INBOUND = frozenset({"NavigationReport", "SystemStatus", "Detection",
-                             "SensorActivity", "JammerActivity", "StrikeActivity"})
+# onboard/<id>/<msg> 중 런타임이 받는 것. 이 키만 구독하므로 자기가 낸 명령이 되돌아오지 않는다 (DEC-081)
+ONBOARD_INBOUND = frozenset({"SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity"})
 
 
 @dataclass
@@ -100,7 +100,7 @@ PARAM_PUBLISH_S = 1.0
 NAV_WAIT_S = 0.05
 ACTIVITY_PERIOD_US = 1_000_000  # 임무장비 상태 주기 보고 (DEC-051)
 ACTIVITY_NAMES = frozenset({"SensorActivity", "JammerActivity", "StrikeActivity"})
-# lockstep에서 onboard 입력(NavigationReport 제외)을 처리하는 틱 = header.frame + 지연 (D-30, DEC-039).
+# lockstep에서 onboard 입력을 처리하는 틱 = header.frame + 지연 (D-30, DEC-039).
 # Core는 틱 P 직전에 입력을 몰아 내므로 그 틱에 도착이 보장되지 않고, 틱 P+1은 Agent의 FrameDone(P) 뒤에야 나온다.
 # SystemStatus는 P에 찍히고(publish_frame), 임무장비 출력은 적분 프레임 P-1로 찍혀 틱 P 앞에 나온다(step_payload)
 ONBOARD_LAG_FRAMES = {"SystemStatus": 1}
@@ -120,6 +120,8 @@ class AgentRuntime:
         # 항법 보고를 기다리는 틱과 기한 (threaded 모드만)
         self._pending_tick: tuple[sim_pb2.ClockTick, float] | None = None
         self._nav_timeout = False
+        self._nav_frame: int | None = None          # 마지막으로 받은 NavigationBatch의 프레임 (DEC-081)
+        self._control_seq = 0                       # ControlBatch 일련번호
         # lockstep 수신 결정성 (DEC-040): Datalink의 FrameDone(f)을 받은 뒤에 틱 f+1을 처리하고,
         # rx는 rx_time_us <= 틱 시각일 때만 소비한다
         self._lockstep = False
@@ -183,6 +185,8 @@ class AgentRuntime:
             self._on_scenario(sim_pb2.Scenario.FromString(s.payload))
         elif key.startswith("sim/clock/done/"):
             self._on_done(sim_pb2.FrameDone.FromString(s.payload))
+        elif key == keys.NAVIGATION_BATCH:
+            self._on_nav_batch(s.payload)
         elif key.startswith("onboard/"):
             self._on_onboard(key, s.payload)
         elif key.startswith("swarm/"):
@@ -264,8 +268,11 @@ class AgentRuntime:
             gcs = v.spec.controlling_gcs or (gcs_ids[0] if gcs_ids else "")
             if gcs:
                 self._gcs[v.entity_id] = gcs
+        if self._order:
+            self._vehicle_subs.append(self.bus.subscribe(keys.NAVIGATION_BATCH, self._on_sample))
         for v in self._order:
-            self._vehicle_subs.append(self.bus.subscribe(f"onboard/{v.entity_id}/*", self._on_sample))
+            for name in sorted(ONBOARD_INBOUND):
+                self._vehicle_subs.append(self.bus.subscribe(keys.onboard(v.entity_id, name), self._on_sample))
             self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
         self._lockstep = scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP
         if self._lockstep:
@@ -320,6 +327,8 @@ class AgentRuntime:
     def _teardown(self) -> None:
         self._pending_tick = None
         self._nav_timeout = False
+        self._nav_frame = None
+        self._control_seq = 0
         self._lockstep = False
         self._dl_names = ()
         self._dl_done = {}
@@ -349,15 +358,23 @@ class AgentRuntime:
 
     # ---- onboard / rx ----
 
+    def _on_nav_batch(self, payload: bytes) -> None:
+        """배치에 있는 호스팅 기체만 이번 프레임 항법이 새로 왔다(nav_fresh). 다른 참여자의 기체는 건너뛴다 (DEC-081)"""
+        batch = vi_pb2.NavigationBatch.FromString(payload)
+        self._nav_frame = batch.header.frame
+        for v in self._order:
+            v.nav_fresh = False
+        for report in batch.reports:
+            v = self.vehicles.get(report.header.source)
+            if v is not None:
+                v.nav = report
+                v.nav_fresh = True
+        self._try_release()
+
     def _on_onboard(self, key: str, payload: bytes) -> None:
         _, eid, name = key.split("/", 2)
         v = self.vehicles.get(eid)
         if v is None or name not in ONBOARD_INBOUND:
-            return
-        if name == "NavigationReport":
-            v.nav = vi_pb2.NavigationReport.FromString(payload)
-            v.nav_fresh = True
-            self._try_release()
             return
         msg = decode(f"swarm.v1.{name}", payload)
         if self._lockstep:
@@ -366,7 +383,7 @@ class AgentRuntime:
             self._apply_onboard(v, name, msg)
 
     def _hold_onboard(self, v: Vehicle, name: str, msg: Message) -> None:
-        """도착 순서가 아니라 메시지의 프레임으로 처리할 틱을 정한다. NavigationReport처럼 틱을 기다리게 할 수는 없다:
+        """도착 순서가 아니라 메시지의 프레임으로 처리할 틱을 정한다. NavigationBatch처럼 틱을 기다리게 할 수는 없다:
         SystemStatus·임무장비 출력은 바뀔 때만 나와 그 프레임에 메시지가 있는지 Agent가 알 수 없다 (D-30)"""
         due = msg.header.frame + ONBOARD_LAG_FRAMES.get(name, ONBOARD_LAG_DEFAULT)
         if self._last_frame is not None and due <= self._last_frame:
@@ -465,11 +482,8 @@ class AgentRuntime:
     # ---- 프레임 ----
 
     def _navs_ready(self, frame: int) -> bool:
-        """이 프레임의 항법 보고를 받아야 할 기체(아직 보고가 없거나 직전 프레임까지 보고한 기체)가 모두 받았는가"""
-        for v in self._order:
-            if v.nav is None or v.nav.header.frame == frame - 1:
-                return False
-        return True
+        """이 프레임의 NavigationBatch를 받았는가. 배치에서 빠진 기체는 기다리지 않는다 (DEC-081)"""
+        return self._nav_frame is not None and self._nav_frame >= frame
 
     def _dl_ready(self, frame: int) -> bool:
         """틱 frame을 처리하려면 Datalink의 FrameDone(frame-1)이 와 있고, 그 sent_count만큼 rx가 도착해 있어야 한다
@@ -519,8 +533,8 @@ class AgentRuntime:
                 self._deliver(v, iface, msg)
 
     def _on_tick(self, tick: sim_pb2.ClockTick) -> None:
-        # Zenoh는 키마다 다른 스레드에서 콜백을 부르므로 NavigationReport(N)가 틱(N)보다 늦게 올 수 있다.
-        # threaded 모드에서는 그 기체들의 보고를 NAV_WAIT_S까지 기다린다
+        # Zenoh는 키마다 다른 스레드에서 콜백을 부르므로 NavigationBatch(N)가 틱(N)보다 늦게 올 수 있다.
+        # threaded 모드에서는 그 배치를 NAV_WAIT_S까지 기다린다
         if self._pending_tick is not None:
             self._release_tick()
         self._ticks_seen += 1
@@ -579,17 +593,28 @@ class AgentRuntime:
             self._guard(name, plugin.on_step_batch, [m.ctx for m in members], nav_batch(members))
         t1 = time.perf_counter()
 
+        controls = fa_pb2.ControlBatch()
         for v in self._order:
             if v.nav is not None and v.nav_fresh:
                 out = self._guard(v.entity_id, v.fa.step, v.nav, dt)
                 if out is not None:
-                    self.publish_onboard(v, out, stamp=True)
+                    out.header.source = v.entity_id    # Core는 이 값으로 기체를 찾는다
+                    v.stamp(out)
+                    controls.controls.append(out)
             for st in v.fa.pending_status():
                 v.ports.vi.push_status(st)
             v.nav_fresh = False
+        self._publish_controls(controls, tick)
         t2 = time.perf_counter()
         self.stats.ma_s += t1 - t0
         self.stats.fa_s += t2 - t1
+
+    def _publish_controls(self, batch: fa_pb2.ControlBatch, tick: sim_pb2.ClockTick) -> None:
+        """틱당 1건. 낼 제어가 없는 틱도 빈 배치를 낸다. FrameDone보다 먼저 나가야 한다 (DEC-081)"""
+        h = batch.header
+        h.source, h.frame, h.sim_time_us, h.seq = self.config.participant, tick.frame, tick.sim_time_us, self._control_seq
+        self._control_seq += 1
+        self.bus.put(keys.control_batch(self.config.participant), batch.SerializeToString(), encoding(batch))
 
     # ---- 매개변수 (DEC-035) ----
 

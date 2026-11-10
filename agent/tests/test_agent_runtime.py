@@ -89,6 +89,16 @@ def test_tc_agt_006_controls_and_batch_nav():
     assert lla[0, 0] == pytest.approx(h.core.bodies["uav-001"].lat, abs=1e-3)
 
 
+def nav_batch_of(sc, frame: int) -> vi_pb2.NavigationBatch:
+    batch = vi_pb2.NavigationBatch()
+    batch.header.frame = frame
+    for e in sc.entities[1:]:
+        nav = batch.reports.add()
+        nav.header.frame, nav.header.source = frame, e.id
+        nav.kinematics.CopyFrom(e.initial)
+    return batch
+
+
 def test_tc_agt_007_lockstep_frame_done():
     h = Harness(make_scenario(2, "hold"))
     dones = []
@@ -96,12 +106,12 @@ def test_tc_agt_007_lockstep_frame_done():
     h.core.step(5)
     assert [d.frame for _, d in dones] == [0, 1, 2, 3, 4]
     assert all(k == "sim/clock/done/agent-0" and d.participant == "agent-0" for k, d in dones)
-    # ControlOutput은 같은 프레임의 FrameDone보다 먼저 나간다
+    # ControlBatch는 같은 프레임의 FrameDone보다 먼저 나간다
     order = []
-    h.bus.subscribe("onboard/*/ControlOutput", lambda s: order.append("ctrl"))
+    h.bus.subscribe(keys.CONTROL_BATCH_ALL, lambda s: order.append("ctrl"))
     h.bus.subscribe("sim/clock/done/*", lambda s: order.append("done"))
     h.core.step(1)
-    assert order == ["ctrl", "ctrl", "done"]
+    assert order == ["ctrl", "done"]
 
 
 def test_tc_agt_007_frame_done_without_vehicles_and_not_in_realtime():
@@ -117,22 +127,18 @@ def test_tc_agt_007_frame_done_without_vehicles_and_not_in_realtime():
 
 
 def test_tc_agt_007_threaded_waits_for_late_nav():
-    """threaded 모드: 틱(N)이 항법 보고(N)보다 먼저 와도 그 보고를 기다려 모든 기체가 ControlOutput을 낸다"""
+    """threaded 모드: 틱(N)이 NavigationBatch(N)보다 먼저 와도 그 배치를 기다려 모든 기체가 제어를 낸다"""
     bus = FastInMemoryBus()
     sc = make_scenario(2, "hold")
     rt = AgentRuntime(bus, RuntimeConfig(), threaded=True)
     rt.load(sc)
     ctrl, done = [], []
-    bus.subscribe("onboard/*/ControlOutput", lambda s: ctrl.append(fa_pb2.ControlOutput.FromString(s.payload)))
+    bus.subscribe(keys.CONTROL_BATCH_ALL, lambda s: ctrl.extend(fa_pb2.ControlBatch.FromString(s.payload).controls))
     bus.subscribe(keys.clock_done("agent-0"), lambda s: done.append(time.monotonic()))
     for f in range(3):
         tick = sim_pb2.ClockTick(frame=f, sim_time_us=f * 20000, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
         bus.put(keys.CLOCK_TICK, tick.SerializeToString(), "")
-        for e in sc.entities[1:]:
-            nav = vi_pb2.NavigationReport()
-            nav.header.frame = f
-            nav.kinematics.CopyFrom(e.initial)
-            bus.put(keys.onboard(e.id, "NavigationReport"), nav.SerializeToString(), "")
+        bus.put(keys.NAVIGATION_BATCH, nav_batch_of(sc, f).SerializeToString(), "")
     t0 = time.monotonic()
     rt.run(max_frames=3)
     assert [c.header.frame for c in ctrl] == [0, 0, 1, 1, 2, 2]
@@ -254,14 +260,14 @@ def _run_trace(seed: int, frames: int = 300) -> list[bytes]:
     sc = make_scenario(6, "flocking", {"wander_deg": 3.0}, seed=seed)
     h = Harness(sc)
     out = []
-    h.bus.subscribe("onboard/*/ControlOutput", lambda s: out.append(s.payload))
+    h.bus.subscribe(keys.CONTROL_BATCH_ALL, lambda s: out.append(s.payload))
     h.core.step(frames)
     return out
 
 
 def test_tc_agt_010_determinism():
     a, b = _run_trace(11), _run_trace(11)
-    assert a == b and len(a) == 6 * 300
+    assert a == b and len(a) == 300 and all(len(fa_pb2.ControlBatch.FromString(p).controls) == 6 for p in a)
     assert _run_trace(12) != a
     # Start.seed가 시나리오 시드를 덮어쓴다
     sc = make_scenario(6, "flocking", {"wander_deg": 3.0}, seed=99)
@@ -270,7 +276,7 @@ def test_tc_agt_010_determinism():
     start.start.seed = 11
     put_sim_command(h.bus, start)
     out = []
-    h.bus.subscribe("onboard/*/ControlOutput", lambda s: out.append(s.payload))
+    h.bus.subscribe(keys.CONTROL_BATCH_ALL, lambda s: out.append(s.payload))
     h.core.step(300)
     assert out == a
 
@@ -320,7 +326,7 @@ def test_tc_agt_013_zenoh_threaded():
         rt = AgentRuntime(bus, RuntimeConfig(participant="agent-zt"), threaded=True)
         sc = make_scenario(2, "hold")
         got_ctrl, got_done = [], []
-        bus.subscribe("onboard/*/ControlOutput", lambda s: got_ctrl.append(s.key))
+        bus.subscribe(keys.CONTROL_BATCH_ALL, lambda s: got_ctrl.append(fa_pb2.ControlBatch.FromString(s.payload)))
         bus.subscribe("sim/clock/done/agent-zt", lambda s: got_done.append(sim_pb2.FrameDone.FromString(s.payload)))
         stop = threading.Event()
         th = threading.Thread(target=rt.run, kwargs={"should_stop": stop.is_set}, daemon=True)
@@ -328,28 +334,24 @@ def test_tc_agt_013_zenoh_threaded():
         cmd = load_command(sc)
         bus.put(keys.SIM_CTRL_CMD, cmd.SerializeToString(), protobuf_encoding("swarm.v1.SimCommand"))
         deadline = time.time() + 5
-        # 기체별 onboard·rx 구독 선언까지 끝나야 첫 항법 보고를 받는다
-        while len(rt._vehicle_subs) < 4 and time.time() < deadline:
+        # NavigationBatch와 기체별 onboard 5종·rx 구독 선언까지 끝나야 첫 항법을 받는다
+        while len(rt._vehicle_subs) < 13 and time.time() < deadline:
             time.sleep(0.01)
         for f in range(5):
-            for e in sc.entities[1:]:
-                nav = vi_pb2.NavigationReport()
-                nav.header.frame = f
-                nav.kinematics.CopyFrom(e.initial)
-                bus.put(keys.onboard(e.id, "NavigationReport"), nav.SerializeToString(), "")
+            bus.put(keys.NAVIGATION_BATCH, nav_batch_of(sc, f).SerializeToString(), "")
             tick = sim_pb2.ClockTick(frame=f, sim_time_us=f * 20000, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
             bus.put(keys.CLOCK_TICK, tick.SerializeToString(), "")
             t0 = time.time()
             while len(got_done) <= f + 1 and time.time() - t0 < 5:  # +1: 적재 직후 준비 신호 (DEC-037)
                 time.sleep(0.005)
-        # 키가 다른 발행은 수신 순서가 보장되지 않으므로 ControlOutput 도착을 잠시 기다린다
+        # 키가 다른 발행은 수신 순서가 보장되지 않으므로 ControlBatch 도착을 잠시 기다린다
         t0 = time.time()
-        while len(got_ctrl) < 10 and time.time() - t0 < 2:
+        while len(got_ctrl) < 5 and time.time() - t0 < 2:
             time.sleep(0.005)
         stop.set()
         th.join(2)
         assert [d.frame for d in got_done] == [0, 0, 1, 2, 3, 4]  # 첫 0은 적재 직후 준비 신호 (DEC-037)
-        assert len(got_ctrl) == 10
+        assert len(got_ctrl) == 5 and all(len(c.controls) == 2 for c in got_ctrl)
         rt.close()
     finally:
         bus.close()

@@ -60,6 +60,7 @@ flowchart LR
 | IMP-AGT-033 | 비행 명령 갱신의 상태 역행 방지(D-28): 같은 `command_id`·종류로 갱신하면 `on_command`가 수행 중에는 EXECUTING, 수행 전에는 ACCEPTED를 돌려줌. 새 ID·종류 변경·REJECTED 처리는 그대로. 파이썬 FA 구현은 `DefaultFlightAutonomy`뿐이라 다른 곳은 고칠 것이 없음 | `src/swarm_agent/fa.py` | D-28, DEC-071 | TC-AGT-070~074 Pass |
 | IMP-AGT-036 | lockstep onboard 입력의 처리 틱을 메시지 프레임으로 고정(D-30, DEC-039): `NavigationReport`를 뺀 onboard 입력(`SystemStatus`, `Detection`, `*Activity`)을 도착 즉시 처리하지 않고 보관했다가 틱 `header.frame + 지연`의 begin_frame 전에 (틱, 메시지, seq) 순으로 처리한다. 지연은 `SystemStatus` 1(Core `publish_frame`이 틱 P 직전에 프레임 P로 발행), 임무장비 출력 2(`step_payload`가 적분 프레임 P-1로 찍어 틱 P 앞에 발행). 틱 P+1은 Agent의 FrameDone(P) 뒤에야 나오므로 그때까지 도착한다. NavigationReport처럼 틱을 기다리게 할 수 없는 이유: 이 입력들은 바뀔 때만 나와 그 프레임에 메시지가 있는지 알 수 없다. 처리할 틱이 지난 뒤 도착하면 `stats.late_onboard`를 세고 경고 후 다음 틱에 처리한다. realtime·free-run은 도착 즉시 처리 그대로. 변화 보고 규칙(DEC-056, DEC-071)은 그대로 | `src/swarm_agent/runtime.py` | D-30, DEC-039, DEC-005, DEC-051, DEC-071, DEC-073 | TC-AGT-088~093 Pass |
 | IMP-AGT-037 | `GcsHeartbeat`의 MA C2 포트 전달(DEC-078): `C2_INBOUND`에 추가해 다른 C2 수신과 같이 lockstep에서는 rx 시각 기준으로 틱에 전달한다(DEC-040). 시험용 `FakeDatalink.heartbeat`는 tx를 거치지 않고 rx로 바로 낸다. 링크 상실 판단과 행동은 `algorithms/TRACE.md` IMP-AGT-038 | `src/swarm_agent/ports.py`, `src/swarm_agent/testing.py` | DEC-078, DEC-013, DEC-040 | TC-AGT-094 Pass |
+| IMP-AGT-040 | 항법·제어 일괄 경로(DEC-081, 계약 0.17.0): `onboard_batch/NavigationBatch` 하나를 구독해 호스팅 기체에 나누고, 배치에 있는 기체만 `nav_fresh`로 둔다(다른 참여자의 기체는 건너뜀). threaded 틱 해제 조건은 그 프레임 배치 수신이다. 배치에서 빠진 기체는 기다리지 않는다. 틱당 1건 `ControlBatch`를 `onboard_batch/ControlBatch/<participant>`로 FrameDone 전에 발행한다(기체 ID 순, `controls[i].header.source`는 기체 ID로 고정, Python FA도 같은 경로, 항법이 없는 틱은 빈 배치, 호스팅 기체가 없는 참여자는 내지 않음). `onboard/<id>/*` 구독을 받을 메시지 5종의 키로 줄여 자기 제어·명령이 되돌아오지 않는다. `FakeCore`·`bench_fa`도 같은 경로로 옮겼다. 배치는 MA에 노출하지 않으며 `ports.vi.nav()`는 그대로 자기 항법을 돌려준다 | `src/swarm_agent/runtime.py`, `src/swarm_agent/testing.py`, `bench/bench_fa.py` | DEC-081, DEC-080, DEC-005, DEC-013, DEC-039, DEC-045, REQ-PRF-002 | TC-AGT-118~125 Pass |
 
 ## TC
 
@@ -135,8 +136,16 @@ flowchart LR
 | TC-AGT-092 | realtime은 도착한 다음 틱에 보고(동작 유지) | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
 | TC-AGT-093 | 처리할 틱이 지난 뒤 도착한 입력은 `late_onboard`로 세고 잃지 않음 | `tests/test_agent_onboard_order.py` | IMP-AGT-036 | Pass |
 | TC-AGT-094 | Heartbeat가 rx 시각 규칙대로 C2 포트에 보이고 MP로 가지 않음 | `tests/test_agent_heartbeat.py` | IMP-AGT-037 | Pass |
+| TC-AGT-118 | 배치에 있는 기체만 FA 실행, 빠진 기체는 틱을 막지 않고 MA 항법은 마지막 값 유지 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-119 | 틱당 ControlBatch 1건이 FrameDone보다 먼저, 헤더·ID 순서, 항법이 없어도 빈 배치, Reset 후 일련번호 0 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-120 | 구독은 받을 메시지뿐, 자기 제어·명령과 예전 기체별 항법을 받지 않음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-121 | 다중 Agent 참여자는 자기 기체만 처리하고 자기 키로 발행 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-122 | threaded 틱 해제는 배치 수신 기준, 일부 기체 누락은 대기 없음, Reset 뒤 이전 실행 배치로 풀리지 않음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-123 | MA는 배치에 접근할 수 없고 `ports.vi.nav()`는 자기 항법만 돌려줌(DEC-013) | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-124 | Python FA도 같은 경로, `header.source`는 기체 ID로 고정, 출력 없음·예외는 그 기체만 빠짐 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-125 | 배치 안 보고 순서와 무관하게 ControlBatch 바이트가 같음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 
-시험 결과(2026-11-10): agent 90, algorithms 102 passed
+시험 결과(2026-11-10): agent 98, algorithms 102 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 

@@ -4,9 +4,9 @@ uv run python agent/bench/bench_fa.py [--n 20 100 300] [--seconds 20] [--ma hold
 
 측정 항목
 - fa_step_us: DefaultFlightAutonomy.step 한 번(Waypoint 모드) 평균 µs. 버스·직렬화 없음
-- frame_ms: 런타임의 프레임 처리 평균 ms. NavigationReport N개 해석 + 틱(MA + FA + ControlOutput
+- frame_ms: 런타임의 프레임 처리 평균 ms. NavigationBatch 해석 + 틱(MA + FA + ControlBatch
   직렬화·발행 + FrameDone). 버스는 발행을 버리는 NullBus라 전송 비용은 빠진다
-- fa_ms: 그중 FA 구간(step + ControlOutput 발행)
+- fa_ms: 그중 FA 구간(step + ControlBatch 발행)
 - rt_x: 50 Hz에서 런타임만의 최대 배속 = 20 ms / frame_ms
 """
 
@@ -53,21 +53,21 @@ def bench_runtime(n: int, seconds: float, ma: str) -> tuple[float, float, float]
     sc = make_scenario(n, ma, spacing_m=300.0)
     rt = AgentRuntime(NullBus(), RuntimeConfig())
     rt.load(sc)
-    navs = []
+    batch = vi_pb2.NavigationBatch()
     for e in sc.entities[1:]:
-        nav = vi_pb2.NavigationReport()
+        nav = batch.reports.add()
+        nav.header.source = e.id
         nav.kinematics.CopyFrom(e.initial)
-        navs.append((keys.onboard(e.id, "NavigationReport"), nav))
     frames = round(seconds * 50)
     t_total = 0.0
     for f in range(frames):
         t_us = f * 20000
-        samples = []
-        for key, nav in navs:
+        batch.header.frame, batch.header.sim_time_us = f, t_us
+        for nav in batch.reports:
             nav.header.frame, nav.header.sim_time_us = f, t_us
             # 위치를 조금씩 옮겨 FA가 매번 다른 입력을 받게 한다
             nav.kinematics.position.lat_deg += 1e-6
-            samples.append(Sample(key, nav.SerializeToString(), ""))
+        samples = [Sample(keys.NAVIGATION_BATCH, batch.SerializeToString(), "")]
         tick = sim_pb2.ClockTick(frame=f, sim_time_us=t_us, dt_us=20000, mode=sim_pb2.RUN_MODE_LOCKSTEP)
         samples.append(Sample(keys.CLOCK_TICK, tick.SerializeToString(), ""))
         t0 = time.perf_counter()
