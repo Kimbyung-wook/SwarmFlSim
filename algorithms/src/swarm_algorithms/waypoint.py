@@ -5,13 +5,14 @@ MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPi
 - RoutePlan은 같은 ID의 계획 작업(Gateway가 route_id를 task_id로 쓴다)이 있으면 그 작업이 수행하므로 따로 비행하지 않는다.
   없으면 단독 항로로 보고 C2 TaskCommand처럼 현재 작업을 CANCELLED(preempted)로 끝내고 바로 비행한다.
   항로 자체의 작업 상태는 보내지 않고, 끝나면 대기 작업을 잇는다 (D-29).
-params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도)
+링크 상실 행동은 common.LostLinkGuard를 따른다 (DEC-078).
+params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_policy
 """
 
 from swarm.v1 import c2_pb2, mp_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
-from .common import TaskPilot, invalid_reason
+from .common import LOST_LINK_PARAMS, TaskPilot, invalid_reason
 
 
 def route_task(ctx: AgentContext, rp: mp_pb2.RoutePlan) -> c2_pb2.TaskCommand:
@@ -31,6 +32,7 @@ class WaypointFollower(MissionAutonomy):
         ParamDef("acceptance_m", 80.0, ParamLayer.DECISION, "m", 1.0, 100000.0, "경유점 도달 판정 반경"),
         ParamDef("hold_radius_m", 300.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "Hold 작업의 기본 선회 반경"),
         ParamDef("speed_mps", 0.0, ParamLayer.BEHAVIOR, "m/s", 0.0, 500.0, "작업에 속도가 없을 때의 속도, 0 = 현재 속도"),
+        *LOST_LINK_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:

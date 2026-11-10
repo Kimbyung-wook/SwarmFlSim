@@ -208,4 +208,5 @@ class PortsImpl:
 
 
 # c2 수신으로 받는 메시지 (그 밖의 것은 버린다)
-C2_INBOUND = (c2_pb2.TaskCommand, c2_pb2.FormationCommand, c2_pb2.GroupAssignment, c2_pb2.ApprovalResponse)
+C2_INBOUND = (c2_pb2.TaskCommand, c2_pb2.FormationCommand, c2_pb2.GroupAssignment, c2_pb2.ApprovalResponse,
+              c2_pb2.GcsHeartbeat)
