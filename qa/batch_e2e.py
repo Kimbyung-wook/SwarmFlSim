@@ -32,12 +32,15 @@ class Case:
     frames: int
     dof3: bool = False
     agents: int = 1
+    logger: bool = False
 
 
 CASES = {
     "d3w": Case("qa_s6_load100", 3000, dof3=True),                  # REQ-PRF-002 구성
     "d3w_a2": Case("qa_s6_load100", 3000, dof3=True, agents=2),     # ControlBatch/<참여자> 2개
     "d3w_a4": Case("qa_s6_load100", 2000, dof3=True, agents=4),
+    "d3w_a2_st": Case("qa_s6_load100", 300, dof3=True, agents=2),    # 2분할 시작 안정성 (D-31)
+    "d3w_a2_log": Case("qa_s6_load100", 3000, dof3=True, agents=2, logger=True),
     "d3f": Case("qa_s6_load100_flock", 1500, dof3=True),
     "s2": Case("qa_s2_swarm20", 3000),
     "s3": Case("qa_s3_link", 3000),                                  # 불완전 링크
@@ -132,7 +135,7 @@ def scenario(c: Case, out: Path) -> tuple[Path, list[str]]:
     return p, uavs
 
 
-def run_one(c: Case, out: Path, base: int) -> tuple[dict, dict]:
+def run_one(c: Case, out: Path, base: int, start_wait: float | None = None) -> tuple[dict, dict]:
     out.mkdir(parents=True, exist_ok=True)
     src, uavs = scenario(c, out)
     agents = [f"agent-{i}" for i in range(c.agents)]
@@ -142,11 +145,13 @@ def run_one(c: Case, out: Path, base: int) -> tuple[dict, dict]:
     obs = None
     res: dict = {"frames_target": c.frames, "uavs": len(uavs), "agents": c.agents}
     try:
+        if c.logger:
+            procs["logger"] = p0.Proc("logger", [p0.exe(BUILD, "logger", "swarm_logger"), "record", "--out", str(out / "rec.mcap"), *net.args("logger")], out)
         procs["datalink"] = p0.Proc("datalink", [p0.exe(BUILD, "datalink", "swarm_datalink"), "--participant", "datalink-0", *net.args("datalink")], out)
         for i, name in enumerate(agents):
             ents = ["--entities", ",".join(uavs[i::c.agents])] if c.agents > 1 else []
             procs[name] = p0.Proc(name, [sys.executable, "-m", "swarm_agent.cli", "--participant", name, *ents, *net.args(name)], out)
-        time.sleep(3.0 + c.agents)
+        time.sleep(3.0 + c.agents if start_wait is None else start_wait)
         core_args = net.args("core")
         obs = Obs([f"tcp/127.0.0.1:{p}" for p in net.ports.values()])
         time.sleep(1.0)
@@ -238,6 +243,7 @@ def main() -> None:
     ap.add_argument("--only", default="")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--base-port", type=int, default=49900)
+    ap.add_argument("--start-wait", type=float, default=None, help="Agent를 띄운 뒤 Core를 띄우기까지 s (기본 3 + Agent 수)")
     a = ap.parse_args()
     root = ROOT / a.out
     root.mkdir(parents=True, exist_ok=True)
@@ -247,7 +253,7 @@ def main() -> None:
         c = CASES[name]
         runs, rep = [], {"case": c.__dict__, "runs": [], "cmp": []}
         for r in range(a.runs):
-            res, d = run_one(c, root / name / f"r{r}", base)
+            res, d = run_one(c, root / name / f"r{r}", base, a.start_wait)
             base += 12
             runs.append(d)
             rep["runs"].append(res)
