@@ -163,7 +163,7 @@ rtm.AgentRuntime._process_tick = _process_tick
 
 if A.perf_mode in ("timers", "no_fa"):
     # 버스 콜백 전체 (Zenoh 스레드). 키 종류별. GIL 안에서 더하므로 드물게 덜 셀 수 있다
-    def subscribe(self, keyexpr, callback):
+    def subscribe(self, keyexpr, callback, *, ordered=False):   # 계약 0.18.0 ordered (DEC-083)
         def on_sample(z):
             t = pc()
             s = Sample(str(z.key_expr), z.payload.to_bytes(), str(z.encoding))
@@ -172,7 +172,9 @@ if A.perf_mode in ("timers", "no_fa"):
                 c = "cb:" + key_class(s.key)
                 T[c] += pc() - t
                 N[c] += 1
-        return busmod._ZenohSubscription(self._session.declare_subscriber(keyexpr, on_sample))
+        # 제품 버스와 같게 ordered면 수신 스레드에서 바로 부른다 (indirect=False)
+        handler = self._zenoh.handlers.Callback(on_sample, indirect=False) if ordered else on_sample
+        return busmod._ZenohSubscription(self._session.declare_subscriber(keyexpr, handler))
     busmod.ZenohBus.subscribe = subscribe
 
     _put = busmod.ZenohBus.put
@@ -218,10 +220,10 @@ if A.perf_narrow:
 
     _sub = busmod.ZenohBus.subscribe
 
-    def narrow(self, keyexpr, callback):
+    def narrow(self, keyexpr, callback, **kw):
         if keyexpr.startswith("onboard/") and keyexpr.endswith("/*"):
-            return _Multi([_sub(self, keyexpr[:-1] + n, callback) for n in sorted(rtm.ONBOARD_INBOUND)])
-        return _sub(self, keyexpr, callback)
+            return _Multi([_sub(self, keyexpr[:-1] + n, callback, **kw) for n in sorted(rtm.ONBOARD_INBOUND)])
+        return _sub(self, keyexpr, callback, **kw)
     busmod.ZenohBus.subscribe = narrow
 
 if A.perf_mode == "no_fa":

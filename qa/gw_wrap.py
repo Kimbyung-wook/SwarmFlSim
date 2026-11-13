@@ -44,14 +44,14 @@ def open_bus(cfg):  # noqa: ANN001, ANN201
     bus = _orig_open(cfg)
     sub0, put0 = bus.subscribe, bus.put
 
-    def subscribe(keyexpr, cb):  # noqa: ANN001, ANN202
+    def subscribe(keyexpr, cb, **kw):  # noqa: ANN001, ANN202  계약 0.18.0 ordered 등은 그대로 넘긴다
         P["subscribe"].append(keyexpr)
 
         def wrapped(s):  # noqa: ANN001, ANN202
             P["rx_prefix"][_prefix(s.key)] += 1
             P["rx_keys"]["/".join(s.key.split("/")[3:])] += 1
             return cb(s)
-        return sub0(keyexpr, wrapped)
+        return sub0(keyexpr, wrapped, **kw)
 
     def put(key, payload, encoding):  # noqa: ANN001, ANN202
         P["put"][key] += 1
