@@ -141,6 +141,7 @@ uv run pytest
 | [40_overview.md](docs/40_overview.md) | 프로젝트 개괄: 목적, 현재 기능, 구성, 처음 실행, 진행 상태 |
 | [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 |
 | [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 |
+| [43_architecture_views.md](docs/43_architecture_views.md) | 관점별 아키텍처 그림: 구성, 데이터 흐름, lockstep, 기체 계층, 유도·제어 체인, 데이터링크, 성능. 설계 피드백 질문 포함 |
 | [en/](docs/en/README.md) | 영문판 (개괄·개발자·사용자 매뉴얼, 국문 `7affdae` 기준) |
 
 ## 9. 개발 규칙
