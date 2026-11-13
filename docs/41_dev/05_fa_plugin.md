@@ -17,9 +17,9 @@ sequenceDiagram
     loop 틱마다
         M->>F: on_command(FlightCommand) (MA가 vi.command를 부를 때)
         F-->>M: FlightCommandStatus
-        R->>F: step(nav, dt_s) (항법 보고를 받은 틱)
+        R->>F: step(nav, dt_s) (NavigationBatch에 이 기체가 있는 틱)
         F-->>R: ControlOutput
-        R->>C: onboard/<id>/ControlOutput
+        R->>C: onboard_batch/ControlBatch/<p> (맡은 기체 묶음)
         R->>F: pending_status()
         F-->>M: 뒤늦은 상태(완료 등)
     end

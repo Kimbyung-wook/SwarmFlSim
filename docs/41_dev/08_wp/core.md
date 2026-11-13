@@ -36,8 +36,8 @@
 
 | 방향 | 키 |
 |---|---|
-| 구독 | `sim/ctrl/cmd`, `sim/clock/done/<p>`, `onboard/<id>/ControlOutput`, `onboard/<id>/*Command` |
-| 발행 | `sim/clock/tick`, `sim/ctrl/status`, `sim/ctrl/scenario`, `sim/param/<id>/dynamics`, `truth/state`, `truth/event/<kind>`, `onboard/<id>/NavigationReport`, `SystemStatus`, `Detection`, `*Activity` |
+| 구독 | `sim/ctrl/cmd`, `sim/clock/done/<p>`, `onboard_batch/ControlBatch/*`, `onboard/<id>/*Command` |
+| 발행 | `sim/clock/tick`, `sim/ctrl/status`, `sim/ctrl/scenario`, `sim/param/<id>/dynamics`, `truth/state`, `truth/event/<kind>`, `onboard_batch/NavigationBatch`(프레임당 1건, 기체 ID 순), `onboard/<id>/SystemStatus`, `Detection`, `*Activity` |
 
 ## 시험
 

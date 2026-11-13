@@ -38,10 +38,10 @@
 
 | 방향 | 키 |
 |---|---|
-| 구독 | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard/<id>/NavigationReport`, `Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
-| 발행 | `swarm/<id>/tx/**`, `onboard/<id>/ControlOutput`, `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
+| 구독 | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
+| 발행 | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>`(틱당 1건, `FrameDone` 전), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
-`truth/**`와 `link/**`는 구독하지 않는다.
+`truth/**`와 `link/**`는 구독하지 않는다. 모든 구독은 `ordered=True`로 연다(DEC-083, [3.2](../03_architecture.md#32-버스-열기)).
 
 ## 시험
 
@@ -55,7 +55,7 @@ uv run pytest agent/tests
 
 - `md.record`는 런타임 메모리에만 남는다. 버스나 MCAP으로 나가지 않는다.
 - 고도 필드는 "미지정"을 표현할 수 없어 `alt_m <= 0`을 현재 고도 유지로 해석한다.
-- 링크 상실 시 기체 행동은 미구현이다(로드맵 P2).
+- 링크 상실 행동은 MA 공용 부품(`algorithms`)에 있고 런타임에는 없다. 사용자 MA가 그 부품을 쓰지 않으면 상실 행동도 없다([4장](../04_ma_plugin.md#48-기본-ma)).
 - MP 포트는 최신 계획만 들고 있다. 한 틱에 `MissionPlan` 두 개가 닿으면 마지막 것만 실행된다.
 - 기체 수가 많으면 Agent를 나눈다. 시나리오의 `participants`에 모두 적는다.
 - lockstep의 onboard 입력 처리 틱은 [3.6](../03_architecture.md#36-lockstep-한-프레임)을 따른다. `late_onboard` 값은 외부로 나오지 않고 첫 건의 경고만 로그에 남는다.

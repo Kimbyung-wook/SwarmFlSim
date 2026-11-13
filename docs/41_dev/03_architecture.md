@@ -27,6 +27,7 @@
 | `--no-multicast` | 멀티캐스트 스카우팅을 끈다 |
 
 - 같은 PC에 다른 버스가 있으면 `--no-multicast`와 명시적 `--connect`로 섞이지 않게 한다.
+- Python `Bus.subscribe(keyexpr, callback, *, ordered=False)`의 `ordered=True`는 수신 스레드에서 바로 콜백을 불러, 같은 발행자가 낸 메시지를 구독이 달라도 발행 순서대로 받게 한다. 기본값은 구독마다 다른 스레드에서 콜백을 불러 구독 사이의 순서가 바뀔 수 있다. C++ 버스와 `InMemoryBus`는 늘 순서대로다. lockstep 순서에 기대는 런타임·도구만 쓰고, 콜백이 수신 스레드를 막으므로 짧게 끝낸다. Agent 런타임은 모든 구독을 ordered로 연다(DEC-083).
 - 다른 QoS로 키를 발행하지 않는다. `sim/clock/**`·`swarm/**`는 혼잡 제어 BLOCK, 나머지는 DROP이다(DEC-043).
 
 ## 3.3 키 영역과 접근 규칙
@@ -42,8 +43,8 @@ flowchart LR
     DL["Datalink"]
     GCS["UI · Gateway<br/>(GCS)"]
     OBS["Monitor · Logger"]
-    CORE -- "onboard/&lt;id&gt;/**" --> RT
-    RT -- "onboard/&lt;id&gt;/**" --> CORE
+    CORE -- "onboard/&lt;id&gt;/**<br/>onboard_batch/NavigationBatch" --> RT
+    RT -- "onboard/&lt;id&gt;/**<br/>onboard_batch/ControlBatch/&lt;p&gt;" --> CORE
     RT -- "swarm/&lt;id&gt;/tx/**" --> DL
     GCS -- "swarm/&lt;gcs&gt;/tx/**" --> DL
     DL -- "swarm/&lt;dst&gt;/rx/**" --> RT
@@ -57,7 +58,10 @@ flowchart LR
 지켜야 할 규칙:
 
 - 기체 간·지상-기체 간 메시지는 반드시 `tx` → Datalink → `rx`로 간다. 런타임이 다른 엔티티의 `rx`에 직접 발행하지 않는다.
-- MA 플러그인은 버스에 접근하지 않는다. `sim/ctrl/`, `truth/`, `link/` 접두어는 플러그인에 노출되지 않는다(`MA_FORBIDDEN_PREFIXES`, DEC-014).
+- MA 플러그인은 버스에 접근하지 않는다. `sim/ctrl/`, `truth/`, `link/`, `onboard_batch/` 접두어는 플러그인에 노출되지 않는다(`MA_FORBIDDEN_PREFIXES`, DEC-014, DEC-081).
+- 항법과 제어는 기체별 키가 아니라 일괄 키로 오간다(DEC-081). Core는 프레임마다 전 기체 항법을 `onboard_batch/NavigationBatch` 1건으로 내고, Agent는 맡은 기체의 제어 출력을 `onboard_batch/ControlBatch/<participant>` 1건으로 모아 `FrameDone` 전에 낸다. 기체별 `onboard/<id>/NavigationReport`·`ControlOutput` 키는 없어졌다. 런타임이 배치에서 자기 기체 행만 꺼내 `ctx.ports.vi.nav()`와 FA `step`에 넘기므로 플러그인 코드는 바뀌지 않는다. 버스를 직접 구독하던 도구는 일괄 키로 바꾼다.
+- 두 Agent가 같은 기체의 제어를 보내면 참여자 이름이 뒤인 쪽이 쓰인다(IMP-CORE-030).
+- Datalink는 GCS마다 통제 기체(`controlling_gcs`)로 `GcsHeartbeat`를 보낸다(기본 1 Hz, `--heartbeat-hz`). 일반 링크 판정을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 닿고, `swarm/<gcs>/tx`를 거치지 않으므로 송신 개수 장벽 대상이 아니다(DEC-078).
 - Gateway는 `swarm/<gcs>/rx/**`만 구독하고 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`만 발행한다.
 - 브라우저는 Zenoh에 직접 붙지 않고 브리지로만 붙는다(DEC-027).
 
@@ -113,6 +117,7 @@ sequenceDiagram
     participant DL as Datalink
     participant AG as Agent
     Note over CO,AG: 시작 전: 시나리오 적재 후 각 참여자가 FrameDone{0}(준비 신호)
+    CO->>AG: onboard_batch/NavigationBatch(f)
     CO->>DL: tick(f)
     CO->>AG: tick(f)
     Note over DL,AG: 각자 상대의 FrameDone{f-1}과 누적 수신 개수(sent_count)를 확인한 뒤 틱 f를 처리
@@ -123,7 +128,7 @@ sequenceDiagram
     AG->>AG: rx_time ≤ T(f-1)인 rx를 (rx_time, source, seq) 순 소비
     AG->>AG: MA·FA 실행
     AG->>DL: swarm/<id>/tx/**
-    AG->>CO: onboard/<id>/ControlOutput
+    AG->>CO: onboard_batch/ControlBatch/<p>(f)
     AG-->>DL: FrameDone{f}
     AG-->>CO: FrameDone{f}
     CO->>CO: 전원 FrameDone{f} → 적분 → f+1
@@ -131,7 +136,7 @@ sequenceDiagram
 
 - 틱 0에서는 rx를 소비하지 않는다. 기체 간 메시지는 모델 지연에 더해 최소 1틱 늦게 소비된다(DEC-040, DEC-045).
 - 틱 f에서 Datalink가 낸 rx는 다음 틱부터 소비된다.
-- `NavigationReport`를 뺀 onboard 입력은 도착 즉시 처리하지 않고 메시지 프레임 기준 틱의 시작 전에 처리한다. `SystemStatus`는 프레임 + 1, 임무장비 출력(`*Activity`)과 `Detection`은 프레임 + 2다(IMP-AGT-036). 처리 틱이 지나 도착하면 경고를 한 번 남기고 내부 통계 `late_onboard`에 세며 다음 틱에 처리한다. 통합 실행에서는 발생하지 않았다. realtime과 free-run은 도착 즉시 처리한다.
+- 항법(`NavigationBatch`)을 뺀 onboard 입력은 도착 즉시 처리하지 않고 메시지 프레임 기준 틱의 시작 전에 처리한다. `SystemStatus`는 프레임 + 1, 임무장비 출력(`*Activity`)과 `Detection`은 프레임 + 2다(IMP-AGT-036). 처리 틱이 지나 도착하면 경고를 한 번 남기고 내부 통계 `late_onboard`에 세며 다음 틱에 처리한다. 일괄화 뒤 재발했던 이 경고(D-33)는 Agent 구독을 ordered로 연 뒤 0건이다(DEC-083, QA 24차). realtime과 free-run은 도착 즉시 처리한다.
 - `sent_count`는 지금까지 발행한 샘플의 누적 수다. 수신 측은 이 수만큼 받을 때까지 기다린다(DEC-044). 대상은 `swarm/**`뿐이다.
 - 난수는 `ctx.rng`만 쓴다. 벽시계, 딕셔너리 순서, 스레드 경합에 의존하면 결정성이 깨진다.
 - 참여자 응답이 벽시계 5 s 넘게 없으면 `SimStatus.waiting_participants`에 실린다. 시작 후 이탈한 참여자의 재합류는 지원하지 않는다. 복구는 Reset+Start다(DEC-038, DEC-041).

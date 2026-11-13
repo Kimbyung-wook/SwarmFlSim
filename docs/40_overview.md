@@ -1,7 +1,7 @@
 # 프로젝트 개괄
 
 - 바로 돌려 보려면 §6으로 간다. 구현 범위는 §2, 진행 상태는 §8에 있다.
-- 기준: 계약 0.15.0, 로드맵 P6 완료(2026-11-09).
+- 기준: 계약 0.19.0, 로드맵 P2·P6 완료, P1 성능 판정 진행 중(2026-11-13).
 - 설계 근거는 [제안 계획서](00_proposal.md)와 [등록부](02_registry.md), 계약은 [10_contracts.md](10_contracts.md)가 기준이다.
 
 ## 1. 목적과 범위
@@ -27,7 +27,7 @@ SwarmFlSim은 군집·편대 알고리즘을 설계하고 검증하는 연구용
 | 실행 | realtime / lockstep(시드 고정) / free-run, 일시정지·스텝·배속 | 구현. 같은 시드 lockstep은 truth, `LinkOutcome`, GCS 수신이 실행마다 같다. 외부 입력이 있는 Gateway 구성은 재현 대상이 아니다 |
 | 실행 | 여러 PC 분산 실행, 수백 대 규모 | 확인 안 됨 (P4). 버스 옵션은 있고 단일 PC에서 시연했다 |
 | 알고리즘 | 기본 MA 4종(hold, waypoint, formation, flocking), 기본 FA(HSA·Waypoint·선회·레이스트랙) | 구현 |
-| 알고리즘 | 링크 상실 시 기체 행동 | 미구현 (P2) |
+| 알고리즘 | 링크 상실 시 기체 행동: GCS Heartbeat 감시, 정책 3종(제자리 선회 후 명령 대기, 복구 시 재개, 계속) | 구현 (DEC-078) |
 | 데이터링크 | 거리·SNR, 가시선, 버스트 손실, 지연·지터, 대역폭 큐, 재밍 구역(수신단 기준), 링크 두절 고장 | 구현. Datalink의 가시선은 평지만 쓴다 |
 | 센서·재머·시뮬레이션 이벤트 | 카메라 탐지(FOV·거리·가시선), 재밍 구역, 유도 객체의 발사·도달 판정 (WP8, Core 내장) | 구현 |
 | 지형 | 평지, 한반도 DEM(Copernicus GLO-90) | 구현 |
@@ -83,13 +83,14 @@ sequenceDiagram
     participant DL as Datalink
     participant OB as UI · Monitor · Logger
     CO->>OB: truth/state (프레임 N)
-    CO->>AG: onboard/<id>/NavigationReport · Detection
+    CO->>AG: onboard_batch/NavigationBatch (전 기체 항법 1건)
+    CO->>AG: onboard/<id>/SystemStatus · Detection
     CO->>AG: sim/clock/tick (N)
     CO->>DL: sim/clock/tick (N)
     DL->>AG: swarm/<id>/rx/** (도착 시각이 된 메시지)
     AG->>AG: MA on_step → VI 명령 → FA step
     AG->>DL: swarm/<id>/tx/** (보고·P2P)
-    AG->>CO: onboard/<id>/ControlOutput · *Command
+    AG->>CO: onboard_batch/ControlBatch/<참여자> · onboard/<id>/*Command
     Note over AG,DL: lockstep이면 각자 sim/clock/done/<참여자>에 FrameDone(N)
     CO->>CO: 진행 조건 충족 → [t_N, t_N+dt] 적분 · 판정 → 프레임 N+1
 ```
@@ -154,13 +155,13 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. 진행 상태
 
-완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-10 기준이다.
+완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-13 기준이다.
 
 | 단계 | 완료 기준 | 상태 | 근거 |
 |---|---|---|---|
 | P0 | 2-DoF 20대가 2D 지도에 표시되고, 드래그 선택으로 이동 명령 가능 | 완료 | [20_p0_demo.md §5](20_p0_demo.md#5-확인-결과-2026-11-02-windows-msvc-debug) TC-INT-001~004 |
-| P1 | 3-DoF 편대 기본 알고리즘, Traffic Monitor 기본 화면, 가속 벤치마크 1차 | 기능 구현 | 편대·flocking·Monitor 구현, QA 성능 측정([21_qa_report.md §10.4](21_qa_report.md#104-성능-release-대-debug와-dec-040)). 완료 판정 기록은 없다 |
-| P2 | GCS 재밍, 개별 기체 두절, 링크 상실 행동 시연 | 부분 | 재밍·두절은 구현·QA 확인. 링크 상실 행동 미구현 |
+| P1 | 3-DoF 편대 기본 알고리즘, Traffic Monitor 기본 화면, 가속 벤치마크 1차 | 진행 중 | 기능 3항목(편대·flocking, Monitor, 가속 벤치마크 1차)은 구현했다. 남은 것은 성능 판정이다: 3-DoF 100대 waypoint, lockstep 최대 배속, Logger 켬, Agent 1개에서 10배 이상(DEC-079, DEC-082, DEC-084). 최근 실측은 `link/state` 분산 전 7.6~8.7배다([21_qa_report.md §32](21_qa_report.md#32-24차-측정-logger-켬-10배-충족-수단-2026-11-13)) |
+| P2 | GCS 재밍, 개별 기체 두절, 링크 상실 행동 시연 | 완료 | DEC-085. 실스택 판정 TC-QA-119~126([21_qa_report.md §30](21_qa_report.md#30-22차-판정-p2-gcs-재밍개별-두절링크-상실-행동-2026-11-10)). 남은 관찰 O-34, O-36, O-37은 후속 개선 대상 |
 | P3 | Aerosonde 6-DoF가 VI 제어 모드 추종, RK45/RK4 오차 비교 | 부분 | RK45·RK4와 오차 시험은 있다. 5·6-DoF 미구현 |
 | P4 | 4대 PC에 분산해 300대 실행 | 미착수 | 단일 PC에서 100기까지 QA 부하 시험 |
 | P5 | 센서·재머·시뮬레이션 이벤트 시나리오, 효과 반경 판정 | 기능 구현 | WP8 Payload Core 통합, QA 종단 시험([21_qa_report.md §14](21_qa_report.md#14-6차-시험-p5-종단-시험-2026-11-05)) |
