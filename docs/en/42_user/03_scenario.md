@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `f7bcbac`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `6a3913f`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
@@ -165,7 +165,7 @@ Write registered names in `ma_plugin` and `fa_plugin`. List the names with `uv r
 
 | MA | What it does | Supported tasks |
 |---|---|---|
-| `hold` | Holds current heading, speed and altitude. If `orbit_radius_m` > 0, orbits in place | Does not execute mission tasks |
+| `hold` | Holds current heading, speed and altitude. If `orbit_radius_m` > 0, orbits in place | Does not execute mission tasks. Acts on link loss |
 | `waypoint` | Executes mission plans and C2 commands | `move_to`, `hold`, `return_to_base`, `search_area`, `route` |
 | `formation` | Leader-follower formation | Formation assignment and the leader's tasks |
 | `flocking`, `flocking_basic` | Reynolds swarming and movement to a goal point | `move_to`, `hold`, `return_to_base`, `search_area`. `route` is `REJECTED` |
@@ -186,10 +186,12 @@ Common parameters:
 | flocking | `neighbor_radius_m` | 600 | Neighbor awareness radius (m) |
 | flocking | `group` | empty | Use only neighbors in the same group |
 | default FA | `racetrack_guidance` | `dubins` | Racetrack guidance (`dubins`, `vector_field`) |
+| all baseline MAs | `lost_link_timeout_s` | 5 | Simulation time (s) after the last GCS Heartbeat before the link counts as lost |
+| all baseline MAs | `lost_link_policy` | `hold_until_command` | Link-loss behavior when the task has no policy |
 
 ## 3.7 Mission plan (mission_plan)
 
-Each task in `tasks` has a `task_id`, `assignees` and one task-kind key.
+Each task in `tasks` has a `task_id`, `assignees` and one task-kind key. It can also have a link-loss policy `lost_link_policy` (`hold_until_command`, `resume_on_recovery`, `continue`).
 
 | Task key | Contents |
 |---|---|
@@ -198,6 +200,8 @@ Each task in `tasks` has a `task_id`, `assignees` and one task-kind key.
 | `search_area` | Circular or polygonal area |
 | `route` | List of route points. For each point `position`, `speed_mps`, `acceptance_radius_m`, action (`loiter`, `recon`) |
 | `return_to_base` | Returns to the starting position |
+
+> Set `lost_link_policy` for a mission that must pass through a stretch where the link drops. Without it, the default policy `hold_until_command` makes the vehicle orbit where the link dropped, and it does not resume the mission after recovery until a new command arrives. This is why three QA link scenarios set `continue` (D-32). Behavior per policy is in [chapter 7](07_link.md#vehicle-behavior-on-link-loss).
 
 Each `formations` entry has `group_id`, `members`, `leader`, `shape` (`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`. For `custom`, the number of `custom_offsets_m` must equal `members`.
 

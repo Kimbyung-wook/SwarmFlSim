@@ -1,6 +1,6 @@
 # 8. WP4 Datalink (`datalink/`)
 
-> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `6a3913f`.
 
 ## Responsibilities
 
@@ -28,7 +28,8 @@ Only when `sim_time_us == 0` and `publisher` is set is the time treated as absen
 | `--no-frame-done` | Does not send FrameDone |
 | `--seed <n>` | Random seed |
 | `--terrain-flat <m>`, `--no-los` | Flat elevation for line of sight, turn off line of sight |
-| `--state-period <s>` | `link/state` period, default 1, off at 0 |
+| `--state-period <s>` | `link/state` period, default 1, off at 0. One message per pair per period, spread over the frames in the period (DEC-084) |
+| `--heartbeat-hz <hz>` | GCS Heartbeat rate (simulation time), default 1, off at 0 (DEC-078) |
 | `--quiet` | Turns off logs |
 | Common bus options | [3.2](../03_architecture.md#32-opening-the-bus) |
 
@@ -37,7 +38,7 @@ Only when `sim_time_us == 0` and `publisher` is set is the time treated as absen
 | Direction | Keys |
 |---|---|
 | Subscribe | `swarm/*/tx/**`, `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `truth/state`, `truth/event/jam_zone`, `truth/event/kill` |
-| Publish | `swarm/<dst>/rx/**`, `link/outcome/<src>/<dst>`, `link/state/<a>/<b>`, `sim/clock/done/<p>` |
+| Publish | `swarm/<dst>/rx/**` (including its own `swarm/<uav>/rx/c2/GcsHeartbeat`), `link/outcome/<src>/<dst>`, `link/state/<a>/<b>`, `sim/clock/done/<p>` |
 
 ## Tests
 

@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `6a3913f`.
 
 See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 
@@ -29,6 +29,7 @@ Processes do not construct a bus implementation directly. They open it with `ope
 | `--no-multicast` | Turns off multicast scouting |
 
 - If another bus exists on the same PC, use `--no-multicast` and explicit `--connect` so they do not mix.
+- In Python `Bus.subscribe(keyexpr, callback, *, ordered=False)`, `ordered=True` calls the callback directly on the receive thread, so messages from one publisher arrive in publish order even across different subscriptions. By default each subscription calls back on its own thread, and the order between subscriptions can change. The C++ bus and `InMemoryBus` are always in order. Use it only in runtimes and tools that rely on lockstep order, and keep the callback short because it blocks the receive thread. The Agent runtime opens all its subscriptions as ordered (DEC-083).
 - Do not publish a key with a different QoS. `sim/clock/**` and `swarm/**` use congestion control BLOCK, the rest DROP (DEC-043).
 
 ## 3.3 Key areas and access rules
@@ -44,8 +45,8 @@ flowchart LR
     DL["Datalink"]
     GCS["UI · Gateway<br/>(GCS)"]
     OBS["Monitor · Logger"]
-    CORE -- "onboard/&lt;id&gt;/**" --> RT
-    RT -- "onboard/&lt;id&gt;/**" --> CORE
+    CORE -- "onboard/&lt;id&gt;/**<br/>onboard_batch/NavigationBatch" --> RT
+    RT -- "onboard/&lt;id&gt;/**<br/>onboard_batch/ControlBatch/&lt;p&gt;" --> CORE
     RT -- "swarm/&lt;id&gt;/tx/**" --> DL
     GCS -- "swarm/&lt;gcs&gt;/tx/**" --> DL
     DL -- "swarm/&lt;dst&gt;/rx/**" --> RT
@@ -59,7 +60,10 @@ flowchart LR
 Rules to follow:
 
 - Vehicle-to-vehicle and ground-to-vehicle messages always go `tx` → Datalink → `rx`. A runtime does not publish directly to another entity's `rx`.
-- MA plugins do not access the bus. The prefixes `sim/ctrl/`, `truth/` and `link/` are not exposed to plugins (`MA_FORBIDDEN_PREFIXES`, DEC-014).
+- MA plugins do not access the bus. The prefixes `sim/ctrl/`, `truth/`, `link/` and `onboard_batch/` are not exposed to plugins (`MA_FORBIDDEN_PREFIXES`, DEC-014, DEC-081).
+- Navigation and control travel on batch keys, not per-vehicle keys (DEC-081). Each frame, Core publishes the navigation of all vehicles as one `onboard_batch/NavigationBatch`, and each Agent collects the control outputs of its vehicles into one `onboard_batch/ControlBatch/<participant>` published before `FrameDone`. The per-vehicle `onboard/<id>/NavigationReport` and `ControlOutput` keys are gone. The runtime takes each vehicle's row from the batch and passes it to `ctx.ports.vi.nav()` and FA `step`, so plugin code does not change. Tools that subscribed to the bus directly must switch to the batch keys.
+- If two Agents send control for the same vehicle, the one with the later participant name wins (IMP-CORE-030).
+- The Datalink sends a `GcsHeartbeat` from each GCS to the vehicles it controls (`controlling_gcs`), 1 Hz by default (`--heartbeat-hz`). It goes through normal link evaluation to `swarm/<uav>/rx/c2/GcsHeartbeat`. It does not pass through `swarm/<gcs>/tx`, so the send-count barrier does not apply (DEC-078).
 - The Gateway subscribes only to `swarm/<gcs>/rx/**` and publishes only to `swarm/<gcs>/tx/c2/<msg>` and `swarm/<gcs>/tx/mp/<msg>`.
 - Browsers do not attach to Zenoh directly, only through the bridge (DEC-027).
 
@@ -115,6 +119,7 @@ sequenceDiagram
     participant DL as Datalink
     participant AG as Agent
     Note over CO,AG: Before start: after the scenario loads, each participant sends FrameDone{0} (ready signal)
+    CO->>AG: onboard_batch/NavigationBatch(f)
     CO->>DL: tick(f)
     CO->>AG: tick(f)
     Note over DL,AG: Each checks the peer's FrameDone{f-1} and cumulative received count (sent_count), then processes tick f
@@ -125,7 +130,7 @@ sequenceDiagram
     AG->>AG: Consume rx with rx_time ≤ T(f-1) in (rx_time, source, seq) order
     AG->>AG: Run MA and FA
     AG->>DL: swarm/<id>/tx/**
-    AG->>CO: onboard/<id>/ControlOutput
+    AG->>CO: onboard_batch/ControlBatch/<p>(f)
     AG-->>DL: FrameDone{f}
     AG-->>CO: FrameDone{f}
     CO->>CO: All FrameDone{f} → integrate → f+1
@@ -133,7 +138,7 @@ sequenceDiagram
 
 - At tick 0 no rx is consumed. Vehicle-to-vehicle messages are consumed at least one tick later on top of the model latency (DEC-040, DEC-045).
 - rx produced by the Datalink at tick f is consumed from the next tick on.
-- Onboard inputs other than `NavigationReport` are not processed on arrival. They wait for the tick derived from the message frame and are processed before that tick starts: frame + 1 for `SystemStatus`, frame + 2 for payload output (`*Activity`) and `Detection` (IMP-AGT-036). An input that arrives after its tick logs one warning, counts in the internal statistic `late_onboard` and is processed on the next tick. This did not happen in integrated runs. realtime and free-run process inputs on arrival.
+- Onboard inputs other than navigation (`NavigationBatch`) are not processed on arrival. They wait for the tick derived from the message frame and are processed before that tick starts: frame + 1 for `SystemStatus`, frame + 2 for payload output (`*Activity`) and `Detection` (IMP-AGT-036). An input that arrives after its tick logs one warning, counts in the internal statistic `late_onboard` and is processed on the next tick. This warning came back after batching (D-33) and has been at 0 since the Agent opened its subscriptions as ordered (DEC-083, QA round 24). realtime and free-run process inputs on arrival.
 - `sent_count` is the cumulative number of samples published so far. The receiver waits until it has received that many (DEC-044). It applies only to `swarm/**`.
 - Use only `ctx.rng` for random numbers. Depending on wall clocks, dictionary order or thread races breaks determinism.
 - If a participant does not respond for more than 5 s of wall-clock time, it appears in `SimStatus.waiting_participants`. A participant that left after start cannot rejoin. Recovery is Reset+Start (DEC-038, DEC-041).

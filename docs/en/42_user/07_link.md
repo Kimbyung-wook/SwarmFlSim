@@ -1,6 +1,6 @@
 # 7. Creating datalink conditions
 
-> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `f7bcbac`.
+> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `6a3913f`.
 
 All vehicle-to-vehicle and ground-to-vehicle messages pass through the Datalink. Adjust latency, loss, bandwidth and jamming with the scenario and fault injection, and view the results in the Traffic Monitor.
 
@@ -74,9 +74,22 @@ uv run python qa/inject_fault.py --connect tcp/127.0.0.1:17601 --entity uav-003 
 - It returns to normal when cleared or when the duration ends. Reset clears all faults.
 - Faults are also reported to the GCS through health and subsystems of `SystemStatus`. Changes made while the link is cut do not arrive until the next change.
 
-> Not implemented: vehicle behavior on link loss (roadmap P2). Baseline MAs continue the last task even if the link is cut.
-
 > Not implemented: peer relay (multi-hop). Messages are delivered only to directly reachable receivers.
+
+### Vehicle behavior on link loss
+
+The Datalink sends a `GcsHeartbeat` at 1 Hz from each GCS to the vehicles it controls (`controlling_gcs`). It goes through the same link evaluation as other messages, so it does not reach a vehicle that is jammed, cut off or out of range. Baseline MAs start watching after the first Heartbeat. When `lost_link_timeout_s` (default 5 s, simulation time) passes after the last one, they treat the link as lost and act on the policy (DEC-078).
+
+| Policy | On loss | On recovery |
+|---|---|---|
+| `hold_until_command` (default) | Orbits in place. Task progress and the start of queued tasks stop | Keeps orbiting until a new command arrives |
+| `resume_on_recovery` | Orbits in place | Resumes the interrupted task. With no task, returns to the flight before the loss |
+| `continue` | Continues the task | No change |
+
+- Set the policy per task with `lost_link_policy`. Without it, the MA parameter `lost_link_policy` applies ([chapter 3](03_scenario.md#37-mission-plan-mission_plan)).
+- A new task command received while orbiting ends the orbit even before recovery, and the vehicle follows it.
+- While the link is fully cut, the GCS cannot tell whether a vehicle is in the lost state (O-34).
+- Setting the policy from the UI or the Gateway has not been checked. Set it in the scenario.
 
 ## 7.5 Checking the results
 

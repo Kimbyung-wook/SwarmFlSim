@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `6a3913f`.
 
 ## Responsibilities
 
@@ -40,10 +40,10 @@ For the frame processing order, see the header comment of `runtime.py` and `_ste
 
 | Direction | Keys |
 |---|---|
-| Subscribe | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard/<id>/NavigationReport`, `Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
-| Publish | `swarm/<id>/tx/**`, `onboard/<id>/ControlOutput`, `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
+| Subscribe | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
+| Publish | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>` (one per tick, before `FrameDone`), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
-`truth/**` and `link/**` are not subscribed.
+`truth/**` and `link/**` are not subscribed. All subscriptions are opened with `ordered=True` (DEC-083, [3.2](../03_architecture.md#32-opening-the-bus)).
 
 ## Tests
 
@@ -57,7 +57,7 @@ Performance measurement tools are in `agent/bench/`.
 
 - `md.record` stays in runtime memory. It does not go to the bus or MCAP.
 - Altitude fields cannot express "unspecified", so `alt_m <= 0` is interpreted as holding the current altitude.
-- Vehicle behavior on link loss is not implemented (roadmap P2).
+- Link-loss behavior lives in the shared MA parts (`algorithms`), not in the runtime. A user MA that does not use those parts has no link-loss behavior ([chapter 4](../04_ma_plugin.md#48-baseline-mas)).
 - The MP port holds only the latest plan. If two `MissionPlan`s arrive in one tick, only the last is executed.
 - With many vehicles, split them across Agents. List them all in the scenario's `participants`.
 - Processing ticks for lockstep onboard inputs follow [3.6](../03_architecture.md#36-one-lockstep-frame). The `late_onboard` value is not exposed. Only the first warning reaches the log.
