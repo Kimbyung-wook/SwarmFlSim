@@ -83,6 +83,7 @@ C = [
     # P 코어 고정 민감도 (i9-14900HX, 논리 0~15가 P)
     Cfg("d3_w_nols", state_off=True), Cfg("d3_w_nols_P", state_off=True, pcore=True), Cfg("d3_nofa_nols_P", ma="hold", mode="no_fa", state_off=True, pcore=True),
     Cfg("d3_w_nols_tl", state_off=True, timeline=True),
+    *[Cfg(f"d3_w_a{n}_nols{t}", agents=n, state_off=True, pcore=bool(t)) for n in (2, 4) for t in ("", "_P")],   # QA 24차 원인 분리 기준
     # QA 24차: Logger 켬 (DEC-082). nols는 원인 분리용
     *[Cfg(f"d3_w{a}_log{x}{t}", agents=n, logger=True, state_off=bool(x), pcore=bool(t))
       for n, a in ((1, ""), (2, "_a2"), (4, "_a4")) for x in ("", "_nols") for t in ("", "_P") if not (n == 1 and not x and not t)],

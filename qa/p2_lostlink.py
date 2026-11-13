@@ -15,7 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
+import threading
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -97,18 +99,24 @@ class Obs(gp.PlanObserver):
             self.fcs_rx.append((env.header.sim_time_us, env.rx_time_us, env.header.source, st.command_id, name))
 
 
+def close_ob(ob: Obs) -> None:
+    try:
+        ob.close()
+    except Exception as e:  # noqa: BLE001
+        print(f"관측기 닫기 실패: {e!r}", flush=True)
+
+
 def inject(ob: Obs, events: list[tuple]) -> list[int]:
     """gw_plan.inject_at_frames에 재밍 구역 켜기·끄기를 더했다. ev = (frame, 기체|구역 소유자, 종류, 지속|(n,e,r))"""
     assert gp.wait_frame(ob, 20, 60), "시작 대기 실패"
     ob.pause()
-    at_f = gp.wait_still(ob)
+    at_f = gp.wait_paused(ob)
     done = []
     for frame, who, kind, arg in events:
         if frame != at_f:
             ob.step(frame - at_f)
             assert gp.wait_frame(ob, frame, 180), f"프레임 {frame} 대기 실패"
-            at_f = gp.wait_still(ob)
-            assert at_f == frame, f"프레임 불일치 {at_f} != {frame}"
+            at_f = gp.wait_paused(ob, frame, 60)
         if kind in ("JAM_ON", "JAM_OFF"):
             n, e, r = arg
             p = at(n, e)
@@ -226,8 +234,8 @@ def run_timeline(out: Path, sc: dict, port: int, rate: float, plan: list[tuple],
         while ob.sim_s() < end and time.monotonic() - t0 < 500 and not st.dead():
             time.sleep(0.05)
         d = grab(ob, st)
-        ob.close()
-    finally:
+    finally:   # 예외가 나도 관측 Zenoh 세션을 닫는다. 남으면 하네스 Python이 끝나지 않는다 (QA 24차)
+        close_ob(ob)
         st.down()
     res = {"marks": marks, "frames": d["frames"], "gap": d["gap"], "dead": d["dead"], "issues": d["issues"],
            "drop": dict(Counter((x[4], x[5]) .__str__() for x in d["lo"] if x[4] == "GcsHeartbeat"))}
@@ -334,8 +342,8 @@ def run_ls(out: Path, sc, port: int, rate: float, events: list[tuple], end: floa
         while ob.sim_s() < end + 1.0 and time.monotonic() - t0 < wall and not st.dead():
             time.sleep(0.05)
         d = grab(ob, st)
-        ob.close()
-    finally:
+    finally:   # 예외가 나도 관측 Zenoh 세션을 닫는다. 남으면 하네스 Python이 끝나지 않는다 (QA 24차)
+        close_ob(ob)
         st.down()
     lim_us, lim_fr = int(end * 1e6), int(end * 50)
     # 지연이 긴 프로파일(qa_slow)은 끝 무렵 송신의 수신이 종료 뒤로 넘어가 실행마다 잘린다. 비교는 끝 5 s의 송신을 뺀다
@@ -463,8 +471,8 @@ def reg_one(out: Path, name: str, mode: str, port: int) -> dict:
         while ob.sim_s() < end and time.monotonic() - t0 < 500 and not st.dead():
             time.sleep(0.1)
         d = grab(ob, st)
-        ob.close()
-    finally:
+    finally:   # 예외가 나도 관측 Zenoh 세션을 닫는다. 남으면 하네스 Python이 끝나지 않는다 (QA 24차)
+        close_ob(ob)
         st.down()
     res: dict = {"wall": round(time.monotonic() - t0, 1), "frames": d["frames"], "gap": d["gap"], "dead": d["dead"], "issues": d["issues"][:6],
                  "events": dict(d["events"]), "hb": dict(Counter(x[5] for x in d["lo"] if x[4] == "GcsHeartbeat")),
@@ -500,7 +508,16 @@ def main() -> None:
     ap.add_argument("--base-port", type=int, default=49300)
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--only", default="")
+    ap.add_argument("--wall-limit", type=float, default=3600.0, help="하네스 전체 시간 제한 s. 넘으면 스택을 내리고 끝낸다 (0이면 없음)")
     a = ap.parse_args()
+    if a.wall_limit > 0:
+        def _limit() -> None:
+            print(f"TIMEOUT {a.wall_limit:.0f} s", flush=True)
+            h.Stack.down_all()
+            os._exit(3)
+        t = threading.Timer(a.wall_limit, _limit)
+        t.daemon = True   # 정상 종료를 막지 않는다
+        t.start()
     base = Path(a.out)
     base.mkdir(parents=True, exist_ok=True)
     try:

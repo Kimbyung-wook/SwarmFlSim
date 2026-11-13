@@ -566,17 +566,40 @@ def wait_still(ob: PlanObserver, secs: float = 0.6) -> int:
     return last
 
 
+def wait_paused(ob: PlanObserver, expect: int | None = None, timeout: float = 30.0) -> int:
+    """일시정지(또는 StepFrames) 뒤 Core가 멈춘 프레임. Core는 PAUSED 동안 1 s마다 sim/ctrl/status를 내고 그 frame이
+    마지막 틱 번호다. 이 호출 뒤에 받은 PAUSED 상태 둘이 1 s 이상 떨어져 같은 frame이면 멈춘 것으로 보고, 그 틱이
+    관측기에 올 때까지 기다린다. wait_still(틱이 0.6 s 안 오면 멈춤)은 부하로 틱 전달이 늦으면 한 프레임 덜 세어
+    다음 StepFrames가 한 프레임 넘쳤다 (QA 24차, loss_cut 501 != 500)"""
+    paused = h.pb()[0].SIM_RUN_STATE_PAUSED
+    since, end = time.monotonic(), time.monotonic() + timeout
+    while time.monotonic() < end:
+        with ob.lock:
+            hist = [x for x in ob.status_hist if x[0] > since and x[1] == paused]
+            last = ob.last_frame or 0
+        if hist:
+            f = hist[-1][2]
+            if expect is not None and f > expect:
+                raise AssertionError(f"프레임 넘침 Core {f} > 목표 {expect}")
+            same = [x for x in hist if x[2] == f]
+            if len(same) >= 2 and same[-1][0] - same[0][0] >= 0.9 and (expect is None or f == expect) and last >= f:
+                if last > f:
+                    raise AssertionError(f"관측 틱 {last}이 Core 정지 프레임 {f}보다 크다")
+                return f
+        time.sleep(0.05)
+    raise AssertionError(f"정지 프레임 확인 실패 (목표 {expect}, 관측 {ob.last_frame})")
+
+
 def inject_at_frames(ob: PlanObserver, events: list[tuple[int, str, str, float]]) -> list[int]:
     """시작 직후 일시정지하고 StepFrames로 정확한 프레임까지 간 뒤 고장을 넣는다. 끝나면 재개한다"""
     assert wait_frame(ob, 20, 60), "시작 대기 실패"
     ob.pause()
-    at = wait_still(ob)
+    at = wait_paused(ob)
     done = []
     for frame, entity, kind, dur in events:
         ob.step(frame - at)
         assert wait_frame(ob, frame, 180), f"프레임 {frame} 대기 실패"
-        at = wait_still(ob)
-        assert at == frame, f"프레임 불일치 {at} != {frame}"
+        at = wait_paused(ob, frame, 60)
         ob.fault(entity, kind, dur)
         time.sleep(0.3)
         done.append(at)
