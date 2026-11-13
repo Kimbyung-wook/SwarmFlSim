@@ -26,7 +26,9 @@ class Subscription(Protocol):
 class Bus(Protocol):
     def put(self, key: str, payload: bytes, encoding: str) -> None: ...
 
-    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None]) -> Subscription: ...
+    # ordered=True: 이 버스의 ordered 구독 콜백은 모두 수신 스레드 하나에서 링크 도착 순서대로 불린다 (DEC-083).
+    # 콜백이 수신을 막으므로 큐에 넣기만 하는 짧은 콜백에만 쓴다
+    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None], *, ordered: bool = False) -> Subscription: ...
 
     def close(self) -> None: ...
 
@@ -59,7 +61,8 @@ class InMemoryBus:
             if keyexpr_matches(sub.keyexpr, key):
                 sub.callback(sample)
 
-    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None]) -> Subscription:
+    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None], *, ordered: bool = False) -> Subscription:
+        # put 안에서 바로 부르므로 늘 순서대로다. ordered는 받기만 한다
         sub = _InMemorySubscription(self, keyexpr, callback)
         self._subs.add(sub)
         return sub
@@ -118,11 +121,15 @@ class ZenohBus:
             express=False,
         )
 
-    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None]) -> Subscription:
+    def subscribe(self, keyexpr: str, callback: Callable[[Sample], None], *, ordered: bool = False) -> Subscription:
         def on_sample(z: Any) -> None:
             callback(Sample(str(z.key_expr), z.payload.to_bytes(), str(z.encoding)))
 
-        return _ZenohSubscription(self._session.declare_subscriber(keyexpr, on_sample))
+        # zenoh-python 기본(indirect=True)은 구독마다 다른 스레드에서 콜백을 불러 구독 간 순서가 깨진다.
+        # ordered면 수신 스레드에서 바로 불러 C++ 버스와 같은 순서를 지킨다 (DEC-083, D-33).
+        # indirect는 zenoh-python에서 unstable 표시다. 버전을 올릴 때 TC-API-008로 확인한다
+        handler = self._zenoh.handlers.Callback(on_sample, indirect=False) if ordered else on_sample
+        return _ZenohSubscription(self._session.declare_subscriber(keyexpr, handler))
 
     def close(self) -> None:
         self._session.close()
