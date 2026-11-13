@@ -168,6 +168,7 @@ class Datalink {
   void flush_overflow_locked(std::vector<Out>& out);
   void deliver_locked(std::vector<Out>& out);
   void publish_states_locked(std::vector<Out>& out);
+  void emit_state_locked(const std::string& a, const std::string& b, std::vector<Out>& out);
   void heartbeats_locked(std::vector<Out>& out);
   void outcome_locked(const std::string& src, const std::string& dst, const v1::LinkEnvelope& env, std::size_t size,
                       v1::DropReason reason, std::uint64_t tx_us, std::uint64_t rx_us, std::vector<Out>& out);
@@ -210,7 +211,17 @@ class Datalink {
   std::map<std::string, std::uint64_t> tx_recv_;  // 엔티티 → 받은 swarm/<e>/tx/** 누적 수
   std::map<std::string, std::uint64_t> rx_sent_;  // 엔티티 → 발행한 swarm/<e>/rx/** 누적 수
   std::map<std::string, std::map<std::string, std::uint64_t>> peer_sent_;  // 참여자 → 마지막 FrameDone.sent_count
-  std::uint64_t next_state_us_ = 0;
+  // link/state 분산 발행 (DEC-084). 주기 창(now / 주기)마다 쌍 목록과 발행 예정 시각을 한 번 정한다
+  struct StatePlan {
+    bool valid = false;
+    std::uint64_t window = 0;
+    std::uint64_t period_us = 0;
+    std::vector<std::pair<std::string, std::string>> pairs;  // a < b 사전순
+    std::vector<std::uint64_t> due_us;                       // pairs와 같은 순서, 오름차순
+    std::size_t next = 0;                                    // 아직 내지 않은 첫 쌍
+  };
+  StatePlan state_plan_;
+  std::uint64_t dt_us_ = 0;  // 마지막 틱의 dt
   std::vector<HeartbeatLink> heartbeats_;  // (GCS, 기체) 순 정렬
   std::uint64_t next_heartbeat_us_ = 0;
   std::uint32_t state_seq_ = 0;
