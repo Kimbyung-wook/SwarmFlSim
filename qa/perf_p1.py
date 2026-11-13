@@ -36,6 +36,8 @@ class Cfg:
     scn: str = "d3"             # m | mf | d3 | d3f
     ma: str = ""                # 비우면 시나리오 그대로
     logger: bool = False
+    logger_key: str = ""        # swarm_logger --key. 비우면 전체(**)
+    logger_null: bool = False   # 기록 파일 대신 NUL (디스크 쓰기 분리)
     state_off: bool = False     # Datalink --state-period 0 (link/state 1 Hz 전 쌍 발행을 끈다)
     agents: int = 1             # 0이면 Agent 없음
     mode: str = "plain"         # perf_agent --perf-mode
@@ -81,6 +83,15 @@ C = [
     # P 코어 고정 민감도 (i9-14900HX, 논리 0~15가 P)
     Cfg("d3_w_nols", state_off=True), Cfg("d3_w_nols_P", state_off=True, pcore=True), Cfg("d3_nofa_nols_P", ma="hold", mode="no_fa", state_off=True, pcore=True),
     Cfg("d3_w_nols_tl", state_off=True, timeline=True),
+    *[Cfg(f"d3_w_a{n}_nols{t}", agents=n, state_off=True, pcore=bool(t)) for n in (2, 4) for t in ("", "_P")],   # QA 24차 원인 분리 기준
+    # QA 24차: Logger 켬 (DEC-082). nols는 원인 분리용
+    *[Cfg(f"d3_w{a}_log{x}{t}", agents=n, logger=True, state_off=bool(x), pcore=bool(t))
+      for n, a in ((1, ""), (2, "_a2"), (4, "_a4")) for x in ("", "_nols") for t in ("", "_P") if not (n == 1 and not x and not t)],
+    Cfg("d3_w_log_tl", logger=True, timeline=True), Cfg("d3_w_log_nols_tl", logger=True, state_off=True, timeline=True),
+    Cfg("d3_w_a2_log_tl", agents=2, logger=True, timeline=True),
+    *[Cfg(f"d3_w_lk_{k}", logger=True, logger_key=v) for k, v in (("none", "qa_none/**"), ("truth", "truth/**"), ("batch", "onboard_batch/**"),
+      ("onboard", "onboard/**"), ("link", "link/**"), ("sim", "sim/**"), ("swarm", "swarm/**"))],
+    Cfg("d3_w_log_null", logger=True, logger_null=True),
     Cfg("d3_w_P", pcore=True), Cfg("d3_f_P", scn="d3f", pcore=True), Cfg("d3_hold_P", ma="hold", pcore=True),
     Cfg("d3_nofa_P", ma="hold", mode="no_fa", pcore=True), Cfg("d3_nosub_P", nosub=True, pcore=True), Cfg("d3_noagent_P", agents=0, pcore=True),
     Cfg("d3_w_ti_P", mode="timers", timeline=True, pcore=True), Cfg("d3_f_ti_P", scn="d3f", mode="timers", timeline=True, pcore=True),
@@ -252,6 +263,7 @@ def timeline(ev: list, c: Cfg, f0: int, f1: int) -> dict:
         return {"mean": round(1e3 * sum(v) / len(v), 3), "p50": round(1e3 * v[len(v) // 2], 3),
                 "p95": round(1e3 * v[int(len(v) * .95)], 3), "max": round(1e3 * v[-1], 3)}
     dl, ag, core, tot, agmax = [], [], [], [], []
+    fs = []
     for f in range(f0, f1):
         a, b = by.get(f), by.get(f + 1)
         if not a or not b or "tick" not in a or "tick" not in b:
@@ -268,6 +280,7 @@ def timeline(ev: list, c: Cfg, f0: int, f1: int) -> dict:
         ag.append((max(ags) - t0) if ags else 0.0)
         core.append(b["tick"] - last)
         tot.append(b["tick"] - t0)
+        fs.append(f)
     if not tot:
         return {}
     r = {"n": len(tot), "tick_to_datalink_done": q(dl), "tick_to_agent_done": q(ag),
@@ -277,6 +290,15 @@ def timeline(ev: list, c: Cfg, f0: int, f1: int) -> dict:
     for lim in (5, 10, 25):
         big = [x for x in tot if x * 1e3 >= lim]
         r[f"frames_ge_{lim}ms"] = {"n": len(big), "ms_per_frame": round(1e3 * sum(big) / len(tot), 3)}
+    # 긴 프레임이 모의 1 s 격자의 어느 위상에 있는가 (O-38). 위상 = 프레임 % 50
+    big_ix = [i for i, x in enumerate(tot) if x * 1e3 >= 5]
+    phase = Counter(fs[i] % 50 for i in big_ix)
+    r["big_phase_top"] = phase.most_common(4)
+    rest = [x for i, x in enumerate(tot) if x * 1e3 < 5]
+    r["rest_lt5ms"] = {"n": len(rest), "mean": round(1e3 * sum(rest) / max(1, len(rest)), 3)}
+    if big_ix:   # 긴 프레임의 구간별 평균. 값은 관측 지터를 포함한다
+        m = lambda v: round(1e3 * sum(v[i] for i in big_ix) / len(big_ix), 2)
+        r["big_segments"] = {"frame": m(tot), "datalink_done": m(dl), "agent_done": m(ag), "last_done_to_tick": m(core)}
     return r
 
 
@@ -306,7 +328,7 @@ def run_one(c: Cfg, out: Path, base: int) -> dict:
     obs = None
     try:
         if c.logger:
-            procs["logger"] = p0.Proc("logger", [p0.exe(BUILD, "logger", "swarm_logger"), "record", "--out", str(out / "rec.mcap"), *net.args("logger")], out)
+            procs["logger"] = p0.Proc("logger", [p0.exe(BUILD, "logger", "swarm_logger"), "record", "--out", "NUL" if c.logger_null else str(out / "rec.mcap"), "--stats", "1", *(["--key", c.logger_key] if c.logger_key else []), *net.args("logger")], out)
         procs["datalink"] = p0.Proc("datalink", [p0.exe(BUILD, "datalink", "swarm_datalink"), "--participant", "datalink-0", *feed, *(["--state-period", "0"] if c.state_off else []), *net.args("datalink")], out)
         for i, name in enumerate(agents):
             ents = ["--entities", "__none__"] if c.nosub else (["--entities", ",".join(uavs[i::c.agents])] if c.agents > 1 else [])
@@ -428,7 +450,7 @@ def main() -> None:
                     shutil.copytree(d, stall, ignore=shutil.ignore_patterns("*.mcap"))
                     print(json.dumps({"name": n, "r": r, "stall_attempt": attempt}), flush=True)
                 finally:
-                    base = 49000 + (base - 49000 + 20) % 800
+                    base = a.base_port + (base - a.base_port + 20) % 800
             if res is None:
                 continue
             cpu = res.get("cpu", {})
