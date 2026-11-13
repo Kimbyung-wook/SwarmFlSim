@@ -27,6 +27,8 @@ flowchart LR
     R["README.md<br/>(저장소 첫 화면)"] --> OV["docs/40_overview.md<br/>프로젝트 개괄"]
     OV --> DEV["docs/41_dev/<br/>개발자 매뉴얼"]
     OV --> USR["docs/42_user/<br/>사용자 매뉴얼"]
+    OV --> ARC["docs/43_architecture_views.md<br/>관점별 아키텍처 그림"]
+    ARC -. 링크 .-> C
     DEV -. 링크 .-> C["10_contracts.md"]
     DEV -. 링크 .-> T["각 WP TRACE.md·README.md"]
     USR -. 링크 .-> D["20_p0_demo.md"]
@@ -41,6 +43,7 @@ flowchart LR
 | 프로젝트 개괄 | `docs/40_overview.md` | 단일 파일 |
 | 개발자 매뉴얼 | `docs/41_dev/NN_<주제>.md`, 목차 `docs/41_dev/README.md` | 장별 파일 |
 | 사용자 매뉴얼 | `docs/42_user/NN_<주제>.md`, 목차 `docs/42_user/README.md` | 장별 파일 |
+| 관점별 아키텍처 그림 | `docs/43_architecture_views.md` | 단일 파일. 설계 검토용(사용자 피드백), 그림 중심 |
 | 그림 | `docs/img/manual/<문서>/` (SVG 원본과 화면 캡처 JPG) | |
 | 영문판 | `docs/en/40_overview.md`, `docs/en/41_dev/`, `docs/en/42_user/` | 국문과 같은 파일 이름·장 번호 |
 | 문서 변경 기록 | `docs/31_doc_changelog.md` | 병합마다 한 줄 추가(§6.2) |
@@ -50,6 +53,7 @@ flowchart LR
 - mermaid 블록 안 글자는 언어별로 옮긴다.
 - 번호 40번대는 기존 체계(00 기획, 10 계약, 20 통합·QA, 30 계획)를 잇는다.
 - 매뉴얼을 장별 파일로 나누는 이유: 장마다 다른 세션이 써도 파일이 겹치지 않는다(§6 분담).
+- 관점별 아키텍처 그림(43)은 매뉴얼이 아니라 설계 검토 문서다. 구현 기준으로 그리되 계획과 다른 곳, 정리가 필요한 곳, 사용자에게 물을 질문을 함께 둔다. 영문판은 사용자 피드백을 반영해 국문이 확정된 뒤 옮긴다. 갱신은 §6.2 절차를 따른다(구조·계층·키가 바뀌는 병합).
 - `README.md` §8 문서 표에 세 문서를 추가한다. `README.md` 본문은 개괄로 옮기지 않고 그대로 둔다(첫 화면 요약 역할).
 - WP 디렉터리의 `README.md`(bridge, ui, ui/monitor, gateway)는 유지한다. 개발자 매뉴얼은 이 파일들을 링크하고, README가 없는 WP(core, dynamics, datalink, agent, algorithms, scenario, logger, payload, qa)는 매뉴얼의 WP 절이 그 역할을 한다. WP 디렉터리에 README를 새로 만들지 않는다(각 WP 영역이므로).
 

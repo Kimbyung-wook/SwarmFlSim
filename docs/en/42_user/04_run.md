@@ -1,6 +1,6 @@
 # 4. Running
 
-> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `f7bcbac`.
+> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `6a3913f`.
 
 To start everything at once, use the runner in [chapter 2](02_quickstart.md). To run another scenario, go to 4.1. To start processes yourself, go to 4.2.
 
@@ -55,7 +55,7 @@ Start order: Logger → Datalink → Agent → Bridge → (wait 2 seconds) → C
 | Process | Main options |
 |---|---|
 | `swarm_core` | `--scenario`, `--autostart`, `--mode`, `--rate`, `--hz`, `--seed`, `--frames`, `--integrator rk4\|rk45`, `--terrain-flat <m>`, `--terrain-dem <json>` |
-| `swarm_datalink` | `--scenario`, `--participant`, `--no-frame-done`, `--seed`, `--terrain-flat <m>`, `--no-los`, `--state-period <s>` |
+| `swarm_datalink` | `--scenario`, `--participant`, `--no-frame-done`, `--seed`, `--terrain-flat <m>`, `--no-los`, `--state-period <s>`, `--heartbeat-hz <hz>` |
 | `swarm-agent` | `--scenario`, `--participant`, `--entities`, `--frames`, `--activity-max-hz`, `--vi-report-hz` |
 | `swarm-bridge` | `--host`, `--port`, `--queue-limit` |
 | Common bus options | `--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast` |

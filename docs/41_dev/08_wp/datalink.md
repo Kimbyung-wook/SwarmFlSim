@@ -26,7 +26,8 @@
 | `--no-frame-done` | FrameDone을 보내지 않는다 |
 | `--seed <n>` | 난수 시드 |
 | `--terrain-flat <m>`, `--no-los` | 가시선 평지 고도, 가시선 끄기 |
-| `--state-period <s>` | `link/state` 주기, 기본 1, 0이면 끔 |
+| `--state-period <s>` | `link/state` 주기, 기본 1, 0이면 끔. 쌍마다 주기당 1건을 주기 안의 프레임에 나눠 낸다(DEC-084) |
+| `--heartbeat-hz <hz>` | GCS Heartbeat 주기(모의 시간), 기본 1, 0이면 끔(DEC-078) |
 | `--quiet` | 로그 끔 |
 | 공통 버스 옵션 | [3.2](../03_architecture.md#32-버스-열기) |
 
@@ -35,7 +36,7 @@
 | 방향 | 키 |
 |---|---|
 | 구독 | `swarm/*/tx/**`, `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `truth/state`, `truth/event/jam_zone`, `truth/event/kill` |
-| 발행 | `swarm/<dst>/rx/**`, `link/outcome/<src>/<dst>`, `link/state/<a>/<b>`, `sim/clock/done/<p>` |
+| 발행 | `swarm/<dst>/rx/**`(자체 발생 `swarm/<uav>/rx/c2/GcsHeartbeat` 포함), `link/outcome/<src>/<dst>`, `link/state/<a>/<b>`, `sim/clock/done/<p>` |
 
 ## 시험
 

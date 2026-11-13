@@ -110,11 +110,11 @@ uv run pytest
 
 ## 7. 로드맵
 
-| 단계 | 내용 | 상태 (2026-11-09) |
+| 단계 | 내용 | 상태 (2026-11-13) |
 |---|---|---|
 | P0 | 2-DoF + 2D UI 골격 | 완료 |
-| P1 | 3-DoF + 편대 + Traffic Monitor | 기능 구현 |
-| P2 | 데이터링크·재밍 | 부분 (링크 상실 행동 미구현) |
+| P1 | 3-DoF + 편대 + Traffic Monitor | 진행 중 (기능 구현, 성능 판정 남음) |
+| P2 | 데이터링크·재밍 | 완료 (DEC-085) |
 | P3 | 5/6-DoF + RK45 | 부분 (RK45·RK4만, 5·6-DoF 미구현) |
 | P4 | 분산 실행 | 미착수 |
 | P5 | 임무장비·표적 (센서·재머·시뮬레이션 이벤트) | 기능 구현 |
@@ -141,6 +141,7 @@ uv run pytest
 | [40_overview.md](docs/40_overview.md) | 프로젝트 개괄: 목적, 현재 기능, 구성, 처음 실행, 진행 상태 |
 | [41_dev/](docs/41_dev/README.md) | 개발자 매뉴얼: 환경, 빌드, 플러그인 작성, WP별 기여 안내 |
 | [42_user/](docs/42_user/README.md) | 사용자 매뉴얼: 시나리오, 실행, UI 조작, 기록·재생 |
+| [43_architecture_views.md](docs/43_architecture_views.md) | 관점별 아키텍처 그림: 구성, 데이터 흐름, lockstep, 기체 계층, 유도·제어 체인, 데이터링크, 성능. 설계 피드백 질문 포함 |
 | [en/](docs/en/README.md) | 영문판 (개괄·개발자·사용자 매뉴얼, 국문 `7affdae` 기준) |
 
 ## 9. 개발 규칙

@@ -1,6 +1,6 @@
 # 5. Writing an FA plugin
 
-> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `6a3913f`.
 
 An FA (Flight Autonomy) turns the MA's flight commands into dynamics control output. Use the default FA as it is, and write your own only when comparing other guidance and control laws.
 
@@ -19,9 +19,9 @@ sequenceDiagram
     loop Every tick
         M->>F: on_command(FlightCommand) (when the MA calls vi.command)
         F-->>M: FlightCommandStatus
-        R->>F: step(nav, dt_s) (ticks with a navigation report)
+        R->>F: step(nav, dt_s) (ticks where this vehicle is in the NavigationBatch)
         F-->>R: ControlOutput
-        R->>C: onboard/<id>/ControlOutput
+        R->>C: onboard_batch/ControlBatch/<p> (all its vehicles)
         R->>F: pending_status()
         F-->>M: Later status (completion and so on)
     end

@@ -1,6 +1,6 @@
 # 10. Troubleshooting
 
-> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `f7bcbac`.
+> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `6a3913f`.
 
 Look up by symptom. For build and code-level issues see [developer manual chapter 11](../41_dev/11_troubleshooting.md).
 
@@ -58,6 +58,7 @@ If you used the runner, process logs are in `out/p0_demo/<mode>-<time>/<process>
 | Started but frames do not advance | Participant IDs differ from the scenario `participants`, or a process did not start | [4.4](04_run.md#44-lockstep), check the waiting list in the Core log |
 | Participant wait indicator on the toolbar | A participant died | Restart the participant, then reset and start |
 | The target rate is not reached | The Python Agent cannot keep up | Split Agents or lower the rate |
+| After the link drops, a vehicle only orbits in place | This is the default link-loss policy `hold_until_command`. It keeps orbiting after recovery until a new command | Send a new command, or set `lost_link_policy` on the scenario task ([chapter 7](07_link.md#vehicle-behavior-on-link-loss)) |
 
 ## 10.7 Recording and replay
 

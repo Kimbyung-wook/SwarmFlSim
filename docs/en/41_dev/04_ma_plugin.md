@@ -1,6 +1,6 @@
 # 4. Writing an MA plugin
 
-> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `6a3913f`.
 
 An MA (Mission Autonomy) is a Python class that makes the mission decisions for one vehicle or a swarm. It takes tasks and turns them into flight commands and equipment commands.
 
@@ -118,8 +118,9 @@ sequenceDiagram
         R->>M: on_step(ctx)
         M->>F: ctx.ports.vi.command(cmd) → on_command
         F-->>M: Status arrives via the next command_status()
-        R->>F: step(nav, dt) (only vehicles that got a navigation report this tick)
+        R->>F: step(nav, dt) (only vehicles in this NavigationBatch)
         F-->>R: ControlOutput
+        Note over R: Collects its vehicles into one ControlBatch and publishes it
     end
     R->>M: on_shutdown(ctx)
 ```
@@ -249,7 +250,18 @@ The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](.
 
 `flocking_basic` is a variant for example scenarios. The full list is in [algorithms/TRACE.md](../../../algorithms/TRACE.md).
 
-> Not implemented: vehicle behavior on link loss (roadmap P2).
+All baseline MAs act on link loss (DEC-078). The shared parts are `LinkMonitor` (Heartbeat watch) and `LostLinkGuard` (policy decision) in [common.py](../../../algorithms/src/swarm_algorithms/common.py). An MA that uses `TaskPilot` needs nothing more. To do something other than orbit, override `TaskPilot.enter_lost_link_hold`.
+
+| Item | Content |
+|---|---|
+| Parameters | `lost_link_timeout_s` (default 5 s), `lost_link_policy` (`hold_until_command` by default, `resume_on_recovery`, `continue`). Baseline MAs add `LOST_LINK_PARAMS` to `PARAMS` |
+| Policy choice | `TaskCommand.lost_link_policy` of the current task at the moment of loss, otherwise the MA parameter |
+| Orbit | Centered on the current position. The radius is the larger of `hold_radius_m` and 1.3 × the minimum turn radius |
+| New task command while orbiting | Ends the orbit even before recovery and follows the command. Commands outside tasks, such as `FormationCommand`, are signaled with `release()` |
+| Recovery (`resume_on_recovery`) | Resumes the interrupted task. With no task, sends the flight command from before the loss again (IMP-AGT-039) |
+| Records | MD `link_state`, `lost_link_policy`, `lost_link_action` |
+
+- The `hold` MA has no tasks, so it uses only the MA parameter. `formation` followers also use the MA parameter because `FormationCommand` has no policy field.
 
 `formation` slots are offsets in the leader's FRD frame. `s` is `spacing_m`, `k` is the follower index (from 0).
 

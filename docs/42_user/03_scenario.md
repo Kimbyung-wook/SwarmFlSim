@@ -163,7 +163,7 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 
 | MA | 하는 일 | 지원 작업 |
 |---|---|---|
-| `hold` | 현재 침로·속도·고도 유지. `orbit_radius_m` > 0이면 그 자리 선회 | 임무 작업을 수행하지 않음 |
+| `hold` | 현재 침로·속도·고도 유지. `orbit_radius_m` > 0이면 그 자리 선회 | 임무 작업을 수행하지 않음. 링크 상실 행동은 한다 |
 | `waypoint` | 임무 계획과 C2 명령 수행 | `move_to`, `hold`, `return_to_base`, `search_area`, `route` |
 | `formation` | 리더-추종 편대 | 편대 지정과 리더의 작업 수행 |
 | `flocking`, `flocking_basic` | Reynolds 군집과 목표점 이동 | `move_to`, `hold`, `return_to_base`, `search_area`. `route`는 `REJECTED` |
@@ -184,10 +184,12 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | flocking | `neighbor_radius_m` | 600 | 이웃 인식 반경(m) |
 | flocking | `group` | 빈 값 | 같은 그룹 이웃만 사용 |
 | default FA | `racetrack_guidance` | `dubins` | 레이스트랙 유도(`dubins`, `vector_field`) |
+| 내장 MA 전부 | `lost_link_timeout_s` | 5 | 마지막 GCS Heartbeat 뒤 링크 상실로 판단할 모의 시간(s) |
+| 내장 MA 전부 | `lost_link_policy` | `hold_until_command` | 작업에 정책이 없을 때의 링크 상실 행동 |
 
 ## 3.7 임무 계획 (mission_plan)
 
-`tasks`의 각 작업에는 `task_id`, `assignees`와 작업 종류 키 하나를 쓴다.
+`tasks`의 각 작업에는 `task_id`, `assignees`와 작업 종류 키 하나를 쓴다. 링크 상실 정책 `lost_link_policy`(`hold_until_command`, `resume_on_recovery`, `continue`)를 함께 쓸 수 있다.
 
 | 작업 키 | 내용 |
 |---|---|
@@ -196,6 +198,8 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `search_area` | 원 또는 다각형 영역 |
 | `route` | 항로점 목록. 항로점마다 `position`, `speed_mps`, `acceptance_radius_m`, 행위(`loiter`, `recon`) |
 | `return_to_base` | 시작 위치로 귀환 |
+
+> 링크가 끊기는 구간을 지나야 하는 임무는 `lost_link_policy`를 지정한다. 지정하지 않으면 기본 정책 `hold_until_command`에 따라 끊긴 자리에서 선회하고, 링크가 돌아와도 새 명령이 올 때까지 임무를 잇지 않는다. QA 링크 시나리오 3건도 이 때문에 `continue`를 지정했다(D-32). 정책별 동작은 [7장](07_link.md#링크-상실-시-기체-행동).
 
 `formations`는 `group_id`, `members`, `leader`, `shape`(`line`, `column`, `wedge`, `echelon`, `circle`, `custom`), `spacing_m`, `custom_offsets_m`를 쓴다. `custom`은 `custom_offsets_m` 개수가 `members`와 같아야 한다.
 

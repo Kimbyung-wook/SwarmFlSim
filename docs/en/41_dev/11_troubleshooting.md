@@ -1,6 +1,6 @@
 # 11. Troubleshooting
 
-> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `f7bcbac`.
+> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `6a3913f`.
 
 - For install and build failures, see [1.4](01_setup.md#14-common-failures) first. Symptoms from the user's point of view are in [user manual chapter 10](../42_user/10_faq.md).
 - Where process logs are depends on how you ran things. The demo runner collects them in `out/p0_demo/<mode>-<time>/<process>.log`.
@@ -12,7 +12,7 @@
 | The first tick does not go out | A participant in `run.participants` has not sent the ready signal (`FrameDone{0}`). It did not start or its ID differs | Match the waiting-participant list in the Core log against each process's `--participant` |
 | Stops during a run. UI and Monitor show waiting participants | A participant died or does not respond (DEC-041) | Rejoining is not supported. Restart the participant, then Reset+Start |
 | Trajectories differ with the same seed | The plugin depends on random numbers other than `ctx.rng`, wall clocks or receive order. Or it ran in realtime or free-run, or the Gateway received external input | Check the rules in [3.6](03_architecture.md#36-one-lockstep-frame). Use `qa/diag_determinism.py` to find the first diverging frame |
-| Rate is below target | The Python Agent is the bottleneck. `frame_overruns` increases | Split vehicles across Agents (`--entities`) or lower the rate |
+| Rate is below target | The Python Agent is the bottleneck. `frame_overruns` increases. Logger on adds about 0.3 ms per frame (QA round 24) | Split vehicles across Agents (`--entities`) or lower the rate. 3-DoF 100 vehicles waypoint runs at about 10× with Logger off |
 
 ## 11.2 Bus
 

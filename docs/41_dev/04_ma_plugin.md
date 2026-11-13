@@ -116,8 +116,9 @@ sequenceDiagram
         R->>M: on_step(ctx)
         M->>F: ctx.ports.vi.command(cmd) → on_command
         F-->>M: 상태는 다음 command_status()로 받는다
-        R->>F: step(nav, dt) (이번 틱에 항법 보고를 받은 기체만)
+        R->>F: step(nav, dt) (이번 NavigationBatch에 있는 기체만)
         F-->>R: ControlOutput
+        Note over R: 맡은 기체를 ControlBatch 1건으로 모아 발행
     end
     R->>M: on_shutdown(ctx)
 ```
@@ -247,7 +248,18 @@ stateDiagram-v2
 
 `flocking_basic`은 예제 시나리오용 변형이다. 전체 항목은 [algorithms/TRACE.md](../../algorithms/TRACE.md).
 
-> 미구현: 링크 상실 시 기체 행동 (로드맵 P2).
+내장 MA는 모두 링크 상실 행동을 한다(DEC-078). 공용 부품은 [common.py](../../algorithms/src/swarm_algorithms/common.py)의 `LinkMonitor`(Heartbeat 감시)와 `LostLinkGuard`(정책 판단)다. `TaskPilot`을 쓰는 MA는 따로 할 일이 없고, 선회 대신 다른 행동을 하려면 `TaskPilot.enter_lost_link_hold`를 덮어쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 매개변수 | `lost_link_timeout_s`(기본 5 s), `lost_link_policy`(`hold_until_command` 기본, `resume_on_recovery`, `continue`). 내장 MA는 `LOST_LINK_PARAMS`를 `PARAMS`에 더한다 |
+| 정책 결정 | 상실 순간 현재 작업의 `TaskCommand.lost_link_policy`, 없으면 MA 변수 |
+| 선회 | 현재 위치 중심, 반경은 `hold_radius_m`과 최소 선회 반경 × 1.3 중 큰 값 |
+| 선회 중 새 작업 명령 | 복구 전이라도 선회를 끝내고 명령을 따른다. `FormationCommand`처럼 작업 밖 명령은 `release()`로 알린다 |
+| 복구(`resume_on_recovery`) | 중단한 작업을 다시 한다. 작업이 없었으면 상실 전 비행 명령을 다시 낸다(IMP-AGT-039) |
+| 기록 | MD `link_state`, `lost_link_policy`, `lost_link_action` |
+
+- `hold` MA는 작업이 없으므로 MA 변수만 쓴다. `formation` 추종기도 `FormationCommand`에 정책 필드가 없어 MA 변수를 쓴다.
 
 `formation`의 슬롯은 리더 FRD 기준 오프셋이다. `s`는 `spacing_m`, `k`는 추종기 순번(0부터)이다.
 
