@@ -9,6 +9,7 @@
 구독하는 키: sim/clock/tick, sim/ctrl/cmd·sim/ctrl/scenario(런타임만, MA에 노출하지 않음, DEC-037),
 onboard_batch/NavigationBatch(런타임만, MA에 노출하지 않음, DEC-013), 기체마다 ONBOARD_INBOUND의 onboard/<id>/<msg>,
 swarm/<id>/rx/**. truth/**와 link/**는 구독하지 않는다 (PRP-SIM-003).
+threaded면 모든 구독을 ordered로 열어 Core가 낸 순서대로 큐에 넣는다 (DEC-083, D-33).
 """
 
 import logging
@@ -138,9 +139,8 @@ class AgentRuntime:
         self._rx_hold: dict[str, list] = {}         # 기체 → [(rx_time_us, source, seq, iface, msg)]
         self._onboard_hold: dict[str, list] = {}    # 기체 → [(처리할 틱, 메시지 이름, seq, msg)] (lockstep, D-30)
         self._last_frame: int | None = None         # 마지막으로 처리한 틱
-        self._subs = [bus.subscribe(keys.CLOCK_TICK, self._on_sample),
-                      bus.subscribe(keys.SIM_CTRL_CMD, self._on_sample),
-                      bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_sample)]
+        self._subs = [self._subscribe(keys.CLOCK_TICK), self._subscribe(keys.SIM_CTRL_CMD),
+                      self._subscribe(keys.SIM_CTRL_SCENARIO)]
         self._vehicle_subs: list = []
         self.scenario: sim_pb2.Scenario | None = None
         self.vehicles: dict[str, Vehicle] = {}
@@ -159,6 +159,12 @@ class AgentRuntime:
         self._sim_time_us = 0
 
     # ---- 버스 입력 ----
+
+    def _subscribe(self, keyexpr: str):
+        """런타임의 구독은 모두 여기서 연다. Zenoh 기본 콜백은 구독마다 스레드가 달라 구독 간 순서가 깨지므로
+        (D-33) threaded면 ordered로 열어 수신 스레드 하나에서 도착 순서대로 큐에 넣는다. 이때 콜백은 큐에 넣기만 한다.
+        threaded가 아니면 콜백이 처리와 발행까지 하므로 수신 스레드를 막지 않게 ordered로 열지 않는다 (DEC-083)"""
+        return self.bus.subscribe(keyexpr, self._on_sample, ordered=self._queue is not None)
 
     def _on_sample(self, s: Sample) -> None:
         if self._queue is not None:
@@ -269,16 +275,16 @@ class AgentRuntime:
             if gcs:
                 self._gcs[v.entity_id] = gcs
         if self._order:
-            self._vehicle_subs.append(self.bus.subscribe(keys.NAVIGATION_BATCH, self._on_sample))
+            self._vehicle_subs.append(self._subscribe(keys.NAVIGATION_BATCH))
         for v in self._order:
             for name in sorted(ONBOARD_INBOUND):
-                self._vehicle_subs.append(self.bus.subscribe(keys.onboard(v.entity_id, name), self._on_sample))
-            self._vehicle_subs.append(self.bus.subscribe(keys.rx_all(v.entity_id), self._on_sample))
+                self._vehicle_subs.append(self._subscribe(keys.onboard(v.entity_id, name)))
+            self._vehicle_subs.append(self._subscribe(keys.rx_all(v.entity_id)))
         self._lockstep = scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP
         if self._lockstep:
             self._dl_names = tuple(p for p in scenario.run.participants if p.startswith(DATALINK_PREFIX))
         for name in self._dl_names:
-            self._vehicle_subs.append(self.bus.subscribe(keys.clock_done(name), self._on_sample))
+            self._vehicle_subs.append(self._subscribe(keys.clock_done(name)))
         log.info("loaded '%s': hosting %d vehicles", scenario.name, len(self._order))
         self._publish_params()
         if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다

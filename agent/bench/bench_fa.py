@@ -25,7 +25,7 @@ class NullBus:
     def put(self, key, payload, encoding):
         pass
 
-    def subscribe(self, keyexpr, callback):
+    def subscribe(self, keyexpr, callback, *, ordered=False):
         return self
 
     def close(self):
