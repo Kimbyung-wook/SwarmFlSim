@@ -36,7 +36,7 @@
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
-| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084 | WP10, WP1, WP3, WP4 | IMP-AGT-010, IMP-AGT-040~041, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025 | TC-QA-114~118, TC-QA-133~136, TC-AGT-118~127, TC-API-008, TC-CORE-044~045, TC-LNK-030~031 | 구현중 |
+| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084 | WP10, WP1, WP3, WP4 | IMP-AGT-010, IMP-AGT-040~041, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025 | TC-QA-114~118, TC-QA-133~142, TC-AGT-118~127, TC-API-008, TC-CORE-044~045, TC-LNK-030~031 | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126 | 구현중 |
@@ -248,6 +248,12 @@
 | TC-QA-134 | 일괄화 전후 단계별·프레임 분해 | `qa/perf_p1.py`, `qa/perf_agent.py` | DEC-081 |
 | TC-QA-135 | 일괄화 전후 메시지·CPU | `qa/perf_p1.py` | DEC-081 |
 | TC-QA-136 | FA C++ 이관 뒤 배속 재추정, §29 추정 검증 | §31.7 | OPN-068 |
+| TC-QA-137 | Logger 켬 배속: Agent 1·2·4개, 기본·P 고정, 짧은·긴 창 | `qa/perf_p1.py` | DEC-082, DEC-083 |
+| TC-QA-138 | Logger 켬 + `--state-period 0` 원인 분리 | `qa/perf_p1.py` | DEC-082, O-38 |
+| TC-QA-139 | Logger 비용 내역: 장벽 참여, 구독 키별, 디스크, 긴 프레임 | `qa/perf_p1.py` | DEC-082, O-38 |
+| TC-QA-140 | Agent 2분할 시작 안정성 (D-31) | `qa/batch_e2e.py` | DEC-082 |
+| TC-QA-141 | Agent 2분할 + Logger 켬 바이트 동일 | `qa/batch_e2e.py` | DEC-005, DEC-039 |
+| TC-QA-142 | `p2_lostlink` 도구 결함 수정과 501 재현 시도 | `qa/p2_lostlink.py`, `qa/gw_plan.py` | DEC-083 |
 
 ## 시험 결과
 
@@ -408,6 +414,13 @@
 | TC-QA-134 | 측정 | 2026-11-10 | FA·제어 발행 6.3→0.44 ms, 항법 수신 4.5→0.83 ms (§31.5) |
 | TC-QA-135 | 측정 | 2026-11-10 | 프레임당 314건→125건, Agent 입력 204→약 7건 (§31.6) |
 | TC-QA-136 | 추정 | 2026-11-10 | FA C++ 기본 약 12.6배, P 고정 약 12.4배. §29의 일괄화 5.4배·기본 6~8배는 과소 (§31.7) |
+| TC-QA-132 | 통과 | 2026-11-13 | 재판정(§32.6). 계약 0.18.0 뒤 16회 경고 0건, 부하 14회 0건, 바이트 동일. D-33 해결 |
+| TC-QA-137 | 측정 | 2026-11-13 | Agent 1개 Logger 켬 짧은 창 7.61배·긴 창 8.74배, 최고 2·4분할 P 긴 창 9.8배. 10배 구성 없음 (§32.3) |
+| TC-QA-138 | 측정 | 2026-11-13 | `link/state` 끔: Agent 1개 8.83배, 2·4분할 11.7~12.8배. 원인 분리용 (§32.3) |
+| TC-QA-139 | 측정 | 2026-11-13 | Logger 비용 0.30~0.39 ms. 장벽 밖, `link/**` 0.16 ms 최대, 디스크 무관, 1 Hz 긴 프레임에 약 0.2 ms (§32.4) |
+| TC-QA-140 | 통과 | 2026-11-13 | 40회 정지 0건 |
+| TC-QA-141 | 통과 | 2026-11-13 | 3,000 프레임 3회 truth·항법·제어 바이트 동일 |
+| TC-QA-142 | 통과 | 2026-11-13 | 관측기 닫기·시간 제한, 정지 프레임을 Core 상태로. 501은 부하 6회에서 재현 안 됨 (§32.6) |
 
 ## 프로세스 결정
 
