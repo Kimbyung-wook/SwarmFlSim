@@ -36,7 +36,7 @@
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
-| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079, DEC-080, DEC-081 | WP10, WP1, WP3 | IMP-AGT-010, IMP-AGT-040, IMP-CORE-029~030 | TC-QA-114~118, TC-QA-133~136, TC-AGT-118~125, TC-CORE-044~045 | 구현중 |
+| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079, DEC-080, DEC-081 | WP10, WP1, WP3 | IMP-AGT-010, IMP-AGT-040~041, IMP-API-022, IMP-CORE-029~030 | TC-QA-114~118, TC-QA-133~136, TC-AGT-118~127, TC-API-008, TC-CORE-044~045 | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126 | 구현중 |
@@ -84,6 +84,7 @@
 | IMP-API-019 | P5 착수: WP8 Payload 지시문, SENSOR 고장 효과 정의 | `docs/11_wp_briefs.md` WP8 | DEC-046, DEC-047 |
 | IMP-API-020 | 계약 0.12.0: rx 불변식 `rx_time_us >= T_k`, 재밍 수신단 기준 명시, 상태 변화 보고 최대 빈도, DEM 파일 형식 | `docs/10_contracts.md` §3.3·§6·§7 | DEC-054, DEC-055, DEC-056, DEC-053 |
 | IMP-API-021 | 계약 0.13.0: `StrikeActivity` 무장별 보고 키, 종료 무장 키의 전체 보고 제외 | `docs/10_contracts.md` §3 임무장비 상태 보고 | DEC-063 |
+| IMP-API-022 | 계약 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독, ZenohBus 직접 콜백 | `api/python/src/swarm_api/bus.py`, `docs/10_contracts.md` §3.4 | DEC-083 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |
@@ -91,6 +92,7 @@
 | TC-API-005 | Python `open_bus` 백엔드 선택, Zenoh 두 세션 간 송수신 | `api/python/tests/test_open_bus.py` | IMP-API-007 |
 | TC-API-006 | 매개변수 해석: 기본값·재정의, 거부 사유(unknown·type·range·not_runtime)와 거부 시 기존 값 유지 | `api/python/tests/test_plugin.py` | IMP-API-012 |
 | TC-API-007 | 허용 목록 밖 문자열은 `choice`로 거부하고 기존 값을 유지한다 | `api/python/tests/test_plugin.py` | IMP-API-013 |
+| TC-API-008 | 두 Zenoh 세션 사이에서 서로 다른 키 둘을 번갈아 보낼 때 `ordered=True` 구독 둘의 콜백 순서가 송신 순서와 같다. memory 백엔드도 `ordered`를 받는다 | `api/python/tests/test_open_bus.py` | IMP-API-022 |
 
 | ID | 내용 | 위치 | 근거 |
 |---|---|---|---|
@@ -269,6 +271,7 @@
 | TC-INT-011 | 통과 | 2026-11-02 | 12대 선택 `전송 (12대)` 최상단, 재생 배지·버튼 비활성, 3배속 지연 평균 약 21 ms |
 | TC-API-006 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
 | TC-API-007 | 통과 | 2026-11-02 | Windows, uv + CPython 3.12 |
+| TC-API-008 | 통과 | 2026-11-13 | Windows, uv + CPython 3.12 + eclipse-zenoh 1.10.2 |
 | TC-QA-001 | 통과 | 2026-11-03 | `msvc-debug`, 계약 0.8.0 (4e3c4c3). 결과·결함은 `docs/21_qa_report.md` |
 | TC-QA-002 | 통과 | 2026-11-03 | 위와 같음 |
 | TC-QA-003 | 통과 | 2026-11-03 | 위와 같음 |

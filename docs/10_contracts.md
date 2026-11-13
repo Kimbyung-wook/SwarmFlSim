@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.17.0
+- 계약 버전: 0.18.0
+  - 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독 (DEC-083)
   - 0.17.0: 항법·제어 일괄 `NavigationBatch`·`ControlBatch`, 키 `onboard_batch/**`. 기체별 `NavigationReport`·`ControlOutput`의 `onboard` 발행을 대체 (DEC-081)
   - 0.16.0: `GcsHeartbeat` EXT, `TaskCommand.lost_link_policy` EXT, Datalink의 Heartbeat 발생, MA 링크 상실 행동 (DEC-078)
   - 0.15.0: `ApprovalResponse` STD(`MA_ApprovalRequestStatus`, DEC-075), Gateway 임무 계획 수신 `tx/mp`(DEC-076), `LinkEnvelope.publisher`(DEC-077)
@@ -160,6 +161,10 @@ flowchart LR
   - C++: `swarm/bus/open_bus.hpp` (타깃 `swarm_bus`). Zenoh가 빌드에 없으면 memory만 된다.
   - Python: `swarm_api.open_bus(BusConfig(...))`. Zenoh는 `swarm-api[zenoh]`(eclipse-zenoh 1.10)
 - `BusConfig`: `backend`(zenoh | memory, 비우면 Zenoh가 있으면 zenoh), `zenoh_config_file`, `zenoh_mode`, `connect`, `listen`, `multicast_scouting`
+- 구독 콜백 순서 (DEC-083)
+  - C++ 버스의 구독 콜백은 수신 스레드에서 바로 불려 같은 링크로 온 메시지는 구독이 달라도 도착 순서대로 처리된다.
+  - Python `Bus.subscribe`는 기본값에서 구독마다 다른 스레드로 콜백을 부르므로 구독 간 순서를 보장하지 않는다. `ordered=True`로 연 구독끼리는 수신 스레드 하나에서 도착 순서대로 불린다.
+  - lockstep 틱과 그 프레임 입력의 순서에 의존하는 참여자(Agent 런타임)는 관련 구독을 모두 `ordered=True`로 연다. 콜백이 수신을 막으므로 큐에 넣기만 한다. Bridge·Gateway처럼 순서 의존이 없는 프로세스는 기본값을 쓴다.
 - 실행 파일의 명령행 옵션은 같은 이름을 쓴다: `--bus`, `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen`, `--no-multicast` (`parse_bus_arg`, `kBusUsage`)
 
 ### 3.5 브라우저 연동 (DEC-027)

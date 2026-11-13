@@ -61,6 +61,7 @@ flowchart LR
 | IMP-AGT-036 | lockstep onboard 입력의 처리 틱을 메시지 프레임으로 고정(D-30, DEC-039): `NavigationReport`를 뺀 onboard 입력(`SystemStatus`, `Detection`, `*Activity`)을 도착 즉시 처리하지 않고 보관했다가 틱 `header.frame + 지연`의 begin_frame 전에 (틱, 메시지, seq) 순으로 처리한다. 지연은 `SystemStatus` 1(Core `publish_frame`이 틱 P 직전에 프레임 P로 발행), 임무장비 출력 2(`step_payload`가 적분 프레임 P-1로 찍어 틱 P 앞에 발행). 틱 P+1은 Agent의 FrameDone(P) 뒤에야 나오므로 그때까지 도착한다. NavigationReport처럼 틱을 기다리게 할 수 없는 이유: 이 입력들은 바뀔 때만 나와 그 프레임에 메시지가 있는지 알 수 없다. 처리할 틱이 지난 뒤 도착하면 `stats.late_onboard`를 세고 경고 후 다음 틱에 처리한다. realtime·free-run은 도착 즉시 처리 그대로. 변화 보고 규칙(DEC-056, DEC-071)은 그대로 | `src/swarm_agent/runtime.py` | D-30, DEC-039, DEC-005, DEC-051, DEC-071, DEC-073 | TC-AGT-088~093 Pass |
 | IMP-AGT-037 | `GcsHeartbeat`의 MA C2 포트 전달(DEC-078): `C2_INBOUND`에 추가해 다른 C2 수신과 같이 lockstep에서는 rx 시각 기준으로 틱에 전달한다(DEC-040). 시험용 `FakeDatalink.heartbeat`는 tx를 거치지 않고 rx로 바로 낸다. 링크 상실 판단과 행동은 `algorithms/TRACE.md` IMP-AGT-038 | `src/swarm_agent/ports.py`, `src/swarm_agent/testing.py` | DEC-078, DEC-013, DEC-040 | TC-AGT-094 Pass |
 | IMP-AGT-040 | 항법·제어 일괄 경로(DEC-081, 계약 0.17.0): `onboard_batch/NavigationBatch` 하나를 구독해 호스팅 기체에 나누고, 배치에 있는 기체만 `nav_fresh`로 둔다(다른 참여자의 기체는 건너뜀). threaded 틱 해제 조건은 그 프레임 배치 수신이다. 배치에서 빠진 기체는 기다리지 않는다. 틱당 1건 `ControlBatch`를 `onboard_batch/ControlBatch/<participant>`로 FrameDone 전에 발행한다(기체 ID 순, `controls[i].header.source`는 기체 ID로 고정, Python FA도 같은 경로, 항법이 없는 틱은 빈 배치, 호스팅 기체가 없는 참여자는 내지 않음). `onboard/<id>/*` 구독을 받을 메시지 5종의 키로 줄여 자기 제어·명령이 되돌아오지 않는다. `FakeCore`·`bench_fa`도 같은 경로로 옮겼다. 배치는 MA에 노출하지 않으며 `ports.vi.nav()`는 그대로 자기 항법을 돌려준다 | `src/swarm_agent/runtime.py`, `src/swarm_agent/testing.py`, `bench/bench_fa.py` | DEC-081, DEC-080, DEC-005, DEC-013, DEC-039, DEC-045, REQ-PRF-002 | TC-AGT-118~125 Pass |
+| IMP-AGT-041 | 런타임 구독의 순서 보장(D-33, DEC-083): 런타임이 여는 구독(틱, sim/ctrl, NavigationBatch, onboard, rx, FrameDone)을 `_subscribe` 하나로 열고, threaded면 `ordered=True`로 열어 Zenoh 수신 스레드에서 Core가 낸 순서대로 큐에 넣는다. 콜백은 큐에 넣기만 한다. Zenoh 기본 콜백은 구독마다 스레드가 달라, 일괄화 뒤 onboard 입력이 NavigationBatch·틱보다 늦게 큐에 들어가 처리할 틱을 놓쳤다(`late_onboard`). threaded가 아니면 콜백이 처리·발행까지 하므로 ordered로 열지 않는다. `bench_fa`의 가짜 버스도 `ordered`를 받는다 | `src/swarm_agent/runtime.py`, `bench/bench_fa.py` | D-33, DEC-083, DEC-005, DEC-039, DEC-081 | TC-AGT-126~127 Pass |
 
 ## TC
 
@@ -144,8 +145,10 @@ flowchart LR
 | TC-AGT-123 | MA는 배치에 접근할 수 없고 `ports.vi.nav()`는 자기 항법만 돌려줌(DEC-013) | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-124 | Python FA도 같은 경로, `header.source`는 기체 ID로 고정, 출력 없음·예외는 그 기체만 빠짐 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-125 | 배치 안 보고 순서와 무관하게 ControlBatch 바이트가 같음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
+| TC-AGT-126 | threaded 런타임은 모든 구독을 ordered로 열고 콜백은 큐에 넣기만 함, threaded가 아니면 ordered 아님 | `tests/test_agent_ordered.py` | IMP-AGT-041 | Pass |
+| TC-AGT-127 | 실제 Zenoh 두 세션: Core 순서(임무장비 출력 → NavigationBatch → SystemStatus → 틱)가 키가 달라도 큐에 그대로 들어옴 | `tests/test_agent_ordered.py` | IMP-AGT-041 | Pass |
 
-시험 결과(2026-11-10): agent 98, algorithms 102 passed
+시험 결과(2026-11-13): agent 100, algorithms 102 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 
