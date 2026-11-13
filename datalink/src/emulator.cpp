@@ -352,6 +352,7 @@ void Datalink::run_tick() {
     now_us_ = tick.sim_time_us();
     lockstep_ = tick.mode() == v1::RUN_MODE_LOCKSTEP;
     frame_ = tick.frame();
+    dt_us_ = tick.dt_us();
     std::erase_if(faults_, [&](const Fault& f) { return f.until_us != 0 && now_us_ >= f.until_us; });
 
     // 이전 틱 시각에 송신된 메시지만 처리한다. 도착이 tick보다 앞서든 뒤서든 같은 틱에서 처리해 결정론을 지킨다.
@@ -491,7 +492,7 @@ void Datalink::reset_locked() {
   tx_recv_.clear();
   rx_sent_.clear();
   peer_sent_.clear();
-  next_state_us_ = now_us_;
+  state_plan_ = {};
   next_heartbeat_us_ = 0;
   for (auto& hb : heartbeats_) hb.sequence = 0;
 }
@@ -738,18 +739,54 @@ void Datalink::heartbeats_locked(std::vector<Out>& out) {
   }
 }
 
+// DEC-084: link/state를 주기 창 안의 틱에 나눠 낸다. 창 w = now / 주기의 첫 틱에서 그때의 쌍 목록(a < b 사전순)을 정하고,
+// i번째 쌍을 슬롯 floor(i·S/N)(S = 주기 / dt, 슬롯 k의 예정 시각 = 창 시작 + k·dt)에 둔다. 쌍의 값은 그 쌍을 내는 틱의 상태다.
+// 모의 시간·dt·쌍 목록으로만 정해지므로 lockstep에서 실행마다 같다(DEC-005, DEC-039). 쌍마다 창당 정확히 1건이다:
+// - 창이 바뀔 때 남은 쌍(틱을 건너뛰었거나 주기를 바꾼 경우)은 그 틱에 먼저 낸다
+// - 창 중간에 생긴 쌍(스폰·종류 변경)은 다음 창부터 낸다. 죽은 엔티티의 쌍은 DOWN으로 계속 낸다
 void Datalink::publish_states_locked(std::vector<Out>& out) {
-  if (cfg_.state_period_s <= 0.0 || now_us_ < next_state_us_) return;
-  next_state_us_ = now_us_ + static_cast<std::uint64_t>(cfg_.state_period_s * 1e6);
+  if (cfg_.state_period_s <= 0.0) {
+    state_plan_ = {};
+    return;
+  }
+  const auto period_us =
+      std::max<std::uint64_t>(1, static_cast<std::uint64_t>(std::llround(cfg_.state_period_s * 1e6)));
+  const std::uint64_t window = now_us_ / period_us;
+  StatePlan& pl = state_plan_;
+  if (pl.valid && (pl.window != window || pl.period_us != period_us)) {
+    for (; pl.next < pl.pairs.size(); ++pl.next) emit_state_locked(pl.pairs[pl.next].first, pl.pairs[pl.next].second, out);
+    pl.valid = false;
+  }
+  if (!pl.valid) {
+    pl = StatePlan{};
+    pl.valid = true;
+    pl.window = window;
+    pl.period_us = period_us;
+    std::vector<const Node*> comm;
+    for (const auto& [id, n] : nodes_)
+      if (comm_node(n)) comm.push_back(&n);
+    for (std::size_t i = 0; i < comm.size(); ++i)
+      for (std::size_t j = i + 1; j < comm.size(); ++j)
+        if (peers(*comm[i], *comm[j])) pl.pairs.emplace_back(comm[i]->id, comm[j]->id);
+    const std::uint64_t start = window * period_us;
+    const std::uint64_t dt = dt_us_ > 0 && dt_us_ < period_us ? dt_us_ : period_us;
+    const std::uint64_t slots = period_us / dt;
+    const auto n = static_cast<std::uint64_t>(pl.pairs.size());
+    pl.due_us.reserve(pl.pairs.size());
+    for (std::uint64_t i = 0; i < n; ++i) pl.due_us.push_back(start + (i * slots / n) * dt);
+  }
+  for (; pl.next < pl.pairs.size() && pl.due_us[pl.next] <= now_us_; ++pl.next)
+    emit_state_locked(pl.pairs[pl.next].first, pl.pairs[pl.next].second, out);
+}
 
-  std::vector<const Node*> comm;
-  for (const auto& [id, n] : nodes_)
-    if (comm_node(n)) comm.push_back(&n);
-  for (std::size_t i = 0; i < comm.size(); ++i) {
-    for (std::size_t j = i + 1; j < comm.size(); ++j) {
-      const Node& a = *comm[i];
-      const Node& b = *comm[j];
-      if (!peers(a, b)) continue;
+void Datalink::emit_state_locked(const std::string& a_id, const std::string& b_id, std::vector<Out>& out) {
+  const auto ia = nodes_.find(a_id), ib = nodes_.find(b_id);
+  if (ia == nodes_.end() || ib == nodes_.end()) return;
+  const Node& a = ia->second;
+  const Node& b = ib->second;
+  if (!comm_node(a) || !comm_node(b) || !peers(a, b)) return;  // 창 중간에 종류·편이 바뀐 경우
+  {
+    {
       const PairState ps = pair_state_locked(a, b);
 
       std::uint64_t sent = 0, lost = 0;

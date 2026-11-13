@@ -86,3 +86,5 @@
 | 2026-11-10 | `cb45a2a` | DEC-082, OPN-068 | FA C++ 보류, P1 완료 수치(3-DoF 100대 Logger 켬 ≥10배) | 개발 시험 | 미처리 | |
 | 2026-11-13 | `350655f` | DEC-083, IMP-API-022, TC-API-008, D-33 | 계약 0.18.0: Python 버스 `subscribe(..., ordered=True)`. 플러그인·도구 작성자가 lockstep 순서에 의존하면 ordered를 쓴다 | 플러그인 개발, 개발 시험 | 미처리 | |
 | 2026-11-13 | `36324c3` | IMP-AGT-041, TC-AGT-126~127, D-33, DEC-083 | Agent 런타임 구독을 ordered로. lockstep 입력 지연 경고 해소 | 개발 시험 | 미처리 | |
+| 2026-11-13 | `fd47288` | DEC-084 | 계약 0.19.0: `link/state`를 주기 안의 여러 프레임에 나눠 발행. P1 판정은 Agent 1개 | 개발 시험 | 미처리 | |
+| 2026-11-13 | `e49dfd3` | IMP-LNK-025, TC-LNK-030~031, DEC-084 | Datalink `link/state`를 주기 안 틱에 나눠 발행 | 개발 시험 | 미처리 | |

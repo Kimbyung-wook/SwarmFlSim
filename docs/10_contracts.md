@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.18.0
+- 계약 버전: 0.19.0
+  - 0.19.0: `link/state` 발행을 주기 안의 여러 프레임에 나눈다 (DEC-084)
   - 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독 (DEC-083)
   - 0.17.0: 항법·제어 일괄 `NavigationBatch`·`ControlBatch`, 키 `onboard_batch/**`. 기체별 `NavigationReport`·`ControlOutput`의 `onboard` 발행을 대체 (DEC-081)
   - 0.16.0: `GcsHeartbeat` EXT, `TaskCommand.lost_link_policy` EXT, Datalink의 Heartbeat 발생, MA 링크 상실 행동 (DEC-078)
@@ -89,7 +90,7 @@ flowchart LR
 | `onboard_batch/NavigationBatch` | `NavigationBatch` (DEC-081) | Core | Agent 런타임, Logger |
 | `onboard_batch/ControlBatch/<participant>` | `ControlBatch` (DEC-081) | Agent 런타임 | Core, Logger |
 | `link/outcome/<src>/<dst>` | `LinkOutcome` | Datalink | Monitor, Logger |
-| `link/state/<a>/<b>` | `LinkState` (a < b 사전순) | Datalink | UI, Monitor |
+| `link/state/<a>/<b>` | `LinkState` (a < b 사전순). 쌍마다 주기(`--state-period`, 기본 1 s)당 1건이고, 한 프레임에 몰지 않고 주기 안의 프레임에 나눠 낸다 (DEC-084) | Datalink | UI, Monitor |
 | `truth/state` | `TruthFrame` | Core | Datalink, UI, Monitor, Logger |
 | `truth/event/<kind>` | `TruthEvent` (`launch`, `impact`, `kill`, `jam_zone`, `spawn`) | Core | UI, Monitor, Logger |
 

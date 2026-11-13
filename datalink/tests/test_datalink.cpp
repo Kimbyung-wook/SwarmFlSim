@@ -1,4 +1,4 @@
-// TC-LNK-001~029: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~031: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -576,8 +576,8 @@ void tc010() {
          {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 15000.0},
          {"uav-004", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 40000.0}},
         cfg);
-  r.tick();
-  check(r.states.size() == 6, "6 pairs at first tick");
+  for (int i = 0; i < 5; ++i) r.tick();  // 0~80 ms: 첫 주기 창에 6쌍을 나눠 낸다 (DEC-084)
+  check(r.states.size() == 6, "6 pairs once in first period");
   auto find = [&](const std::string& a, const std::string& b) -> const v1::LinkState* {
     for (auto it = r.states.rbegin(); it != r.states.rend(); ++it)
       if (it->a() == a && it->b() == b) return &*it;
@@ -592,8 +592,6 @@ void tc010() {
   if (s12) check_near(s12->snr_db(), 136.0 - fspl_db(3000.0, 2400.0), 0.1, "SNR reported");
 
   r.states.clear();
-  for (int i = 0; i < 4; ++i) r.tick();  // 20~80 ms: 주기 전
-  check(r.states.empty(), "no state before period");
   r.jam("jam-01", 3000.0, 500.0, true);
   r.fault("uav-001", v1::FAULT_KIND_LINK_CUT, 0.05);
   r.tx("uav-001", {"uav-002"});
@@ -1668,6 +1666,131 @@ void tc029() {
   check(violations == 0, "lockstep rx_time >= T_k");
 }
 
+// ---- TC-LNK-030~031: link/state 프레임 분산 (DEC-084) ----
+std::vector<Ent> grid_ents(int n) {
+  std::vector<Ent> v;
+  char id[16];
+  for (int i = 0; i < n; ++i) {
+    std::snprintf(id, sizeof id, "uav-%03d", i + 1);
+    v.push_back({id, v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 200.0 * i});
+  }
+  return v;
+}
+
+struct StateRun {
+  std::map<std::pair<std::string, std::string>, std::map<std::uint64_t, int>> per_window;  // 쌍 → 창 → 건수
+  std::map<std::uint64_t, std::size_t> per_tick;                                         // 틱 시각 → 건수
+  bool stamped = true;  // 헤더 시각 = 낸 틱 시각
+};
+
+// n대, 주기 period_s, dt dt_us로 ticks틱 돌린다. hook(k, r)로 중간에 상태를 바꾼다
+template <class Hook>
+StateRun run_states(int n, double period_s, std::uint32_t dt_us, int ticks, Hook hook) {
+  DatalinkConfig cfg;
+  cfg.state_period_s = period_s;
+  Rig r(grid_ents(n), cfg);
+  r.dt_us = dt_us;
+  StateRun out;
+  const auto period_us = static_cast<std::uint64_t>(std::llround(period_s * 1e6));
+  for (int k = 0; k < ticks; ++k) {
+    hook(k, r);
+    const std::uint64_t t = r.frame * r.dt_us;
+    r.states.clear();
+    r.tick();
+    out.per_tick[t] = r.states.size();
+    for (const auto& s : r.states) {
+      out.stamped = out.stamped && s.header().sim_time_us() == t;
+      ++out.per_window[{s.a(), s.b()}][t / period_us];
+    }
+  }
+  return out;
+}
+
+void tc030() {
+  const auto no_hook = [](int, Rig&) {};
+  // 30대 = 435쌍, 0.5 s / 20 ms = 25슬롯: 창마다 쌍별 1건, 틱당 최대 ceil(435/25) = 18.
+  // Rig는 주기 1.0 s를 끔으로 바꾸므로(다른 시험 편의) 0.5 s로 본다
+  for (const auto& [dt, limit] : {std::pair{20000u, 18u}, std::pair{30000u, 28u}}) {  // 30 ms: 16슬롯
+    const StateRun s = run_states(30, 0.5, dt, static_cast<int>(1500000 / dt), no_hook);
+    check(s.per_window.size() == 435, "all pairs published");
+    bool once = true;
+    for (const auto& [pair, w] : s.per_window) {
+      once = once && w.size() == 3;
+      for (const auto& [win, c] : w) once = once && c == 1;
+    }
+    check(once, "exactly one state per pair per period");
+    std::size_t mx = 0;
+    for (const auto& [t, c] : s.per_tick) mx = std::max(mx, c);
+    check(mx <= limit, "max per tick ~ total / ticks per period");
+    check(s.stamped, "header time = publishing tick");
+  }
+  // 주기가 틱보다 짧으면 틱마다 전 쌍
+  {
+    const StateRun s = run_states(4, 0.01, 20000, 5, no_hook);
+    bool all = true;
+    for (const auto& [t, c] : s.per_tick) all = all && c == 6;
+    check(all, "period < dt: all pairs every tick");
+  }
+  // 0.25 s / 20 ms(12.5): 나누어떨어지지 않아도 창마다 1건
+  {
+    const StateRun s = run_states(10, 0.25, 20000, 100, no_hook);
+    bool once = true;
+    for (const auto& [pair, w] : s.per_window)
+      for (const auto& [win, c] : w) once = once && c == 1;
+    check(once && s.per_window.size() == 45, "non-divisible period: one per window");
+  }
+  // 스폰: 창 중간에 생긴 쌍은 다음 창부터, 사망: DOWN으로 계속
+  {
+    const StateRun s = run_states(5, 0.5, 20000, 150, [](int k, Rig& r) {
+      if (k == 70) r.ents.push_back({"uav-099", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 500.0});  // 1.4 s, 창 2
+      if (k == 20) r.ent("uav-002").alive = false;
+    });
+    const auto sp = s.per_window.find({"uav-001", "uav-099"});
+    check(sp != s.per_window.end() && sp->second.size() == 3 && sp->second.begin()->first == 3,
+          "spawned pair from next window");
+    const auto dead = s.per_window.find({"uav-001", "uav-002"});
+    check(dead != s.per_window.end() && dead->second.size() == 6, "dead pair still published each window");
+  }
+  // 틱 건너뜀: 남은 쌍은 다음 틱에 한 번 내고 새 창을 시작한다
+  {
+    DatalinkConfig cfg;
+    cfg.state_period_s = 0.5;
+    Rig r(grid_ents(10), cfg);
+    for (int k = 0; k < 10; ++k) r.tick();  // 0~180 ms
+    const std::size_t first = r.states.size();
+    r.frame = 115;  // 2.3 s로 건너뜀
+    r.tick();
+    std::map<std::pair<std::string, std::string>, int> c;
+    for (const auto& s : r.states) ++c[{s.a(), s.b()}];
+    bool ok = c.size() == 45;
+    for (const auto& [p, n] : c) ok = ok && (n == 1 || n == 2);
+    check(first < 45 && ok, "skipped ticks: leftovers flushed once, new window started");
+  }
+}
+
+std::vector<std::string> state_bytes(std::uint64_t seed) {
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.5;
+  std::vector<std::string> out;
+  Rig r(grid_ents(12), cfg, nullptr, seed);
+  auto sub = r.bus.subscribe("link/state/**", [&](const Sample& s) {
+    out.push_back(s.key + std::string(reinterpret_cast<const char*>(s.payload.data()), s.payload.size()));
+  });
+  for (int k = 0; k < 120; ++k) {
+    r.ent("uav-003").north_m = 400.0 + 300.0 * k;  // 멀어지며 상태가 바뀐다
+    if (k == 30) r.jam("jam-01", 2000.0, 300.0, true);
+    if (k % 3 == 0) r.tx("uav-001", {"uav-002", "uav-003"}, 32, keys::Iface::P2P, "PeerStatus", r.frame * r.dt_us);
+    r.tick();
+  }
+  return out;
+}
+
+void tc031() {
+  const auto a = state_bytes(3), b = state_bytes(3);
+  check(a.size() > 66 * 4, "states published");
+  check(a == b, "same input: identical link/state bytes");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1682,6 +1805,7 @@ const Case kCases[] = {
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
     {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
     {"TC-LNK-027", tc027}, {"TC-LNK-028", tc028}, {"TC-LNK-029", tc029},
+    {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031},
 };
 
 }  // namespace
