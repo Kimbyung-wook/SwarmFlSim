@@ -95,3 +95,4 @@
 | 2026-11-15 | `7753bcc` | DEC-086 | P1 미달분 충족 수단: 의미·기록 범위를 바꾸지 않는 비용 축소(WP4 link/state, WP3 Agent 1 Hz, WP7 Logger)부터, 판정은 긴 창 2묶음 6회 중앙값 | 개괄, 개발 시험 | 미처리 | |
 | 2026-11-15 | `ed38878` | IMP-API-023, D-34 | Zenoh를 못 찾으면 CMake 경고, `-DSWARM_REQUIRE_ZENOH=ON`이면 구성 실패 | 설치·빌드 | 미처리 | |
 | 2026-11-15 | `f8a96fe` | IMP-LNK-026, TC-LNK-032, DEC-086 | Datalink `link/state` 계산·직렬화 비용 약 43% 절감, 출력 바이트 불변. 남은 비용은 Zenoh put(약 2.5 µs/건, TC-API-009) | 개발 시험 | 해당 없음 | |
+| 2026-11-15 | `ffe8ad0` | IMP-LOG-012, TC-LOG-011, DEC-086 | Logger 구독 콜백·기록 경로 비용 절감(키 문자열 복사 제거, 쓰기 묶음). 파일 바이트 불변, Logger 비용 프레임당 약 0.2 ms 감소 | 개발 시험 | 해당 없음 | |
