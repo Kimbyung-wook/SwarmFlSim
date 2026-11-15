@@ -1,9 +1,9 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `6a3913f`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `cfa687f`.
 
 - To run it right away, go to §6. What is implemented is in §2, and progress in §8.
-- Baseline: contract 0.19.0, roadmap P2 and P6 complete, P1 performance evaluation in progress (2026-11-13).
+- Baseline: contract 0.19.0, roadmap P1, P2 and P6 complete (2026-11-15).
 - The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts.
 
 ## 1. Purpose and scope
@@ -157,12 +157,12 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. Progress status
 
-Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-13.
+Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-15.
 
 | Phase | Completion criterion | Status | Evidence |
 |---|---|---|---|
 | P0 | 20 2-DoF vehicles shown on a 2D map, move commands by drag selection | Complete | [20_p0_demo.md §5](../20_p0_demo.md#5-확인-결과-2026-11-02-windows-msvc-debug) TC-INT-001~004 |
-| P1 | 3-DoF baseline formation algorithms, basic Traffic Monitor screens, first acceleration benchmark | In progress | The three features (formation and flocking, Monitor, first acceleration benchmark) are implemented. The performance evaluation remains: 10× or more with 3-DoF 100 vehicles waypoint, lockstep at maximum rate, Logger on, one Agent (DEC-079, DEC-082, DEC-084). The latest measurement, before `link/state` spreading, is 7.6 to 8.7× ([21_qa_report.md §32](../21_qa_report.md#32-24차-측정-logger-켬-10배-충족-수단-2026-11-13), Korean). No completion decision on record |
+| P1 | 3-DoF baseline formation algorithms, basic Traffic Monitor screens, first acceleration benchmark | Complete | DEC-087. The judging setup (3-DoF 100 vehicles waypoint, lockstep at maximum rate, one Agent, Logger on, long window of 7,500 frames, median of 6 runs in 2 batches at different times of day) reached 12.43× (1.61 ms). TC-QA-148 to 154 ([21_qa_report.md §34](../21_qa_report.md#34-26차-측정-p1-판정-재측정-dec-086-개선-뒤-2026-11-15), Korean). Remaining observation O-42: placement on E cores can drop a single run below 10× |
 | P2 | Demonstration of GCS jamming, individual vehicle link cuts, link-loss behavior | Complete | DEC-085. Full-stack evaluation TC-QA-119 to 126 ([21_qa_report.md §30](../21_qa_report.md#30-22차-판정-p2-gcs-재밍개별-두절링크-상실-행동-2026-11-10), Korean). Remaining observations O-34, O-36 and O-37 are for later improvement |
 | P3 | Aerosonde 6-DoF follows VI control modes, RK45/RK4 error comparison | Partial | RK45, RK4 and error tests exist. 5-DoF and 6-DoF not implemented |
 | P4 | 300 vehicles distributed across 4 PCs | Not started | QA load test up to 100 vehicles on a single PC |

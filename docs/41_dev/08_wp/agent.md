@@ -30,6 +30,7 @@
 | `--frames <n>` | n 틱 뒤 종료 |
 | `--activity-max-hz <hz>` | 상태 변화 보고의 키별 최대 빈도, 기본 10 |
 | `--vi-report-hz <hz>` | `NavigationReport` GCS 보고 빈도, 기본 1, 0 이하면 끔 |
+| `--profile <file>` | 틱 단계별 계측 JSON 경로, 기본 꺼짐. 환경 변수 `SWARM_AGENT_PROFILE`로도 켠다([10.5](../10_qa.md#105-성능-측정)) |
 | `--list-plugins` | 등록된 MA·FA 출력 |
 | `-v` | 자세한 로그 |
 | 공통 버스 옵션 | [3.2](../03_architecture.md#32-버스-열기) |
@@ -42,6 +43,8 @@
 | 발행 | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>`(틱당 1건, `FrameDone` 전), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
 `truth/**`와 `link/**`는 구독하지 않는다. 모든 구독은 `ordered=True`로 연다(DEC-083, [3.2](../03_architecture.md#32-버스-열기)).
+
+시나리오의 AutonomySpec 기체를 모두 맡으면 기체 자리를 와일드카드로 묶어 `onboard/*/<메시지>`와 `swarm/*/rx/**`로 연다. 기체 100대면 구독이 600개에서 6개로 준다(IMP-AGT-043). Zenoh는 put마다 세션의 구독 전체와 키를 맞춰 보므로 구독 수가 put 비용을 정한다. 맡지 않은 기체와 GCS 앞 입력은 해석 전에 버린다. 여러 Agent가 나눠 맡으면 기체별 구독 그대로다. 키·메시지·주기는 같다.
 
 ## 시험
 

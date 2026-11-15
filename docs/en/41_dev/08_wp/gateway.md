@@ -1,6 +1,6 @@
 # 8. WP9 A-GRA Gateway (`gateway/`)
 
-> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `6a3913f`.
+> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `cfa687f`.
 
 ## Responsibilities
 
