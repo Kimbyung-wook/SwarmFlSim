@@ -1,6 +1,7 @@
 # WP0 공용 버스 라이브러리 (DEC-026, PRP-NET-001)
 # Zenoh(zenoh-c + zenoh-cpp)는 선택 의존성이다. 없으면 InMemoryBus만 들어간다.
 # 설치 방법은 docs/10_contracts.md §7.2. 설치 경로는 CMAKE_PREFIX_PATH로 넘긴다.
+option(SWARM_REQUIRE_ZENOH "Zenoh가 없으면 구성 실패" OFF)
 find_package(zenohc CONFIG QUIET)
 if(zenohc_FOUND)
   find_package(zenohcxx CONFIG QUIET)
@@ -10,7 +11,11 @@ if(zenohc_FOUND AND zenohcxx_FOUND)
   message(STATUS "bus: Zenoh ${zenohc_VERSION} found")
 else()
   set(SWARM_BUS_WITH_ZENOH OFF CACHE INTERNAL "")
-  message(STATUS "bus: Zenoh not found, memory backend only")
+  # D-34: 메모리 버스만으로 빌드된 실행 파일은 프로세스 사이 통신이 안 돼 시작에서 멈춘다.
+  if(SWARM_REQUIRE_ZENOH)
+    message(FATAL_ERROR "bus: Zenoh not found (SWARM_REQUIRE_ZENOH=ON). CMAKE_PREFIX_PATH를 확인하라 (docs/10_contracts.md §7.2)")
+  endif()
+  message(WARNING "bus: Zenoh not found, memory backend only. 다중 프로세스 실행은 동작하지 않는다. 설치 경로를 CMAKE_PREFIX_PATH로 넘겨라 (docs/10_contracts.md §7.2)")
 endif()
 
 add_library(swarm_bus STATIC src/open_bus.cpp)
