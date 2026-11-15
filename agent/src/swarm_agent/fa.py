@@ -19,7 +19,7 @@ from swarm.v1 import common_pb2, fa_pb2, vi_pb2
 from swarm_api import FlightAutonomy, ParamDef, ParamLayer
 
 from . import racetrack
-from .geo import G_MPS2, course_rad, ned_offset, wrap_pi
+from .geo import G_MPS2, ned_offset_s, wrap_pi_s
 
 _A, _C, _G = ParamLayer.AIRFRAME, ParamLayer.CONTROL, ParamLayer.GUIDANCE
 
@@ -178,7 +178,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
         vn, ve, vd = k.velocity_ned_mps.x, k.velocity_ned_mps.y, k.velocity_ned_mps.z
         v = math.hypot(vn, ve)
         if v > 1.0:
-            self._course = float(course_rad(vn, ve))
+            self._course = math.atan2(ve, vn)   # geo.course_rad와 같은 값
         chi = self._course
         if self._hdg is None:
             self._hdg = chi
@@ -199,7 +199,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
 
         v_ref = max(v, self.v_min)
         rate_max = G_MPS2 * math.tan(self.bank_max) / v_ref
-        rate = max(-rate_max, min(rate_max, self.p["k_heading"] * float(wrap_pi(chi_d - chi))))
+        rate = max(-rate_max, min(rate_max, self.p["k_heading"] * wrap_pi_s(chi_d - chi)))
         climb = max(-self.climb_max, min(self.climb_max, self.p["k_altitude"] * (h_d - alt)))
         out = fa_pb2.ControlOutput()
         kc = out.kinematic
@@ -212,7 +212,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
     def _waypoint(self, lat: float, lon: float, alt: float, v: float) -> tuple[float, float, float]:
         wp = self._wps[self._wp_idx]
         acc = max(wp.acceptance_radius_m or self.p["acceptance_radius_m"], self.turn_radius(max(v, self.v_min)))
-        n, e = ned_offset(lat, lon, wp.position.lat_deg, wp.position.lon_deg)
+        n, e = ned_offset_s(lat, lon, wp.position.lat_deg, wp.position.lon_deg)
         if math.hypot(n, e) < acc:
             if self._wp_idx + 1 < len(self._wps):
                 self._wp_idx += 1
@@ -222,7 +222,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
                 self._finish_waypoints(wp, v)
                 return self._hdg, self._spd, self._alt
             wp = self._wps[self._wp_idx]
-            n, e = ned_offset(lat, lon, wp.position.lat_deg, wp.position.lon_deg)
+            n, e = ned_offset_s(lat, lon, wp.position.lat_deg, wp.position.lon_deg)
         if wp.HasField("speed_mps"):
             self._spd = wp.speed_mps
         if wp.position.alt_m > 0:
@@ -242,7 +242,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
 
     def _racetrack_course(self, lat: float, lon: float) -> float:
         clat, clon, r, leg, alpha, lam = self._race
-        n, e = (float(x) for x in ned_offset(clat, clon, lat, lon))
+        n, e = ned_offset_s(clat, clon, lat, lon)
         if self.race_guidance == "vector_field":
             self._hdg = racetrack.vector_field_course(n, e, r, leg, alpha, lam, self.p["k_racetrack_line"],
                                                       self.p["racetrack_gamma"])
@@ -256,7 +256,7 @@ class DefaultFlightAutonomy(FlightAutonomy):
         if self._race is not None:
             return self._racetrack_course(lat, lon)
         clat, clon, r, lam = self._orbit
-        n, e = ned_offset(clat, clon, lat, lon)
+        n, e = ned_offset_s(clat, clon, lat, lon)
         d = math.hypot(n, e)
         gamma = math.atan2(float(e), float(n))  # 중심에서 본 기체 방위
         self._hdg = gamma + lam * (math.pi / 2 + math.atan(self.p["k_orbit"] * (d - r) / r))

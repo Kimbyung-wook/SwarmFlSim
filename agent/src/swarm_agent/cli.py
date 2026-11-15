@@ -69,6 +69,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         "임무장비 1 Hz 전체 보고와 NavigationReport 주기 보고는 이와 별개 (DEC-056, DEC-063, DEC-071)")
     p.add_argument("--vi-report-hz", type=float, default=1.0,
                    help="NavigationReport를 GCS에 보내는 빈도(Hz, 모의 시간). 0 이하면 끈다 (DEC-071)")
+    p.add_argument("--profile", default="",
+                   help="틱 단계별 계측 결과 JSON 경로(프레임 위상별, 기본 꺼짐). 환경 변수 SWARM_AGENT_PROFILE로도 켠다 (DEC-086)")
     p.add_argument("--list-plugins", action="store_true", help="등록된 MA/FA 플러그인 이름을 출력하고 종료")
     p.add_argument("-v", "--verbose", action="store_true")
     add_bus_args(p)
@@ -87,7 +89,8 @@ def main(argv: list[str] | None = None) -> int:
     entities = {e for arg in a.entities for e in arg.split(",") if e} or None
     bus = open_bus(bus_config(a))
     rt = AgentRuntime(bus, RuntimeConfig(participant=a.participant, entities=entities,
-                                         activity_max_hz=a.activity_max_hz, vi_report_hz=a.vi_report_hz),
+                                         activity_max_hz=a.activity_max_hz, vi_report_hz=a.vi_report_hz,
+                                         profile=a.profile),
                       registry, threaded=True)
     if a.scenario:
         rt.load(read_scenario(a.scenario))
