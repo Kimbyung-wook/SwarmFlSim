@@ -21,9 +21,11 @@ bool parse(const Sample& s, M& m) {
   return m.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size()));
 }
 
+// IMP-LNK-026: 메시지 종류마다 한 번만 만든다(발행마다 문자열을 새로 만들지 않는다)
 template <class M>
-std::string encoding_of() {
-  return protobuf_encoding(M::descriptor()->full_name());
+const std::string& encoding_of() {
+  static const std::string e = protobuf_encoding(M::descriptor()->full_name());
+  return e;
 }
 
 GeoPoint to_geo(const v1::Geodetic& g) { return {g.lat_deg(), g.lon_deg(), g.alt_m()}; }
@@ -504,17 +506,19 @@ Datalink::Node& Datalink::node_locked(const std::string& id) {
 }
 
 const LinkProfile& Datalink::profile_locked(const Node& n) const {
-  const std::string name = n.profile_name.empty() ? std::string(default_profile_name(n.kind)) : n.profile_name;
+  // IMP-LNK-026: string_view로 찾아 조회마다 이름 문자열을 만들지 않는다
+  const std::string_view name = n.profile_name.empty() ? std::string_view(default_profile_name(n.kind))
+                                                       : std::string_view(n.profile_name);
   if (auto it = profiles_.find(name); it != profiles_.end()) return it->second;
-  if (!warned_[name]) {
-    warned_[name] = true;
-    log("unknown link profile '" + name + "', using 'default'");
+  if (auto w = warned_.find(name); w == warned_.end() || !w->second) {
+    warned_[std::string(name)] = true;
+    log("unknown link profile '" + std::string(name) + "', using 'default'");
   }
   return profiles_.at("default");
 }
 
 Datalink::Channel& Datalink::channel_locked(const std::string& src, const std::string& dst) {
-  auto it = channels_.find({src, dst});
+  auto it = channels_.find(std::pair<std::string_view, std::string_view>(src, dst));
   if (it == channels_.end()) {
     const LinkProfile& p = profile_locked(nodes_.at(src));
     Channel ch{Rng(link_seed(seed_, src, dst)), {}, TokenBucket(p.bandwidth_bps, p.bucket_bytes, p.queue_len)};
@@ -754,7 +758,7 @@ void Datalink::publish_states_locked(std::vector<Out>& out) {
   const std::uint64_t window = now_us_ / period_us;
   StatePlan& pl = state_plan_;
   if (pl.valid && (pl.window != window || pl.period_us != period_us)) {
-    for (; pl.next < pl.pairs.size(); ++pl.next) emit_state_locked(pl.pairs[pl.next].first, pl.pairs[pl.next].second, out);
+    for (; pl.next < pl.pairs.size(); ++pl.next) emit_state_locked(*pl.pairs[pl.next].first, *pl.pairs[pl.next].second, out);
     pl.valid = false;
   }
   if (!pl.valid) {
@@ -767,7 +771,7 @@ void Datalink::publish_states_locked(std::vector<Out>& out) {
       if (comm_node(n)) comm.push_back(&n);
     for (std::size_t i = 0; i < comm.size(); ++i)
       for (std::size_t j = i + 1; j < comm.size(); ++j)
-        if (peers(*comm[i], *comm[j])) pl.pairs.emplace_back(comm[i]->id, comm[j]->id);
+        if (peers(*comm[i], *comm[j])) pl.pairs.emplace_back(comm[i], comm[j]);
     const std::uint64_t start = window * period_us;
     const std::uint64_t dt = dt_us_ > 0 && dt_us_ < period_us ? dt_us_ : period_us;
     const std::uint64_t slots = period_us / dt;
@@ -776,21 +780,20 @@ void Datalink::publish_states_locked(std::vector<Out>& out) {
     for (std::uint64_t i = 0; i < n; ++i) pl.due_us.push_back(start + (i * slots / n) * dt);
   }
   for (; pl.next < pl.pairs.size() && pl.due_us[pl.next] <= now_us_; ++pl.next)
-    emit_state_locked(pl.pairs[pl.next].first, pl.pairs[pl.next].second, out);
+    emit_state_locked(*pl.pairs[pl.next].first, *pl.pairs[pl.next].second, out);
 }
 
-void Datalink::emit_state_locked(const std::string& a_id, const std::string& b_id, std::vector<Out>& out) {
-  const auto ia = nodes_.find(a_id), ib = nodes_.find(b_id);
-  if (ia == nodes_.end() || ib == nodes_.end()) return;
-  const Node& a = ia->second;
-  const Node& b = ib->second;
+// IMP-LNK-026: 계획의 Node 포인터로 바로 낸다(ID 재조회 없음). 채널은 string_view 쌍으로 찾고, LinkState 메시지와
+// encoding 문자열은 재사용한다. 값·순서·바이트는 이전과 같다
+void Datalink::emit_state_locked(const Node& a, const Node& b, std::vector<Out>& out) {
   if (!comm_node(a) || !comm_node(b) || !peers(a, b)) return;  // 창 중간에 종류·편이 바뀐 경우
   {
     {
       const PairState ps = pair_state_locked(a, b);
 
       std::uint64_t sent = 0, lost = 0;
-      for (const auto& k : {std::make_pair(a.id, b.id), std::make_pair(b.id, a.id)}) {
+      using Key = std::pair<std::string_view, std::string_view>;
+      for (const Key& k : {Key(a.id, b.id), Key(b.id, a.id)}) {
         if (auto it = channels_.find(k); it != channels_.end()) {
           sent += it->second.sent;
           lost += it->second.lost;
@@ -799,7 +802,7 @@ void Datalink::emit_state_locked(const std::string& a_id, const std::string& b_i
       }
       const double loss = sent ? static_cast<double>(lost) / static_cast<double>(sent) : 0.0;
 
-      v1::LinkState st;
+      v1::LinkState& st = state_msg_;
       auto* h = st.mutable_header();
       h->set_sim_time_us(now_us_);
       h->set_frame(frame_);
@@ -821,7 +824,8 @@ void Datalink::emit_state_locked(const std::string& a_id, const std::string& b_i
         st.set_state(v1::LINK_STATE_KIND_DEGRADED);
       else
         st.set_state(v1::LINK_STATE_KIND_UP);
-      out.push_back(Out{keys::link_state(a.id, b.id), st.SerializeAsString(), encoding_of<v1::LinkState>()});
+      Out& o = out.emplace_back(Out{keys::link_state(a.id, b.id), {}, encoding_of<v1::LinkState>()});
+      if (!st.SerializeToString(&o.bytes)) o.bytes.clear();  // SerializeAsString과 같다(실패 시 빈 값)
     }
   }
 }
@@ -850,7 +854,11 @@ void Datalink::publish(std::vector<Out>& out) {
     const auto slash = key.find('/', kPrefix.size());
     if (key.substr(0, kPrefix.size()) == kPrefix && slash != std::string_view::npos && key.substr(slash, 4) == "/rx/") {
       std::lock_guard lock(mu_);
-      ++rx_sent_[std::string(key.substr(kPrefix.size(), slash - kPrefix.size()))];
+      const std::string_view e = key.substr(kPrefix.size(), slash - kPrefix.size());
+      if (auto it = rx_sent_.find(e); it != rx_sent_.end())
+        ++it->second;
+      else
+        rx_sent_.emplace(std::string(e), 1);
     }
   }
   for (const auto& o : out)

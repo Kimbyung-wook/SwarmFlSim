@@ -1,4 +1,4 @@
-// TC-LNK-001~031: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~032: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -1791,6 +1791,90 @@ void tc031() {
   check(a == b, "same input: identical link/state bytes");
 }
 
+// ---- TC-LNK-032: link/state 비용 절감(IMP-LNK-026) 후에도 값이 같다 ----
+// 쌍 계획의 Node 포인터, string_view 프로파일·채널 조회, 재사용 LinkState가 값을 바꾸지 않는지 본다
+void tc032() {
+  // (1) 미등록 프로파일은 default와 같은 값이고 경고는 한 번
+  {
+    std::vector<std::string> logs;
+    DatalinkConfig cfg;
+    cfg.state_period_s = 0.5;
+    cfg.log = [&](const std::string& m) { logs.push_back(m); };
+    Rig r({{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 3000.0, 1000.0, "nope"},
+           {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 3000.0, 1000.0, "default"},
+           {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 0.0, 1000.0, "default"}},
+          cfg);
+    for (int k = 0; k < 60; ++k) r.tick();
+    const v1::LinkState* a = nullptr;
+    const v1::LinkState* b = nullptr;
+    for (const auto& st : r.states) {
+      if (st.a() == "uav-001" && st.b() == "uav-003") a = &st;
+      if (st.a() == "uav-002" && st.b() == "uav-003") b = &st;
+    }
+    check(a && b && a->snr_db() == b->snr_db() && a->state() == b->state() && a->los() == b->los(),
+          "unknown profile = default values");
+    check(std::count_if(logs.begin(), logs.end(),
+                        [](const std::string& m) { return m.find("unknown link profile 'nope'") != std::string::npos; }) == 1,
+          "unknown profile warned once");
+  }
+  // (2) 재사용 LinkState: 앞 쌍의 값이 다음 쌍에 남지 않는다. 재밍 쌍 다음 정상 쌍, 손실 집계 쌍 다음 무송신 쌍
+  {
+    DatalinkConfig cfg;
+    cfg.state_period_s = 0.5;
+    Rig r(grid_ents(4), cfg);  // 0, 200, 400, 600 m
+    r.jam("jam-01", 0.0, 50.0, true);  // uav-001만 재밍
+    for (int k = 0; k < 25; ++k) {
+      r.tx("uav-002", {"uav-003"}, 32, keys::Iface::P2P, "PeerStatus", r.frame * r.dt_us);
+      r.tick();
+    }
+    std::map<std::pair<std::string, std::string>, v1::LinkState> last;
+    for (const auto& st : r.states) last[{st.a(), st.b()}] = st;
+    check(last.size() == 6, "all 6 pairs published");
+    check(last[{"uav-001", "uav-002"}].jammed() && last[{"uav-001", "uav-002"}].state() == v1::LINK_STATE_KIND_DOWN,
+          "jammed pair DOWN");
+    check(!last[{"uav-002", "uav-003"}].jammed() && last[{"uav-002", "uav-003"}].state() == v1::LINK_STATE_KIND_UP,
+          "next pair not jammed");
+    check(!last[{"uav-002", "uav-004"}].jammed() && last[{"uav-002", "uav-004"}].loss_rate() == 0.0,
+          "no stale loss/jam");
+    for (const auto& st : r.states) {
+      v1::LinkState fresh;
+      check(fresh.ParseFromString(st.SerializeAsString()), "parse");
+      check(fresh.SerializeAsString() == st.SerializeAsString(), "round trip");
+    }
+    // 채널 통계는 방향별 채널을 합치고 낸 뒤 비운다(string_view 쌍 조회)
+    std::uint64_t seen = 0;
+    for (const auto& o : r.outcomes)
+      if (o.src() == "uav-002" && o.dst() == "uav-003") ++seen;
+    check(seen >= 20, "outcomes uav-002 -> uav-003");
+  }
+  // (3) 창 중간 재적재: 이전 계획(이전 Node 포인터)을 쓰지 않고 새 엔티티 쌍만 낸다
+  {
+    DatalinkConfig cfg;
+    cfg.state_period_s = 0.5;
+    Rig r(grid_ents(6), cfg);
+    for (int k = 0; k < 30; ++k) r.tick();  // 창 1의 슬롯 5
+    v1::Scenario sc;
+    sc.set_name("reload");
+    r.ents.clear();
+    for (const char* id : {"uav-101", "uav-102", "uav-103"}) {
+      r.ents.push_back({id, v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 100.0 * r.ents.size()});
+      auto* e = sc.add_entities();
+      e->set_id(id);
+      e->set_kind(v1::ENTITY_KIND_UAV);
+      e->set_link_profile("clean");
+    }
+    r.dl->load(sc);
+    r.states.clear();
+    for (int k = 0; k < 50; ++k) r.tick();
+    std::map<std::pair<std::string, std::string>, int> n;
+    for (const auto& st : r.states) ++n[{st.a(), st.b()}];
+    check(n.size() == 3, "only new pairs after reload");
+    bool ok = true;
+    for (const auto& [p, c] : n) ok = ok && p.first.rfind("uav-10", 0) == 0 && c >= 1 && c <= 3;
+    check(ok, "new pairs once per window");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1805,7 +1889,7 @@ const Case kCases[] = {
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
     {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
     {"TC-LNK-027", tc027}, {"TC-LNK-028", tc028}, {"TC-LNK-029", tc029},
-    {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031},
+    {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031}, {"TC-LNK-032", tc032},
 };
 
 }  // namespace
