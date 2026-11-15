@@ -1,6 +1,6 @@
 # 2. Build and test
 
-> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `6a3913f`.
+> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `cfa687f`.
 
 Each area is built and tested separately, so if you only change Python, start at 2.3. Run the commands from the repository root. Exceptions are written in front of the command.
 
@@ -37,6 +37,7 @@ cmake --build --preset <preset>
 ctest --preset <preset>
 ```
 
+- If Zenoh is not found, CMake prints the warning `bus: Zenoh not found, memory backend only` and finishes configuring with the memory backend only. Executables built this way cannot talk between processes and stall at start (D-34). To make sure you do not miss the warning, add `-DSWARM_REQUIRE_ZENOH=ON`. Configuration then fails when Zenoh is missing (IMP-API-023). Builds for performance measurement turn this option on.
 - If `CMAKE_PREFIX_PATH` is set as an environment variable, you can drop the `-D` option. Where the path is long, such as a worktree, also pass `VCPKG_INSTALL_OPTIONS` from [1.4](01_setup.md#14-common-failures).
 - Outputs: `build/<preset>/core/swarm_core`, `build/<preset>/datalink/swarm_datalink`, `build/<preset>/logger/swarm_logger`
 - Test names carry a module prefix (for example `pay.TC-PAY-018`). To run only some of them:

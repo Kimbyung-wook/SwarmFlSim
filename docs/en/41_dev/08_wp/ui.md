@@ -1,6 +1,6 @@
 # 8. WP5 GCS/UI (`ui/`)
 
-> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `6a3913f`.
+> Source: [docs/41_dev/08_wp/ui.md](../../../41_dev/08_wp/ui.md) at commit `cfa687f`.
 
 ## Responsibilities
 

@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `6a3913f`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `cfa687f`.
 
 ## Responsibilities
 
@@ -32,6 +32,7 @@ For the frame processing order, see the header comment of `runtime.py` and `_ste
 | `--frames <n>` | Exit after n ticks |
 | `--activity-max-hz <hz>` | Per-key maximum rate of change reports, default 10 |
 | `--vi-report-hz <hz>` | Rate of `NavigationReport` to the GCS, default 1, off at 0 or below |
+| `--profile <file>` | Path of the per-stage tick profiling JSON, off by default. The environment variable `SWARM_AGENT_PROFILE` also turns it on ([10.5](../10_qa.md#105-performance-measurement)) |
 | `--list-plugins` | Prints the registered MAs and FAs |
 | `-v` | Verbose logs |
 | Common bus options | [3.2](../03_architecture.md#32-opening-the-bus) |
@@ -44,6 +45,8 @@ For the frame processing order, see the header comment of `runtime.py` and `_ste
 | Publish | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>` (one per tick, before `FrameDone`), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
 `truth/**` and `link/**` are not subscribed. All subscriptions are opened with `ordered=True` (DEC-083, [3.2](../03_architecture.md#32-opening-the-bus)).
+
+When the Agent hosts every AutonomySpec vehicle in the scenario, it groups the vehicle position with a wildcard and opens `onboard/*/<message>` and `swarm/*/rx/**`. With 100 vehicles this cuts subscriptions from 600 to 6 (IMP-AGT-043). Zenoh matches each put against every subscription in the session, so the subscription count sets the put cost. Input for vehicles it does not host and input addressed to a GCS are dropped before parsing. When several Agents split the vehicles, subscriptions stay per vehicle. Keys, messages and rates are unchanged.
 
 ## Tests
 

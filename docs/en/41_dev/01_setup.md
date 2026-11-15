@@ -1,6 +1,6 @@
 # 1. Development environment
 
-> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `6a3913f`.
+> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `cfa687f`.
 
 Install commands are in [10_contracts.md §7](../../10_contracts.md#7-빌드-환경과-시험-dec-022) (Korean).
 
@@ -54,7 +54,7 @@ To run it in one line, use the `cmd /c` form in the [common instructions](../../
 |---|---|---|
 | abseil compile fails with C1083 | The repository path is long and the vcpkg build tree path exceeds the limit | Add `-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=C:/b/bt` to the configure command. Almost always needed in a worktree |
 | `GlobalEmptyString` unresolved at release link | A `build/msvc-*` made with an old triplet remains (QA-007) | Delete `build/msvc-*` and reconfigure |
-| Zenoh warning at configure, `--bus zenoh` unavailable at run time | `CMAKE_PREFIX_PATH` lacks the Zenoh prefix. Without it only the memory backend is built | Pass `-DCMAKE_PREFIX_PATH=<Zenoh prefix>` or set it as an environment variable |
+| `bus: Zenoh not found` warning at configure; runs stall at start or `--bus zenoh` is unavailable | `CMAKE_PREFIX_PATH` lacks the Zenoh prefix. Without it only the memory backend is built (D-34) | Pass `-DCMAKE_PREFIX_PATH=<Zenoh prefix>` or set it as an environment variable. With `-DSWARM_REQUIRE_ZENOH=ON`, configuration fails in this case so you notice at once |
 | `zenohc.dll` not found on Windows | The executable was moved out of the build tree | Use the executable inside the build tree or copy the dll next to it |
 | `libzenohc.so` not found on Linux | Same as above | `LD_LIBRARY_PATH=<prefix>/lib` |
 | Warning, then `logger/` is skipped (MSYS2, Linux) | `MCAP_INCLUDE_DIR` is missing | Fetch the headers as in contract §7.2 "MCAP" and pass them |

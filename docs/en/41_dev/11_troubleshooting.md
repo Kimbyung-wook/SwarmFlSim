@@ -1,6 +1,6 @@
 # 11. Troubleshooting
 
-> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `6a3913f`.
+> Source: [docs/41_dev/11_troubleshooting.md](../../41_dev/11_troubleshooting.md) at commit `cfa687f`.
 
 - For install and build failures, see [1.4](01_setup.md#14-common-failures) first. Symptoms from the user's point of view are in [user manual chapter 10](../42_user/10_faq.md).
 - Where process logs are depends on how you ran things. The demo runner collects them in `out/p0_demo/<mode>-<time>/<process>.log`.
@@ -12,7 +12,7 @@
 | The first tick does not go out | A participant in `run.participants` has not sent the ready signal (`FrameDone{0}`). It did not start or its ID differs | Match the waiting-participant list in the Core log against each process's `--participant` |
 | Stops during a run. UI and Monitor show waiting participants | A participant died or does not respond (DEC-041) | Rejoining is not supported. Restart the participant, then Reset+Start |
 | Trajectories differ with the same seed | The plugin depends on random numbers other than `ctx.rng`, wall clocks or receive order. Or it ran in realtime or free-run, or the Gateway received external input | Check the rules in [3.6](03_architecture.md#36-one-lockstep-frame). Use `qa/diag_determinism.py` to find the first diverging frame |
-| Rate is below target | The Python Agent is the bottleneck. `frame_overruns` increases. Logger on adds about 0.3 ms per frame (QA round 24) | Split vehicles across Agents (`--entities`) or lower the rate. 3-DoF 100 vehicles waypoint runs at about 10× with Logger off |
+| Rate is below target | The Python Agent is the bottleneck. `frame_overruns` increases. Logger on adds about 0.10 ms per frame (QA round 26) | Split vehicles across Agents (`--entities`) or lower the rate. 3-DoF 100 vehicles waypoint with one Agent runs at about 12× with Logger on and about 13.5× with Logger off. If only one run is much lower, it may be E-core placement (O-42) |
 
 ## 11.2 Bus
 
@@ -21,7 +21,7 @@
 | Processes do not see each other | Endpoints do not match or multicast is blocked | Set `--listen`/`--connect` explicitly. Later processes connect to the listen address of the earlier ones |
 | Messages from another run are mixed in | Joined another bus on the same PC by multicast | `--no-multicast` on all processes |
 | Fails at start because a port cannot be opened | Another run is using the port | Change `--base-port`, `--bridge-port` or the listen port. The bridge and CAL Server both default to 8765, so change one when running both |
-| A C++ process comes up only with the memory backend | Built without Zenoh | [1.4](01_setup.md#14-common-failures) |
+| A C++ process comes up only with the memory backend, or runs stall at start | Built without Zenoh (D-34). Configuration should have printed the `bus: Zenoh not found` warning | [1.4](01_setup.md#14-common-failures). Configure again with `-DSWARM_REQUIRE_ZENOH=ON` |
 
 ## 11.3 Plugins and parameters
 

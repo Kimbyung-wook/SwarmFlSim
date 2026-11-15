@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `6a3913f`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `cfa687f`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
