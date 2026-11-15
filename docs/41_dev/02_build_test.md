@@ -35,6 +35,7 @@ cmake --build --preset <preset>
 ctest --preset <preset>
 ```
 
+- Zenoh를 못 찾으면 CMake가 `bus: Zenoh not found, memory backend only` 경고를 내고 memory 백엔드만으로 구성을 마친다. 이렇게 만든 실행 파일은 프로세스 사이 통신이 안 돼 시작에서 멈춘다(D-34). 경고를 놓치지 않으려면 `-DSWARM_REQUIRE_ZENOH=ON`을 더한다. 그러면 Zenoh가 없을 때 구성이 실패한다(IMP-API-023). 성능 측정용 빌드는 이 옵션을 켠다.
 - `CMAKE_PREFIX_PATH`를 환경 변수로 뒀다면 `-D` 옵션은 빼도 된다. worktree처럼 경로가 긴 곳에서는 [1.4](01_setup.md#14-자주-나는-실패)의 `VCPKG_INSTALL_OPTIONS`도 함께 준다.
 - 산출물: `build/<preset>/core/swarm_core`, `build/<preset>/datalink/swarm_datalink`, `build/<preset>/logger/swarm_logger`
 - 시험 이름은 모듈 접두어가 붙는다(예: `pay.TC-PAY-018`). 일부만 돌릴 때는 다음과 같이 쓴다.

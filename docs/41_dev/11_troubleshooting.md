@@ -10,7 +10,7 @@
 | 첫 틱이 나가지 않는다 | `run.participants`의 참여자가 준비 신호(`FrameDone{0}`)를 보내지 않았다. 참여자가 안 떴거나 ID가 다르다 | Core 로그의 대기 참여자 목록과 프로세스의 `--participant`를 맞춘다 |
 | 진행 중 멈춘다. UI·Monitor에 참여자 대기 표시 | 참여자가 죽었거나 응답하지 않는다(DEC-041) | 재합류는 지원하지 않는다. 참여자를 다시 띄우고 Reset+Start |
 | 같은 시드인데 궤적이 다르다 | 플러그인이 `ctx.rng` 외의 난수, 벽시계, 수신 순서에 의존한다. 또는 realtime·free-run으로 돌렸거나, Gateway에 외부 입력을 넣었다 | [3.6](03_architecture.md#36-lockstep-한-프레임)의 규칙을 확인한다. `qa/diag_determinism.py`로 처음 어긋나는 프레임을 찾는다 |
-| 배속이 목표보다 낮다 | Python Agent가 병목이다. `frame_overruns`가 는다. Logger를 켜면 프레임당 약 0.3 ms가 더 든다(QA 24차) | 기체를 여러 Agent로 나누거나(`--entities`) 배속을 낮춘다. 3-DoF 100대 waypoint는 Logger 끔 약 10배다 |
+| 배속이 목표보다 낮다 | Python Agent가 병목이다. `frame_overruns`가 는다. Logger를 켜면 프레임당 약 0.10 ms가 더 든다(QA 26차) | 기체를 여러 Agent로 나누거나(`--entities`) 배속을 낮춘다. 3-DoF 100대 waypoint, Agent 1개는 Logger 켬 약 12배, 끔 약 13.5배다. 한 번만 크게 낮으면 E 코어 배치일 수 있다(O-42) |
 
 ## 11.2 버스
 
@@ -19,7 +19,7 @@
 | 프로세스끼리 서로 보지 못한다 | 엔드포인트가 맞지 않거나 멀티캐스트가 막혔다 | `--listen`/`--connect`를 명시한다. 먼저 뜬 프로세스의 listen 주소에 뒤 프로세스가 connect한다 |
 | 다른 실행의 메시지가 섞인다 | 같은 PC의 다른 버스와 멀티캐스트로 붙었다 | 모든 프로세스에 `--no-multicast` |
 | 포트를 열지 못해 시작에 실패한다 | 포트를 다른 실행이 쓰고 있다 | `--base-port`, `--bridge-port`나 listen 포트를 바꾼다. 브리지와 CAL Server의 기본 포트는 둘 다 8765이므로 함께 띄울 때 하나를 바꾼다 |
-| C++ 프로세스가 memory 백엔드로만 뜬다 | Zenoh 없이 빌드됐다 | [1.4](01_setup.md#14-자주-나는-실패) |
+| C++ 프로세스가 memory 백엔드로만 뜬다, 실행이 시작에서 멈춘다 | Zenoh 없이 빌드됐다(D-34). 구성 때 `bus: Zenoh not found` 경고가 났을 것이다 | [1.4](01_setup.md#14-자주-나는-실패). `-DSWARM_REQUIRE_ZENOH=ON`으로 다시 구성한다 |
 
 ## 11.3 플러그인과 매개변수
 

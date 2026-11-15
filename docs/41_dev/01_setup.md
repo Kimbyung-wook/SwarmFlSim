@@ -52,7 +52,7 @@ flowchart TD
 |---|---|---|
 | abseil 컴파일이 C1083으로 실패 | 저장소 경로가 길어 vcpkg 빌드 트리 경로가 한계를 넘는다 | 구성 명령에 `-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=C:/b/bt`를 더한다. worktree에서는 거의 항상 필요하다 |
 | release 링크에서 `GlobalEmptyString` 미해결 | 예전 트리플렛으로 만든 `build/msvc-*`가 남아 있다 (QA-007) | `build/msvc-*`를 지우고 다시 구성한다 |
-| 구성 중 Zenoh 경고, 실행 시 `--bus zenoh` 불가 | `CMAKE_PREFIX_PATH`에 Zenoh 접두 경로가 없다. 없으면 memory 백엔드만 빌드된다 | `-DCMAKE_PREFIX_PATH=<Zenoh 접두 경로>`를 주거나 환경 변수로 둔다 |
+| 구성 중 `bus: Zenoh not found` 경고, 실행하면 시작에서 멈추거나 `--bus zenoh` 불가 | `CMAKE_PREFIX_PATH`에 Zenoh 접두 경로가 없다. 없으면 memory 백엔드만 빌드된다(D-34) | `-DCMAKE_PREFIX_PATH=<Zenoh 접두 경로>`를 주거나 환경 변수로 둔다. `-DSWARM_REQUIRE_ZENOH=ON`을 주면 이 경우 구성이 실패해 바로 알 수 있다 |
 | Windows에서 `zenohc.dll`을 찾지 못한다 | 실행 파일을 빌드 트리 밖으로 옮겼다 | 빌드 트리 안의 실행 파일을 쓰거나 dll을 옆에 복사한다 |
 | Linux에서 `libzenohc.so`를 찾지 못한다 | 위와 같다 | `LD_LIBRARY_PATH=<prefix>/lib` |
 | 경고 후 `logger/`가 빠진다 (MSYS2·Linux) | `MCAP_INCLUDE_DIR`가 없다 | 계약 §7.2 "MCAP"대로 헤더를 받아 넘긴다 |
