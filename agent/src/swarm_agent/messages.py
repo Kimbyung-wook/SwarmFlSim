@@ -11,15 +11,24 @@ from swarm.v1 import c2_pb2, common_pb2, entity_pb2, fa_pb2, link_pb2, mp_pb2, m
 _ALLOWED_PACKAGE = "swarm.v1."
 
 
+_CLASSES: dict[str, type[Message] | None] = {}
+
+
 def message_class(full_name: str) -> type[Message] | None:
-    """전체 이름(swarm.v1.X)의 메시지 클래스. 모르거나 swarm.v1이 아니면 None"""
-    if not full_name.startswith(_ALLOWED_PACKAGE):
-        return None
+    """전체 이름(swarm.v1.X)의 메시지 클래스. 모르거나 swarm.v1이 아니면 None. 이름별로 기억한다 (DEC-086)"""
     try:
-        desc = descriptor_pool.Default().FindMessageTypeByName(full_name)
+        return _CLASSES[full_name]
     except KeyError:
-        return None
-    return message_factory.GetMessageClass(desc)
+        pass
+    cls = None
+    if full_name.startswith(_ALLOWED_PACKAGE):
+        try:
+            cls = message_factory.GetMessageClass(descriptor_pool.Default().FindMessageTypeByName(full_name))
+        except KeyError:
+            cls = None
+    if len(_CLASSES) < 1024:   # 버스에서 온 이름이라 상한을 둔다
+        _CLASSES[full_name] = cls
+    return cls
 
 
 def decode(full_name: str, payload: bytes) -> Message | None:

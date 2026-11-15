@@ -35,8 +35,11 @@ class FrameBuffer:
         self._pending.append(msg)
 
     def flip(self) -> None:
-        self._current = list(self._pending)
-        self._pending.clear()
+        if self._pending:
+            self._current = list(self._pending)
+            self._pending.clear()
+        else:                          # 대부분의 프레임: 받은 것이 없다 (DEC-086)
+            self._current = []
 
     def take(self) -> list[Message]:
         out, self._current = self._current, []

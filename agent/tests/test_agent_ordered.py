@@ -32,8 +32,8 @@ def test_tc_agt_126_threaded_opens_every_subscription_ordered():
     rt.load(_lockstep_with_datalink())
     exprs = {e for e, _ in bus.opened}
     assert {keys.CLOCK_TICK, keys.SIM_CTRL_CMD, keys.SIM_CTRL_SCENARIO, keys.NAVIGATION_BATCH,
-            keys.onboard("uav-001", "SystemStatus"), keys.rx_all("uav-002"), keys.clock_done("datalink-0")} <= exprs
-    assert len(bus.opened) == 3 + 1 + 2 * 6 + 1 and all(o for _, o in bus.opened)
+            "onboard/*/SystemStatus", "swarm/*/rx/**", keys.clock_done("datalink-0")} <= exprs
+    assert len(bus.opened) == 3 + 1 + 6 + 1 and all(o for _, o in bus.opened)
     # 콜백은 큐에 넣기만 한다: 수신 스레드에서 처리·발행하지 않는다
     done = []
     bus.subscribe("sim/clock/done/*", lambda s: done.append(s))

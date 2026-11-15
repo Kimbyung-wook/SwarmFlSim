@@ -27,6 +27,7 @@ class ChangeReporter:
         self.dirty: set[ReportKey] = set()
         self.sent: dict[ReportKey, int] = {}   # 키 → 마지막으로 내준 모의 시각
         self._period: int | None = None
+        self._gone: set[ReportKey] = set()     # 종료 상태로 지운 키. sent에서 지울 후보 (IMP-AGT-045)
 
     def note(self, key: ReportKey, msg: Message) -> None:
         copy = type(msg)()
@@ -44,6 +45,8 @@ class ChangeReporter:
         if period is not None and self._period != period:
             self._period = period
             keys = set(self.state)
+        elif not self.dirty and not self._gone:   # 대부분의 프레임: 바뀐 것도 지울 것도 없다 (IMP-AGT-045, DEC-086)
+            return []
         else:
             keys = {k for k in self.dirty if k not in self.sent or sim_time_us - self.sent[k] >= min_gap_us}
         out: list[Message] = []
@@ -53,9 +56,13 @@ class ChangeReporter:
             self.sent[k] = sim_time_us
             if self._terminal(k, msg):
                 del self.state[k]
+                self._gone.add(k)
         self.dirty -= keys
-        for k in [k for k, t in self.sent.items() if k not in self.state and sim_time_us - t >= min_gap_us]:
-            del self.sent[k]
+        # state에서 빠진 키는 종료 상태로 지운 것뿐이다. 다시 들어온 키는 sent를 그대로 둔다
+        for k in [k for k in self._gone if k in self.state or sim_time_us - self.sent[k] >= min_gap_us]:
+            self._gone.discard(k)
+            if k not in self.state:
+                del self.sent[k]
         return out
 
 

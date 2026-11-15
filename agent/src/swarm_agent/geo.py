@@ -3,6 +3,8 @@
 모든 함수는 스칼라와 NumPy 배열을 함께 받는다.
 """
 
+import math
+
 import numpy as np
 
 EARTH_RADIUS_M = 6378137.0
@@ -30,3 +32,17 @@ def wrap_pi(a):
 def course_rad(vn, ve):
     """대지 침로(북 기준 시계 방향, rad)"""
     return np.arctan2(ve, vn)
+
+
+# 스칼라 전용 (IMP-AGT-044, DEC-086). 기본 FA가 기체마다 매 프레임 부르는 곳에 쓴다. NumPy 스칼라 연산은 호출마다
+# µs 단위 오버헤드가 있다. 연산 순서가 위 함수와 같아 결과가 비트 단위로 같다(TC-AGT-129)
+_TWO_PI = 2.0 * math.pi
+
+
+def ned_offset_s(lat0_deg: float, lon0_deg: float, lat_deg: float, lon_deg: float) -> tuple[float, float]:
+    return (math.radians(lat_deg - lat0_deg) * EARTH_RADIUS_M,
+            math.radians(lon_deg - lon0_deg) * EARTH_RADIUS_M * math.cos(math.radians(lat0_deg)))
+
+
+def wrap_pi_s(a: float) -> float:
+    return (a + math.pi) % _TWO_PI - math.pi

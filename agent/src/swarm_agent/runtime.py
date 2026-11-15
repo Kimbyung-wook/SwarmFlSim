@@ -13,6 +13,7 @@ threaded면 모든 구독을 ordered로 열어 Core가 낸 순서대로 큐에 �
 """
 
 import logging
+import os
 import queue
 import time
 import traceback
@@ -30,6 +31,7 @@ from swarm_api.keys import Iface
 from .messages import decode, encoding, full_name, short_name
 from .params import OWNER_KEY, ParamSet, param_defs
 from .plugins import PluginRegistry
+from .profiling import ENV as PROFILE_ENV, TickProfile, input_class
 from .ports import C2_INBOUND
 from .reporting import activity_key, vi_key
 from .vehicle import Vehicle
@@ -57,6 +59,7 @@ class RuntimeConfig:
     strict: bool = False              # 플러그인 예외를 다시 던진다 (시험용)
     vi_report_hz: float = 1.0         # NavigationReport GCS 보고 빈도(모의 시간). 0 이하면 끈다 (DEC-071)
     activity_max_hz: float = 10.0     # 임무장비·VI 상태 변화 보고의 키별 최대 빈도. 0 이하면 제한 없음 (DEC-056, DEC-071). 키는 reporting.activity_key·vi_key
+    profile: str = ""                 # 틱 단계별 계측 결과 JSON 경로. 비우면 환경 변수 SWARM_AGENT_PROFILE, 그것도 없으면 끔 (DEC-086)
 
 
 @dataclass
@@ -142,6 +145,7 @@ class AgentRuntime:
         self._subs = [self._subscribe(keys.CLOCK_TICK), self._subscribe(keys.SIM_CTRL_CMD),
                       self._subscribe(keys.SIM_CTRL_SCENARIO)]
         self._vehicle_subs: list = []
+        self._wide_subs = False                     # 기체 자리를 와일드카드로 구독했는가 (IMP-AGT-043)
         self.scenario: sim_pb2.Scenario | None = None
         self.vehicles: dict[str, Vehicle] = {}
         self._order: list[Vehicle] = []
@@ -157,6 +161,9 @@ class AgentRuntime:
         self._pending_params: list[tuple[str, int, dict]] = []  # (entity, owner, 바꿀 값). 다음 프레임 시작에 적용
         self._param_due = 0.0
         self._sim_time_us = 0
+        prof_path = self.config.profile or os.environ.get(PROFILE_ENV, "")
+        self._prof: TickProfile | None = TickProfile(prof_path) if prof_path else None
+        self._prof_tick_s = 0.0                     # handle() 안에서 틱 처리에 쓴 시간 (입력 처리 시간에서 뺀다)
 
     # ---- 버스 입력 ----
 
@@ -175,7 +182,12 @@ class AgentRuntime:
     def handle(self, s: Sample) -> None:
         """입력 하나를 처리한다. 어떤 입력도 프로세스를 죽이지 못한다 (DEC-038): 예외는 로그로 남기고 넘어간다"""
         try:
-            self._handle(s)
+            if self._prof is None:
+                self._handle(s)
+            else:
+                t0, tick0 = time.perf_counter(), self._prof_tick_s
+                self._handle(s)
+                self._prof.add_input(input_class(s.key), time.perf_counter() - t0 - (self._prof_tick_s - tick0))
         except Exception:
             if self.config.strict:
                 raise
@@ -221,6 +233,8 @@ class AgentRuntime:
                 break
 
     def close(self) -> None:
+        if self._prof is not None:
+            self._prof.flush()
         self._teardown()
         for sub in self._subs:
             sub.close()
@@ -276,10 +290,19 @@ class AgentRuntime:
                 self._gcs[v.entity_id] = gcs
         if self._order:
             self._vehicle_subs.append(self._subscribe(keys.NAVIGATION_BATCH))
-        for v in self._order:
+        self._wide_subs = self._hosts_all_hostable(scenario)
+        if self._wide_subs:
+            # 맡을 수 있는 기체를 모두 맡으면 기체 자리를 와일드카드로 연다. Zenoh는 문자열 키 put마다 세션의 구독 전체와
+            # 경로를 맞춰 보므로 구독 600개(기체 100대 × 6)면 put 하나가 수십 µs 든다. 키·메시지는 같다 (IMP-AGT-043, DEC-086).
+            # 맡지 않은 기체·GCS 앞으로 온 것은 _on_onboard·_on_rx가 해석 전에 버린다
             for name in sorted(ONBOARD_INBOUND):
-                self._vehicle_subs.append(self._subscribe(keys.onboard(v.entity_id, name)))
-            self._vehicle_subs.append(self._subscribe(keys.rx_all(v.entity_id)))
+                self._vehicle_subs.append(self._subscribe(f"onboard/*/{name}"))
+            self._vehicle_subs.append(self._subscribe("swarm/*/rx/**"))
+        else:
+            for v in self._order:
+                for name in sorted(ONBOARD_INBOUND):
+                    self._vehicle_subs.append(self._subscribe(keys.onboard(v.entity_id, name)))
+                self._vehicle_subs.append(self._subscribe(keys.rx_all(v.entity_id)))
         self._lockstep = scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP
         if self._lockstep:
             self._dl_names = tuple(p for p in scenario.run.participants if p.startswith(DATALINK_PREFIX))
@@ -289,6 +312,13 @@ class AgentRuntime:
         self._publish_params()
         if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다
             self._send_done(0)
+
+    def _hosts_all_hostable(self, scenario: sim_pb2.Scenario) -> bool:
+        """AutonomySpec이 있는 기체를 모두 이 런타임이 맡는가. 여러 Agent가 나눠 맡으면 거짓이다 (IMP-AGT-043)"""
+        if not self._order:
+            return False
+        hostable = {e.id for e in scenario.entities if e.autonomy.ma_plugin or e.autonomy.fa_plugin}
+        return hostable <= self.vehicles.keys()
 
     def _hosts(self, spec: entity_pb2.EntitySpec) -> bool:
         if self.config.entities is not None:
@@ -558,31 +588,66 @@ class AgentRuntime:
 
     def _process_tick(self, tick: sim_pb2.ClockTick) -> None:
         t_start = time.perf_counter()
+        prof = self._prof
+        if prof is not None:
+            prof.begin_tick()
         self.mode = tick.mode
         self._sim_time_us = tick.sim_time_us
         self._apply_params()
         self._publish_params_due()
+        if prof is not None:
+            t = time.perf_counter()
+            prof.add("params", t - t_start)
         if self._order:
             self._step(tick)
         if tick.mode == sim_pb2.RUN_MODE_LOCKSTEP:
+            if prof is not None:
+                t = time.perf_counter()
             self._send_done(tick.frame)
+            if prof is not None:
+                prof.add("send_done", time.perf_counter() - t)
         self.stats.ticks += 1
+        elapsed = time.perf_counter() - t_start
         fs = self.stats.frame_s
-        fs.append(time.perf_counter() - t_start)
+        fs.append(elapsed)
         if len(fs) > 10000:
             del fs[:5000]
+        if prof is not None:
+            self._prof_tick_s += elapsed
+            prof.end_tick(tick.frame, elapsed)
 
     def _step(self, tick: sim_pb2.ClockTick) -> None:
         dt = tick.dt_us * 1e-6
+        prof = self._prof
+        pc = time.perf_counter
+        if prof is not None:
+            ta = pc()
         if self._lockstep:
             # 이번 틱의 rx는 Datalink가 지금 내고 있을 수 있다. FrameDone이 보장된 이전 틱 시각까지만 소비한다
             self._release_rx(self._prev_tick_us)
+            if prof is not None:
+                tb = pc()
+                prof.add("release_rx", tb - ta)
+                ta = tb
             self._prev_tick_us = tick.sim_time_us
             self._release_onboard(tick.frame)
             self._last_frame = tick.frame
+            if prof is not None:
+                tb = pc()
+                prof.add("release_onboard", tb - ta)
+                ta = tb
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
+        if prof is not None:
+            tb = pc()
+            prof.add("begin_frame", tb - ta)
+            ta = tb
+            tx0 = sum(self._tx_count.values())
         self._report_activity(tick.sim_time_us)
+        if prof is not None:
+            tb = pc()
+            prof.add("report_activity", tb - ta, sum(self._tx_count.values()) - tx0)  # 횟수 = 이번 틱 GCS 보고 송신 수
+            ta = tb
         if not self._initialized:
             self._initialized = True
             for v in self._order:
@@ -610,8 +675,15 @@ class AgentRuntime:
             for st in v.fa.pending_status():
                 v.ports.vi.push_status(st)
             v.nav_fresh = False
+        if prof is not None:
+            tb = pc()
+            prof.add("ma", t1 - t0)
+            prof.add("fa", tb - t1)
+            prof.add("init", t0 - ta)
         self._publish_controls(controls, tick)
         t2 = time.perf_counter()
+        if prof is not None:
+            prof.add("publish_controls", t2 - tb)
         self.stats.ma_s += t1 - t0
         self.stats.fa_s += t2 - t1
 
