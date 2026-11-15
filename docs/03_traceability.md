@@ -94,6 +94,7 @@
 | TC-API-006 | 매개변수 해석: 기본값·재정의, 거부 사유(unknown·type·range·not_runtime)와 거부 시 기존 값 유지 | `api/python/tests/test_plugin.py` | IMP-API-012 |
 | TC-API-007 | 허용 목록 밖 문자열은 `choice`로 거부하고 기존 값을 유지한다 | `api/python/tests/test_plugin.py` | IMP-API-013 |
 | TC-API-008 | 두 Zenoh 세션 사이에서 서로 다른 키 둘을 번갈아 보낼 때 `ordered=True` 구독 둘의 콜백 순서가 송신 순서와 같다. memory 백엔드도 `ordered`를 받는다 | `api/python/tests/test_open_bus.py` | IMP-API-022 |
+| TC-API-009 | Zenoh put 경로 비용 측정 도구 (`swarm_bus_bench`, ctest 제외). 2026-11-15 측정 2.5~3.2 µs/put, 키 정규화 생략은 이득 없음 | `bus/bench/bench_put.cpp` | DEC-086 |
 
 | ID | 내용 | 위치 | 근거 |
 |---|---|---|---|

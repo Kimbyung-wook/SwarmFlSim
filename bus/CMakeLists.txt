@@ -42,3 +42,10 @@ if(SWARM_BUILD_TESTS)
   swarm_copy_runtime_dlls(swarm_bus_tests)
   add_test(NAME swarm_bus_tests COMMAND swarm_bus_tests)
 endif()
+
+# TC-API-009: put 경로 측정 도구 (DEC-086). ctest에는 넣지 않는다
+if(SWARM_BUILD_TESTS AND SWARM_BUS_WITH_ZENOH)
+  add_executable(swarm_bus_bench bench/bench_put.cpp)
+  target_link_libraries(swarm_bus_bench PRIVATE swarm_bus)
+  swarm_copy_runtime_dlls(swarm_bus_bench)
+endif()
