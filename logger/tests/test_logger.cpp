@@ -1,4 +1,4 @@
-// TC-LOG-001~010: InMemoryBus로 기록 → 재생 결과 일치
+// TC-LOG-001~011: InMemoryBus로 기록 → 재생 결과 일치
 #include <mcap/reader.hpp>
 
 #include <google/protobuf/descriptor.h>
@@ -17,7 +17,9 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <string>
 #include <thread>
@@ -371,6 +373,52 @@ void test_unindexed_order(const std::filesystem::path& path) {
     check(stats.messages == 300 && got == 300 && in_order, indexed ? "order: indexed replay" : "order: unindexed replay");
   }
 }
+// TC-LOG-011: 같은 입력이면 파일 바이트가 같다 (IMP-LOG-012 전후 동일성).
+// 채널 여러 개(protobuf, 알 수 없는 타입, 인코딩 없음, text/plain), 빈 페이로드, 시계 역행, 키 같고 인코딩 다른 경우를 섞는다.
+// kGolden은 IMP-LOG-012 이전 구현으로 만든 파일의 FNV-1a 해시다.
+void test_file_golden(const std::filesystem::path& path) {
+  std::uint64_t t = 7'000'000'000;
+  swarm::InMemoryBus bus;
+  {
+    swarm::logger::Recorder rec(bus, path, {.clock = [&] { return t += (t % 5 == 0 ? -2 : 3); }});
+    for (int i = 0; i < 3000; ++i) {
+      switch (i % 6) {
+        case 0: put(bus, "truth/state", truth_frame(static_cast<std::uint64_t>(i))); break;
+        case 1: put(bus, "truth/other", truth_frame(static_cast<std::uint64_t>(i * 7))); break;
+        case 2: {
+          const std::vector<std::uint8_t> b(static_cast<std::size_t>(i % 40), static_cast<std::uint8_t>(i));
+          bus.put("raw/noenc", b, "");
+          break;
+        }
+        case 3: {
+          const std::vector<std::uint8_t> b{1, 2, 3, static_cast<std::uint8_t>(i)};
+          bus.put("raw/text", b, "text/plain");
+          break;
+        }
+        case 4: {
+          const std::vector<std::uint8_t> b{9, static_cast<std::uint8_t>(i)};
+          bus.put("raw/unknown", b, "application/protobuf;swarm.v1.NoSuchType");
+          break;
+        }
+        default: {
+          const std::vector<std::uint8_t> b;
+          bus.put(i % 12 == 5 ? "truth/state" : "raw/noenc", b, i % 12 == 5 ? "text/plain" : "x/y");
+        }
+      }
+    }
+  }
+  std::ifstream in(path, std::ios::binary);
+  std::uint64_t h = 1469598103934665603ull;
+  char c;
+  std::uint64_t n = 0;
+  while (in.get(c)) {
+    h = (h ^ static_cast<unsigned char>(c)) * 1099511628211ull;
+    ++n;
+  }
+  constexpr std::uint64_t kGolden = 128735877181429900ull;  // 이전 구현의 해시로 채운다
+  if (std::getenv("LOG_GOLDEN_PRINT")) std::printf("golden: size=%llu fnv=%llu\n", static_cast<unsigned long long>(n), static_cast<unsigned long long>(h));
+  check(h == kGolden, "golden: file bytes equal pre-IMP-LOG-012 output");
+}
 }  // namespace
 
 int main() {
@@ -386,6 +434,7 @@ int main() {
   test_replay_status(dir / "status.mcap");
   test_queue_bound(dir / "queue.mcap");
   test_unindexed_order(dir / "order.mcap");
+  test_file_golden(dir / "golden.mcap");
   test_memory_bounded(dir / "memory.mcap");
   check(swarm::logger::protobuf_type_of("application/protobuf;swarm.v1.X") == "swarm.v1.X", "type of");
   check(swarm::logger::protobuf_type_of("text/plain").empty(), "type of non-protobuf");

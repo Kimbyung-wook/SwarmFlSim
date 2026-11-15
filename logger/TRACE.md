@@ -25,6 +25,7 @@ flowchart LR
 | IMP-LOG-009 | `swarm_logger record`가 SIGTERM과 Windows Ctrl+Break(SIGBREAK)도 처리해 MCAP을 닫고 종료 (P0 데모 실행기에서 프로그램으로 정지) | `src/main.cpp` | REQ-LOG-001, DEC-026 |
 | IMP-LOG-010 | 기록기 유한 큐: 구독 콜백은 큐에 넣기만 하고 쓰기 스레드가 MCAP에 쓴다. 건수(100,000)·바이트(64 MiB) 상한을 넘으면 새 샘플을 버리고 `dropped_count()`에 센다. `stats()`로 큐 길이·최대치·드롭 수를 본다. CLI `--stats`, `--max-queue-messages`, `--max-queue-mib` (QA-006) | `src/mcap_log.cpp`, `include/swarm/logger/mcap_log.hpp`, `src/main.cpp` | REQ-LOG-001, DEC-011 |
 | IMP-LOG-011 | 메시지 색인을 쓰지 않는다(`RecorderOptions::message_index`=false). 채널이 수만 개일 때 writer의 청크별 색인이 RSS를 부하에 비례해 키웠다(QA-006 원인). 색인이 없으므로 log_time을 단조 증가로 고정하고, 읽을 때 색인이 없는 파일은 파일 순서로 읽는다 | `src/mcap_log.cpp` | REQ-LOG-001, DEC-011 |
+| IMP-LOG-012 | 구독 콜백·기록 경로 비용 절감(DEC-086). 콜백은 (키, 인코딩) 문자열 복사를 없애고 정수 id만 달며(큐 락 안의 해시 조회), 쓰기 스레드가 잠들어 있고 큐가 빈 때만 깨운다. 쓰기 스레드는 첫 항목에 바로 깨지 않고 2 ms 또는 256건까지 모아 한 번에 쓰고, 배치당 락을 한 번만 쥐며, 채널·sequence를 id 인덱스 배열로 찾는다. 기록 범위와 파일 내용은 그대로(TC-LOG-011) | `src/mcap_log.cpp` | REQ-LOG-001, DEC-086 |
 
 ## 시험
 
@@ -42,6 +43,8 @@ flowchart LR
 | TC-LOG-008 | 큐 상한: 상한 0이면 전부 드롭, 상한 8이면 큐 최대 ≤8, 쓴 수+드롭 수=보낸 수 | `tests/test_logger.cpp` | IMP-LOG-010 | Pass |
 | TC-LOG-009 | 150만 건·채널 1.5만 개 기록 시 RSS 증가 <100 MB(실측 41 MB), 드롭 0 | `tests/test_logger.cpp` | IMP-LOG-011 | Pass |
 | TC-LOG-010 | 시계가 거꾸로 가도 파일이 log_time 순이고 재생 순서가 맞다(색인 유/무) | `tests/test_logger.cpp` | IMP-LOG-011 | Pass |
+| TC-LOG-011 | 같은 입력(채널 여러 종류·빈 페이로드·시계 역행)으로 만든 MCAP 파일 바이트가 IMP-LOG-012 이전 구현의 것과 같다(FNV-1a 해시·크기 일치) | `tests/test_logger.cpp` | IMP-LOG-012 | Pass |
 
 시험 결과(2026-11-01, msvc-debug): swarm_api_tests, swarm_logger_tests 통과 (100% tests passed out of 2)
 시험 결과(2026-11-03, msvc-debug): swarm_logger_tests 통과 (TC-LOG-008~010 추가). QA-006: 큐 대기가 아니라 MCAP 메시지 색인이 원인이어서 IMP-LOG-011로 고쳤다.
+시험 결과(2026-11-15, msvc-debug): swarm_logger_tests 통과 (TC-LOG-011 추가, 파일 바이트가 IMP-LOG-012 이전과 동일). msvc-release P1 판정 구성(d3_w, 1 Agent, lockstep rate 0, 측정 6000프레임) 같은 시간대 교차 짝 측정 각 10회 평균: Logger 끔 2.30 ms(8.95배), 이전 Logger 2.52 ms(8.03배), 이후 Logger 2.32 ms(8.66배). 중앙값은 2.10 / 2.45 / 2.32 ms. 측정 잡음이 커서 이득은 평균 약 0.2 ms, 중앙값 약 0.13 ms로 본다.
