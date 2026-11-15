@@ -50,6 +50,7 @@ class Cfg:
     rate: float = 0.0
     warm: int = 250
     meas: int = 1250
+    profile: bool = False       # Agent --profile (틱 단계별 계측, IMP-AGT-042, DEC-086)
 
 
 C = [
@@ -99,6 +100,8 @@ C = [
     *[Cfg(f"d3_w_a{n}_P", agents=n, pcore=True) for n in (2, 4, 8)],
     *[Cfg(f"d3_f_a{n}_P", scn="d3f", agents=n, pcore=True) for n in (2, 4, 8)],
     Cfg("d3_w_a4_nar_P", agents=4, narrow=True, pcore=True),
+    # QA 26차: Agent 틱 단계별 계측 (DEC-086). 긴 창으로 돌린다
+    Cfg("d3_w_prof", profile=True), Cfg("d3_w_log_prof", logger=True, profile=True),
 ]
 BY = {c.name: c for c in C}
 
@@ -339,7 +342,8 @@ def run_one(c: Cfg, out: Path, base: int) -> dict:
                 perf += ["--perf-switch", str(c.switch)]
             if c.narrow:
                 perf += ["--perf-narrow"]
-            procs[name] = p0.Proc(name, [sys.executable, str(ROOT / "qa" / "perf_agent.py"), *perf, "--participant", name, *feed, *ents, *net.args(name)], out)
+            prof = ["--profile", str(out / f"{name}_profile.json")] if c.profile else []
+            procs[name] = p0.Proc(name, [sys.executable, str(ROOT / "qa" / "perf_agent.py"), *perf, "--participant", name, *feed, *ents, *prof, *net.args(name)], out)
         time.sleep(3.0 + 1.0 * c.agents if c.agents >= 4 else 2.0 + 0.4 * c.agents)
         pin(c, procs)
         core_args = net.args("core")
