@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <deque>
 #include <map>
+#include <unordered_map>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -90,12 +91,13 @@ void ensure_swarm_descriptors() {
 // ---------------------------------------------------------------- Recorder
 
 struct Recorder::Impl {
+  // IMP-LOG-012: 콜백은 (키, 인코딩) 문자열을 복사하지 않고 정수 id만 달아 둔다
   struct Item {
     std::uint64_t t;
-    std::string key;
-    std::string encoding;
+    std::uint32_t kid;  // keys[kid] = (키, 인코딩)
+    std::uint32_t overhead;  // 키·인코딩 길이 (큐 바이트 계산용, 이전과 같은 값)
     std::vector<std::uint8_t> payload;
-    std::size_t bytes() const { return payload.size() + key.size() + encoding.size(); }
+    std::size_t bytes() const { return payload.size() + overhead; }
   };
 
   RecorderOptions opts;
@@ -104,7 +106,8 @@ struct Recorder::Impl {
   bool open = false;
   std::map<std::string, mcap::SchemaId> schemas;                          // 타입 이름 → id
   std::map<std::pair<std::string, std::string>, mcap::ChannelId> channels;  // (키, 인코딩) → id
-  std::map<mcap::ChannelId, std::uint32_t> seq;
+  std::vector<mcap::ChannelId> chan_of;  // kid → 채널 id (0 = 아직 없음; MCAP 채널 id는 0부터라 +1로 저장)
+  std::vector<std::uint32_t> seq;        // kid → 다음 sequence
   std::uint64_t count = 0;
   std::uint64_t last_t = 0;
   std::unique_ptr<Subscription> sub;
@@ -117,7 +120,11 @@ struct Recorder::Impl {
   std::size_t peak_messages = 0, peak_bytes = 0;
   std::uint64_t dropped = 0;
   bool stopping = false;
+  bool writer_waiting = false;  // 쓰기 스레드가 잠들어 있을 때만 깨운다
   std::thread worker;
+  // (키 NUL 인코딩) → kid. qmu로 보호. keys는 qmu 아래에서만 늘어나고 쓰기 스레드는 사본을 읽는다
+  std::unordered_map<std::string, std::uint32_t> intern;
+  std::vector<std::pair<std::string, std::string>> keys;
 
   mcap::SchemaId schema_for(std::string_view type_name) {
     if (type_name.empty()) return 0;
@@ -133,24 +140,29 @@ struct Recorder::Impl {
     return id;
   }
 
-  mcap::ChannelId channel_for(const Item& s) {
-    auto key = std::make_pair(s.key, s.encoding);
+  mcap::ChannelId channel_for(const std::string& skey, const std::string& sencoding) {
+    auto key = std::make_pair(skey, sencoding);
     if (auto it = channels.find(key); it != channels.end()) return it->second;
-    const auto type_name = protobuf_type_of(s.encoding);
+    const auto type_name = protobuf_type_of(sencoding);
     const auto schema_id = schema_for(type_name);
-    std::string msg_encoding = schema_id != 0 ? "protobuf" : (s.encoding.empty() ? std::string(kRawEncoding) : s.encoding);
-    mcap::Channel ch(s.key, msg_encoding, schema_id, {{std::string(kEncodingMetaKey), s.encoding}});
+    std::string msg_encoding = schema_id != 0 ? "protobuf" : (sencoding.empty() ? std::string(kRawEncoding) : sencoding);
+    mcap::Channel ch(skey, msg_encoding, schema_id, {{std::string(kEncodingMetaKey), sencoding}});
     writer.addChannel(ch);
     channels.emplace(std::move(key), ch.id);
     return ch.id;
   }
 
-  void write_item(const Item& s) {
-    std::lock_guard lock(mu);
+  // mu를 쥔 채 호출. kinfo는 이 항목의 (키, 인코딩) 사본
+  void write_item(const Item& s, const std::pair<std::string, std::string>& kinfo) {
     if (!open) return;
+    if (chan_of.size() <= s.kid) {
+      chan_of.resize(s.kid + 1, 0);
+      seq.resize(s.kid + 1, 0);
+    }
+    if (chan_of[s.kid] == 0) chan_of[s.kid] = channel_for(kinfo.first, kinfo.second) + 1;
     mcap::Message m;
-    m.channelId = channel_for(s);
-    m.sequence = seq[m.channelId]++;
+    m.channelId = chan_of[s.kid] - 1;
+    m.sequence = seq[s.kid]++;
     // 색인 없이도 파일 순서 = log_time 순이도록 시각이 거꾸로 가지 않게 한다 (IMP-LOG-011)
     last_t = std::max(last_t, s.t);
     m.logTime = last_t;
@@ -166,8 +178,11 @@ struct Recorder::Impl {
 
   // 구독 콜백(여러 스레드): 복사해 큐에 넣는다. 상한을 넘으면 버리고 센다
   void on_sample(const Sample& s) {
-    Item it{opts.clock(), s.key, s.encoding, {s.payload.begin(), s.payload.end()}};
+    const auto t = opts.clock();
+    const auto overhead = static_cast<std::uint32_t>(s.key.size() + s.encoding.size());
+    Item it{t, 0, overhead, {s.payload.begin(), s.payload.end()}};
     const auto bytes = it.bytes();
+    bool wake = false;
     {
       std::lock_guard lock(qmu);
       if (stopping) return;
@@ -175,24 +190,45 @@ struct Recorder::Impl {
         ++dropped;
         return;
       }
+      thread_local std::string scratch;
+      scratch.assign(s.key);
+      scratch.push_back('\0');
+      scratch.append(s.encoding);
+      auto f = intern.find(scratch);
+      if (f == intern.end()) {
+        f = intern.emplace(scratch, static_cast<std::uint32_t>(keys.size())).first;
+        keys.emplace_back(s.key, s.encoding);
+      }
+      it.kid = f->second;
       queue_bytes += bytes;
+      wake = writer_waiting && queue.empty();
       queue.push_back(std::move(it));
       peak_messages = std::max(peak_messages, queue.size());
       peak_bytes = std::max(peak_bytes, queue_bytes);
     }
-    qcv.notify_one();
+    if (wake) qcv.notify_one();
   }
 
   void run() {
     std::deque<Item> batch;
+    std::vector<std::pair<std::string, std::string>> known;  // keys의 쓰기 스레드 쪽 사본
     for (;;) {
       {
         std::unique_lock lock(qmu);
+        writer_waiting = true;
         qcv.wait(lock, [&] { return stopping || !queue.empty(); });
         if (queue.empty()) return;  // stopping이고 다 비웠다
+        // IMP-LOG-012: 첫 항목에 바로 깨지 말고 잠깐 모아 한 번에 쓴다 (깨우기·문맥 전환 비용)
+        if (!stopping && queue.size() < kCoalesceMessages)
+          qcv.wait_for(lock, kCoalesce, [&] { return stopping || queue.size() >= kCoalesceMessages; });
+        writer_waiting = false;
         batch.swap(queue);
+        for (auto i = known.size(); i < keys.size(); ++i) known.push_back(keys[i]);
       }
-      for (const auto& it : batch) write_item(it);
+      {
+        std::lock_guard lock(mu);
+        for (const auto& it : batch) write_item(it, known[it.kid]);
+      }
       {
         std::lock_guard lock(qmu);
         for (const auto& it : batch) queue_bytes -= it.bytes();
@@ -200,6 +236,9 @@ struct Recorder::Impl {
       batch.clear();
     }
   }
+
+  static constexpr std::chrono::milliseconds kCoalesce{2};
+  static constexpr std::size_t kCoalesceMessages = 256;
 };
 
 Recorder::Recorder(Bus& bus, const std::filesystem::path& path, RecorderOptions opts)
