@@ -36,7 +36,7 @@
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
-| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084, DEC-086 | WP10, WP1, WP3, WP4, WP7 | IMP-AGT-010, IMP-AGT-040~045, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025~026, IMP-LOG-012 | TC-QA-114~118, TC-QA-133~147, TC-AGT-118~131, TC-API-008~009, TC-CORE-044~045, TC-LNK-030~032, TC-LOG-011 | 구현중 |
+| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084, DEC-086 | WP10, WP1, WP3, WP4, WP7 | IMP-AGT-010, IMP-AGT-040~045, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025~026, IMP-LOG-012 | TC-QA-114~118, TC-QA-133~154, TC-AGT-118~131, TC-API-008~009, TC-CORE-044~045, TC-LNK-030~032, TC-LOG-011 | 구현중 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126 | 구현중 |
@@ -261,6 +261,13 @@
 | TC-QA-145 | `link/state` 분산 효과: 10·25 ms 넘는 프레임, 프레임 분해 | `qa/perf_p1.py` | DEC-084, O-38 |
 | TC-QA-146 | 분산 뒤 lockstep 2회 truth·항법·제어 바이트 동일 (Logger 끔·켬) | `qa/batch_e2e.py` | DEC-005, DEC-084 |
 | TC-QA-147 | 분산 뒤 D-33 경고 0건 | `qa/p2_lostlink.py` | DEC-083, DEC-084 |
+| TC-QA-148 | P1 판정: Agent 1개 Logger 켬 긴 창, 기본 스케줄링, 2묶음 6회 중앙값 | `qa/perf_p1.py` | DEC-082, DEC-084, DEC-086 |
+| TC-QA-149 | 교차 확인: P 고정 긴 창, 같은 실행 Logger 끔 짝 값 | `qa/perf_p1.py` | DEC-086 |
+| TC-QA-150 | DEC-086 개선 뒤 lockstep 2회 바이트 동일 (Agent 1개 Logger 끔·켬, 2분할 Logger 켬) | `qa/batch_e2e.py` | DEC-005, DEC-086 |
+| TC-QA-151 | DEC-086 개선 뒤 D-33 경고 0건 | `qa/p2_lostlink.py` | DEC-083, DEC-086 |
+| TC-QA-152 | Agent 2분할 회귀 (와일드카드 구독을 타지 않는 경로) | `qa/perf_p1.py`, `qa/batch_e2e.py` | DEC-086 |
+| TC-QA-153 | Agent 틱 단계별 몫 (`--profile`) | `qa/perf_p1.py` | DEC-086 |
+| TC-QA-154 | D-34 수정 확인 (Zenoh 미발견 경고, `SWARM_REQUIRE_ZENOH`) | §34.7 | DEC-022, DEC-026 |
 
 ## 시험 결과
 
@@ -433,6 +440,13 @@
 | TC-QA-145 | 측정 | 2026-11-14 | Logger 켬 25 ms 이상 10~14 → 4~5개, 10 ms 이상 31~32 → 16~21개. 보통 프레임 평균 +0.15~0.3 ms, 총비용 줄지 않음 (§33.4) |
 | TC-QA-146 | 통과 | 2026-11-14 | 3,000 프레임 Logger 끔·켬 각 2회 바이트 동일 |
 | TC-QA-147 | 통과 | 2026-11-14 | 15회 경고 0건, 재현성 비교 전부 동일 |
+| TC-QA-148 | 통과 | 2026-11-15 | 긴 창 6회 중앙값 12.43배(1.61 ms), 묶음 a 11.43·b 12.48배. 여유 0.39 ms (§34.3) |
+| TC-QA-149 | 통과 | 2026-11-15 | P 고정 12.27배(1.63 ms). Logger 끔 13.52·13.00배, Logger 비용 짝 비교 0.10 ms (§34.3) |
+| TC-QA-150 | 통과 | 2026-11-15 | 3,000 프레임 3구성 각 2회 truth·항법·제어 바이트 동일 |
+| TC-QA-151 | 통과 | 2026-11-15 | 15회 경고 0건, 재현성 비교 전부 동일 |
+| TC-QA-152 | 통과 | 2026-11-15 | 2분할 13.52배(Logger 끔), 시작 10회 정지 0건 (§34.6) |
+| TC-QA-153 | 측정 | 2026-11-15 | Agent 안 1.02 ms(FA 0.44), Agent 밖 0.61 ms. 1 Hz 위상 0 몫 0.13 ms/프레임 (§34.5) |
+| TC-QA-154 | 통과 | 2026-11-15 | 미발견 시 경고, `ON`이면 구성 실패. D-34 해결 (§34.7) |
 
 ## 프로세스 결정
 
