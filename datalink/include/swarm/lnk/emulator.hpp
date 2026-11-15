@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -136,7 +137,19 @@ class Datalink {
   struct Out {
     std::string key;
     std::string bytes;
-    std::string encoding;
+    std::string_view encoding;  // encoding_of<M>()의 정적 문자열 (IMP-LNK-026)
+  };
+
+  // channels_ 키 비교: (src, dst) 사전순. std::less<pair<string, string>>와 같은 순서이고, string_view 쌍으로도
+  // 찾을 수 있다(조회마다 문자열 복사 없음, IMP-LNK-026)
+  struct PairLess {
+    using is_transparent = void;
+    template <class A, class B>
+    bool operator()(const A& x, const B& y) const {
+      const std::string_view xf(x.first), yf(y.first);
+      if (xf != yf) return xf < yf;
+      return std::string_view(x.second) < std::string_view(y.second);
+    }
   };
 
   void on_tx(const Sample& s);
@@ -168,7 +181,7 @@ class Datalink {
   void flush_overflow_locked(std::vector<Out>& out);
   void deliver_locked(std::vector<Out>& out);
   void publish_states_locked(std::vector<Out>& out);
-  void emit_state_locked(const std::string& a, const std::string& b, std::vector<Out>& out);
+  void emit_state_locked(const Node& a, const Node& b, std::vector<Out>& out);
   void heartbeats_locked(std::vector<Out>& out);
   void outcome_locked(const std::string& src, const std::string& dst, const v1::LinkEnvelope& env, std::size_t size,
                       v1::DropReason reason, std::uint64_t tx_us, std::uint64_t rx_us, std::vector<Out>& out);
@@ -184,10 +197,10 @@ class Datalink {
 
   std::recursive_mutex run_mu_;  // run_tick 전체(계산·발행·FrameDone) 직렬화
   mutable std::mutex mu_;
-  std::map<std::string, LinkProfile> profiles_;
+  std::map<std::string, LinkProfile, std::less<>> profiles_;
   std::map<std::string, Node> nodes_;
-  std::map<std::pair<std::string, std::string>, Channel> channels_;
-  std::map<std::string, LinkProfile> base_profiles_;  // 내장 + cfg_.profiles. 시나리오 재정의 전
+  std::map<std::pair<std::string, std::string>, Channel, PairLess> channels_;
+  std::map<std::string, LinkProfile, std::less<>> base_profiles_;  // 내장 + cfg_.profiles. 시나리오 재정의 전
   std::map<std::string, JamArea> jam_zones_;          // 소유자 → 영역
   std::vector<Fault> faults_;
   std::vector<Pending> pending_;
@@ -209,14 +222,15 @@ class Datalink {
   std::uint64_t ticks_seen_ = 0;
   // 송신 개수 장벽 (DEC-044)
   std::map<std::string, std::uint64_t> tx_recv_;  // 엔티티 → 받은 swarm/<e>/tx/** 누적 수
-  std::map<std::string, std::uint64_t> rx_sent_;  // 엔티티 → 발행한 swarm/<e>/rx/** 누적 수
+  std::map<std::string, std::uint64_t, std::less<>> rx_sent_;  // 엔티티 → 발행한 swarm/<e>/rx/** 누적 수
   std::map<std::string, std::map<std::string, std::uint64_t>> peer_sent_;  // 참여자 → 마지막 FrameDone.sent_count
   // link/state 분산 발행 (DEC-084). 주기 창(now / 주기)마다 쌍 목록과 발행 예정 시각을 한 번 정한다
   struct StatePlan {
     bool valid = false;
     std::uint64_t window = 0;
     std::uint64_t period_us = 0;
-    std::vector<std::pair<std::string, std::string>> pairs;  // a < b 사전순
+    // a < b 사전순. nodes_는 std::map이고 지우는 곳은 load_locked뿐(그때 계획도 비운다)이라 포인터가 창 동안 유효하다
+    std::vector<std::pair<const Node*, const Node*>> pairs;
     std::vector<std::uint64_t> due_us;                       // pairs와 같은 순서, 오름차순
     std::size_t next = 0;                                    // 아직 내지 않은 첫 쌍
   };
@@ -225,7 +239,8 @@ class Datalink {
   std::vector<HeartbeatLink> heartbeats_;  // (GCS, 기체) 순 정렬
   std::uint64_t next_heartbeat_us_ = 0;
   std::uint32_t state_seq_ = 0;
-  mutable std::map<std::string, bool> warned_;
+  mutable std::map<std::string, bool, std::less<>> warned_;
+  v1::LinkState state_msg_;  // emit_state_locked가 매번 모든 필드를 다시 쓴다. 할당 재사용 (IMP-LNK-026)
 
   std::mutex shutdown_mu_;
   std::condition_variable shutdown_cv_;
