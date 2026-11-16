@@ -21,7 +21,7 @@
 | REQ-UI-002 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-006, 016~017, 019, 025~026, 031, 034, IMP-INT-001 | TC-UI-004, 009, 018~019, TC-INT-003 | 구현중 |
 | REQ-UI-003 | PRP-UI-001 | DEC-014, DEC-033 | WP5 | IMP-API-010, IMP-UI-025, 027~032, 034~041, 074~075 | TC-UI-008, 018~025, 061~063 | 구현중 |
 | REQ-UI-004 | PRP-UI-001, PRP-BHV-001 | DEC-008, DEC-033 | WP5, WP3 | IMP-UI-025, 027, 031, 034~041, IMP-AGT-016~018 | TC-UI-018~025, TC-AGT-016~018 | 구현중 |
-| REQ-UI-005 | PRP-UI-002, PRP-LNK-002 | DEC-011, DEC-031, DEC-032 | WP6, WP4 | IMP-MON-001~026, IMP-LNK-008~009 | TC-MON-001~013, TC-LNK-001, 004~006, 008~011 | 구현중 |
+| REQ-UI-005 | PRP-UI-002, PRP-LNK-002 | DEC-011, DEC-031, DEC-032 | WP6, WP4 | IMP-MON-001~026, IMP-LNK-008~009 | TC-MON-001~013, TC-LNK-001, 004~006, 008~011, TC-QA-163 | 구현중 |
 | REQ-UI-006 | PRP-UI-001, PRP-NET-002 | DEC-020 | WP5 | IMP-UI-021~022, 024, 034, IMP-MON-003 | TC-UI-011~017, 019, TC-MON-002 | 구현중 |
 | REQ-UI-007 | PRP-UI-001 | DEC-003 | WP5 | IMP-UI-003, 007, 014, 017 | TC-UI-001, 007, 009 | 구현중 |
 | REQ-DYN-001 | PRP-DYN-001 | DEC-007 | WP2 | IMP-CORE-004, 008, IMP-DYN-001~002, 006, IMP-INT-002 | TC-CORE-005, 007~008, 013, 017, TC-DYN-001~003, 009, 011~012, TC-INT-001 | 구현중 |
@@ -50,10 +50,10 @@
 | REQ-PAY-004 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-064, DEC-066, DEC-067 | WP8 | IMP-PAY-005~006, 008~009, IMP-CORE-022 | TC-PAY-006~011, 015~018, TC-CORE-034, TC-QA-065~068, 075~077 | 구현중 |
 | REQ-PAY-005 | PRP-PAY-001, PRP-DYN-003 | DEC-012, DEC-019 | WP8 | IMP-PAY-002, 006 | TC-PAY-006, 009, 013 | 구현중 |
 | REQ-SIM-001 | PRP-SIM-001 | DEC-017 | WP8 | IMP-CORE-010 | TC-CORE-015 | 구현중 |
-| REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113 | 검증완료 |
+| REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043, TC-QA-158~161 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -271,6 +271,12 @@
 | TC-QA-155 | 결함·관찰 현황 일괄 점검 (D-1~D-34, O-1~O-44, DEC·OPN·커밋 대조) | §35 (`docs/21_qa_report.md`) | DEC-038~087 |
 | TC-QA-156 | D-31 재현: Agent 8분할 시작, 파일 피드 우회 없음 | `qa/batch_e2e.py` (`d3w_a8_st`) | DEC-082, DEC-083 |
 | TC-QA-157 | 열린 항목 코드 확인 (D-15, D-26 잔여, O-20, O-28) | §35.4 | DEC-074 |
+| TC-QA-158 | DEC-088 송신 4종 통합 교환: agra_lacal 경유 외부 구독자 도달, 공개 XSD 통과, O-20 `declared.pub` | `qa/gw_agra.py` + `qa/gw_ext_client.py` | DEC-088, DEC-072 |
+| TC-QA-159 | 실행 전 승인 흐름: 승인·거부·시간 초과·계획 작업, strike 시연 범위 | `qa/gw_agra.py` | DEC-088, DEC-075 |
+| TC-QA-160 | 링크 복구 재송신(12 s·3 s 끊김)과 평소 보고량 | `qa/gw_agra.py` | DEC-089, DEC-071, DEC-078 |
+| TC-QA-161 | 늦게 붙은 외부 구독자의 변화 보고 마지막 값 수신 | `qa/gw_agra.py` (ext2) | DEC-089 |
+| TC-QA-162 | DEC-088 기능을 켠 lockstep 재현: truth·항법·제어·GCS rx 바이트 동일, D-33 경고 0 | `qa/batch_e2e.py` (`agra28`, `agra28_a2`) | DEC-088, DEC-083, DEC-005 |
+| TC-QA-163 | Monitor 브리지 주소 `bridge=`·`url=` 실제 접속 (D-15) | `qa/recovery_stack.py` + 브라우저 | DEC-091, DEC-027 |
 
 ## 시험 결과
 
@@ -453,6 +459,12 @@
 | TC-QA-155 | 통과 | 2026-11-16 | 결함 34건: 해소 23, 결정됨 9, 열림 1, 사용자 결정 1. 관찰 44건: 해소 7, 결정됨 21, 열림 13, 사용자 결정 3 (§35) |
 | TC-QA-156 | 통과 | 2026-11-16 | 13/13 300 프레임 완료, 정지 0, truth 차이 0. D-31 재현 안 됨 (§35.4) |
 | TC-QA-157 | 통과 | 2026-11-16 | 네 항목 모두 코드상 그대로 (§35.4) |
+| TC-QA-158 | 통과 | 2026-11-16 | 4종 모두 외부 도달, ext1·ext2 XSD 실패 0, 2회 같음. D-26 해소, O-20 해소 (§36.2) |
+| TC-QA-159 | 통과 | 2026-11-16 | 승인 → EXECUTING, 거부·시간 초과 → REJECTED, 계획 작업 승인 뒤 시작. strike는 요청 단계 전(O-45) (§36.3) |
+| TC-QA-160 | 통과 | 2026-11-16 | 12 s 끊김 뒤 키별 1회 재송신, 3 s 끊김 재송신 없음, 평소 변화 보고 0. O-16 해소 (§36.4) |
+| TC-QA-161 | 통과 | 2026-11-16 | 구독 뒤 0.18~0.24 s에 마지막 값 수신, 기존 구독자도 1회 중복. O-19 해소 (§36.5) |
+| TC-QA-162 | 통과 | 2026-11-16 | Agent 1·2분할 각 2회 차이 0 (GCS rx 2497건 포함), 경고 0 (§36.6) |
+| TC-QA-163 | 통과 | 2026-11-16 | 두 쿼리 모두 연결됨, vitest 64 passed. D-15 해소 (§36.6) |
 
 ## 프로세스 결정
 

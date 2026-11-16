@@ -4092,3 +4092,195 @@ D-34는 해결로 본다(IMP-API-023). 경고만 나는 기본값은 그대로�
 ### 35.8 관찰
 
 새 관찰은 없다. D-31을 해소(재현 안 됨)로 옮겼다.
+
+## 36. 28차 시험: DEC-088~091 통합 확인 (2026-11-16)
+
+DEC-088~091 구현분을 실제 스택과 agra_lacal CAL Server로 확인했다. 기준 코드는 wp0-contracts 6518055다. 이 코드에는 세 가지가 들어 있다.
+
+- WP3 0413c32 (IMP-AGT-046~049): A-GRA 송신 4종과 링크 복구 재보고.
+- WP9 5188492 (IMP-GW-024~028): 변화 보고 마지막 값 보관, 늦은 구독자 전달, O-20 `declared.pub` 수정.
+- WP6 3d598f0 (IMP-MON-029): Monitor `bridge=` 통일, `url=` 별칭.
+
+C++ 코드는 바뀌지 않아 QA 26차 release 빌드(Zenoh 1.10.2)를 그대로 썼다. 단위 시험은 gateway 105 passed·1 skipped, agent·algorithms 219 passed, Monitor vitest 64 passed다.
+
+통합 실행은 `qa/gw_agra.py`다. 구성은 다음과 같다.
+
+- Core realtime 1배속, Datalink, Agent 1개, Gateway(`--lacal-admin`).
+- CAL Server: `qa/scenarios/gw_lacal_server_28.yaml`. `gateway/config/lacal_server.yaml`에서 포트만 바꿨다.
+- 외부 클라이언트 둘: ext1은 시작부터 붙고, ext2는 모의 80 s에 붙는 늦은 구독자다.
+- 시나리오 `qa/scenarios/qa_agra28.json`, 기체 8대와 gcs-01.
+
+같은 실행을 두 번(r1, r2) 했고 결과는 같다. 각 실행과 결정론 묶음 동안 다른 worktree의 시뮬레이터 프로세스 기록은 0건이다. P1 긴 창 측정은 하지 않았다. 제품 코드는 고치지 않았다.
+
+| 기체 | MA·변수 | 확인할 것 |
+|---|---|---|
+| uav-001~003 | waypoint, `approval_tasks=hold`, `approval_timeout_s=15` | 외부 hold의 승인(ap-yes)·거부(ap-no)·응답 없음(ap-to) |
+| uav-004 | waypoint, `approval_tasks=move_to`, `track_share_hz=1` | 계획 작업 task-001을 승인 뒤 시작, TrackShare |
+| uav-003 | `track_share_hz=1` | TrackShare (표적 tgt-001 쪽으로 비행) |
+| uav-005 | waypoint, 정지, agm_short 2발 | StoreLoadout, 계획 strike(task-003, `require_approval=true`) |
+| uav-006~008 | formation(beta, 리더 uav-006) | LeaderUpdate |
+
+시간표(모의 s):
+
+- 20: 외부 hold 3건.
+- 50: GCS_LINK_CUT. uav-001·uav-005는 12 s(`lost_link_timeout_s` 5 s보다 김), uav-002는 3 s.
+- 80: ext2 접속.
+- 105: 끝.
+
+### 36.1 결론
+
+- **D-26 잔여분은 해소다.** 4종이 모두 GCS rx → Gateway → CAL Server → 외부 구독자까지 나갔다. ext1이 따로 적재한 공개 XSD 검증 실패는 0건이다.
+- **승인 흐름은 hold·move_to 작업으로 끝까지 시연된다.**
+  - 승인: ACCEPTED → EXECUTING.
+  - 거부: REJECTED(approval denied).
+  - 시간 초과: 15 s 뒤 REJECTED(approval timeout).
+  - 계획 작업: 승인 뒤 시작.
+  - strike 승인은 시연할 수 없다. 기본 MA가 strike를 지원하지 않고, 외부에서 strike 명령을 넣을 경로도 없다(§36.3).
+- **DEC-089 복구 재송신은 확인했다.** 12 s 끊김 뒤 복구에서 변화 보고 키 전체와 FlightCapability가 기체마다 한 번씩 다시 왔다. 끊긴 동안 유실된 링크 상실 선회 명령 상태도 이때 전달됐다. 3 s 끊김(시간 제한 안)은 재송신이 없다. 평소 보고량은 늘지 않았다.
+- **DEC-089 늦은 구독은 확인했다.** ext2는 구독 뒤 0.18~0.24 s에 기체별 SystemStatus·FlightCapability와 진행 중 명령·작업 상태, StoreLoadout, 임무장비 상태의 마지막 값을 받았다. O-16, O-19는 해소로 본다.
+- **회귀는 모두 통과다.**
+  - 결정론: lockstep 2회 truth·NavigationBatch·ControlBatch·GCS rx가 바이트 동일. Agent 1개와 2분할 모두.
+  - D-33 경고 0건.
+  - Monitor `bridge=`·`url=` 둘 다 실제 브리지에 접속. D-15는 해소다.
+- 새 관찰 2건(O-45, O-46). 새 결함은 없다.
+
+### 36.2 4종 교환 (TC-QA-158)
+
+| 내부 → UCI (토픽) | GCS rx r1 / r2 | ext1 수신, XSD 통과 r1 / r2 | 보낸 기체 |
+|---|---|---|---|
+| ApprovalRequest → `MA_ApprovalRequest` (`swarm.c2`) | 4 / 4 | 4, 4 / 4, 4 | uav-001~004 |
+| LeaderUpdate → `MA_LeaderUpdateRequest` (`swarm.p2p`) | 1 / 1 | 1, 1 / 1, 1 | uav-006 (리더, term 1) |
+| TrackShare → `MA_Entity` (`swarm.p2p`) | 162 / 161 | 159, 159 / 159, 159 | uav-003 104, uav-004 58 (r1) |
+| StoreLoadout → `StoreLoadoutConfiguration` (`swarm.ms`) | 7 / 7 | 12, 12 / 12, 12 | uav-001~005 |
+
+- 나머지 메시지도 포함해 ext1·ext2 수신 전체의 XSD 검증 실패는 0건이다. Gateway 거부 기록과 로그 문제도 0건이다.
+- TrackShare가 GCS rx보다 2~3건 적은 것은 외부 클라이언트를 먼저 멈추는 종료 순서 때문으로 보이며 확인하지 않았다.
+- StoreLoadout의 ext1 수신이 GCS rx보다 5건 많은 것은 늦은 구독자 전달이 기존 구독자에게도 한 번 더 간 것이다(§36.5).
+- 내용:
+  - `MA_LeaderUpdateRequest`: `ApplicablePackageID` beta, 제안 리더와 요청 기체 uav-006, `RequestID` `beta/leader/1`, `Status` ASSIGN.
+  - `MA_Entity`: `EntityID` `uav-003/tgt-001`, `AssociatedID` tgt-001, 환경 GROUND.
+  - StoreLoadout은 카메라만 실은 기체도 보낸다(`Loadout` `cam0:camerax0`). 무장이 없는 formation 기체 3대는 보내지 않는다.
+- O-20: 통합 실행의 CAL Server 설정은 수정된 `declared.pub`(`MA_PositionReport@swarm.vi`, `@swarm.p2p`)를 그대로 쓴다. 이 설정으로 `MA_PositionReport`가 거부 없이 나갔다. 해소로 본다(IMP-GW-028).
+
+### 36.3 승인 흐름 (TC-QA-159)
+
+r1 기준이다. r2도 순서와 결과가 같다.
+
+| 작업 | 요청(모의 s) | 외부 응답 | Gateway tx ApprovalResponse | 기체 TaskStatus | 외부 `MA_TaskStatus` |
+|---|---|---|---|---|---|
+| task-001 (uav-004, 계획 move_to) | 0.06 | APPROVED (0.06) | 0.04, dst uav-004 | ACCEPTED → EXECUTING | EXECUTION_PENDING → EXECUTING |
+| ap-yes (uav-001, hold) | 20.26 | APPROVED (20.36) | 20.32, dst uav-001 | task-001 CANCELLED(preempted), ap-yes ACCEPTED → EXECUTING | task-001 CANCELED, ap-yes EXECUTION_PENDING → EXECUTING |
+| ap-no (uav-002, hold) | 20.26 | REJECTED (20.36) | 20.32, dst uav-002 | REJECTED(approval denied), task-001 계속 | DROPPED |
+| ap-to (uav-003, hold) | 20.26 | 없음 | 없음 | REJECTED(approval timeout), task-001 계속 | DROPPED (35.3) |
+
+- 응답 전에는 TaskStatus가 없고, 지금 작업을 밀어내지 않았다(uav-002, uav-003은 task-001 수행 유지).
+- 외부 응답은 `MA_ApprovalRequestStatus`(`RequestProcessingState` COMPLETED)로 보냈다. Gateway는 요청을 낸 기체에게만 ApprovalResponse를 보냈다.
+- strike 승인은 어디까지 시연되나:
+  - 계획 strike(task-003, uav-005, `engagement_criteria.require_approval=true`)는 ApprovalRequest도 TaskStatus도 나오지 않았다. 기본 MA의 `TaskTracker`는 시작 계획에서 지원하지 않는 작업을 보고 없이 거른다(O-45). 실행 중 받은 계획이나 C2 명령이면 REJECTED(unsupported)를 보낸다.
+  - 외부에서 strike를 넣을 경로는 없다. Gateway가 받는 작업은 hold, return_to_base뿐이고(`IMPORTABLE_TASKS`), `MA_MissionPlan`은 move_to·route로만 편다.
+  - 따라서 strike 승인 흐름은 실제 스택에서 요청 단계까지 가지 않는다. `require_approval` StrikeTask가 REJECTED로 끝나는 것은 단위 시험 TC-AGT-133만 확인한다. 실제 시연에는 strike를 지원하는 MA가 필요하다.
+
+### 36.4 링크 복구 재송신 (TC-QA-160)
+
+GCS가 받은 변화 보고의 모의 시각이다. r1과 r2가 같다.
+
+| 기체 | 끊김 | 복구 직후 | 재송신(복구 약 1 s 뒤) |
+|---|---|---|---|
+| uav-001 | 50~62 s (12 s) | SystemStatus 62.10 | SystemStatus·StoreLoadout 63.08, FlightCapability·FlightCommandStatus(`uav-001-lost-link-1` EXECUTING) 63.10 |
+| uav-005 | 50~62 s (12 s) | SystemStatus 62.12 | FlightCommandStatus(`uav-005-lost-link-1` EXECUTING) 63.10, SystemStatus·FlightCapability·StoreLoadout 63.12 |
+| uav-002 | 50~53 s (3 s) | SystemStatus 53.10 | 없음 |
+
+- 복구 직후 SystemStatus 1건은 기존 변화 보고다. 내용은 끊기기 전과 같고, 끊긴 동안의 변화는 GCS에 닿지 않았다.
+- 재송신은 키마다 한 번이다. 끊긴 동안 생긴 링크 상실 선회 명령의 상태는 재송신으로 처음 GCS에 닿았다. uav-005는 시작 때 비행 명령이 없어 이것이 첫 FlightCommandStatus다.
+- 평소 보고량: 끊김의 영향이 없는 구간(25~50 s, 65~80 s, 85~105 s)의 GCS 수신은 다음뿐이다.
+  - NavigationReport 8.0/s (8대 × 1 Hz).
+  - SensorActivity 41/s.
+  - TrackShare 1.0~2.0/s.
+  - 25~50 s 구간의 TaskStatus 0.04/s (ap-to 시간 초과 1건).
+
+  SystemStatus·FlightCapability·StoreLoadout·FlightCommandStatus는 시작, 사건, 복구 때만 나왔다. 주기 전체 보고는 없다.
+- lockstep 결정론 묶음(§36.6)에서는 GCS 수신 종류별 건수가 회차마다 같다. 복구 재송신의 lockstep 재현은 TC-AGT-137(가짜 Core)만 확인한다. 실제 스택 lockstep에 링크 끊김을 넣은 재현은 하지 않았다.
+
+### 36.5 늦은 구독자 (TC-QA-161)
+
+ext2는 모의 80 s에 기동해 85.1 s(r1)·85.0 s(r2)에 구독을 마쳤다. Gateway 로그에는 `watching LA-CAL subscriptions at ws://127.0.0.1:18766/graph/events`가 남고, 구독 때 다음 줄이 남았다.
+
+- `replayed 8 retained SystemStatus@swarm.vi`
+- `replayed 8 retained MA_FlightCapability@swarm.vi`
+- `replayed 9 retained MA_FlightCommandStatus@swarm.vi`
+- `replayed 5 retained MA_TaskStatus@swarm.c2`
+- `replayed 5 retained StoreLoadoutConfiguration@swarm.ms`
+- `replayed 5 retained PO_Activity@swarm.ms`
+
+| UCI 메시지 | 구독 뒤 첫 수신 r1 / r2 (s) | 2 s 안 수신 | 비고 |
+|---|---|---|---|
+| SystemStatus | 0.205 / 0.176 | 8 | 8대 모두 |
+| MA_FlightCapability | 0.237 / 0.191 | 8 | |
+| MA_FlightCommandStatus | 0.221 / 0.191 | 9 | 진행 중 명령 |
+| MA_TaskStatus | 0.229 / 0.191 | 5 | 진행 중 작업. 끝난 ap-no·ap-to는 없음 |
+| StoreLoadoutConfiguration | 0.221 / 0.207 | 5 | |
+| PO_Activity | 0.029 / 0.068 | 87 | 주기 보고. 보관 값 5건 포함 |
+| MA_NavigationReport, MA_PositionReport | 0.029 / 0.068 | 16 | 주기 보고 그대로(다시 보내지 않음) |
+| MA_Entity | 0.54 / 0.59 | 2 | 사건성이라 보관하지 않음. 다음 주기 값 |
+
+- ext2 수신의 XSD 통과는 1221/1221(r1), 1201/1201(r2)이다.
+- 같은 2 s 동안 ext1도 같은 보관 값을 한 번 더 받았다(SystemStatus 8, FlightCapability 8, FlightCommandStatus 9, TaskStatus 5, StoreLoadout 5). README와 DEC-089 메모대로의 동작이다. 값은 마지막 상태라 뜻은 바뀌지 않는다.
+- Gateway 재기동 뒤의 늦은 구독(보관 값 없음)은 시험하지 않았다. README대로 Agent 재송신이나 다음 변화에 맡긴다.
+
+### 36.6 회귀 (TC-QA-162, TC-QA-163)
+
+결정론: `qa/batch_e2e.py`에 `agra28`, `agra28_a2`를 넣었다. 구성은 위 시나리오 lockstep 최대 배속 3,000 프레임이고, 외부 시스템과 Gateway는 없다. 이번에 GCS rx(`swarm/gcs-01/rx/**`) 키별 순번 해시 비교를 더했다.
+
+| 구성 | truth | NavigationBatch | ControlBatch | GCS rx | 이벤트 | 경고 |
+|---|---|---|---|---|---|---|
+| Agent 1개, 2회 | 3001 중 차이 0 | 3001 중 0 | 3001 중 0 | 2497 중 0 | 0 | 0 |
+| Agent 2분할, 2회 | 3001 중 0 | 3001 중 0 | 6002 중 0 | 2497 중 0 | 0 | 0 |
+
+- GCS rx 종류별 건수는 4회 모두 같다: ApprovalRequest 1, LeaderUpdate 1, StoreLoadout 5, FlightCapability 8, SystemStatus 8, FlightCommandStatus 10, TaskStatus 8, TrackShare 56.
+- 외부 응답이 없으므로 uav-004의 task-001은 승인 대기로 남는다.
+- D-33: 결정론 4회와 통합 2회의 Agent 로그에 `late_onboard` 경고와 WARNING이 없다.
+- Monitor(D-15, DEC-091) 확인 방법: `qa/recovery_stack.py`로 브리지(48765)와 Monitor dev 서버(45174)를 띄우고 브라우저 창에서 열었다. 기본 주소(`ws://localhost:8765/bus`)는 띄우지 않았으므로 연결되면 쿼리 값을 쓴 것이다.
+  - `?source=bridge&bridge=ws://127.0.0.1:48765/bus`: `브리지 · 연결됨 · 계약 0.19.0`, 엔티티 10, 통계 갱신.
+  - `?source=bridge&url=ws://127.0.0.1:48765/bus`: 같은 결과(별칭).
+  - 둘 다 있을 때 `bridge=` 우선과 빈 값 처리는 TC-MON-017(vitest)이 확인한다.
+- 확인 뒤 스택과 dev 서버를 내렸고, 남은 포트는 없다.
+
+### 36.7 결함·관찰 현황표 갱신 (§35 기준)
+
+§35의 행은 그대로 두고 바뀐 항목만 적는다.
+
+| ID | §35 상태 | 현재 상태 | 근거 |
+|---|---|---|---|
+| D-15 | 아직 열림 | 해소 | DEC-091, IMP-MON-029, TC-MON-017, TC-QA-163 |
+| D-26 | 해소(VI) / 사용자 결정 필요(잔여) | 해소 | DEC-088, IMP-AGT-046~048, IMP-GW-026, TC-QA-158, TC-QA-159. strike 승인 시연은 O-45 참고 |
+| O-16 | 사용자 결정 필요 | 해소 | DEC-089, IMP-AGT-049, TC-QA-160 |
+| O-17 | 사용자 결정 필요 | 결정됨 | DEC-090, IMP-GW-027(TC-GW-033). 외부 `MA_FlightCommandStatus`는 ACCEPTED, 수행·완료는 `MA_TaskStatus`(§36.3 표) |
+| O-19 | 사용자 결정 필요 | 해소 | DEC-089, IMP-GW-024~025, TC-QA-161 |
+| O-20 | 아직 열림 | 해소 | IMP-GW-028(TC-GW-034), TC-QA-158 |
+| O-45 | (신규) | 아직 열림 | WP3, 낮음 (§36.9) |
+| O-46 | (신규) | 아직 열림 | WP4, 매우 낮음 (§36.9) |
+
+갱신 뒤 합계:
+
+- **결함 34건**: 해소 25, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
+- **관찰 46건**: 해소 10, 결정됨 22, 아직 열림 14, 사용자 결정 필요 0.
+
+### 36.8 결함
+
+새 결함은 없다. D-15, D-26은 해소다(§36.7).
+
+### 36.9 관찰
+
+- O-45: 시작 계획(시나리오 `mission_plan`)에 기본 MA가 지원하지 않는 작업이 있으면 `TaskTracker`가 보고 없이 거른다(`algorithms/src/swarm_algorithms/common.py`). 이번 예는 uav-005의 strike task-003으로, TaskStatus도 ApprovalRequest도 없었다. 실행 중 받은 계획(`_apply_plan`)과 C2 명령은 REJECTED(unsupported)를 보내므로 동작이 다르다. GCS와 외부에서는 작업이 무시된 것을 알 수 없다. 담당 WP3. 낮음.
+- O-46: r2에서 uav-001의 같은 틱 두 TaskStatus가 GCS에 거꾸로 도착했다(`ap-yes:ACCEPTED` 뒤 `task-001:CANCELLED(preempted)`). r1은 보낸 순서대로였다. Agent는 CANCELLED를 먼저 보낸다. realtime 링크 지연 변동으로 같은 키 메시지가 뒤바뀐 것으로 보이며 확인하지 않았다. 외부 `MA_TaskStatus` 순서도 같이 바뀌었다. 담당 WP4. 매우 낮음.
+
+### 36.10 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| strike 승인의 실제 시연 | strike를 지원하는 MA와 외부 strike 입력 경로가 없다(§36.3) |
+| 재밍 구역으로 생긴 GCS 끊김의 복구 재송신 | 링크 두절(GCS_LINK_CUT)로만 확인했다. 재송신 판정은 Heartbeat 공백 기준이라 원인과 무관하다 |
+| LeaderUpdate 리더 변경(term 2) | 실제 스택에서 리더를 바꾸는 입력을 넣지 않았다. TC-AGT-134가 확인한다 |
+| Gateway 재기동 뒤 늦은 구독 | 범위 밖. 보관 값이 없는 것은 README에 적혀 있다 |
+| 실제 스택 lockstep의 복구 재송신 재현 | 결정론 묶음에 링크 끊김을 넣지 않았다 |
+| O-46 원인 | 링크 지연 기록을 대조하지 않았다 |
