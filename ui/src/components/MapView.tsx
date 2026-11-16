@@ -49,12 +49,16 @@ interface Props {
   onWaypointDrag(index: number, point: MapPoint, done: boolean): void;
 }
 
-/** 화면 좌표 → 지면(지형이 있으면 지형, 없으면 타원체) 위경도 */
+/**
+ * 화면 좌표(CSS px, 캔버스 왼쪽 위 기준) → 지면(지형이 있으면 지형, 없으면 타원체) 위경도.
+ * Cesium의 getPickRay·pickEllipsoid는 CSS px를 받아 드로잉 버퍼 배율(resolutionScale·devicePixelRatio)을 스스로 적용한다.
+ * IMP-UI-077: globe.pick은 2D·2.5D(Columbus)에서도 지형 표면을 잡으므로 모든 모드에서 먼저 쓴다.
+ */
 function pickGround(viewer: Viewer, x: number, y: number): MapPoint | null {
   const scene = viewer.scene;
-  const ray = viewer.camera.getPickRay(new Cartesian2(x, y));
-  const p = (ray && scene.mode === SceneMode.SCENE3D ? scene.globe.pick(ray, scene) : undefined) ??
-    viewer.camera.pickEllipsoid(new Cartesian2(x, y), scene.globe.ellipsoid);
+  const xy = new Cartesian2(x, y);
+  const ray = viewer.camera.getPickRay(xy);
+  const p = (ray ? scene.globe.pick(ray, scene) : undefined) ?? viewer.camera.pickEllipsoid(xy, scene.globe.ellipsoid);
   if (!p) return null;
   const c = Cartographic.fromCartesian(p);
   return { latDeg: CesiumMath.toDegrees(c.latitude), lonDeg: CesiumMath.toDegrees(c.longitude), heightM: Math.max(0, c.height) };

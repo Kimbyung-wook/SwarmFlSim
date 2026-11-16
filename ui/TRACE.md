@@ -87,6 +87,9 @@
 | IMP-UI-074 | 입력 칸·선택 상자에 포커스가 있어도 Esc는 전역 처리(임무 창 닫기, 없으면 선택 해제·자유 시점). 다른 단축키(숫자, H, Ctrl+A)는 입력 칸에서 계속 무시 | `src/model/shortcuts.ts`, `src/App.tsx` | REQ-UI-003 | TC-UI-061, TC-UI-063 |
 | IMP-UI-075 | 타격 지정 양식의 종류 선택 라벨을 매뉴얼과 같은 "유도 객체 종류"로 변경. 탭 이름 "타격 지정", 코드 식별자, proto 필드는 그대로 | `src/components/MissionPanel.tsx` | REQ-UI-003 | TC-UI-062 |
 | IMP-UI-076 | UI가 `swarm/<gcs>/tx/c2/**`로 보내는 모든 `LinkEnvelope`에 `publisher`를 채운다. 값은 브리지 hello의 `client`와 같은 UI 참여자 ID. `header.source`는 GCS ID 그대로, `header.seq`는 UI 인스턴스·키별. 봉투를 만드는 곳은 `C2Commander.wrap` 한 곳 | `src/model/commands.ts` | DEC-077 | TC-UI-064 |
+| IMP-UI-077 | 임무 점은 지면에 붙인 표지(점·라벨, CLAMP_TO_GROUND)로 그리고 명령 고도에는 작은 점과 지면→고도 수직선을 둔다. 손잡이 화면 좌표도 지면 표지 기준. `pickGround`는 3D·2.5D·2D 모두 `globe.pick`(지형 없으면 `pickEllipsoid`). 원근 화면에서 명령 고도에 그려 커서와 어긋나던 결함 수정(좌표 배율은 CSS px로 원래 맞음) | `src/cesium/missionLayer.ts`, `src/components/MapView.tsx` | REQ-UI-003 | TC-UI-066, TC-UI-068 |
+| IMP-UI-078 | 임무 도형 깜빡임 방지: 점·선은 순번 풀로 값만 바꾸고 선 위치는 `CallbackProperty`(비동기 형상 재생성 없음), 원은 내용이 같으면 그대로 두고 바뀐 것만 다시 만든다 | `src/cesium/missionLayer.ts` | REQ-UI-003 | TC-UI-065, TC-UI-068 |
+| IMP-UI-079 | 대상 선택이 비면 임무 메뉴 지점을 닫고 미전송 초안(taskId 없음)을 버린다. 전송한 항로를 고치는 초안과 전송된 임무 표시(활성 동안 표시)는 그대로 | `src/model/deselect.ts`, `src/App.tsx` | REQ-UI-001, REQ-UI-003 | TC-UI-067, TC-UI-068 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -143,6 +146,10 @@
 | TC-UI-062 | 임무 창 타격 지정 양식에 라벨 "유도 객체 종류"가 있고 이전 라벨은 없으며 탭 이름은 유지 (1건) | `ui/src/components/panels.test.tsx` | IMP-UI-075 | 통과 |
 | TC-UI-063 | 수동(브라우저, 목 소스): 24대 선택 후 우클릭으로 임무 창을 열고 입력 칸에 포커스. `1` 키는 입력 값에만 들어가고 선택은 24대 유지. Esc로 임무 창이 닫히고 포커스는 BODY, 선택은 24대 유지. 콘솔 오류 없음 | 브라우저 확인 | IMP-UI-074 | 통과 |
 | TC-UI-064 | publisher: task·mission·formation·group 봉투 8종이 직렬화 뒤에도 UI ID를 유지, `header.source`는 GCS, seq는 발행자·키별, `BusSource.sendC2`로 나간 바이트에서 publisher 확인 (3건 + 기존 BusSource 송신 시험에 검사 1개 추가, 구현을 빼면 4건 실패 확인) | `ui/src/model/publisher.test.ts`, `ui/src/data/busSource.test.ts` | IMP-UI-076 | 통과 |
+| TC-UI-065 | 깜빡임 방지: 같은 도형 반복 set 시 추가·삭제 0, 점선 시작점 이동 시 같은 Entity에서 위치만 변경, 라벨 변경은 글만 갱신, 원은 반경 변경 시 그 원만 1회 재생성, 빈 도형이면 Entity 0 (4건) | `ui/src/cesium/missionLayer.test.ts` | IMP-UI-078 | 통과 |
+| TC-UI-066 | 지면 표지: 표지 점·라벨 CLAMP_TO_GROUND·찍은 위경도, 명령 고도 점 1000 m, 수직선 지면 120 m→1000 m, 지형 없으면 지면 0 (2건) | `ui/src/cesium/missionLayer.test.ts` | IMP-UI-077 | 통과 |
+| TC-UI-067 | 선택 해제: n→0이면 메뉴 닫기·미전송 초안 버림, 전송 항로 초안 유지, 0→0·2→1·0→2·1→3은 동작 없음 (3건) | `ui/src/model/deselect.test.ts` | IMP-UI-079 | 통과 |
+| TC-UI-068 | 브라우저 수동 확인(미리보기 5175): 지형 있음·타원체 각각 3D(수직·경사)·2.5D·2D에서 우클릭 좌표와 표지 화면 좌표 일치(오차 0 px), 선회 미리보기 중 기체 이동 5초 동안 임무 Entity 재생성 0, 빈 곳 클릭으로 선택 해제 시 메뉴·이동 표지 사라짐 | 수동 | IMP-UI-077~079 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -155,4 +162,5 @@
 - 지도 영상 자체 합성(DEC-059, 기준 `wp0-contracts` dee8dfb): `npm test` 23파일 157건 통과, `npm run build` 통과. AWS 공개 Sentinel-2 L2A 가을 장면 144개를 20 m 개관으로 받아(약 17.7 GB, 17분) z13 영상 타일 62,203장 618 MB. EOX `fetch_imagery.py`는 `--template` 경로로 남김
 - 문서 교차 검토 UI 수정(기준 `wp0-contracts` 6a85fb0): `npm test` 24파일 161건 통과, `npm run build` 통과. 임무 창 입력 칸의 Esc 동작과 라벨 "유도 객체 종류" 반영
 - LinkEnvelope.publisher(DEC-077, 기준 `wp0-contracts` c74b252, 계약 0.15.0): `npm test` 25파일 164건 통과, `npm run build` 통과. 브리지는 봉투를 그대로 전달하므로 변경 없음
+- 데모 결함 3건(우클릭 어긋남·깜빡임·선택 해제 잔상, 기준 `wp0-contracts` f5fea80): `npx vitest run` 27파일 173건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-068
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.

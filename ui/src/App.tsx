@@ -42,6 +42,7 @@ import { commandStateLabel } from "./model/taskLog";
 import type { SelectMode } from "./model/selection";
 import { applySelection, isControllable, pruneSelection } from "./model/selection";
 import { ignoresShortcut } from "./model/shortcuts";
+import { onTargetsChange } from "./model/deselect";
 import { TaskLog } from "./model/taskLog";
 
 /** UI 인스턴스 ID (DEC-020: 여러 UI 동시 접속). 엔티티 ID 규칙을 따른다 */
@@ -178,6 +179,15 @@ export function App() {
   });
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
+
+  // 대상 선택이 없어지면 찍어 둔 지점·보내지 않은 도형을 지운다 (IMP-UI-079). 보낸 임무 표시는 그대로
+  const prevTargetCount = useRef(targets.length);
+  useEffect(() => {
+    const fx = onTargetsChange(prevTargetCount.current, targets.length, draftRef.current);
+    prevTargetCount.current = targets.length;
+    if (fx.closeMenu) setMenu(null);
+    if (fx.dropDraft) setDraft(null);
+  }, [targets.length]);
 
   const issue = useCallback(
     (make: (c: C2Commander) => OutgoingC2) => {
