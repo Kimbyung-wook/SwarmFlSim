@@ -1,19 +1,23 @@
 // IMP-UI-019: GCS 화면 구성 (REQ-UI-001, REQ-UI-002, REQ-UI-007)
 // IMP-UI-034: 버스 소스(브리지) 선택, C2 명령 전송·상태 표시, 부대 그룹 단축키 (REQ-UI-002~004, DEC-027)
 // IMP-UI-040: 우클릭 임무 메뉴·Ctrl+우클릭 항로 편집·보낸 임무 지도 표시 연결 (REQ-UI-003, REQ-UI-004, DEC-033)
+// IMP-UI-083: 보낸 임무 표시를 기체별 현재 행동(ActivityStore)으로 바꾼다. 작업은 TaskStatus로 수행이 확인된 뒤부터 그린다
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { create } from "@bufbuild/protobuf";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { FormationShape } from "./gen/swarm/v1/c2_pb";
-import type { ParamOwner } from "./gen/swarm/v1/sim_pb";
+import { ParamOwner } from "./gen/swarm/v1/sim_pb";
 import { SimCommandSchema } from "./gen/swarm/v1/sim_pb";
+import { ActivityStore } from "./model/activity";
+import type { ActivityMode } from "./model/activityMode";
+import { simRate } from "./model/activityMode";
 import { BridgeTransport } from "./data/bridgeTransport";
 import type { BridgeState } from "./data/bridgeTransport";
 import { BusSource } from "./data/busSource";
 import { MockSource } from "./data/mockSource";
 import type { DataSource } from "./data/source";
 import type { SourceConfig, SourceKind } from "./data/sourceConfig";
-import { parseSourceConfig, withSource } from "./data/sourceConfig";
+import { mockLayout, parseSourceConfig, withSource } from "./data/sourceConfig";
 import type { MapDataStatus } from "./cesium/viewer";
 import type { MapApi, ViewMode } from "./components/MapView";
 import { MapView } from "./components/MapView";
@@ -38,7 +42,6 @@ import { combine, draftOverlay, emptyOverlay, missionOverlay } from "./model/mis
 import type { RouteDraft } from "./model/routeDraft";
 import * as route from "./model/routeDraft";
 import { Side } from "./gen/swarm/v1/entity_pb";
-import { commandStateLabel } from "./model/taskLog";
 import type { SelectMode } from "./model/selection";
 import { applySelection, isControllable, pruneSelection } from "./model/selection";
 import { ignoresShortcut } from "./model/shortcuts";
@@ -57,7 +60,7 @@ interface Conn {
 }
 
 function makeSource(cfg: SourceConfig, onConn: (c: Conn) => void, onNotice: (m: string) => void): DataSource {
-  if (cfg.kind !== "bus") return new MockSource();
+  if (cfg.kind !== "bus") return new MockSource(cfg.mockUavs ? { scenario: mockLayout(cfg.mockUavs) } : {});
   const transport = new BridgeTransport({
     url: cfg.bridgeUrl,
     client: UI_ID,
@@ -96,6 +99,15 @@ export function App() {
   const tasks = useMemo(() => new TaskLog(), []);
   const params = useMemo(() => new ParamStore(), []);
   const groups = useMemo(() => new GroupStore(), []);
+  const activity = useMemo(
+    () =>
+      new ActivityStore((id) => {
+        const v = params.get(id, ParamOwner.MA)?.values?.["hold_radius_m"];
+        return typeof v === "number" ? v : undefined;
+      }),
+    [params],
+  );
+  const [activityMode, setActivityMode] = useState<ActivityMode>("all");
   const commander = useMemo(() => (source.gcs ? new C2Commander(source.gcs, UI_ID, () => live.frame) : null), [source, live]);
   const [selection, setSelection] = useState<readonly string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("3d");
@@ -117,11 +129,17 @@ export function App() {
     const unsub = source.subscribe({
       truth: (f) => live.onTruth(f),
       frameSeq: (n) => live.onFrameSeq(n),
-      status: (s) => live.onStatus(s),
+      status: (s) => {
+        live.onStatus(s);
+        activity.onSimStatus(s.simTimeUs, simRate(s));
+      },
       rx: (k, env) => {
         tasks.received(k, env);
         live.onRx(k, env);
+        activity.onRx(k, env);
       },
+      tx: (k, env) => activity.onTx(k, env),
+      scenario: (s) => activity.onScenario(s),
       event: (_k, ev) => live.onEvent(ev),
       params: (p) => params.onParams(p),
     });
@@ -133,7 +151,7 @@ export function App() {
       unsub();
       source.close();
     };
-  }, [source, live, tasks, params]);
+  }, [source, live, tasks, params, activity]);
 
   useEffect(() => {
     if (conn?.state === "open") setError(null);
@@ -204,6 +222,8 @@ export function App() {
       }
       // 응답이 곧바로 올 수 있으므로(목 소스) 기록을 먼저 남긴다
       const entry = tasks.sent(out);
+      // 작업 내용은 tx 구독으로도 돌아오지만(브리지가 되돌려 주지 않을 수 있어) 직접 넣는다. 같은 task_id면 덮어쓴다
+      activity.onTx(out.key, out.envelope);
       try {
         source.sendC2(out);
       } catch (e) {
@@ -212,7 +232,7 @@ export function App() {
       }
       refresh();
     },
-    [commander, source, tasks, flash],
+    [commander, source, tasks, activity, flash],
   );
 
   const task = useCallback(
@@ -356,21 +376,10 @@ export function App() {
       ? "브리지 미연결"
       : null;
 
-  // 지도 도형: 편집 중 항로, 메뉴 미리보기, 보낸 임무(기체별 최근, 진행 중)
+  // 지도 도형: 편집 중 항로, 메뉴 미리보기. 보낸 임무는 기체별 현재 행동(MapView ActivityLayer)으로 그린다 (중복 도형 없음)
   const overlays: Overlay[] = [];
   if (draft) overlays.push(draftOverlay(draft));
   if (menu && preview) overlays.push(missionOverlay(preview, "pending", "", avgPos(live, targets)));
-  for (const t of tasks.activeMissions()) {
-    if (draft && t.id === draft.taskId) continue; // 편집 중인 항로는 편집 도형으로 그린다
-    let m = t.mission!;
-    if (m.kind === "strike" && !m.aimPoint && m.targetId) {
-      const e = live.get(m.targetId);
-      if (e) m = { ...m, aimPoint: { latDeg: e.lat, lonDeg: e.lon, altM: e.alt } };
-    }
-    const st = [...t.reports.values()].pop();
-    const label = `${t.summary}${st ? ` · ${commandStateLabel(st.state)}${st.progress > 0 ? ` ${Math.round(st.progress * 100)}%` : ""}` : ""}`;
-    overlays.push(missionOverlay(m, "sent", label));
-  }
   const overlayKey = JSON.stringify(overlays);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const overlay = useMemo(() => (overlays.length ? combine(...overlays) : emptyOverlay()), [overlayKey]);
@@ -392,6 +401,8 @@ export function App() {
         mapStatus={mapStatus}
         viewMode={viewMode}
         onViewMode={setViewMode}
+        activityMode={activityMode}
+        onActivityMode={setActivityMode}
         onStart={() => send({ case: "start", value: { rate: 1 } })}
         onPause={() => send({ case: "pause", value: {} })}
         onResume={() => send({ case: "resume", value: {} })}
@@ -421,6 +432,8 @@ export function App() {
           onRightClick={onRightClick}
           overlay={overlay}
           onWaypointDrag={onWaypointDrag}
+          activity={activity}
+          activityMode={activityMode}
         />
         <aside className="panel">
           {menu && !draft && (

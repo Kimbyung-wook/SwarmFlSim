@@ -172,9 +172,7 @@ export class MockScenario {
     };
   }
 
-  private context(t: number): PlanContext {
-    const gcs = this.actors.find((a) => a.kind === EntityKind.GCS);
-    const home = gcs ? gcs.at(t).pos : { n: 0, e: 0 };
+  private context(_t: number): PlanContext {
     return {
       toNed: geodeticToNed,
       entityNed: (id) => {
@@ -183,7 +181,10 @@ export class MockScenario {
         const p = this.sample(a, this.guidedT).pos;
         return { n: p.n, e: p.e };
       },
-      home: { n: home.n, e: home.e },
+      home: (id) => {
+        const p = this.actors.find((x) => x.id === id)?.at(0).pos ?? { n: 0, e: 0 };
+        return { n: p.n, e: p.e };
+      },
     };
   }
 

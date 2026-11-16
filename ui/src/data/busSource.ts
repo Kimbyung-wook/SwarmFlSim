@@ -6,7 +6,8 @@
 import { fromBinary, toBinary } from "@bufbuild/protobuf";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import type { SimCommand } from "../gen/swarm/v1/sim_pb";
-import { EntityParamsSchema, SimCommandSchema, SimStatusSchema } from "../gen/swarm/v1/sim_pb";
+// IMP-UI-082: swarm/<gcs>/tx/**(LinkEnvelope)와 sim/ctrl/scenario(Scenario) 구독 (기체 행동 표시)
+import { EntityParamsSchema, ScenarioSchema, SimCommandSchema, SimStatusSchema } from "../gen/swarm/v1/sim_pb";
 import { TruthEventSchema, TruthFrameSchema } from "../gen/swarm/v1/truth_pb";
 import type { OutgoingC2 } from "../model/commands";
 import { ENVELOPE_ENCODING } from "../model/commands";
@@ -21,8 +22,14 @@ export const KEY_TRUTH_EVENTS = "truth/event/**";
 export const KEY_SIM_CMD = "sim/ctrl/cmd";
 export const SIM_CMD_ENCODING = `application/protobuf;${SimCommandSchema.typeName}`;
 
+export const KEY_SIM_SCENARIO = "sim/ctrl/scenario";
+
 export function rxAllKey(gcs: string): string {
   return `swarm/${gcs}/rx/**`;
+}
+
+export function txAllKey(gcs: string): string {
+  return `swarm/${gcs}/tx/**`;
 }
 
 export interface SubscribeOptions {
@@ -84,10 +91,13 @@ export class BusSource implements DataSource {
       t.subscribe(KEY_SIM_STATUS, (p, k) => this.decode(k, () => this.handlers.status(fromBinary(SimStatusSchema, p)))),
       t.subscribe(KEY_SIM_PARAMS, (p, k) => this.decode(k, () => this.handlers.params(fromBinary(EntityParamsSchema, p)))),
       t.subscribe(KEY_TRUTH_EVENTS, (p, k) => this.decode(k, () => this.handlers.event(k, fromBinary(TruthEventSchema, p)))),
+      // 준비 대기 중 1초마다 온다(DEC-037). 시작 뒤에 붙으면 받지 못한다
+      t.subscribe(KEY_SIM_SCENARIO, (p, k) => this.decode(k, () => this.handlers.scenario(fromBinary(ScenarioSchema, p)))),
     ];
     if (this.gcs) {
       this.unsubs.push(
         t.subscribe(rxAllKey(this.gcs), (p, k) => this.decode(k, () => this.handlers.rx(k, fromBinary(LinkEnvelopeSchema, p)))),
+        t.subscribe(txAllKey(this.gcs), (p, k) => this.decode(k, () => this.handlers.tx(k, fromBinary(LinkEnvelopeSchema, p)))),
       );
     }
     await t.open();

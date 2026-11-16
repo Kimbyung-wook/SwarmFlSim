@@ -9,7 +9,8 @@ const MAX_BANK = (30 * Math.PI) / 180;
 const CLIMB_MPS = 6;
 const ACCEL_MPS2 = 2;
 const MIN_SPEED = 15;
-export const GUIDE_DEFAULT_RADIUS_M = 600;
+/** 작업에 반경이 없을 때. 내장 MA hold_radius_m 기본값과 같게 둔다 (IMP-UI-082) */
+export const GUIDE_DEFAULT_RADIUS_M = 300;
 const ARRIVE_M = 200;
 const STRIKE_ORBIT_M = 400;
 
@@ -173,7 +174,8 @@ export interface PlanContext {
   toNed(g: { latDeg: number; lonDeg: number }): Ned2;
   /** 엔티티 현재 위치. 없으면 null */
   entityNed(id: string): Ned2 | null;
-  home: Ned2;
+  /** 기체 귀환점: 시작 위치(첫 NavigationReport). Agent MA home 규칙과 같다 (IMP-UI-082) */
+  home(id: string): Ned2;
 }
 
 /**
@@ -186,11 +188,12 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
   const dR = 120 * k;
   const spread = (p: Ned2): Ned2 => (k === 0 ? p : { n: p.n + 150 * k * Math.cos(2.4 * k), e: p.e + 150 * k * Math.sin(2.4 * k) });
   const here: Ned2 = { n: cur.n, e: cur.e };
+  // own: 기체마다 제 중심(현재 위치·귀환점)을 도는 선회. MA처럼 반경을 엇갈리지 않는다 (행동 표시 선회원과 같게, IMP-UI-082)
   const hold = (
     c: Ned2 | (() => Ned2), alt: number, r = GUIDE_DEFAULT_RADIUS_M, dir: 1 | -1 = 1, durationS: number | null = null,
-    rt?: { legLengthM: number; axisHeadingDeg: number },
+    rt?: { legLengthM: number; axisHeadingDeg: number }, own = false,
   ): Leg => ({
-    kind: "orbit", center: c, radiusM: r + dR, dir, alt: alt + dAlt, durationS,
+    kind: "orbit", center: c, radiusM: r + (own ? 0 : dR), dir, alt: alt + dAlt, durationS,
     race: rt && rt.legLengthM > 0 ? { legM: rt.legLengthM, axisRad: (rt.axisHeadingDeg * Math.PI) / 180 } : undefined,
   });
   const goto = (to: Ned2 | (() => Ned2), alt: number, speed?: number, acceptM = ARRIVE_M): Leg => ({
@@ -212,8 +215,8 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
       const alt = v.center ? v.center.altM : cur.alt - dAlt;
       const r = v.radiusM ?? GUIDE_DEFAULT_RADIUS_M;
       const rt = v.racetrack;
-      if (v.durationS) return plan([hold(c, alt, r, dirOf(v.direction), v.durationS, rt), hold(c, alt, r, dirOf(v.direction), null, rt)], 0);
-      return plan([hold(c, alt, r, dirOf(v.direction), null, rt)], 0);
+      if (v.durationS) return plan([hold(c, alt, r, dirOf(v.direction), v.durationS, rt, !v.center), hold(c, alt, r, dirOf(v.direction), null, rt, !v.center)], 0);
+      return plan([hold(c, alt, r, dirOf(v.direction), null, rt, !v.center)], 0);
     }
     case "strike": {
       const v = t.value;
@@ -256,7 +259,10 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
       return plan([...legs, hold(endAt, last.alt - dAlt)], legs.length - 1);
     }
     case "returnToBase":
-      return plan([goto(ctx.home, cur.alt - dAlt), hold(ctx.home, cur.alt - dAlt)], 0);
+    {
+      const home = ctx.home(cmd.assignees[k] ?? "");
+      return plan([goto(home, cur.alt - dAlt), hold(home, cur.alt - dAlt, undefined, 1, null, undefined, true)], 0);
+    }
     default:
       return null;
   }

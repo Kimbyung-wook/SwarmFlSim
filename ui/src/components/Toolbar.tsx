@@ -6,6 +6,8 @@ import type { MapDataStatus } from "../cesium/viewer";
 import type { BridgeState } from "../data/bridgeTransport";
 import type { SourceKind } from "../data/sourceConfig";
 import type { ViewMode } from "./MapView";
+import type { ActivityMode } from "../model/activityMode";
+import { ACTIVITY_MODE_LABEL } from "../model/activityMode";
 
 type ConnState = BridgeState;
 
@@ -29,6 +31,9 @@ interface Props {
   mapStatus: MapDataStatus | null;
   viewMode: ViewMode;
   onViewMode(m: ViewMode): void;
+  /** 기체 행동 표시 범위 (IMP-UI-083) */
+  activityMode?: ActivityMode;
+  onActivityMode?(m: ActivityMode): void;
   onStart(): void;
   onPause(): void;
   onResume(): void;
@@ -77,6 +82,19 @@ export function Toolbar(p: Props) {
           </button>
         ))}
         <button onClick={onFit} title="전체 보기">전체</button>
+        {p.onActivityMode && (
+          <select
+            value={p.activityMode ?? "all"}
+            onChange={(e) => p.onActivityMode?.(e.target.value as ActivityMode)}
+            title="기체별 현재 행동(향하는 점·선회원·표적) 표시 범위"
+          >
+            {(Object.keys(ACTIVITY_MODE_LABEL) as ActivityMode[]).map((m) => (
+              <option key={m} value={m}>
+                {ACTIVITY_MODE_LABEL[m]}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="group">
         {loaded ? (

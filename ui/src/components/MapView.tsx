@@ -4,10 +4,15 @@
 // IMP-UI-067: 2D·2.5D·3D 전환 시 직전 화면 중심·폭을 새 모드에 그대로 옮긴다 (REQ-UI-001, DEC-003)
 // IMP-UI-068: 첫 엔티티 수신과 시나리오 교체 때 한 번씩 맞춤 뷰 (REQ-UI-001)
 // IMP-UI-037: 우클릭 → 임무 메뉴, Ctrl+우클릭 → 항로점 추가, 항로점 손잡이 왼쪽 끌기 → 위치 변경 (DEC-033)
+// IMP-UI-083: 기체별 현재 행동(ActivityLayer)을 렌더 루프에서 갱신한다. 도형은 4 Hz 안에서만 다시 맞추고 대시선 시작점은 매 프레임
 import { useEffect, useRef, useState } from "react";
 import type { Viewer } from "cesium";
 import { Cartesian2, Cartographic, Math as CesiumMath, SceneMode } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
+import { ActivityLayer } from "../cesium/activityLayer";
+import type { ActivityStore } from "../model/activity";
+import type { ActivityMode } from "../model/activityMode";
+import { activityFilter } from "../model/activityMode";
 import { EntityLayer } from "../cesium/entityLayer";
 import { EventLayer } from "../cesium/eventLayer";
 import { captureView, restoreView } from "../cesium/cameraView";
@@ -47,7 +52,13 @@ interface Props {
   overlay: Overlay;
   /** 항로점 손잡이를 끄는 중. done이면 놓았다 */
   onWaypointDrag(index: number, point: MapPoint, done: boolean): void;
+  /** 기체별 현재 행동 (IMP-UI-080) */
+  activity: ActivityStore;
+  activityMode: ActivityMode;
 }
+
+/** 행동 도형을 다시 맞추는 최소 간격(ms). 대시선 시작점은 이와 무관하게 매 프레임 움직인다 */
+const ACTIVITY_SYNC_MS = 250;
 
 /**
  * 화면 좌표(CSS px, 캔버스 왼쪽 위 기준) → 지면(지형이 있으면 지형, 없으면 타원체) 위경도.
@@ -102,6 +113,10 @@ export function MapView(props: Props) {
       missionRef.current = missions;
       missions.set(propsRef.current.overlay);
       const events = new EventLayer(viewer);
+      const activity = propsRef.current.activity;
+      const acts = new ActivityLayer(viewer, (id) => activity.positionAt(id));
+      let actSeen = "";
+      let actAt = 0;
       let seenEv = "";
       let seen = -1;
       const gate = new FitGate();
@@ -120,6 +135,15 @@ export function MapView(props: Props) {
           events.update(
             eventOverlay(live.events, live.sensors.active(), (id) => live.get(id), events.groundAlt),
           );
+        }
+        const { activityMode, selection: sel } = propsRef.current;
+        const actKey = `${activity.version}/${activityMode}/${sel.join(",")}`;
+        const now = Date.now();
+        if (actKey !== actSeen && now - actAt >= ACTIVITY_SYNC_MS) {
+          actSeen = actKey;
+          actAt = now;
+          const f = activityFilter(activityMode, sel);
+          acts.sync(f === "off" ? [] : activity.shapes(f ?? undefined), new Set(sel));
         }
         layer.follow(follow.current.id, follow.current.mode);
         layer.orient();
@@ -224,6 +248,7 @@ export function MapView(props: Props) {
         window.removeEventListener("pointerup", up);
         viewer.scene.preRender.removeEventListener(onPreRender);
         events.destroy();
+        acts.destroy();
         missions.destroy();
         missionRef.current = null;
         layer.destroy();

@@ -4,7 +4,10 @@
 // IMP-UI-046: UAV마다 동역학·FA·MA 매개변수(EntityParams)를 sim/param으로 내고, set_params를 검사해 적용·거부한다 (DEC-035).
 // IMP-UI-063: truth/event/<kind>와 SensorActivity(rx/ms)를 각본(MockEvents)으로 낸다. 발사체는 truth/state에 함께 싣는다 (DEC-046).
 // IMP-UI-041: 대상 UAV는 임무대로 비행하고(MockScenario.command), 구간 진행·완료를 TaskStatus(EXECUTING·COMPLETED)로 보낸다.
+// IMP-UI-082: Agent 런타임처럼 UAV마다 NavigationReport를 1 Hz(모의 시간)로 rx/vi에 내고, 보낸 C2 봉투를 tx로 되돌려 준다 (기체 행동 표시)
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { NavigationReportSchema } from "../gen/swarm/v1/vi_pb";
+import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
 import { EntityKind } from "../gen/swarm/v1/entity_pb";
@@ -148,6 +151,7 @@ export class MockSource implements DataSource {
 
   sendC2(out: OutgoingC2): void {
     const env = out.envelope;
+    this.handlers.tx(out.key, env);
     if (env.msgType !== TaskCommandSchema.typeName) return;
     const cmd = fromBinary(TaskCommandSchema, env.payload);
     const rejected = new Set(this.scenario.command(cmd, Number(this.simTimeUs()) / 1e6));
@@ -246,8 +250,28 @@ export class MockSource implements DataSource {
     for (const e of evs) this.handlers.event(`truth/event/${eventKind(e.event.case)}`, e);
     const act = this.events?.sensor(nowS, f);
     if (act) this.handlers.rx(`swarm/${this.gcs}/rx/ms/SensorActivity`, act);
+    if (this.lastPubS < 0 || Math.floor(nowS) > Math.floor(this.lastPubS)) this.publishNav(f);
     this.lastPubS = nowS;
     for (const r of this.scenario.takeReports()) this.reply(r.entityId, r.taskId, r.state, r.progress, r.reason);
+  }
+
+  /** UAV마다 NavigationReport (잡음 없음) */
+  private publishNav(f: TruthFrame): void {
+    const simTimeUs = this.simTimeUs();
+    for (const e of f.entities) {
+      if (e.kind !== EntityKind.UAV || !e.alive) continue;
+      const header = { simTimeUs, frame: this.frame, source: e.id };
+      const nav = create(NavigationReportSchema, { header, kinematics: e.kinematics });
+      const env = create(LinkEnvelopeSchema, {
+        header,
+        dst: [this.gcs],
+        iface: L1Interface.VI,
+        msgType: NavigationReportSchema.typeName,
+        payload: toBinary(NavigationReportSchema, nav),
+        rxTimeUs: simTimeUs,
+      });
+      this.handlers.rx(`swarm/${this.gcs}/rx/vi/NavigationReport`, env);
+    }
   }
 }
 
