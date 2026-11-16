@@ -38,7 +38,8 @@ export function readConfig(search: string): AppConfig {
   };
   return {
     source: p.get("source") === "bridge" ? "bridge" : "mock",
-    url: p.get("url") ?? DEFAULT_BRIDGE_URL,
+    // DEC-091: 브리지 주소는 `bridge=`, `url=`은 별칭. 둘 다 있으면 `bridge=`가 우선
+    url: p.get("bridge") || p.get("url") || DEFAULT_BRIDGE_URL,
     view: p.get("replay") === "1" ? "replay" : "live",
     uavs: num("uavs", 20),
     peerHz: num("hz", 10),
