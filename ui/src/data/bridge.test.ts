@@ -233,12 +233,17 @@ describe("BridgeTransport", () => {
 
 describe("sourceConfig", () => {
   it("쿼리 > 환경변수 > 기본값, 잘못된 GCS는 관찰 전용", () => {
-    expect(parseSourceConfig("", {}, "localhost")).toEqual({ kind: "mock", bridgeUrl: "ws://localhost:8765/bus", gcs: "gcs-01" });
+    expect(parseSourceConfig("", {}, "localhost")).toEqual({ kind: "mock", bridgeUrl: "ws://localhost:8765/bus", gcs: "gcs-01", mockUavs: null });
     expect(parseSourceConfig("?source=bus&bridge=ws://a:1/bus&gcs=gcs-02", { VITE_BRIDGE_URL: "ws://env/bus" })).toEqual({
       kind: "bus",
       bridgeUrl: "ws://a:1/bus",
       gcs: "gcs-02",
+      mockUavs: null,
     });
+    // 목 소스 UAV 수 (성능 확인용, IMP-UI-082)
+    expect(parseSourceConfig("?uavs=100").mockUavs).toBe(100);
+    expect(parseSourceConfig("?uavs=0").mockUavs).toBeNull();
+    expect(parseSourceConfig("?uavs=abc").mockUavs).toBeNull();
     expect(parseSourceConfig("?source=bus", { VITE_BRIDGE_URL: "ws://env/bus", VITE_GCS: "gcs-09" })).toMatchObject({ bridgeUrl: "ws://env/bus", gcs: "gcs-09" });
     expect(parseSourceConfig("?gcs=").gcs).toBeNull();
     expect(parseSourceConfig("?gcs=GCS").gcs).toBeNull();

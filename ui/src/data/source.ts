@@ -5,7 +5,8 @@
 // IMP-UI-028: C2 명령 송신(swarm/<gcs>/tx/c2/**)과 swarm/<gcs>/rx/** 수신을 더한다 (REQ-UI-003, REQ-UI-004)
 import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
 import type { TruthEvent, TruthFrame } from "../gen/swarm/v1/truth_pb";
-import type { EntityParams, SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
+// IMP-UI-082: swarm/<gcs>/tx/**(UI 자신·Gateway가 보낸 작업)와 sim/ctrl/scenario(mission_plan) 수신을 더한다 (기체 행동 표시)
+import type { EntityParams, Scenario, SimCommand, SimStatus } from "../gen/swarm/v1/sim_pb";
 import type { OutgoingC2 } from "../model/commands";
 
 export interface DataHandlers {
@@ -17,6 +18,10 @@ export interface DataHandlers {
   frameSeq?: (frame: bigint) => void;
   /** swarm/<gcs>/rx/** (데이터링크가 전달한 LinkEnvelope) */
   rx?: (key: string, env: LinkEnvelope) => void;
+  /** swarm/<gcs>/tx/** (이 GCS 이름으로 나간 LinkEnvelope. UI 자신과 Gateway) */
+  tx?: (key: string, env: LinkEnvelope) => void;
+  /** sim/ctrl/scenario */
+  scenario?: (s: Scenario) => void;
   /** sim/param/<entity>/<owner> (DEC-035) */
   params?: (p: EntityParams) => void;
   /** truth/event/<kind> (launch·impact·kill·jam_zone·spawn) */
@@ -59,6 +64,14 @@ export class HandlerSet {
 
   rx(key: string, env: LinkEnvelope): void {
     for (const h of this.set) h.rx?.(key, env);
+  }
+
+  tx(key: string, env: LinkEnvelope): void {
+    for (const h of this.set) h.tx?.(key, env);
+  }
+
+  scenario(s: Scenario): void {
+    for (const h of this.set) h.scenario?.(s);
   }
 
   params(p: EntityParams): void {
