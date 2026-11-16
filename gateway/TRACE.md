@@ -1,7 +1,8 @@
 # gateway 추적표 (모듈 코드 GW)
 
-- 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-075(외부 승인 응답), DEC-076(임무 계획 수신), DEC-077(`publisher`), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
-- 계약 버전: 0.15.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts c74b252 병합)
+- 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-075(외부 승인 응답), DEC-076(임무 계획 수신), DEC-077(`publisher`), DEC-088(A-GRA 송신 4종), DEC-089(변화 보고 복구), DEC-090(XSD 상태 표현), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
+- 계약 버전: 0.19.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 28ac1e0 병합). 0.16.0~0.19.0의 바뀐 점(`GcsHeartbeat`·`lost_link_policy` EXT, `NavigationBatch`·`ControlBatch` SIM, `ordered` 구독, `link/state` 분산)은 Gateway 동작에 영향이 없다. 새 EXT·SIM은 descriptor 매핑으로 내보내지 않는다
+- 5차(2026-11-16): DEC-089(늦게 붙은 외부 시스템에 변화 보고 마지막 값), DEC-088(송신 4종 시험), DEC-090(상태 enum 확인), QA O-20(`declared.pub`)
 - 4차(2026-11-09): DEC-075(CR-GW-002), DEC-076(CR-GW-003), DEC-077(CR-GW-005, QA O-14)
 - 3차(2026-11-09): 문서 교차 검토 불일치 2건. Zenoh가 없으면 실패 종료, cp949 콘솔의 `--help` (wp0-contracts 6a85fb0 병합)
 - 2차(2026-11-08): DEC-072 구현(CR-GW-001 해소), QA 15차 D-27(`--no-multicast`), O-13(준비 전 구간 로그·문서). DEC-071(Agent의 VI 상태 GCS 보고)은 WP3 몫이며 Gateway는 기존 VI 변환기로 받는다
@@ -34,6 +35,11 @@
 | IMP-GW-021 | 임무 계획 수신: `MA_RoutePlan` → `RoutePlan`(`NextPathSegment` 순서, rad→도, 속력), `MA_MissionPlan` → `MissionPlan`(참조한 경로를 `move_to`·`route` 작업으로 편다). 허용 목록 밖 요소는 임시 규칙 없이 거부한다 | `src/swarm_gateway/converters/mp.py`, `base.py`(`BoundedStore`) | DEC-076 | TC-GW-021~024 통과 |
 | IMP-GW-022 | 2단계 범위를 STD C2·MP로 넓힌다. 발행 키는 `tx/c2/**`, `tx/mp/**`로 제한하고(`publish_inbound`), MP는 LA-CAL 토픽 `<prefix>.mp`로 구독한다 | `src/swarm_gateway/gateway.py`, `runner.py`, `config/lacal_server.yaml` | DEC-076, DEC-068 | TC-GW-026, TC-GW-027 통과 |
 | IMP-GW-023 | `LinkEnvelope.publisher`를 참여자 ID로 채운다. `--participant`, 기본 `gateway-0`, 엔티티 ID 형식 검증. `header.seq`는 발행자·키별이다 | `src/swarm_gateway/gateway.py`, `__main__.py` | DEC-077, QA O-14 | TC-GW-025 통과 |
+| IMP-GW-024 | 변화 보고 보관: XSD 검증을 통과해 내보낸 `SystemStatus`, `FlightCapability`, `FlightCommandStatus`(command_id별), `SensorActivity`·`JammerActivity`(payload_id별), `StrikeActivity`(payload_id·weapon_entity별), `StoreLoadout`, `TaskStatus`(task_id별)를 (UCI 메시지, 토픽, 보고 기체, 키)별 마지막 값으로 둔다. 키는 Agent 변화 보고 키(`swarm_agent.reporting`)와 같고, 종료 상태를 받은 키는 지운다. 최대 4096건. 주기 보고(`NavigationReport`, `PeerStatus`)와 사건성 메시지(`ApprovalRequest`, `LeaderUpdate`, `TrackShare`)는 두지 않는다 | `src/swarm_gateway/retain.py`(`RetainedReports`), `gateway.py` | DEC-089, QA O-19 | TC-GW-028 통과 |
+| IMP-GW-025 | 늦게 붙은 외부 구독자 전달: OWP 1.0에는 보관 메시지·구독 알림이 없어 CAL Server 관리 포트 `/graph/events`(agra_lacal 그래프 API)로 새 구독(`edge_added` sub 간선, 접속·재접속 스냅샷의 모르던 구독, 다른 서버는 `remote_updated` 뒤 `GET /graph`)을 알아내고, 그 (메시지, 토픽)의 마지막 값을 한 번 다시 PUB한다. 몰린 구독은 0.2 s 안에서 한 번으로 합친다. 평소 보고량은 그대로다. 관리 포트에 못 붙으면 경고하고 2 s마다 다시 시도하며 1·2단계는 그대로 돈다. CLI `--lacal-admin`(기본 `--lacal` 호스트의 8766, `none`이면 끔) | `src/swarm_gateway/retain.py`(`LateJoinReplayer`), `runner.py`, `__main__.py` | DEC-089 | TC-GW-029, TC-GW-030 통과 |
+| IMP-GW-026 | DEC-088 송신 4종(`ApprovalRequest`, `LeaderUpdate`, `TrackShare`→`MA_Entity`, `StoreLoadout`): 변환기는 그대로이고, Agent 모양 봉투(`publisher` 비움, `rx_time_us`, 브로드캐스트 dst)와 값 변형으로 외부까지 나가는지 시험을 더했다. 코드 변경 없음 | `tests/test_reports_088.py` | DEC-088 | TC-GW-031, TC-GW-032 통과 |
+| IMP-GW-027 | DEC-090 확인: 외부 상태는 공개 XSD enum 그대로다. `MA_FlightCommandStatus`는 `CommandProcessingStateEnum`(RECEIVED·ACCEPTED·REJECTED·CANCELED)뿐이라 EXECUTING·COMPLETED가 ACCEPTED로 보이고, 수행·완료는 `MA_TaskStatus`(`RequirementExecutionStateEnum`의 EXECUTING·COMPLETED)에서 읽는다. 확장 필드는 없다. 코드 변경 없음 | `src/swarm_gateway/converters/vi.py`, `c2.py`, `ms.py` | DEC-090, QA O-17 | TC-GW-033 통과 |
+| IMP-GW-028 | CAL Server 설정 `declared.pub`에 `MA_PositionReport@swarm.vi`, `@swarm.p2p`를 넣었다. 선언이 Gateway의 실제 PUB·SUB와 같은지 시험으로 묶었다 | `config/lacal_server.yaml` | QA O-20, DEC-072 | TC-GW-034 통과 |
 | IMP-GW-013 | CAL Server 설정(서비스 `swarm_gateway`, `external_c2`, 토픽 `swarm.*`)과 기동 래퍼(서브모듈 수정 없음) | `config/lacal_server.yaml`, `src/swarm_gateway/lacal_server.py` | DEC-069 | TC-GW-010 통과, 수동 기동 확인 |
 
 ## 시험 (TC)
@@ -66,9 +72,16 @@
 | TC-GW-025 | `publisher` 채움(지정값, 기본 `gateway-0`), 잘못된 ID 거부, seq 키별 | `tests/test_inbound_plans.py` | IMP-GW-023 | 통과 |
 | TC-GW-026 | 2단계 전 종류를 보내도 발행 키는 `tx/c2/**`, `tx/mp/**`뿐, 구독은 `rx/**` 하나, 그 밖의 L1 발행 시도는 예외 | `tests/test_inbound_plans.py` | IMP-GW-022 | 통과 |
 | TC-GW-027 | 실제 CAL Server 왕복: 외부 승인 응답·`MA_RoutePlan`·`MA_MissionPlan` → `tx`, `publisher`, `dst`, 위치, 잘못된 메시지는 서버가 거부 | `tests/test_roundtrip.py` | IMP-GW-020~023 | 통과 |
+| TC-GW-028 | 변화 보고 8종만 보관, 같은 키는 덮어쓰고 기체·payload·무장별로 따로 둠, 종료 상태(IMPACT, COMPLETED, CANCELLED, 표본의 REJECTED)는 지움, 검증 실패분은 두지 않음, 건수 상한 | `tests/test_late_join.py` | IMP-GW-024 | 통과 |
+| TC-GW-029 | 그래프 이벤트 처리: 새 sub 간선마다 한 번, 몰린 구독 합침, 보관 값 없는 대상·pub 간선·알던 구독은 보내지 않음, 해제 뒤 재구독은 다시 보냄, `remote_updated`는 `GET /graph`로 비교, 기본 관리 주소 | `tests/test_late_join.py` | IMP-GW-025 | 통과 |
+| TC-GW-030 | 실제 CAL Server: 보고 뒤에 구독한 외부 클라이언트가 `SystemStatus` 마지막 값(NOMINAL)과 `MA_FlightCapability`를 받음, 새 구독이 없으면 다시 보내지 않음, 주기 재송신 없음. `admin_url=None`이면 끔, 관리 포트가 없어도 1단계는 동작, CLI `--lacal-admin` | `tests/test_late_join.py` | IMP-GW-025 | 통과 |
+| TC-GW-031 | DEC-088 4종 × 값 변형 2개가 Agent 모양 봉투로 와서 별도 적재한 공개 XSD 통과, `swarm.<iface>`로 발행, 내용(요청·작업 ID와 응답 대상 기억, 지도자 유무, 위치·속도·연결 표적·환경, 스테이션별 잔량), 브로드캐스트 dst, 다른 GCS rx는 받지 않음 | `tests/test_reports_088.py` | IMP-GW-026 | 통과 |
+| TC-GW-032 | 실제 CAL Server: 4종 변형 8건이 외부 구독자에게 도달(서버 XSD 검증 통과) | `tests/test_reports_088.py` | IMP-GW-026 | 통과 |
+| TC-GW-033 | 모든 `CommandState`·`StrikeState` 값의 외부 표현이 공개 XSD enum 안, FlightCommandStatus EXECUTING·COMPLETED → ACCEPTED, TaskStatus는 EXECUTING·COMPLETED 그대로, 내보낸 XML을 다시 읽으면 같은 JSON(표준 밖 필드 없음) | `tests/test_reports_088.py` | IMP-GW-027 | 통과 |
+| TC-GW-034 | `lacal_server.yaml`의 `swarm_gateway` `declared.pub`·`sub`이 Gateway의 실제 PUB·SUB와 같음(`MA_PositionReport` 포함), `external_c2` pub = Gateway 수신 | `tests/test_reports_088.py` | IMP-GW-028 | 통과 |
 | TC-GW-015 | 실제 CAL Server 접속에서 로그 순서: connected/not ready → XSD → SUB → ready | `tests/test_roundtrip.py` | IMP-GW-017 | 통과 |
 
-시험 결과: `cd gateway && uv run pytest` → 85 passed (2026-11-09, Windows 11, Python 3.12, 계약 0.15.0, Zenoh 미설치 환경). `--extra zenoh` 환경에서는 84 passed, 1 skipped(TC-GW-016의 Zenoh 없는 프로세스 시험). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
+시험 결과: `cd gateway && uv run pytest` → 106 passed (2026-11-16, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 4차는 85 passed(`--extra zenoh` 환경 84 passed, 1 skipped). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
 
 ## 매핑 표 (descriptor에서 생성, `MappingTable.markdown()`)
 
@@ -142,6 +155,11 @@
 | P-GW-001 | 준비 전 구간 줄이기(O-13). (1) XSD 적재·매핑 생성을 LA-CAL 접속 **앞**으로 옮긴다. 지금은 INIT 뒤 XSD 적재(대부분의 시간)가 끝나야 SUB가 걸리므로, 순서만 바꿔도 "접속돼 보이지만 받지 못하는" 구간이 SUB 왕복 시간으로 준다. (2) 근본적으로는 외부 C2가 준비를 알 수 있어야 한다: 예를 들어 ready 시점에 Gateway가 `SystemStatus`(SystemID = Gateway 서비스, Communications ACTIVE)를 한 번 발행하거나, 외부 C2가 명령 뒤 `MA_TaskStatus`가 일정 시간 안에 오지 않으면 다시 보내는 규칙을 둔다. (2)는 계약(등록부) 결정이 필요하다 | QA 15차 O-13 |
 
 ## 메모
+
+- DEC-089 전달 방식: OWP 1.0(agra_lacal)에는 보관(retained·durable) 메시지, 구독 알림, 상태 요청이 없다. 구독 시점을 아는 유일한 곳이 CAL Server 관리 포트의 그래프 API라 이를 쓴다. 관리 포트는 OWP 포트와 따로 열리고(기본 127.0.0.1:8766) 인증이 없다. 다른 PC에서 CAL Server를 띄우면 관리 포트를 Gateway에 열어 주거나 `--lacal-admin`을 지정해야 한다. 열 수 없으면 늦게 붙은 외부 시스템은 다음 변화까지 기다린다(1·2단계는 영향 없음).
+- 다시 PUB한 값은 OWP에 수신자 지정이 없어 같은 (메시지, 토픽)의 기존 구독자에게도 한 번 더 간다. 변화 보고는 마지막 상태라 뜻이 바뀌지 않는다. `MessageHeader.Timestamp`는 원래 보고 시각 그대로다.
+- Gateway가 재기동하면 보관 값이 없다. 그 경우의 복구는 Agent의 링크 복구 재송신(DEC-089 Agent 쪽)이나 다음 변화에 맡긴다.
+- DEC-088 확인 중 본 점(동작 변경 안 함): `MA_Entity`의 `KinematicsTimeStamp`·`IdentityTimestamp`는 `TrackShare.observed_time_us`(모의 시각)가 아니라 변환 시 벽시계 UTC다. `LeaderUpdate.group_id`가 비면 `ApplicablePackageID`가 빈 이름의 UUID가 된다(XSD는 통과).
 
 - `MA_MissionPlan`의 대상 표현(XSD 확인): `Applicability`의 `ApplicableToIDs`가 `ALL | NON | PackageID | SystemID`의 선택이다. Gateway는 `SystemID` 하나만 `dst`로 쓴다. `PlannedForID`는 XSD 주석상 계획의 사용자(상위 C2일 수 있음)라 대상으로 쓰지 않는다. `MA_RoutePlan`은 `Plan/Applicability`에 같은 구조로 있다. 임무 계획 자체는 작업 내용 없이 하위 계획을 ID로 참조한다.
 - QA O-14(재기동 시 `header.seq`가 0부터): DEC-077에 따라 seq는 발행자·키별이고 `publisher`로 구분한다. 재기동한 Gateway가 같은 `publisher`로 0부터 다시 매기는 것은 새 발행 세션으로 보며, 이번에 동작을 바꾸지 않았다. Datalink·Agent는 seq 연속성에 의존하지 않는다(QA 15차 TC-QA-073).
