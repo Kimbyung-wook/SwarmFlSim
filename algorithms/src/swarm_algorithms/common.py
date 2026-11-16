@@ -1,4 +1,5 @@
-"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038): 작업 추적, 작업 → 비행 구간, PeerStatus, 링크 상실 행동.
+"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038, IMP-AGT-046~047): 작업 추적·승인, 작업 → 비행 구간, PeerStatus,
+TrackShare, 링크 상실 행동.
 
 플러그인은 ctx.ports로만 송수신한다 (DEC-013). 여기 함수들도 ctx 밖의 상태를 보지 않는다.
 """
@@ -30,6 +31,20 @@ LOST_LINK_PARAMS = (
              "마지막 GcsHeartbeat 수신 후 링크 상실로 판단할 모의 시간"),
     ParamDef("lost_link_policy", "hold_until_command", ParamLayer.DECISION,
              description="작업에 정책이 없을 때의 링크 상실 행동", choices=tuple(LOST_LINK_POLICIES)),
+)
+
+# 실행 전 GCS 승인 (IMP-AGT-046, DEC-088, DEC-075). 기본은 승인 없이 바로 수행한다
+ENGAGEMENT_TASKS = ("strike",)   # EngagementCriteria.require_approval이 참이면 승인을 받는 작업 (기본 MA는 지원하지 않아 REJECTED)
+APPROVAL_PARAMS = (
+    ParamDef("approval_tasks", "", ParamLayer.DECISION,
+             description="실행 전 GCS 승인(ApprovalRequest)을 받을 작업 종류, 쉼표 구분(예: move_to,hold). 빈 값 = 없음"),
+    ParamDef("approval_timeout_s", 0.0, ParamLayer.DECISION, "s", 0.0, 86400.0,
+             "승인 응답을 기다리는 모의 시간, 넘으면 REJECTED. 0 = 무한"),
+)
+# 탐지 표적 공유 (IMP-AGT-047, DEC-088). 0이면 공유하지 않고 detections()도 건드리지 않는다
+TRACK_SHARE_PARAMS = (
+    ParamDef("track_share_hz", 0.0, ParamLayer.BEHAVIOR, "Hz", 0.0, 50.0,
+             "자기 탐지를 TrackShare(MA_Entity)로 피어·GCS에 브로드캐스트하는 주기. 0 = 끔"),
 )
 
 
@@ -234,6 +249,9 @@ class TaskTracker:
         self.plan_task_ids: set[str] = set()           # 지금까지 받은 계획의 task_id
         self.commands = 0                              # 수락한 새 명령 수 (LostLinkGuard가 본다)
         self.paused = False                            # 링크 상실 선회 중: 대기 작업을 시작하지 않는다
+        # 승인 대기 (IMP-AGT-046): (request_id, 작업, 요청한 모의 시각 us). 승인되면 C2 명령처럼 시작한다
+        self.awaiting: tuple[str, c2_pb2.TaskCommand, int] | None = None
+        self._approval_n = 0
         self.plans = PlanWatcher(ctx)
         if self.plans.initial is not None:
             self.plan_task_ids.update(t.task_id for t in self.plans.initial.tasks)
@@ -247,8 +265,75 @@ class TaskTracker:
         st.header.correlation_id = task.task_id
         self.ctx.ports.c2.send(st)
 
+    # ---- 승인 (IMP-AGT-046, DEC-088) ----
+
+    def needs_approval(self, task: c2_pb2.TaskCommand) -> bool:
+        """MA 변수 approval_tasks에 든 작업, 또는 교전 기준이 승인을 요구하는 교전 작업"""
+        kind = task.WhichOneof("task")
+        listed = {k.strip() for k in str(self.ctx.params.get("approval_tasks", "")).split(",") if k.strip()}
+        if kind in listed:
+            return True
+        crit = self.ctx.ports.mp.engagement_criteria()
+        return kind in ENGAGEMENT_TASKS and crit is not None and crit.require_approval
+
+    def _request_approval(self, task: c2_pb2.TaskCommand) -> None:
+        """승인 요청을 통제 GCS로 보내고 응답까지 작업을 시작하지 않는다. 기다리던 다른 작업은 CANCELLED(preempted)"""
+        self._drop_awaiting("preempted", keep=task.task_id)
+        self._approval_n += 1
+        rid = f"{self.ctx.entity_id}-approval-{self._approval_n}"
+        kind = task.WhichOneof("task")
+        req = c2_pb2.ApprovalRequest(request_id=rid, task_id=task.task_id, description=f"{kind} {task.task_id}",
+                                     target_id=task.strike.target_id if kind == "strike" else "")
+        req.header.correlation_id = task.task_id
+        self.ctx.ports.c2.send(req)
+        self.awaiting = (rid, task, round(self.ctx.sim_time_s * 1e6))
+        self.ctx.ports.md.record("approval_requested", task.task_id)
+
+    def _drop_awaiting(self, reason: str, keep: str = "") -> None:
+        if self.awaiting is not None:
+            _, t, _ = self.awaiting
+            self.awaiting = None
+            if t.task_id != keep:
+                self.status(t, S.COMMAND_STATE_CANCELLED, reason=reason)
+
+    def _on_approval(self, resp: c2_pb2.ApprovalResponse) -> None:
+        if self.awaiting is None or resp.request_id != self.awaiting[0]:
+            return                                     # 모르는 요청·이미 끝난 요청
+        _, task, _ = self.awaiting
+        self.awaiting = None
+        self.ctx.ports.md.record("approval", "approved" if resp.approved else "denied")
+        if resp.approved:
+            self._start(task)
+        else:
+            self.status(task, S.COMMAND_STATE_REJECTED, reason="approval denied")
+
+    def _approval_timeout(self) -> None:
+        if self.awaiting is None:
+            return
+        limit = float(self.ctx.params.get("approval_timeout_s", 0.0))
+        if limit <= 0:
+            return
+        _, task, since = self.awaiting
+        if round(self.ctx.sim_time_s * 1e6) - since > round(limit * 1e6):
+            self.awaiting = None
+            self.status(task, S.COMMAND_STATE_REJECTED, reason="approval timeout")
+
+    def _start(self, msg: c2_pb2.TaskCommand) -> None:
+        """작업을 지금 시작한다. 현재 작업은 CANCELLED(preempted), 같은 task_id면 내용 교체 (DEC-033)"""
+        if self.current is not None and self.current.task_id == msg.task_id:
+            pass  # 같은 task_id: 내용 교체. 이전 것을 취소로 보고하지 않는다
+        elif self.current is not None:
+            self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
+        self.current = msg
+        self.changed = True
+        self._new_command()
+        self.status(msg, S.COMMAND_STATE_ACCEPTED)
+
     def handle(self, msg: Message) -> bool:
-        """C2 메시지 하나를 처리한다. TaskCommand가 아니면 False"""
+        """C2 메시지 하나를 처리한다. TaskCommand·ApprovalResponse가 아니면 False"""
+        if isinstance(msg, c2_pb2.ApprovalResponse):
+            self._on_approval(msg)
+            return True
         if not isinstance(msg, c2_pb2.TaskCommand):
             return False
         if msg.assignees and self.ctx.entity_id not in msg.assignees:
@@ -257,7 +342,9 @@ class TaskTracker:
             self.status(msg, S.COMMAND_STATE_REJECTED, reason="empty assignees")
             return True
         if msg.cancel:
-            if self.current is not None and self.current.task_id == msg.task_id:
+            if self.awaiting is not None and self.awaiting[1].task_id == msg.task_id:
+                self._drop_awaiting("")
+            elif self.current is not None and self.current.task_id == msg.task_id:
                 self.status(self.current, S.COMMAND_STATE_CANCELLED)
                 self.current = None
                 self.changed = True
@@ -272,14 +359,11 @@ class TaskTracker:
         if reason:
             self.status(msg, S.COMMAND_STATE_REJECTED, reason=reason)
             return True
-        if self.current is not None and self.current.task_id == msg.task_id:
-            pass  # 같은 task_id: 내용 교체 (DEC-033). 이전 것을 취소로 보고하지 않는다
-        elif self.current is not None:
-            self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
-        self.current = msg
-        self.changed = True
-        self._new_command()
-        self.status(msg, S.COMMAND_STATE_ACCEPTED)
+        if self.needs_approval(msg):
+            self._request_approval(msg)
+            return True
+        self._drop_awaiting("preempted", keep=msg.task_id)   # 새 명령이 승인 대기 작업을 밀어낸다
+        self._start(msg)
         return True
 
     def _new_command(self) -> None:
@@ -302,6 +386,8 @@ class TaskTracker:
         if not valid:
             return
         ids = {t.task_id for t in valid}
+        if self.awaiting is not None and self.awaiting[1].task_id not in ids:
+            self._drop_awaiting("preempted")
         for t in ([self.current] if self.current is not None else []) + list(self.queue):
             if t.task_id not in ids:
                 self.status(t, S.COMMAND_STATE_CANCELLED, reason="preempted")
@@ -318,6 +404,7 @@ class TaskTracker:
         """상태 보고 없이 바로 수행한다. 현재 작업은 C2처럼 CANCELLED(preempted)로 끝내고 대기 작업은 그대로 둔다 (D-29)"""
         if self.current is not None:
             self.status(self.current, S.COMMAND_STATE_CANCELLED, reason="preempted")
+        self._drop_awaiting("preempted")
         self.quiet = self.current = task
         self.changed = True
         self._new_command()
@@ -329,10 +416,15 @@ class TaskTracker:
         plan = self.plans.poll()
         if plan is not None:
             self._apply_plan(plan)
-        if self.current is None and self.queue and not self.paused:
-            self.current = self.queue.popleft()
-            self.changed = True
-            self.status(self.current, S.COMMAND_STATE_ACCEPTED)
+        self._approval_timeout()
+        if self.current is None and self.queue and not self.paused and self.awaiting is None:
+            t = self.queue.popleft()
+            if self.needs_approval(t):
+                self._request_approval(t)
+            else:
+                self.current = t
+                self.changed = True
+                self.status(self.current, S.COMMAND_STATE_ACCEPTED)
 
     def finish(self, state: int, reason: str = "") -> None:
         if self.current is not None:
@@ -756,6 +848,40 @@ class TaskPilot:
         self._cmd_id = cmd.command_id
         self._last_cmd = cmd
         self.ctx.ports.vi.command(cmd)
+
+
+class TrackSharer:
+    """자기 임무장비 탐지(Detection)를 TrackShare(UCI MA_Entity)로 피어와 GCS에 알린다 (IMP-AGT-047, DEC-088).
+
+    track_share_hz > 0일 때만 동작한다. 매 틱 ms.detections()를 비우며 표적별 최신 탐지를 모았다가, 기체별 위상(every)으로
+    그동안 본 표적마다 한 건씩 브로드캐스트한다(표적 ID 순). track_id = "<자기 ID>/<표적 ID>". 꺼져 있으면 detections()를
+    건드리지 않아 다른 용도로 쓸 수 있다
+    """
+
+    def __init__(self, ctx: AgentContext):
+        self.ctx = ctx
+        self.latest: dict[str, object] = {}
+
+    def step(self) -> None:
+        hz = self.ctx.params.get("track_share_hz", 0.0)
+        if not hz or hz <= 0:                      # 기본: 아무것도 하지 않는다 (매 틱 기체마다 불리므로 짧게)
+            return
+        hz = float(hz)
+        for d in self.ctx.ports.ms.detections():
+            key = d.target_id or f"{d.payload_id}@{d.header.sim_time_us}"
+            prev = self.latest.get(key)
+            if prev is None or d.header.sim_time_us >= prev.header.sim_time_us:
+                self.latest[key] = d
+        if not self.latest or not every(self.ctx, hz):
+            return
+        for key in sorted(self.latest):
+            d = self.latest[key]
+            ts = p2p_pb2.TrackShare(track_id=f"{self.ctx.entity_id}/{key}", target_id=d.target_id, kind=d.kind,
+                                    observed_time_us=d.header.sim_time_us)
+            ts.position.CopyFrom(d.position)
+            ts.velocity_ned_mps.CopyFrom(d.velocity_ned_mps)
+            self.ctx.ports.p2p.send(ts)
+        self.latest.clear()
 
 
 def peer_status(nav: vi_pb2.NavigationReport, group_id: str = "", task_id: str = "") -> p2p_pb2.PeerStatus:

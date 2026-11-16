@@ -43,6 +43,9 @@ class Vehicle:
         # GCS 자동 보고 (DEC-051, DEC-063, DEC-071). 런타임이 틱 시작에 비운다
         self.activity_reports = ChangeReporter(activity_terminal)
         self.vi_reports = ChangeReporter(vi_terminal)
+        self.ms_reports = ChangeReporter()          # StoreLoadout: 시작할 때와 바뀔 때 (DEC-088)
+        self.hb_last_us: int | None = None          # 마지막 GcsHeartbeat 수신 모의 시각 (DEC-089)
+        self.resync = False                         # 링크 복구: 다음 보고 때 보고 상태 전체를 다시 보낸다
         self.nav_report_period: int | None = None
         self.capability_reported = False
         self.ports = PortsImpl(self, plan, criteria)

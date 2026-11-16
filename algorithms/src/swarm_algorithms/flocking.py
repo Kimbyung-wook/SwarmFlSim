@@ -14,7 +14,7 @@
   링크 상실 선회(DEC-078)는 그 자리를 중심으로 한 같은 Hold 벡터장이다.
 - params: group(같은 group_id 이웃만), cruise_mps(22), neighbor_radius_m(600), separation_m(80),
   w_sep(1.5), w_align(0.5), w_coh(0.02), peer_hz(5), stale_s(2), goal_radius_m(300),
-  hold_radius_m(300), wander_deg(0, ctx.rng로 침로 흔들기)
+  hold_radius_m(300), wander_deg(0, ctx.rng로 침로 흔들기), approval_tasks·approval_timeout_s·track_share_hz (DEC-088, common)
 """
 
 import math
@@ -27,7 +27,8 @@ from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch, ParamDef, Pa
 from swarm_agent.geo import ned_offset
 from swarm_agent.racetrack import path_error, vector_field_course
 
-from .common import LOST_LINK_PARAMS, Goal, LostLinkGuard, TaskTracker, every, peer_status
+from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, Goal, LostLinkGuard, TaskTracker, TrackSharer,
+                     every, peer_status)
 
 S = common_pb2
 _B, _D = ParamLayer.BEHAVIOR, ParamLayer.DECISION
@@ -45,8 +46,11 @@ PARAMS = (
     ParamDef("wander_deg", 0.0, _B, "deg", 0.0, 180.0, "침로 흔들기 표준편차"),
     ParamDef("group", "", _D, "", description="같은 group_id 이웃만 사용, 빈 값 = 전체", runtime=False),
     *LOST_LINK_PARAMS,
+    *APPROVAL_PARAMS,
+    *TRACK_SHARE_PARAMS,
 )
-_DEFAULTS = {d.name: d.default for d in PARAMS if isinstance(d.default, float) and d not in LOST_LINK_PARAMS}
+_SHARED = (*LOST_LINK_PARAMS, *APPROVAL_PARAMS, *TRACK_SHARE_PARAMS)   # common 부품이 ctx.params에서 바로 읽는다
+_DEFAULTS = {d.name: d.default for d in PARAMS if isinstance(d.default, float) and d not in _SHARED}
 _SUPPORTED = ("move_to", "hold", "return_to_base", "search_area")
 
 
@@ -60,6 +64,7 @@ class _Agent:
         self.goal: Goal | None = None
         self.hold_since: float | None = None  # hold 원 위에 처음 든 모의 시각
         self.link = LostLinkGuard(ctx, self.tracker)
+        self.tracks = TrackSharer(ctx)
         self.suspended: tuple[Goal | None, float | None, float] = (None, None, 0.0)  # 상실로 중단한 (목표, hold_since, 시각)
 
 
@@ -85,6 +90,7 @@ class Flocking(BatchMissionAutonomy):
             msgs = list(c.ports.c2.inbox())
             for m in msgs:
                 a.tracker.handle(m)
+            a.tracks.step()
             for m in c.ports.p2p.inbox():
                 if isinstance(m, p2p_pb2.PeerStatus) and (not a.group or m.group_id == a.group):
                     a.table[m.header.source] = m
