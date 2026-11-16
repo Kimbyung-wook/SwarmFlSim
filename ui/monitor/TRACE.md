@@ -35,6 +35,7 @@
 | IMP-MON-026 | 링크 지연을 outcome을 받은 순간의 (sim 시계 − tx 시각)으로 계산. 마지막 outcome 이후 sim 시계가 5 s 넘게 흐르면 0. 트래픽 공백(`최신 tx 시각`이 멈춘 구간)을 지연으로 보이던 결함 수정 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, PRP-UI-002, DEC-005 | TC-MON-014 |
 | IMP-MON-027 | `truth/state` 프레임 번호 공백으로 누락 프레임 수를 세어 머리줄에 표시(재생 한계), `SimStatus.waiting_participants`를 머리줄에 경고 표시 | `src/model/store.ts`, `src/components/Header.tsx` | REQ-UI-005, DEC-041, DEC-042 | TC-MON-015 (Superseded by IMP-UI-059: 1 Hz 구독으로 누락을 과다 계수해 WP5 구현으로 대체) |
 | IMP-MON-028 | QA-018 조사: 집계 정의는 변경 없음. 같은 outcome 열에서 독립 집계와 일치함을 시험으로 고정 | `src/model/aggregator.test.ts` | REQ-UI-005, DEC-044 | TC-MON-016 |
+| IMP-MON-029 | 브리지 주소 쿼리를 `bridge=`로 받고 `url=`은 별칭으로 유지, 둘 다 있으면 `bridge=` 우선 | `src/App.tsx` | DEC-091, DEC-027 | TC-MON-017 |
 
 ## 시험 (TC)
 
@@ -56,8 +57,9 @@
 | TC-MON-014 | 트래픽 공백은 링크 지연이 아님, 늦은 outcome은 그 지연만 표시하고 5 s 후 해제 (1건) | `src/model/store.test.ts` | IMP-MON-026 | 통과 |
 | TC-MON-015 | 프레임 번호 공백 누락 계수·재생 재시작·초기화, waiting_participants 보관 (2건) | `src/model/store.test.ts` | IMP-MON-027 | Superseded by IMP-UI-059 시험 |
 | TC-MON-016 | 송신자별 누적 손실률·평균 지연이 독립 단순 계수와 일치, 창 이동(advance)이 누적값을 바꾸지 않음 (1건) | `src/model/aggregator.test.ts` | IMP-MON-028 | 통과 |
+| TC-MON-017 | readConfig: `bridge=`·`url=` 별칭·우선순위·빈 값 기본 주소 (4건) | `src/config.test.ts` | IMP-MON-029 | 통과 |
 
-`npm test`: 10개 파일 60건 통과. `npm run build`: 통과(tsc -b, vite build).
+`npm test`: 11개 파일 64건 통과. `npm run build`: 통과(tsc -b, vite build).
 
 ## 부하 측정 (TC-MON-009)
 
