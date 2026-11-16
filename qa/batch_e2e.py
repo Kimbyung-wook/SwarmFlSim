@@ -40,6 +40,7 @@ CASES = {
     "d3w_a2": Case("qa_s6_load100", 3000, dof3=True, agents=2),     # ControlBatch/<참여자> 2개
     "d3w_a4": Case("qa_s6_load100", 2000, dof3=True, agents=4),
     "d3w_a2_st": Case("qa_s6_load100", 300, dof3=True, agents=2),    # 2분할 시작 안정성 (D-31)
+    "d3w_a8_st": Case("qa_s6_load100", 300, dof3=True, agents=8),    # 8분할 시작 재현 (D-31, QA 27차)
     "d3w_a2_log": Case("qa_s6_load100", 3000, dof3=True, agents=2, logger=True),
     "d3w_log": Case("qa_s6_load100", 3000, dof3=True, logger=True),            # P1 판정 구성 (DEC-084)
     "d3f": Case("qa_s6_load100_flock", 1500, dof3=True),
