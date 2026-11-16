@@ -234,8 +234,8 @@ def assigned_task(ctx: AgentContext, msg: Message) -> bool:
 class TaskTracker:
     """MissionPlan 작업을 순서대로, C2 TaskCommand는 받는 즉시(현재 작업을 밀어내고) 처리한다.
 
-    상태는 TaskStatus로 통제 GCS에 보낸다. 지원하지 않는 작업은 C2와 실행 중 받은 계획이면 REJECTED,
-    초기 계획이면 건너뛴다. 실행 중 받은 새 계획은 C2처럼 현재 작업을 밀어내고 대기열을 교체한다 (DEC-076).
+    상태는 TaskStatus로 통제 GCS에 보낸다. 지원하지 않거나 잘못된 작업은 C2, 실행 중 받은 계획,
+    시작 계획 모두 REJECTED다. 시작 계획의 거부는 첫 update()에서 보낸다 (O-45). 실행 중 받은 새 계획은 C2처럼 현재 작업을 밀어내고 대기열을 교체한다 (DEC-076).
     """
 
     def __init__(self, ctx: AgentContext, supported: tuple[str, ...] = ("move_to", "hold", "return_to_base")):
@@ -252,11 +252,18 @@ class TaskTracker:
         # 승인 대기 (IMP-AGT-046): (request_id, 작업, 요청한 모의 시각 us). 승인되면 C2 명령처럼 시작한다
         self.awaiting: tuple[str, c2_pb2.TaskCommand, int] | None = None
         self._approval_n = 0
+        # 시작 계획에서 거른 작업: 첫 update()에서 REJECTED로 보고한다 (O-45, 실행 중 계획·C2와 같은 규칙)
+        self._initial_rejects: list[tuple[c2_pb2.TaskCommand, str]] = []
         self.plans = PlanWatcher(ctx)
         if self.plans.initial is not None:
             self.plan_task_ids.update(t.task_id for t in self.plans.initial.tasks)
-            self.queue.extend(t for t in self.plans.initial.tasks
-                              if t.WhichOneof("task") in supported and not invalid_reason(t))
+            for t in self.plans.initial.tasks:
+                kind = t.WhichOneof("task")
+                reason = f"unsupported task {kind}" if kind not in supported else invalid_reason(t)
+                if reason:
+                    self._initial_rejects.append((t, reason))
+                else:
+                    self.queue.append(t)
 
     def status(self, task: c2_pb2.TaskCommand, state: int, progress: float = 0.0, reason: str = "") -> None:
         if task is self.quiet:
@@ -413,6 +420,10 @@ class TaskTracker:
         if nav is not None and self.home is None:
             p = nav.kinematics.position
             self.home = (p.lat_deg, p.lon_deg, p.alt_m)
+        if self._initial_rejects:
+            for t, reason in self._initial_rejects:
+                self.status(t, S.COMMAND_STATE_REJECTED, reason=reason)
+            self._initial_rejects.clear()
         plan = self.plans.poll()
         if plan is not None:
             self._apply_plan(plan)
