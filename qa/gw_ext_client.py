@@ -5,6 +5,8 @@
 - 관리 포트 /tap으로 서버를 지나간 모든 메시지 이름·발신 서비스를 센다(구독하지 않은 이름도 보인다).
 - <out>/cmd/NNN.json 명령 파일을 읽어 MA_TaskCommand를 PUB한다. Gateway 변환기를 쓰지 않고 JSON을 직접 만든다.
 - <out>/ext.json에 수신 기록을 1 s마다 쓴다. <out>/STOP 파일이 생기면 끝낸다.
+- 28차: `--approve <json>`({task_id: APPROVED|REJECTED})이면 MA_ApprovalRequest를 받는 즉시 그 작업의 요청에
+  MA_ApprovalRequestStatus로 답한다(목록에 없는 작업은 답하지 않는다). DEC-088 4종의 내용 요약을 extra에 남긴다.
 
 gateway/.venv/Scripts/python.exe qa/gw_ext_client.py --url ws://127.0.0.1:18765 --admin 127.0.0.1:18766 --out <dir>
 """
@@ -104,6 +106,8 @@ class Ext:
         self.tap_t: list[list] = []        # [t, name]
         self.cmds: list[dict] = []
         self.errors: list[str] = []
+        self.on_approval = None            # 28차: 승인 요청 콜백
+        self.sub_t: float | None = None    # 28차: 구독을 마친 시각 (늦은 구독자 판정)
 
     def on_msg(self, topic: str):  # noqa: ANN201
         def cb(name: str, obj: dict) -> None:
@@ -137,6 +141,16 @@ class Ext:
                          "state": md.get("SystemState") or md.get("CommandProcessingState") or ""}
             elif name in ("PO_Activity", "EA_Activity", "StrikeActivity"):
                 extra = {"keys": sorted(md.keys())[:6]}
+            elif name == "MA_ApprovalRequest":     # 28차 (DEC-088)
+                rq = md.get("RequestID") or {}
+                item = ((md.get("ApprovalReferences") or {}).get("ApprovalItem") or {})
+                tid = ((item.get("RequirementExecutionApproval") or {}).get("RequirementID") or {}).get("TaskID")
+                extra = {"req": label(rq), "req_uuid": rq.get("UUID", ""), "task": label(tid),
+                         "state": md.get("RequestState", "")}
+                if self.on_approval is not None:
+                    self.on_approval(extra)
+            elif name in ("MA_LeaderUpdateRequest", "MA_Entity", "StoreLoadoutConfiguration"):
+                extra = {"md": json.dumps(md, ensure_ascii=False, sort_keys=True)[:1500]}
             sysid = (body.get("MessageHeader") or {}).get("SystemID", {}).get("UUID", "")
             mode = (body.get("MessageHeader") or {}).get("Mode", "")
             self.rx.append([t, name, topic, ok, sysid, mode, extra])
@@ -144,7 +158,8 @@ class Ext:
 
     def dump(self) -> None:
         d = {"rx": self.rx, "xsd_fail": self.xsd_fail, "tap": [[k[0], k[1], v] for k, v in self.tap.items()],
-             "tap_t": self.tap_t, "cmds": self.cmds, "errors": self.errors, "t_wall": time.monotonic() - self.t0}
+             "tap_t": self.tap_t, "cmds": self.cmds, "errors": self.errors, "t_wall": time.monotonic() - self.t0,
+             "sub_t": self.sub_t}
         tmp = self.out / "ext.tmp"
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.out / "ext.json")
@@ -172,6 +187,7 @@ async def main() -> None:
     ap.add_argument("--admin", default="127.0.0.1:18766")
     ap.add_argument("--service", default="external_c2")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--approve", default="", help="28차: {task_id: APPROVED|REJECTED} JSON")
     a = ap.parse_args()
     out = Path(a.out)
     (out / "cmd").mkdir(parents=True, exist_ok=True)
@@ -198,12 +214,27 @@ async def main() -> None:
         except CalError as e:
             sub_err[f"{name}@{iface}"] = str(e)
     ext.errors += [f"sub {k}: {v}" for k, v in sub_err.items()]
+    ext.sub_t = round(time.time(), 3)
+    rules = json.loads(a.approve) if a.approve else {}
+    pending: list[dict] = []
+    if rules:
+        ext.on_approval = pending.append
     asyncio.create_task(tap_loop(ext, a.admin))
     print(f"ext ready system={cli.system_uuid} subs={len(EXPORTS) + len(EXTRA_SUBS) - len(sub_err)}", flush=True)
     (out / "ext.ready").write_text("ok", encoding="utf-8")
     done: set[str] = set()
     last = 0.0
     while not (out / "STOP").exists():
+        while pending:                      # 28차: 승인 응답
+            q = pending.pop(0)
+            state = rules.get(q["task"])
+            if state is None:
+                continue
+            c = {"raw": "MA_ApprovalRequestStatus", "topic": "swarm.c2", "tag": f"approve {q['task']} {state}",
+                 "data": {"RequestID": {"UUID": q["req_uuid"], "DescriptiveLabel": q["req"]},
+                          "RequestProcessingState": "COMPLETED", "ApprovalRequestProcessingState": state}}
+            await send_raw(cli, codec, ext, f"approve-{q['req']}", c)
+            print(f"approve {q['req']} {q['task']} -> {state} {ext.cmds[-1].get('pub')}", flush=True)
         for f in sorted((out / "cmd").glob("*.json")):
             if f.name in done:
                 continue

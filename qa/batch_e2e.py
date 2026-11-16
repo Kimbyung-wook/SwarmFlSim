@@ -41,6 +41,8 @@ CASES = {
     "d3w_a4": Case("qa_s6_load100", 2000, dof3=True, agents=4),
     "d3w_a2_st": Case("qa_s6_load100", 300, dof3=True, agents=2),    # 2분할 시작 안정성 (D-31)
     "d3w_a8_st": Case("qa_s6_load100", 300, dof3=True, agents=8),    # 8분할 시작 재현 (D-31, QA 27차)
+    "agra28": Case("qa_agra28", 3000),                                # DEC-088·089 기능을 켠 시나리오 (QA 28차)
+    "agra28_a2": Case("qa_agra28", 3000, agents=2),
     "d3w_a2_log": Case("qa_s6_load100", 3000, dof3=True, agents=2, logger=True),
     "d3w_log": Case("qa_s6_load100", 3000, dof3=True, logger=True),            # P1 판정 구성 (DEC-084)
     "d3f": Case("qa_s6_load100_flock", 1500, dof3=True),
@@ -71,6 +73,8 @@ class Obs:
         self.ctl: dict[tuple[str, int], tuple[str, int]] = {}
         self.ctl_msgs: Counter = Counter()
         self.ctl_sources: dict[str, set[str]] = defaultdict(set)
+        self.gcs: dict[tuple[str, int], str] = {}   # 28차: GCS rx (키, 그 키의 n번째) → 해시
+        self.gcs_n: Counter = Counter()
         self.legacy: Counter = Counter()
         self.last = -1
         self.state = 0
@@ -79,7 +83,14 @@ class Obs:
                      self.bus.subscribe("onboard_batch/ControlBatch/*", self._c),
                      self.bus.subscribe("onboard/*/NavigationReport", self._old),
                      self.bus.subscribe("onboard/*/ControlOutput", self._old),
-                     self.bus.subscribe("sim/ctrl/status", self._s)]
+                     self.bus.subscribe("sim/ctrl/status", self._s),
+                     self.bus.subscribe("swarm/gcs-01/rx/**", self._g)]
+
+    def _g(self, s) -> None:  # noqa: ANN001
+        k = str(s.key).split("/rx/", 1)[1]
+        with self.lock:
+            self.gcs[(k, self.gcs_n[k])] = sha(bytes(s.payload))
+            self.gcs_n[k] += 1
 
     def _t(self, s) -> None:  # noqa: ANN001
         m = self.truth_pb.TruthFrame.FromString(s.payload)
@@ -192,7 +203,8 @@ def run_one(c: Case, out: Path, base: int, start_wait: float | None = None) -> t
             res["ctl_frames"] = cover
             res["motion"] = motion(obs.samples, uavs)
             data = {"truth": dict(obs.truth), "events": list(obs.events), "nav": {k: v[0] for k, v in obs.nav.items()},
-                    "ctl": {k: v[0] for k, v in obs.ctl.items()}}
+                    "ctl": {k: v[0] for k, v in obs.ctl.items()}, "gcs": dict(obs.gcs)}
+            res["gcs_rx"] = dict(obs.gcs_n)
     finally:
         if obs is not None:
             try:
@@ -227,7 +239,7 @@ def motion(samples: dict[int, dict], uavs: list[str]) -> dict:
 
 def compare(a: dict, b: dict) -> dict:
     out = {}
-    for k in ("truth", "nav", "ctl"):
+    for k in ("truth", "nav", "ctl", "gcs"):
         common = sorted(set(a[k]) & set(b[k]))
         bad = [x for x in common if a[k][x] != b[k][x]]
         out[k] = {"common": len(common), "diff": len(bad), "first": bad[0] if bad else None,
