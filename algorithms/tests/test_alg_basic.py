@@ -49,12 +49,12 @@ def test_tc_agt_015_waypoint_mission_plan_and_status():
     t1.move_to.speed_mps = 28.0
     t2 = plan.tasks.add(task_id="t2", assignees=["uav-001"])
     t2.move_to.destination.lat_deg, t2.move_to.destination.lon_deg, t2.move_to.destination.alt_m = dest(3000, 3000)
-    plan.tasks.add(task_id="t3", assignees=["uav-001"]).strike.target_id = "tgt-001"  # 지원 안 함: 건너뜀
+    plan.tasks.add(task_id="t3", assignees=["uav-001"]).strike.target_id = "tgt-001"  # 지원 안 함: REJECTED (O-45)
     h = Harness(make_scenario(1, "waypoint", course_deg=0.0, mission_plan=plan))
     h.run_s(400.0)
     for t in ("t1", "t2"):
         assert h.task_states(t) == [S.COMMAND_STATE_ACCEPTED, S.COMMAND_STATE_EXECUTING, S.COMMAND_STATE_COMPLETED]
-    assert h.task_states("t3") == []
+    assert h.task_states("t3") == [S.COMMAND_STATE_REJECTED]
     b = h.core.bodies["uav-001"]
     assert dist_to(b, *dest(3000, 3000)[:2]) < 300.0  # 마지막 점 둘레 선회
     assert b.alt == pytest.approx(1600.0, abs=2.0)

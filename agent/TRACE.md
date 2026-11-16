@@ -163,8 +163,9 @@ flowchart LR
 | TC-AGT-135 | TrackShare: 주기마다 표적당 한 건(ID 순), track_id·종류·속도·위치·관측 시각, 보낸 뒤 본 탐지는 다음 주기, 새 탐지 없으면 없음, 기본 끔 | `tests/test_agent_agra.py` | IMP-AGT-047 | Pass |
 | TC-AGT-136 | StoreLoadout: 적재 기체만 시작 보고, Payload 첫 구성이 같으면 재송신 없음, Payload 감소 + 같은 프레임 발사에서 잔량 한 번만 감소·보고, Payload 없으면 발사 감소 보고 | `tests/test_agent_agra.py` | IMP-AGT-048 | Pass |
 | TC-AGT-137 | 링크 복구: 평소·시간 제한 안 공백은 재송신 없음, 상실 뒤 복구 시 SystemStatus·StoreLoadout·FlightCapability 한 번씩, `lost_link_timeout_s` 반영. 모두 켠 lockstep 실행 2회의 GCS 수신이 바이트 단위로 같음 | `tests/test_agent_agra.py` | IMP-AGT-046~049 | Pass |
+| TC-AGT-138 | 시작 계획(O-45): waypoint·flocking 모두 미지원 strike는 REJECTED(`unsupported task strike`)를 첫 보고로 한 번, 종류 없는 작업도 REJECTED, 지원 작업은 ACCEPTED, require_approval이어도 ApprovalRequest 없음, 배정 안 된 기체는 보고 안 함. lockstep 2회 GCS 수신 바이트 동일 | `tests/test_agent_agra.py` | IMP-AGT-050 | Pass |
 
-시험 결과(2026-11-16): agent 117, algorithms 102 passed
+시험 결과(2026-11-16): agent 118, algorithms 102 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 

@@ -1,4 +1,4 @@
-"""TC-AGT-132~137: A-GRA 송신 4종(DEC-088)과 링크 복구 재보고(DEC-089) (IMP-AGT-046~049)"""
+"""TC-AGT-132~138: A-GRA 송신 4종(DEC-088), 링크 복구 재보고(DEC-089), 시작 계획 미지원 작업 보고(O-45) (IMP-AGT-046~050)"""
 
 from swarm.v1 import c2_pb2, common_pb2, entity_pb2, mp_pb2, ms_pb2, p2p_pb2, vi_pb2
 from swarm_agent.geo import offset_geo
@@ -300,3 +300,37 @@ def test_tc_agt_137b_deterministic():
 
     a, b = run(), run()
     assert a == b and len(a) > 10
+
+
+# ---- TC-AGT-138: 시작 계획의 미지원 작업 보고 (O-45) ----
+
+def test_tc_agt_138_initial_plan_unsupported_rejected():
+    def plan():
+        p = mp_pb2.MissionPlan(plan_id="p0")
+        p.tasks.append(move("p1"))
+        s = c2_pb2.TaskCommand(task_id="p3", assignees=[A])
+        s.strike.target_id = "red-1"
+        p.tasks.append(s)
+        p.tasks.append(c2_pb2.TaskCommand(task_id="p4", assignees=[A]))   # 종류 없음: 잘못된 작업
+        return p
+
+    def run(ma, params=None):
+        sc = make_scenario(2, ma, params or {}, mission_plan=plan())
+        sc.engagement_criteria.require_approval = True
+        h = Harness(sc)
+        h.run_s(1.0)
+        return h
+
+    for ma in ("waypoint", "flocking"):
+        h = run(ma)
+        st = [(m.task_id, m.state, m.reason) for m in of(h, "TaskStatus", A)]
+        # 실행 중 계획·C2와 같은 규칙: 미지원은 REJECTED(unsupported), 시작 작업보다 먼저, 한 번만
+        assert st[0] == ("p3", REJ, "unsupported task strike"), (ma, st)
+        assert [s for s in st if s[0] == "p3"] == [st[0]]
+        assert [s[1] for s in st if s[0] == "p4"] == [REJ]
+        assert h.task_states("p1")[:1] == [ACC]
+        assert of(h, "ApprovalRequest") == []
+        assert not [m for m in of(h, "TaskStatus", B) if m.task_id in ("p3", "p4")]   # 배정 안 된 기체는 보고 안 함
+    # 결정론: 두 번 실행의 GCS 수신이 같다
+    a, b = (run("waypoint"), run("waypoint"))
+    assert [m.SerializeToString() for m in a.gcs_rx] == [m.SerializeToString() for m in b.gcs_rx]
