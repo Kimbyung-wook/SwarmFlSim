@@ -1,4 +1,4 @@
-"""GCS 자동 보고용 키별 변화 추적 (IMP-AGT-029~032, DEC-051, DEC-056, DEC-063, DEC-071).
+"""GCS 자동 보고용 키별 변화 추적 (IMP-AGT-029~032, IMP-AGT-048~049, DEC-051, DEC-056, DEC-063, DEC-071, DEC-088, DEC-089).
 
 기체 하나·보고 묶음 하나마다 둔다. 판단은 모두 모의 시간이라 lockstep에서 결정적이다.
 """
@@ -40,6 +40,10 @@ class ChangeReporter:
         self.state[key] = (blob, copy)
         if prev is None or prev[0] != blob:
             self.dirty.add(key)
+
+    def resend_all(self) -> None:
+        """저장된 키 전체를 다음 due()에 한 번 더 내준다. 키별 최소 간격은 그대로 지킨다 (DEC-089)"""
+        self.dirty.update(self.state)
 
     def due(self, sim_time_us: int, min_gap_us: int, period: int | None = None) -> list[Message]:
         if period is not None and self._period != period:
@@ -84,6 +88,9 @@ def activity_terminal(k: ReportKey, msg: Message) -> bool:
 def vi_key(name: str, msg: Message) -> ReportKey:
     """SystemStatus는 기체당 하나, FlightCommandStatus는 command_id별 (DEC-071)"""
     return (name, msg.command_id if name == "FlightCommandStatus" else "", "")
+
+
+LOADOUT_KEY: ReportKey = ("StoreLoadout", "", "")   # 기체당 하나 (DEC-088)
 
 
 def vi_terminal(k: ReportKey, msg: Message) -> bool:

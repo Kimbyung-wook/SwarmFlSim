@@ -4,6 +4,7 @@ params
 - orbit_radius_m: 0보다 크면 그 자리에서 선회한다. 기본 0 = 침로·속도·고도 유지(HSA)
 - lost_link_timeout_s(5), lost_link_policy: 링크 상실 행동 (DEC-078). 작업을 수행하지 않으므로 MA 변수만 쓴다.
   선회 중 자기에게 온 작업 명령을 받거나 재개하면 원래 비행 명령을 다시 낸다
+- track_share_hz(0): 탐지 공유 (common.TrackSharer, DEC-088)
 """
 
 import math
@@ -11,7 +12,7 @@ import math
 from swarm.v1 import vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
-from .common import LOST_LINK_PARAMS, LostLinkGuard, assigned_task
+from .common import LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, LostLinkGuard, TrackSharer, assigned_task
 
 LOST_LINK_ORBIT_M = 300.0     # orbit_radius_m이 0일 때 링크 상실 선회 반경
 
@@ -21,6 +22,7 @@ class Hold(MissionAutonomy):
         ParamDef("orbit_radius_m", 0.0, ParamLayer.BEHAVIOR, "m", 0.0, 100000.0,
                  "0보다 크면 그 자리에서 이 반경으로 선회, 0이면 침로·속도·고도 유지"),
         *LOST_LINK_PARAMS,
+        *TRACK_SHARE_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
@@ -28,6 +30,7 @@ class Hold(MissionAutonomy):
         self.orbit_radius_m = float(ctx.params.get("orbit_radius_m", 0.0))
         self.link = LostLinkGuard(ctx)
         self.cmd: vi_pb2.FlightCommand | None = None
+        self.tracks = TrackSharer(ctx)
 
     def on_params(self, ctx: AgentContext, changed: dict) -> None:
         if "orbit_radius_m" in changed:
@@ -37,6 +40,7 @@ class Hold(MissionAutonomy):
 
     def on_step(self, ctx: AgentContext) -> None:
         msgs = list(ctx.ports.c2.inbox())
+        self.tracks.step()
         ctx.ports.vi.command_status()
         nav = ctx.ports.vi.nav()
         if any(assigned_task(ctx, m) for m in msgs):

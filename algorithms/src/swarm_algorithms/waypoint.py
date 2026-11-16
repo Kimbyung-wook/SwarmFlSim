@@ -6,13 +6,15 @@ MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPi
   없으면 단독 항로로 보고 C2 TaskCommand처럼 현재 작업을 CANCELLED(preempted)로 끝내고 바로 비행한다.
   항로 자체의 작업 상태는 보내지 않고, 끝나면 대기 작업을 잇는다 (D-29).
 링크 상실 행동은 common.LostLinkGuard를 따른다 (DEC-078).
-params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_policy
+승인(approval_tasks, DEC-088)은 common.TaskTracker, 탐지 공유(track_share_hz)는 common.TrackSharer를 따른다.
+params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_policy,
+approval_tasks(""), approval_timeout_s(0), track_share_hz(0)
 """
 
 from swarm.v1 import c2_pb2, mp_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
-from .common import LOST_LINK_PARAMS, TaskPilot, invalid_reason
+from .common import APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, TaskPilot, TrackSharer, invalid_reason
 
 
 def route_task(ctx: AgentContext, rp: mp_pb2.RoutePlan) -> c2_pb2.TaskCommand:
@@ -33,6 +35,8 @@ class WaypointFollower(MissionAutonomy):
         ParamDef("hold_radius_m", 300.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "Hold 작업의 기본 선회 반경"),
         ParamDef("speed_mps", 0.0, ParamLayer.BEHAVIOR, "m/s", 0.0, 500.0, "작업에 속도가 없을 때의 속도, 0 = 현재 속도"),
         *LOST_LINK_PARAMS,
+        *APPROVAL_PARAMS,
+        *TRACK_SHARE_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
@@ -40,6 +44,7 @@ class WaypointFollower(MissionAutonomy):
         self.pilot = TaskPilot(ctx, float(p.get("acceptance_m", 80.0)), float(p.get("hold_radius_m", 300.0)),
                                float(p.get("speed_mps", 0.0)) or None)
         self.routes_seen: set[str] = set()
+        self.tracks = TrackSharer(ctx)
 
     def on_params(self, ctx: AgentContext, changed: dict) -> None:
         p = self.pilot
@@ -49,6 +54,7 @@ class WaypointFollower(MissionAutonomy):
 
     def on_step(self, ctx: AgentContext) -> None:
         self.pilot.step()
+        self.tracks.step()
         for rp in ctx.ports.mp.route_plans():
             if rp.route_id in self.routes_seen or not rp.waypoints:
                 continue

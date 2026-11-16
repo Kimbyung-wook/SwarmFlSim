@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from google.protobuf.message import Message
 
-from swarm.v1 import entity_pb2, fa_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
+from swarm.v1 import c2_pb2, entity_pb2, fa_pb2, link_pb2, options_pb2, sim_pb2, vi_pb2
 from swarm_api import BatchMissionAutonomy, Bus, NavBatch, Sample, keys
 from swarm_api.keys import Iface
 
@@ -49,7 +49,9 @@ L1_ENUM = {
 _PRIORITY = {"c2": 0, "p2p": 1}
 
 # onboard/<id>/<msg> 중 런타임이 받는 것. 이 키만 구독하므로 자기가 낸 명령이 되돌아오지 않는다 (DEC-081)
-ONBOARD_INBOUND = frozenset({"SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity"})
+ONBOARD_INBOUND = frozenset({"SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity",
+                             "StoreLoadout"})
+LOST_LINK_TIMEOUT_S = 5.0  # MA 변수 lost_link_timeout_s가 없을 때 (DEC-078 기본값)
 
 
 @dataclass
@@ -444,6 +446,8 @@ class AgentRuntime:
             v.vi_reports.note(vi_key(name, msg), msg)   # GCS 변화 보고 (DEC-071)
         elif name == "Detection":
             v.ports.ms.detection_buffer.push(msg)
+        elif name == "StoreLoadout":
+            v.ports.ms.on_loadout(msg)               # GCS 보고 (DEC-088)
         else:
             v.ports.ms.on_activity(msg)
             if name in ACTIVITY_NAMES:
@@ -455,6 +459,8 @@ class AgentRuntime:
         - 임무장비 상태(DEC-051): 바뀐 값은 이번 틱에, 전체는 모의 시간 1 s마다 `tx/ms/<Msg>`
         - VI 상태(DEC-071): `FlightCapability`는 첫 틱에 한 번, `NavigationReport`는 vi_report_hz 주기(0이면 끔),
           `SystemStatus`·`FlightCommandStatus`는 바뀔 때 `tx/vi/<Msg>`. 전체 주기 보고는 없다
+        - 적재 구성(DEC-088): `StoreLoadout`은 시작할 때(적재가 있으면)와 바뀔 때 `tx/ms/StoreLoadout`
+        - GCS 링크가 끊겼다 복구되면(DEC-089) 그 기체의 변화 보고 키 전체와 FlightCapability를 한 번 다시 보낸다
         - 변화 보고는 키별 최소 간격(activity_max_hz)을 지키고 미룬 변화는 최신 값으로 보낸다 (DEC-056).
           종료 상태(무장 IMPACT·MISSED·REJECTED, 비행 명령 REJECTED·COMPLETED·FAILED·CANCELLED)를 보낸 키는 지운다 (DEC-063)
         """
@@ -467,6 +473,12 @@ class AgentRuntime:
             gcs = self._gcs.get(v.entity_id)
             if not gcs:
                 continue
+            if v.resync:                                 # GCS 링크 복구: 보고 상태 전체를 한 번 (DEC-089)
+                v.resync = False
+                v.activity_reports.resend_all()
+                v.vi_reports.resend_all()
+                v.ms_reports.resend_all()
+                v.capability_reported = False
             for msg in v.activity_reports.due(sim_time_us, min_gap_us, period):
                 self.send_link(v, "ms", msg, [gcs])
             if not v.capability_reported:
@@ -481,6 +493,10 @@ class AgentRuntime:
                     self.send_link(v, "vi", v.nav, [gcs])
             for msg in v.vi_reports.due(sim_time_us, min_gap_us):
                 self.send_link(v, "vi", msg, [gcs])
+            if v.ms_reports.dirty:                       # StoreLoadout (DEC-088). 종료 상태가 없어 dirty만 보면 된다
+                for msg in v.ms_reports.due(sim_time_us, min_gap_us):
+                    v.stamp(msg)
+                    self.send_link(v, "ms", msg, [gcs])
 
     def _on_rx(self, key: str, payload: bytes) -> None:
         parts = key.split("/")
@@ -506,6 +522,8 @@ class AgentRuntime:
 
     def _deliver(self, v: Vehicle, iface: str, msg: Message) -> None:
         if iface == "c2":
+            if isinstance(msg, c2_pb2.GcsHeartbeat):
+                self._on_heartbeat(v)
             if isinstance(msg, C2_INBOUND):
                 v.ports.c2.buffer.push(msg)
             else:
@@ -514,6 +532,15 @@ class AgentRuntime:
             v.ports.p2p.buffer.push(msg)
         elif iface == "mp":
             v.ports.mp.on_message(msg)
+
+    def _on_heartbeat(self, v: Vehicle) -> None:
+        """GCS 링크 복구 판단 (DEC-089). MA의 LinkMonitor(DEC-078)와 같은 규칙이다: 직전 Heartbeat 뒤 lost_link_timeout_s를
+        넘겨 다시 받으면 상실 뒤 복구다. 시각은 처리 중인 틱의 모의 시간이라 lockstep에서 결정적이다"""
+        now = self._sim_time_us
+        timeout_us = round(float(v.ma_set.values.get("lost_link_timeout_s", LOST_LINK_TIMEOUT_S)) * 1e6)
+        if v.hb_last_us is not None and now - v.hb_last_us > timeout_us:
+            v.resync = True
+        v.hb_last_us = now
 
     # ---- 프레임 ----
 

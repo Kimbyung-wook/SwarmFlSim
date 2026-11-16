@@ -15,7 +15,7 @@ from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, mp_pb2, ms_pb2, vi_pb2
 
-from .reporting import vi_key
+from .reporting import LOADOUT_KEY, vi_key
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -106,8 +106,11 @@ class MSPortImpl:
     def __init__(self, vehicle: "Vehicle") -> None:
         self._v = vehicle
         self._loadout = ms_pb2.StoreLoadout(stores=list(vehicle.spec.payloads))
+        self._from_payload = False   # Payload가 낸 StoreLoadout을 받았으면 그것이 기준이다 (DEC-088)
         self.detection_buffer = FrameBuffer()
         self.activity_buffer = FrameBuffer()
+        if self._loadout.stores:     # 시작 보고. 적재가 없는 기체는 보내지 않는다
+            vehicle.ms_reports.note(LOADOUT_KEY, self._loadout)
 
     def loadout(self) -> ms_pb2.StoreLoadout:
         return self._loadout
@@ -125,12 +128,20 @@ class MSPortImpl:
         return self.activity_buffer.take()
 
     def on_activity(self, msg: Message) -> None:
-        # 발사가 확인되면 잔량을 줄인다
-        if isinstance(msg, ms_pb2.StrikeActivity) and msg.state == ms_pb2.STRIKE_STATE_LAUNCHED:
+        # 발사가 확인되면 잔량을 줄인다. Payload의 StoreLoadout을 받은 뒤로는 그 값을 따른다
+        if (not self._from_payload and isinstance(msg, ms_pb2.StrikeActivity)
+                and msg.state == ms_pb2.STRIKE_STATE_LAUNCHED):
             for store in self._loadout.stores:
                 if store.id == msg.payload_id and store.count > 0:
                     store.count -= 1
+                    self._v.ms_reports.note(LOADOUT_KEY, self._loadout)
         self.activity_buffer.push(msg)
+
+    def on_loadout(self, msg: ms_pb2.StoreLoadout) -> None:
+        """onboard/<id>/StoreLoadout (Payload, 처음 프레임과 잔량이 바뀐 프레임). GCS 보고는 값이 바뀔 때만 나간다"""
+        self._from_payload = True
+        self._loadout = msg
+        self._v.ms_reports.note(LOADOUT_KEY, msg)
 
 
 class MPPortImpl:

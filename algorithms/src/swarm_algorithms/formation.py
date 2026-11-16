@@ -11,6 +11,8 @@
   리더 상태가 leader_timeout_s보다 오래되면 현재 침로를 유지한다.
 - 링크 상실(DEC-078): 리더는 수행 중 작업의 정책, 추종기와 작업 없는 리더는 MA 변수 lost_link_policy를 따른다(FormationCommand에 정책이 없다).
   선회 중 새 편대 명령이나 자기에게 온 작업 명령을 받으면 선회를 끝낸다.
+- 리더 알림(DEC-088): 편대의 리더가 정해지거나 바뀌면 새 리더가 LeaderUpdate(group_id, leader, term)를 P2P로 브로드캐스트한다.
+  term은 이 기체가 본 리더 변경 횟수(1부터)다. 승인(approval_tasks)·탐지 공유(track_share_hz)는 common 부품을 따른다.
 
 오프셋(FRD, s = spacing_m, k = 추종기 순번 0..): LINE (0, ±s·⌈(k+1)/2⌉), COLUMN (−s(k+1), 0),
 WEDGE (−s·r, ±s·r), r = ⌊k/2⌋+1, ECHELON (−s(k+1), s(k+1)), CIRCLE 리더 둘레 반경 s 등간격,
@@ -24,7 +26,8 @@ from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset, offset_geo
 
-from .common import LOST_LINK_PARAMS, PlanWatcher, TaskPilot, assigned_task, every, peer_status
+from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, PlanWatcher, TaskPilot, TrackSharer,
+                     assigned_task, every, peer_status)
 
 F = c2_pb2
 
@@ -75,6 +78,8 @@ class Formation(MissionAutonomy):
         ParamDef("hold_radius_m", 400.0, ParamLayer.BEHAVIOR, "m", 1.0, 100000.0, "리더 Hold 기본 선회 반경"),
         ParamDef("group", "", ParamLayer.DECISION, "", description="따를 편대 group_id, 빈 값 = 소속 첫 편대", runtime=False),
         *LOST_LINK_PARAMS,
+        *APPROVAL_PARAMS,
+        *TRACK_SHARE_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
@@ -93,6 +98,9 @@ class Formation(MissionAutonomy):
         self.peers: dict[str, p2p_pb2.PeerStatus] = {}
         self._leader_init = False
         self._psi = 0.0
+        self.term = 0                  # 리더 변경 횟수 (LeaderUpdate.term)
+        self._announce = False         # 다음 틱에 LeaderUpdate를 보낸다
+        self.tracks = TrackSharer(ctx)
         self.group = p.get("group")
         self.plans = PlanWatcher(ctx)
         self._apply_plan(ctx, self.plans.initial)
@@ -118,8 +126,12 @@ class Formation(MissionAutonomy):
                 break
 
     def _set(self, cmd: c2_pb2.FormationCommand) -> None:
+        prev = (self.cmd.group_id, self.leader) if self.cmd is not None else None
         self.cmd = cmd
         self.leader = pick_leader(cmd)
+        if prev != (cmd.group_id, self.leader):
+            self.term += 1
+            self._announce = self.leader == self._id
         self.offsets = slot_offsets(cmd, self.leader)
         self._leader_init = False
         self.pilot.link.release()
@@ -143,6 +155,10 @@ class Formation(MissionAutonomy):
             if isinstance(m, p2p_pb2.PeerStatus):
                 self.peers[m.header.source] = m
         nav = ctx.ports.vi.nav()
+        self.tracks.step()
+        if self._announce and self.cmd is not None:
+            self._announce = False
+            ctx.ports.p2p.send(p2p_pb2.LeaderUpdate(group_id=self.cmd.group_id, leader=self.leader, term=self.term))
 
         if self.is_leader:
             if not self._leader_init and nav is not None:

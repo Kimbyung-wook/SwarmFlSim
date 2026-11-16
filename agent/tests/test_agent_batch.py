@@ -87,7 +87,7 @@ def test_tc_agt_119_one_control_batch_per_tick_before_frame_done():
 
 def test_tc_agt_120_no_echo_subscription():
     """런타임 구독은 받을 메시지뿐이다. 자기 제어·명령과 예전 기체별 항법은 받지 않는다"""
-    names = ("SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity")
+    names = ("SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity", "StoreLoadout")
     # 일부만 맡으면 기체별 구독 (IMP-AGT-043)
     part = Harness(make_scenario(2, "hold"), entities={A})
     exprs = [s.keyexpr for s in part.rt._vehicle_subs]
