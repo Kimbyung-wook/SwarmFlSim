@@ -27,6 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
                                  description="A-GRA Gateway: swarm/<gcs>/rx/** <-> LA-CAL (DEC-068)")
     ap.add_argument("--gcs", required=True, help="GCS 엔티티 ID (예: gcs-01)")
     ap.add_argument("--lacal", default="ws://127.0.0.1:8765", help="CAL Server OWP 주소")
+    ap.add_argument("--lacal-admin", default="",
+                    help="CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 다시 보낸다 (DEC-089). "
+                         "기본은 --lacal 호스트의 8766, none이면 끈다")
     ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
                     help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")
@@ -50,7 +53,8 @@ async def _run(args) -> None:
                              connect=args.connect, listen=args.listen,
                              multicast_scouting=not args.no_multicast))
     running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix), args.lacal,
-                                  service_id=args.service, inbound_topic=args.inbound_topic)
+                                  service_id=args.service, inbound_topic=args.inbound_topic,
+                                  admin_url=None if args.lacal_admin.lower() == "none" else args.lacal_admin)
     try:
         while True:
             await asyncio.sleep(args.stats_s or 3600)

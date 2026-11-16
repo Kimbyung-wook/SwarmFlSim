@@ -25,6 +25,7 @@ from .converters import (AlsoConverter, ConvContext, ConversionError, Converter,
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
+from .retain import RetainedReports
 
 log = logging.getLogger("swarm_gateway")
 
@@ -91,6 +92,7 @@ class Gateway:
         self._tx_seq: dict[str, int] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._outbox: asyncio.Queue | None = None
+        self.retained = RetainedReports()   # 변화 보고 키별 마지막 값 (DEC-089)
         self._check_converters()
 
     # ------------------------------------------------------------------ 매핑
@@ -226,6 +228,7 @@ class Gateway:
         self.counters["exported"] += 1
         self.counters[f"exported.{uci}"] += 1
         self._emit(topic, obj)
+        self.retained.note(entry.full_name, uci, topic, msg, obj)
         return Outcome("exported", proto=entry.full_name, uci_name=uci, topic=topic, key=key, message=obj)
 
     def _emit(self, topic: str, obj: dict) -> None:
@@ -236,6 +239,11 @@ class Gateway:
             if asyncio.iscoroutine(res):
                 res.close()
                 raise RuntimeError("async sink needs Gateway.start() inside an event loop")
+
+    def replay(self, topic: str, obj: dict) -> None:
+        """보관한 마지막 값을 늦게 붙은 구독자를 위해 다시 보낸다 (DEC-089). 이미 검증한 메시지다"""
+        self.counters["replayed"] += 1
+        self._emit(topic, obj)
 
     async def run_sender(self) -> None:
         """outbox → sink(LA-CAL PUB). 전송 오류는 세고 계속한다"""
