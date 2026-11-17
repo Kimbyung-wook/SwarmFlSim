@@ -4284,3 +4284,135 @@ ext2는 모의 80 s에 기동해 85.1 s(r1)·85.0 s(r2)에 구독을 마쳤다. 
 | Gateway 재기동 뒤 늦은 구독 | 범위 밖. 보관 값이 없는 것은 README에 적혀 있다 |
 | 실제 스택 lockstep의 복구 재송신 재현 | 결정론 묶음에 링크 끊김을 넣지 않았다 |
 | O-46 원인 | 링크 지연 기록을 대조하지 않았다 |
+
+## 37. 29차 점검: 표준 적합성 점검 도구 (2026-11-17)
+
+DEC-092·093, REQ-STD-001에 따라 표준 적합성 점검 도구 `qa/conformance/`를 만들고 실제로 돌렸다. 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 결과 보고서 [45_standards_report.md](45_standards_report.md)는 도구가 만든다.
+
+- 기준 코드: wp0-contracts 14538c4(DEC-092)에 da1f84b(DEC-093 AMS-GRA 적용성 표 docs/46, docs/44 C7 개정)를 병합했다.
+- 보고서 첫 줄: 커밋 b80a848, 계약 0.19.0, agra_lacal 45274ce.
+- 제품 코드는 고치지 않았다. 실패 항목도 고치지 않고 발견으로 남겨 담당 WP로 보낸다.
+
+### 37.1 도구
+
+`uv run python qa/conformance/run.py --out qa/out/conformance/<날짜> [--repeat N]`
+
+| 단계 | 내용 |
+|---|---|
+| 정적 수집 | proto 옵션·Gateway 변환기 등록(gateway/.venv에서 덤프), 공개 XSD 최상위 요소, 등록부 §5, gateway/TRACE.md, MA import, open_bus 소스 점검, docs/46 적용성 표 |
+| 점검 실행 | lockstep 1배속 50 Hz, 시드 20261117, 평지. 기체 14대와 gcs-01. CAL 28765/28766, Zenoh 48900~48930(기본 데모와 겹치지 않음). 외부 입력은 일시정지한 프레임에서 넣는다 |
+| 판정 | `judges.py`. 입력은 dict·list뿐이라 단위 시험이 위반 입력으로 직접 부른다 |
+| 보고 | `docs/45_standards_report.md`, `<out>/result.json`, `<out>/c1_table.json` |
+
+외부 입력은 다음과 같다(모의 s).
+
+- 10: 승인 필요 hold 3건(ap-yes·ap-no·ap-to). 승인 필요 없는 hold 1건, return_to_base 1건, RoutePlan 1건.
+- 14: MissionPlan.
+- 22: hold 취소.
+- 26: 부정 입력 10종.
+- 30: 시험 전용 StrikeCommand.
+
+기존 QA 스크립트 두 개를 바꿨다.
+
+- `qa/gw_ext_client.py`
+  - 결과 파일(ext.json)을 프로세스별 임시 파일에 쓴 뒤 `os.replace`한다. Windows에서 다른 프로세스가 읽는 중이라 PermissionError가 나면 0.05 s 간격으로 40회까지 재시도한다. 끝내 실패하면 `dump_retry_fail`로 센다.
+  - 수신·송신 전체를 기록하는 `--full <파일>`을 추가했다.
+  - (이름, 출처, 토픽)별 `/tap` 건수(`tap3`)를 추가했다.
+- `qa/gw_wrap.py`: 결과 파일 쓰기에 같은 재시도를 넣었다.
+
+### 37.2 결과
+
+실행 2회의 판정과 실패 문구(수치 제외)는 같았다. C3 Timestamp 차의 수치만 달랐다. 점검 한 번(정적 수집, 실행 2회, 판정)에 152 s가 걸렸다. 실행 1회는 모의 70 s, 벽시계 약 73 s다. 로그 이상은 0줄이다. 다른 worktree의 시뮬레이터 프로세스가 없을 때 시작했다.
+
+| 항목 | 판정 | 핵심 수치 | 발견 |
+|---|---|---|---|
+| C1 적용 범위 | 실패 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4. STD인데 변환기 없음 5 | D-38 |
+| C2 형식 | 실패 | 외부 수신 9318건 XSD 재검증 실패 0. 부정 입력 10종 중 9종 거부, 1종이 버스로 나감 | D-35 |
+| C3 값 의미 | 실패 | 위치 2030쌍, 위경도·고도·속도·자세 최대 차 0. UUID·상태 대응·항로점 문제 0. Timestamp 변동 36.4 s | D-36 |
+| C4 기체 계층 경계 | 통과 | 구독 12·발행 125키 모두 허용, MA 포트 SIM 메시지 0, 금지 import 0 | O-48, O-49, O-50 |
+| C5 상태 흐름 | 실패 | 전이 위반 6건(편대 명령 3개의 내부·외부). 승인 필요 4건은 모두 맞다 | D-37, O-47 |
+| C6 OMS/LA-CAL | 실패 | Gateway 발행 15흐름·구독 4흐름 일치, `/tap` 불일치 0. external_c2 구독 13흐름이 선언 밖이다 | D-39, O-45 |
+| C7 AMS-GRA | 정보 | 버스 직접 열기 0, 진입점 6/6 open_bus. 적용성 해당·부분 30행의 근거 파일 5개·DEC 20개가 모두 있다 | — |
+
+승인 흐름(C5)은 기대대로였다.
+
+- ap-yes: 응답 10.86 s, EXECUTING 10.98 s.
+- ap-no: REJECTED. 수행하지 않았다.
+- ap-to: 응답이 없어 수행하지 않았다.
+- 계획 task-001(uav-004): 승인 0.06 s, EXECUTING 0.2 s.
+
+외부 hold·return_to_base·취소는 모두 상태 보고가 왔다.
+
+### 37.3 결함과 관찰
+
+| ID | 항목 | 담당 | 중요도 | 내용 |
+|---|---|---|---|---|
+| D-35 | C2 | WP9 | 중간 | 시나리오에 없는 기체(uav-999)를 가리키는 외부 `MA_TaskCommand`가 버스로 나간다. 거부 기록도 TaskStatus도 없다 |
+| D-36 | C3 | WP9 | 중간 | UCI Timestamp가 모의 시각이 아니라 Gateway 벽시계(`ConvContext.now` 기본값 `datetime.now(UTC)`)다. 일시정지만큼 어긋난다 |
+| D-37 | C5 | WP3·WP4 | 낮음 | 편대 추종기가 첫 틱에 mode 없는 명령(`<기체>-fmn-beta`)을 내 REJECTED를 받는다. 이후 같은 command_id를 다시 써서 REJECTED 뒤 EXECUTING(외부 REJECTED 뒤 ACCEPTED)이 된다 |
+| D-38 | C1 | WP0·WP9 | 낮음 | STD로 표시됐지만 Gateway 변환기가 없는 메시지 5종: EngagementCriteria, SensorCommand, JammerCommand, StrikeCommand, FlightCommand |
+| D-39 | C6 | WP9 | 낮음 | `gateway/config/lacal_server.yaml`의 external_c2 `declared.sub`는 2흐름뿐인데 실제로는 15흐름을 구독한다. CAL Server는 선언 밖 구독을 막지 않는다 |
+| O-47 | C5 | WP4 | 매우 낮음 | 편대 리더 명령 `<기체>-fmn-lead`의 첫 상태 보고가 ACCEPTED 없이 CANCELLED(superseded)다 |
+| O-48 | C4 | WP3·WP4 | 매우 낮음 | 내장 MA가 플러그인 API(§5) 밖의 `swarm_agent.geo`, `swarm_agent.racetrack`을 import한다. 버스·truth·Core 모듈은 아니다 |
+| O-49 | C4 | WP4 | 매우 낮음 | Agent의 `swarm/*/rx/**` 구독이 gcs-01 수신 키까지 받는다(실행 1회 7289건). 경계 위반은 아니다 |
+| O-50 | C4 | WP0 | 문서 | 계약 §3.2 키 표와 §3.3 본문의 Agent 구독 키가 3개 다르다: `sim/ctrl/cmd`, `sim/clock/done/*`, `swarm/<e>/rx/**`. 도구는 근거와 함께 보충 허용 키로 둔다 |
+
+기존 O-45(기본 MA에 무장 경로 없음)는 그대로다. 이번 실행의 StrikeActivity 1건은 관측기가 직접 넣은 StrikeCommand에서 나왔다.
+
+기준 문서와 계약 문서는 고치지 않았다. 결정이 필요한 문서 사항은 셋이다.
+
+- D-38: 기체 안쪽 STD 메시지를 C1에서 Gateway 범위 밖으로 둘지, 변환기를 둘지.
+- O-47: C5 전이 표에서 첫 보고 CANCELLED를 허용할지.
+- O-50: 계약 §3.2 표에 Agent 구독 키 3개를 넣을지.
+
+### 37.4 판정 로직 단위 시험 (TC-QA-164~171)
+
+`uv run python -m pytest qa/conformance/tests -q`의 결과는 51 passed다. 항목마다 정상 입력은 통과하고, 일부러 위반을 넣은 입력은 실패하는지 본다.
+
+| TC | 위반 입력 |
+|---|---|
+| TC-QA-164 C1 | STD인데 변환기 없음, XSD에 없는 UCI 이름, `uci_also` 변환기·XSD 누락, STD 아닌 메시지의 변환기 |
+| TC-QA-165 C2 | 수신 XSD 실패, 부정 입력이 버스로 나감, 거부 기록 없음, 정상 송신 거부 |
+| TC-QA-166 C3 | 위경도를 도로 둠, AGL, 고도 차, 북·동 속도 뒤바꿈, 속도 빠짐, 오일러 순서·부호, 벽시계 Timestamp, UUID 여럿·표지 여럿·표지 없음, DEC-090과 다른 상태 대응, 항로점 순서·수 |
+| TC-QA-167 C4 | truth 구독·수신, 계약 밖 키, 맡지 않은 엔티티 발행, `zenoh`·`truth_pb2`·`open_bus`·`swarm_core` import, MA 포트의 SIM 메시지 |
+| TC-QA-168 C5 | 끝 상태 뒤 전이, 표 밖 전이, 첫 보고 CANCELLED, 승인 전·거부 뒤·응답 없이 수행, 상태 보고 없음 |
+| TC-QA-169 C6 | 선언했지만 교환 없음, 선언 밖 교환, `/tap`·외부 수신 불일치, 버스에 안 나간 외부 송신 |
+| TC-QA-170 C7 | 버스 직접 열기, open_bus 안 쓰는 진입점, docs/46 근거 파일·DEC 없음 |
+| TC-QA-171 | `os.replace` PermissionError 2회 뒤 성공, 계속 실패 시 False·임시 파일 없음 |
+
+TC-QA-170에서는 몇 가지를 더 확인한다.
+
+- docs/46 §3 요약 건수와 §4 상세가 다르면 정보로 적는다.
+- 해당없음 행의 근거는 확인하지 않는다.
+- 미분류 실패가 남는지 본다.
+- 반복 비교는 엔티티 번호를 두고 수치만 지운다.
+
+### 37.5 결함·관찰 현황 갱신
+
+§35·§36.7 행은 그대로 두고 새 항목만 적는다.
+
+| ID | 이전 상태 | 현재 상태 | 근거 |
+|---|---|---|---|
+| D-35 | (신규) | 아직 열림 | WP9, 중간 (§37.3) |
+| D-36 | (신규) | 아직 열림 | WP9, 중간 (§37.3) |
+| D-37 | (신규) | 아직 열림 | WP3·WP4, 낮음 (§37.3) |
+| D-38 | (신규) | 아직 열림 | WP0·WP9, 낮음 (§37.3) |
+| D-39 | (신규) | 아직 열림 | WP9, 낮음 (§37.3) |
+| O-47 | (신규) | 아직 열림 | WP4, 매우 낮음 (§37.3) |
+| O-48 | (신규) | 아직 열림 | WP3·WP4, 매우 낮음 (§37.3) |
+| O-49 | (신규) | 아직 열림 | WP4, 매우 낮음 (§37.3) |
+| O-50 | (신규) | 아직 열림 | WP0, 문서 (§37.3) |
+
+갱신 뒤 합계:
+
+- **결함 39건**: 해소 25, 결정됨 9, 아직 열림 5, 사용자 결정 필요 0.
+- **관찰 50건**: 해소 10, 결정됨 22, 아직 열림 18, 사용자 결정 필요 0.
+
+### 37.6 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 손실 있는 링크에서의 C3 대조 | 도착 순서로 짝짓는다. 손실이 있으면 건수가 달라 방법을 바꿔야 한다 |
+| 공식 A-GRA L1 준수 시험 | 도구가 저장소에 없다(docs/44 §4) |
+| docs/46 근거의 코드 식별자·키·WP·계약 절 | 파일 경로와 DEC ID만 확인한다 |
+| strike 계획 작업의 승인 흐름 | 기본 MA에 무장 경로가 없다(O-45) |

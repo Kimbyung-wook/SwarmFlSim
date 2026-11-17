@@ -7,6 +7,10 @@
 - <out>/ext.json에 수신 기록을 1 s마다 쓴다. <out>/STOP 파일이 생기면 끝낸다.
 - 28차: `--approve <json>`({task_id: APPROVED|REJECTED})이면 MA_ApprovalRequest를 받는 즉시 그 작업의 요청에
   MA_ApprovalRequestStatus로 답한다(목록에 없는 작업은 답하지 않는다). DEC-088 4종의 내용 요약을 extra에 남긴다.
+- 29차(표준 적합성 점검, DEC-092): ext.json을 쓸 때 다른 프로세스가 읽는 중이면 Windows에서 os.replace가
+  PermissionError를 낸다(데모에서 클라이언트가 죽었다). 임시 파일을 프로세스별 이름으로 쓰고 replace를 0.05 s 간격으로
+  재시도하며, 끝내 실패하면 그 회차는 건너뛰고 errors에 센다(클라이언트는 죽지 않는다).
+  `--full <file>`이면 받은 메시지와 보낸 메시지 전체를 JSON 줄로 덧붙여 쓴다(교체 없이 append). /tap 기록에 토픽을 더했다(tap3).
 
 gateway/.venv/Scripts/python.exe qa/gw_ext_client.py --url ws://127.0.0.1:18765 --admin 127.0.0.1:18766 --out <dir>
 """
@@ -16,6 +20,7 @@ import argparse
 import asyncio
 import datetime as dt
 import json
+import os
 import sys
 import time
 import uuid
@@ -90,6 +95,7 @@ async def send_raw(cli, codec, ext, fname: str, c: dict) -> None:  # noqa: ANN00
     except CalError as e:
         rec["pub"] = f"-ERR {e}"[:200]
     ext.cmds.append(rec)
+    ext.write_full("tx", rec["t"], c["raw"], c["topic"], msg[c["raw"]], rec["xsd_ok"])
 
 
 def label(obj) -> str:  # noqa: ANN001
@@ -103,6 +109,9 @@ class Ext:
         self.rx: list[list] = []          # [t, name, topic, xsd_ok, origin_system, extra]
         self.xsd_fail: list[str] = []
         self.tap: Counter = Counter()      # (name, origin service) 서버 통과 수
+        self.tap3: Counter = Counter()     # 29차: (name, origin service, topic)
+        self.full = None                   # 29차: --full 파일 (append)
+        self.dump_retry_fail = 0
         self.tap_t: list[list] = []        # [t, name]
         self.cmds: list[dict] = []
         self.errors: list[str] = []
@@ -154,15 +163,30 @@ class Ext:
             sysid = (body.get("MessageHeader") or {}).get("SystemID", {}).get("UUID", "")
             mode = (body.get("MessageHeader") or {}).get("Mode", "")
             self.rx.append([t, name, topic, ok, sysid, mode, extra])
+            self.write_full("rx", t, name, topic, body, ok)
         return cb
+
+    def write_full(self, kind: str, t: float, name: str, topic: str, body: dict, ok: bool) -> None:
+        if self.full is not None:
+            self.full.write(json.dumps({"k": kind, "t": t, "name": name, "topic": topic, "ok": ok, "body": body},
+                                       ensure_ascii=False) + "\n")
 
     def dump(self) -> None:
         d = {"rx": self.rx, "xsd_fail": self.xsd_fail, "tap": [[k[0], k[1], v] for k, v in self.tap.items()],
+             "tap3": [[*k, v] for k, v in self.tap3.items()],
              "tap_t": self.tap_t, "cmds": self.cmds, "errors": self.errors, "t_wall": time.monotonic() - self.t0,
-             "sub_t": self.sub_t}
-        tmp = self.out / "ext.tmp"
+             "sub_t": self.sub_t, "dump_retry_fail": self.dump_retry_fail}
+        if self.full is not None:
+            self.full.flush()
+        tmp = self.out / f"ext.{os.getpid()}.tmp"
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.out / "ext.json")
+        for _ in range(40):                 # 29차: 읽는 쪽이 파일을 잡고 있으면 PermissionError (Windows)
+            try:
+                os.replace(tmp, self.out / "ext.json")
+                return
+            except PermissionError:
+                time.sleep(0.05)
+        self.dump_retry_fail += 1
 
 
 async def tap_loop(ext: Ext, admin: str) -> None:
@@ -175,6 +199,7 @@ async def tap_loop(ext: Ext, admin: str) -> None:
                     if "message_name" not in m:
                         continue
                     ext.tap[(m["message_name"], m.get("origin", ""))] += 1
+                    ext.tap3[(m["message_name"], m.get("origin", ""), m.get("topic", ""))] += 1
                     ext.tap_t.append([round(time.time(), 3), m["message_name"]])
         except Exception as e:  # noqa: BLE001
             ext.errors.append(f"tap: {e}"[:200])
@@ -188,11 +213,14 @@ async def main() -> None:
     ap.add_argument("--service", default="external_c2")
     ap.add_argument("--out", required=True)
     ap.add_argument("--approve", default="", help="28차: {task_id: APPROVED|REJECTED} JSON")
+    ap.add_argument("--full", default="", help="29차: 주고받은 메시지 전체를 JSON 줄로 덧붙일 파일")
     a = ap.parse_args()
     out = Path(a.out)
     (out / "cmd").mkdir(parents=True, exist_ok=True)
     codec = OmsJsonCodec(XSD)
     ext = Ext(out, codec)
+    if a.full:
+        ext.full = open(a.full, "a", encoding="utf-8")  # noqa: SIM115
     cli = LaCalClient(a.url, a.service)
     for _ in range(60):
         try:
@@ -258,12 +286,15 @@ async def main() -> None:
             except CalError as e:
                 rec["pub"] = f"-ERR {e}"
             ext.cmds.append(rec)
+            ext.write_full("tx", rec["t"], "MA_TaskCommand", "swarm.c2", msg["MA_TaskCommand"], rec["xsd_ok"])
             print(f"cmd {f.name} {c['kind'] if 'kind' in c else ''} -> {rec['pub']}", flush=True)
         if time.monotonic() - last > 1.0:
             ext.dump()
             last = time.monotonic()
         await asyncio.sleep(0.1)
     ext.dump()
+    if ext.full is not None:
+        ext.full.close()
     await cli.close()
 
 

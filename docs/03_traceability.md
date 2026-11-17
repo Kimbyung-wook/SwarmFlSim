@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043, TC-QA-158~161 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043, TC-QA-158~161, TC-QA-164~172 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -277,6 +277,15 @@
 | TC-QA-161 | 늦게 붙은 외부 구독자의 변화 보고 마지막 값 수신 | `qa/gw_agra.py` (ext2) | DEC-089 |
 | TC-QA-162 | DEC-088 기능을 켠 lockstep 재현: truth·항법·제어·GCS rx 바이트 동일, D-33 경고 0 | `qa/batch_e2e.py` (`agra28`, `agra28_a2`) | DEC-088, DEC-083, DEC-005 |
 | TC-QA-163 | Monitor 브리지 주소 `bridge=`·`url=` 실제 접속 (D-15) | `qa/recovery_stack.py` + 브라우저 | DEC-091, DEC-027 |
+| TC-QA-164 | 적합성 C1 판정: STD인데 변환기 없음·XSD에 없는 UCI 이름·`uci_also` 누락·STD 아닌 변환기는 실패, 미구현은 실패 아님 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-072 |
+| TC-QA-165 | 적합성 C2 판정: 수신 XSD 재검증 실패, 부정 입력이 버스로 나감, 거부 기록 없음, 정상 송신 거부는 실패 | `qa/conformance/tests/test_judges.py` | DEC-092 |
+| TC-QA-166 | 적합성 C3 판정: 도→rad 미변환, MSL 아님, NED 속도 뒤바뀜, 자세 순서·부호, 벽시계 Timestamp, UUID 불일치, DEC-090 상태 대응, 항로점 순서는 실패 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-090 |
+| TC-QA-167 | 적합성 C4 판정: truth 구독, 계약 밖 키, 맡지 않은 엔티티 발행, 금지 import, MA 포트의 SIM 메시지는 실패, 와일드카드 수신은 정보 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-013 |
+| TC-QA-168 | 적합성 C5 판정: 끝 상태 뒤 전이, 허용 표 밖 전이, 승인 전 수행, 상태 보고 없음은 실패 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-075 |
+| TC-QA-169 | 적합성 C6 판정: 선언했지만 교환 없음, 선언 밖 교환, `/tap`·외부 수신 건수 불일치, 외부 송신이 버스에 안 나감은 실패 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-069 |
+| TC-QA-170 | 적합성 C7 판정: 버스 직접 열기 실패, docs/46 해당·부분 근거 파일·DEC 없음은 실패, 요약 건수 불일치는 정보. 발견 대응·반복 비교 수치 제거 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-093 |
+| TC-QA-171 | 결과 파일 쓰기: Windows `os.replace` PermissionError 재시도, 끝내 실패해도 예외 없이 임시 파일 정리 | `qa/conformance/tests/test_judges.py` | DEC-092 |
+| TC-QA-172 | 표준 적합성 점검 도구 실제 실행(lockstep 고정 시드, 2회 반복) → `docs/45_standards_report.md` | `qa/conformance/run.py` | DEC-092, DEC-093, REQ-STD-001 |
 
 ## 시험 결과
 
@@ -465,6 +474,15 @@
 | TC-QA-161 | 통과 | 2026-11-16 | 구독 뒤 0.18~0.24 s에 마지막 값 수신, 기존 구독자도 1회 중복. O-19 해소 (§36.5) |
 | TC-QA-162 | 통과 | 2026-11-16 | Agent 1·2분할 각 2회 차이 0 (GCS rx 2497건 포함), 경고 0 (§36.6) |
 | TC-QA-163 | 통과 | 2026-11-16 | 두 쿼리 모두 연결됨, vitest 64 passed. D-15 해소 (§36.6) |
+| TC-QA-164 | 통과 | 2026-11-17 | 위반 입력 4종 실패, 정상 입력 통과 (§37.4) |
+| TC-QA-165 | 통과 | 2026-11-17 | 위반 입력 4종 실패 (§37.4) |
+| TC-QA-166 | 통과 | 2026-11-17 | 위반 입력 9종 실패, 자세 행렬 계산 검산 (§37.4) |
+| TC-QA-167 | 통과 | 2026-11-17 | 위반 입력 5종 실패, 실제 algorithms/ 금지 import 0 (§37.4) |
+| TC-QA-168 | 통과 | 2026-11-17 | 위반 입력 4종 실패, 시간 초과 미수행 통과 (§37.4) |
+| TC-QA-169 | 통과 | 2026-11-17 | 위반 입력 4종 실패 (§37.4) |
+| TC-QA-170 | 통과 | 2026-11-17 | 위반 입력 3종 실패, 해당없음 행 근거는 보지 않음 (§37.4) |
+| TC-QA-171 | 통과 | 2026-11-17 | 2회 실패 뒤 성공, 계속 실패 시 False·임시 파일 없음 (§37.4) |
+| TC-QA-172 | 측정 | 2026-11-17 | C4 통과, C1·C2·C3·C5·C6 실패(D-35~39), C7 정보. 2회 판정 같음 (§37) |
 
 ## 프로세스 결정
 

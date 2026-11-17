@@ -32,9 +32,14 @@ def _prefix(key: str) -> str:
 def _dump() -> None:
     d = {**P, "put": dict(P["put"]), "rx_prefix": dict(P["rx_prefix"]), "rx_keys": dict(P["rx_keys"]),
          "t": time.time()}
-    tmp = OUT.with_suffix(".tmp")
+    tmp = OUT.with_suffix(f".{os.getpid()}.tmp")
     tmp.write_text(json.dumps(d, ensure_ascii=False, default=str), encoding="utf-8")
-    os.replace(tmp, OUT)
+    for _ in range(40):     # 29차: 읽는 쪽이 파일을 잡고 있으면 Windows에서 PermissionError. 재시도 뒤 실패하면 그 회차를 건너뛴다
+        try:
+            os.replace(tmp, OUT)
+            return
+        except PermissionError:
+            time.sleep(0.05)
 
 
 _orig_open = M.open_bus
