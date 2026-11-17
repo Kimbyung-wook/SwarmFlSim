@@ -167,6 +167,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-090 | 외부 A-GRA 상태 표현은 공개 XSD enum을 그대로 따른다. EXECUTING·COMPLETED는 외부에 ACCEPTED로 보이고, 수행·완료는 상태 보고에서 읽는다. 표준 밖 확장 필드는 쓰지 않는다 | O-17, docs/21_qa_report.md §35.6 Q3, 사용자 답변 "그대로 둠" | Confirmed |
 | DEC-091 | 브라우저 클라이언트의 브리지 주소 쿼리 이름은 `bridge=`로 통일한다. Traffic Monitor의 `url=`은 별칭으로 남긴다 | D-15, DEC-027, docs/21_qa_report.md §35.6 Q4, 사용자 답변 "bridge=로 통일" | Confirmed |
 | DEC-092 | 표준 적용(UCI·A-GRA·OMS/CAL·AMS-GRA)을 자체 점검 도구로 확인한다. 점검 기준은 `docs/44_standards_conformance.md`(C1~C7), 도구는 `qa/conformance/`, 결과는 `docs/45_standards_report.md`로 남긴다. AMS-GRA는 준수가 아니라 개념 차용으로 판정한다. 공식 적합성 시험을 대신하지 않는다 | REQ-STD-001, DEC-013, DEC-090, 사용자 요청(검증 문서·도구·보고서) | Confirmed |
+| DEC-093 | AMS-GRA는 개념 차용을 유지하고 준수로 바꾸지 않는다. 요구별 적용성 표(`docs/46_amsgra_applicability.md`)로 범위를 보인다(해당·부분·해당없음과 근거). 하드웨어 MPU, 보안·사이버·암호, MPU 납품·인증 산출물, 실시간 시각 동기, AMS-GRA 고유 버스·API 요구는 해당없음으로 둔다 | REQ-STD-001, DEC-092, 사용자: "차용 유지+적용성 표" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 

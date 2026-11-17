@@ -46,6 +46,7 @@ flowchart LR
 | 관점별 아키텍처 그림 | `docs/43_architecture_views.md` | 단일 파일. 설계 검토용(사용자 피드백), 그림 중심 |
 | 표준 적합성 점검 기준 | `docs/44_standards_conformance.md` | 단일 파일. 점검 항목·판정 기준·도구 사용법 (DEC-092) |
 | 표준 적합성 점검 결과 | `docs/45_standards_report.md` | 도구가 만든 보고서. 점검할 때마다 다시 만든다 (DEC-092) |
+| AMS-GRA 요구 적용성 표 | `docs/46_amsgra_applicability.md` | 단일 파일. 요구별 해당·부분·해당없음과 근거. 준수 판정 아님 (DEC-093) |
 | 그림 | `docs/img/manual/<문서>/` (SVG 원본과 화면 캡처 JPG) | |
 | 영문판 | `docs/en/40_overview.md`, `docs/en/41_dev/`, `docs/en/42_user/` | 국문과 같은 파일 이름·장 번호 |
 | 문서 변경 기록 | `docs/31_doc_changelog.md` | 병합마다 한 줄 추가(§6.2) |
