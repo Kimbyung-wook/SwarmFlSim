@@ -1,6 +1,6 @@
 # 표준 적합성 점검 기준
 
-- 근거: REQ-STD-001, DEC-092, DEC-093. 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
+- 근거: REQ-STD-001, DEC-092, DEC-093, DEC-094(C1 범위 구분), DEC-095(이력). 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
 - 점검 결과는 [45_standards_report.md](45_standards_report.md)에 둔다. 도구가 만든다.
 - 이 점검은 자체 점검이다. 공식 A-GRA 적합성 시험이나 외부 검토를 대신하지 않는다.
 
@@ -42,9 +42,11 @@ flowchart LR
 | 입력 | proto descriptor(`uci_name`, `uci_also`, `mapping`, `l1`), Gateway 변환기 등록, 공개 XSD, 등록부 §5 상호작용 목록 |
 | 산출 | 상호작용별 행: L1, UCI 메시지, 방향(송신·수신), 구분(STD·EXT·SIM), 변환기 유무, 구현 ID, 시험 ID, 상태(구현·시험됨 / 부분 / 미구현) |
 | 요약 | XSD 최상위 메시지 수, 그중 `MA_` 메시지 수, 대응한 UCI 메시지 수, 송신·수신 각각의 수 |
-| 실패 조건 | STD로 표시된 메시지의 `uci_name`·`uci_also`가 XSD에 없다. STD인데 변환기가 없다. 변환기는 있는데 STD가 아니다 |
+| 범위 구분 | STD 메시지를 GCS 경계(`swarm/<gcs>/**`로 오갈 수 있음)와 기체 내부(`onboard/**`로만 오감, MA↔장비·FA)로 나눈다. 기체 내부 STD는 "Gateway 범위 밖(기체 내부)"으로 표시한다 (DEC-094) |
+| 실패 조건 | STD로 표시된 메시지의 `uci_name`·`uci_also`가 XSD에 없다. GCS 경계 STD인데 변환기가 없다. 변환기는 있는데 STD가 아니다 |
 
 - 미구현 상호작용은 실패가 아니다. 범위를 보이는 것이 목적이다.
+- 기체 내부 STD의 변환기 없음은 실패가 아니다. STD 표시는 UCI 메시지 대응을 뜻하고 Gateway 송출을 뜻하지 않는다.
 
 ### C2. 형식 검증 (UCI)
 
@@ -137,3 +139,27 @@ uv run python qa/conformance/run.py --out qa/out/conformance/<날짜>
 - 점검 실행을 띄우고(C2~C6), 정적 점검(C1, C4 소스, C7)을 하고, `docs/45_standards_report.md`와 결과 폴더(JSON, 표)를 만든다.
 - 실행 중 띄운 프로세스는 끝날 때 PID로 정리한다.
 - 보고서 첫 줄에 커밋, 계약 버전, agra_lacal 커밋, 실행 날짜를 적는다.
+
+## 6. 이력 (DEC-095)
+
+점검 조건과 결과가 커밋마다 어떻게 바뀌었는지 추적한다.
+
+| 산출 | 내용 |
+|---|---|
+| `qa/conformance/history.jsonl` | 실행마다 한 줄을 덧붙인다. 고치거나 지우지 않는다 |
+| `docs/47_conformance_history.md` | 도구가 `history.jsonl`과 git 기록으로 만든다. 손으로 고치지 않는다 |
+
+실행 기록 필드:
+
+| 필드 | 내용 |
+|---|---|
+| 실행 | 실행 날짜, 결과 폴더 |
+| 대상 | 점검한 커밋(작업 트리가 깨끗하지 않으면 `dirty` 표시), 계약 버전, agra_lacal 커밋 |
+| 조건 | 기준 문서 커밋(`docs/44`의 마지막 커밋), 도구 커밋(`qa/conformance/`의 마지막 커밋), 시나리오 시드, 반복 횟수 |
+| 결과 | C1~C7 판정과 실패 문구 수, 항목별 핵심 수치, 발견 ID 목록 |
+
+`docs/47_conformance_history.md`의 표:
+
+1. **실행 이력**: 실행마다 한 행. 대상 커밋, 기준·도구 커밋, C1~C7 판정. 이전 실행과 달라진 판정을 표시한다.
+2. **점검 조건 변경 이력**: `docs/44`와 `qa/conformance/`를 바꾼 커밋마다 한 행. 커밋, 날짜, 제목, 관련 DEC. 판정이 바뀐 원인이 조건 변경인지 제품 변경인지 가르는 데 쓴다.
+3. **발견 추적**: 발견 ID마다 처음 나온 실행·커밋, 마지막으로 재현된 실행, 사라진 실행·커밋, 현재 상태(재현·해소).

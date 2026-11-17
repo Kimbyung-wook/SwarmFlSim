@@ -168,6 +168,8 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-091 | 브라우저 클라이언트의 브리지 주소 쿼리 이름은 `bridge=`로 통일한다. Traffic Monitor의 `url=`은 별칭으로 남긴다 | D-15, DEC-027, docs/21_qa_report.md §35.6 Q4, 사용자 답변 "bridge=로 통일" | Confirmed |
 | DEC-092 | 표준 적용(UCI·A-GRA·OMS/CAL·AMS-GRA)을 자체 점검 도구로 확인한다. 점검 기준은 `docs/44_standards_conformance.md`(C1~C7), 도구는 `qa/conformance/`, 결과는 `docs/45_standards_report.md`로 남긴다. AMS-GRA는 준수가 아니라 개념 차용으로 판정한다. 공식 적합성 시험을 대신하지 않는다 | REQ-STD-001, DEC-013, DEC-090, 사용자 요청(검증 문서·도구·보고서) | Confirmed |
 | DEC-093 | AMS-GRA는 개념 차용을 유지하고 준수로 바꾸지 않는다. 요구별 적용성 표(`docs/46_amsgra_applicability.md`)로 범위를 보인다(해당·부분·해당없음과 근거). 하드웨어 MPU, 보안·사이버·암호, MPU 납품·인증 산출물, 실시간 시각 동기, AMS-GRA 고유 버스·API 요구는 해당없음으로 둔다 | REQ-STD-001, DEC-092, 사용자: "차용 유지+적용성 표" | Confirmed |
+| DEC-094 | 표준 점검 C1에서 GCS 경계를 넘지 않는 STD 메시지(기체 안 MA↔장비·FA, `onboard/**`로만 오감)는 "Gateway 범위 밖(기체 내부)"으로 표시하고 변환기 없음을 실패로 보지 않는다. STD 표시는 UCI 메시지 대응을 뜻하고 Gateway 송출을 뜻하지 않는다 | QA D-38, DEC-092, 사용자 답변 "기체 내부로 분류" | Confirmed |
+| DEC-095 | 표준 점검은 실행마다 이력을 남긴다. 도구가 실행 기록(대상 커밋, 계약 버전, agra_lacal 커밋, 기준 문서 커밋, 도구 커밋, 시드, 항목별 판정·핵심 수치·발견 ID)을 `qa/conformance/history.jsonl`에 덧붙이고, 이를 읽어 `docs/47_conformance_history.md`(실행 이력, 점검 조건 변경 이력, 발견 추적)를 만든다. 이력 행은 고치거나 지우지 않는다 | DEC-092, 사용자 요청(점검 조건·결과의 커밋별 이력표) | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
