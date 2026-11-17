@@ -166,6 +166,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-089 | 변화 보고(DEC-071)의 복구 규칙. Agent는 기체의 GCS 링크가 끊겼다 복구되면 그 기체의 현재 보고 상태(SystemStatus 등 변화 보고 키 전체)를 한 번 다시 보낸다. Gateway는 키별 마지막 값을 들고 있다가 늦게 붙은 외부 시스템에 넘긴다. 평소 보고량은 늘리지 않는다 | O-16, O-19, DEC-071, DEC-078, docs/21_qa_report.md §35.6 Q2, 사용자 답변 "링크 복구 시 재송신" | Confirmed |
 | DEC-090 | 외부 A-GRA 상태 표현은 공개 XSD enum을 그대로 따른다. EXECUTING·COMPLETED는 외부에 ACCEPTED로 보이고, 수행·완료는 상태 보고에서 읽는다. 표준 밖 확장 필드는 쓰지 않는다 | O-17, docs/21_qa_report.md §35.6 Q3, 사용자 답변 "그대로 둠" | Confirmed |
 | DEC-091 | 브라우저 클라이언트의 브리지 주소 쿼리 이름은 `bridge=`로 통일한다. Traffic Monitor의 `url=`은 별칭으로 남긴다 | D-15, DEC-027, docs/21_qa_report.md §35.6 Q4, 사용자 답변 "bridge=로 통일" | Confirmed |
+| DEC-092 | 표준 적용(UCI·A-GRA·OMS/CAL·AMS-GRA)을 자체 점검 도구로 확인한다. 점검 기준은 `docs/44_standards_conformance.md`(C1~C7), 도구는 `qa/conformance/`, 결과는 `docs/45_standards_report.md`로 남긴다. AMS-GRA는 준수가 아니라 개념 차용으로 판정한다. 공식 적합성 시험을 대신하지 않는다 | REQ-STD-001, DEC-013, DEC-090, 사용자 요청(검증 문서·도구·보고서) | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
