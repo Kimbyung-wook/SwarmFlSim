@@ -79,13 +79,13 @@ flowchart LR
 | 키 | 메시지 | 발행 | 구독 |
 |---|---|---|---|
 | `sim/clock/tick` | `ClockTick` | Core | 모든 참여자의 런타임 |
-| `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽) |
-| `sim/ctrl/cmd` | `SimCommand` | UI | Core |
+| `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
+| `sim/ctrl/cmd` | `SimCommand` | UI | Core, Agent 런타임 (`set_params`, §3.3) |
 | `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
 | `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
-| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽) |
+| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임, UI(GCS), Gateway(GCS 쪽) |
 | `onboard/<id>/<msg>` | `SystemStatus`(DEC-073), `Detection`, `*Activity`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `onboard_batch/NavigationBatch` | `NavigationBatch` (DEC-081) | Core | Agent 런타임, Logger |
 | `onboard_batch/ControlBatch/<participant>` | `ControlBatch` (DEC-081) | Agent 런타임 | Core, Logger |
