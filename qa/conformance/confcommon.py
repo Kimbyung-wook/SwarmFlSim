@@ -67,7 +67,7 @@ def versions() -> dict:
     import re
     init = (ROOT / "api" / "python" / "src" / "swarm_api" / "__init__.py").read_text(encoding="utf-8")
     m = re.search(r'CONTRACT_VERSION\s*=\s*"([^"]+)"', init)
-    return {"commit": git("rev-parse", "--short", "HEAD"), "dirty": bool(git("status", "--porcelain")),
+    return {"commit": git("rev-parse", "--short", "HEAD"), "dirty": bool(git("status", "--porcelain", "--", ".", ":!docs/45_standards_report.md")),
             "contract": m.group(1) if m else "",
             "agra_lacal": git("rev-parse", "--short", "HEAD", cwd=LACAL)}
 

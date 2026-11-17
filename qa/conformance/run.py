@@ -119,15 +119,22 @@ def main() -> int:  # noqa: PLR0915
     res["C7"]["determinism"]["tool_repeat"] = None
     repeat = None
     if len(all_res) > 1:
-        rows, same_all = [], True
+        rows, same_all, exact_all = [], True, True
         for k in ("C2", "C3", "C4", "C5", "C6"):
             vs = [r[k]["verdict"] for r, _ in all_res]
             fs = [sorted(r[k]["fail"]) for r, _ in all_res]
-            same = len(set(vs)) == 1 and all(f == fs[0] for f in fs)
+            ns = [sorted(J.strip_numbers(t) for t in f) for f in fs]
+            same = len(set(vs)) == 1 and all(f == ns[0] for f in ns)
+            exact = all(f == fs[0] for f in fs)
             same_all &= same
-            rows.append([k, *[f"{v} ({len(f)})" for v, f in zip(vs, fs)], "예" if same else "아니오"])
-        repeat = {"runs": len(all_res), "rows": rows,
-                  "summary": "판정과 실패 문구가 모두 같다" if same_all else "판정 또는 실패 문구가 다른 항목이 있다(표 참고)"}
+            exact_all &= exact
+            rows.append([k, *[f"{v} ({len(f)})" for v, f in zip(vs, fs)], "예" if same else "아니오",
+                         "예" if exact else "아니오"])
+        if same_all:
+            summ = "판정과 실패 문구(수치 제외)가 모두 같다" + ("" if exact_all else ". 수치(건수·시간 차)는 일부 다르다(표 참고)")
+        else:
+            summ = "판정 또는 실패 문구(수치 제외)가 다른 항목이 있다(표 참고)"
+        repeat = {"runs": len(all_res), "rows": rows, "summary": summ}
         res["C7"]["determinism"]["text"] += f". 이 도구의 같은 커밋 {len(all_res)}회 실행: {repeat['summary']}"
     r: A.Run = extra["run"]
     m = r.marks

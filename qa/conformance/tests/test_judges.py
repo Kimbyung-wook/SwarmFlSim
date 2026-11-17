@@ -477,6 +477,13 @@ def test_c7_real_applicability_and_limits_parse():
     assert any("자체 점검" in t for t in lim) and any("AMS-GRA에는 시험 도구가 없다" in t for t in lim)
 
 
+def test_strip_numbers_keeps_entity_ids():
+    a = "MA_Entity@swarm.p2p: 선언 밖 교환 (117건), uav-007-fmn-beta 36.39 s"
+    b = "MA_Entity@swarm.p2p: 선언 밖 교환 (118건), uav-007-fmn-beta 36.24 s"
+    assert J.strip_numbers(a) == J.strip_numbers(b) and "uav-007" in J.strip_numbers(a)
+    assert J.strip_numbers("uav-007 REJECTED") != J.strip_numbers("uav-008 REJECTED")
+
+
 def test_findings_unmatched_failure_is_loose():
     fnd, loose = F.attach({"C2": {"fail": ["부정 입력 neg-unknown: 버스로 나감 (k)", "새로운 실패"], "info": []}})
     assert [f["id"] for f in fnd if f["hits"]] == ["D-35"]

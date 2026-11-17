@@ -90,7 +90,9 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
                      "flocking_basic 3), 표적 1. 손실 없는 링크"],
         ["포트", f"CAL {m['cal']}, Zenoh {m['zenoh']} (기본 데모 8765/8766·7447과 겹치지 않음)"],
         ["시간", f"모의 {m['sim_s']} s, 벽시계 {m['wall_s']} s (점검 전체 {meta['elapsed_s']} s)"],
-        ["프로세스 종료", f"띄운 PID만 정리: {m['pids']}. 끝날 때 죽어 있던 프로세스: {m['dead'] or '없음'}"],
+        ["프로세스 종료", f"띄운 PID만 정리: {m['pids']}. 끝날 때 죽어 있던 프로세스: "
+                       f"{[x for x in (m['dead'] or []) if x != 'ext'] or '없음'}"
+                       + (" (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상)" if "ext" in (m["dead"] or []) else "")],
         ["로그 이상", f"{len(m['log_issues'])}줄" + (f" (예: {m['log_issues'][0][:120]})" if m['log_issues'] else "")],
     ])
     L.append("")
@@ -106,7 +108,11 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
         rp = R["repeat"]
         L.append(f"같은 커밋 재실행 {rp['runs']}회의 판정 비교: {rp['summary']}")
         L.append("")
-        L += table(["항목", *[f"실행 {i + 1}" for i in range(rp["runs"])], "같음"], rp["rows"])
+        L += table(["항목", *[f"실행 {i + 1}" for i in range(rp["runs"])], "판정·문구 같음(수치 제외)", "수치까지 같음"],
+                   rp["rows"])
+        L.append("")
+        L.append("- 괄호는 실패 문구 수. 외부 클라이언트의 승인 응답과 수신은 실행 중에 오가므로 건수·Timestamp 차 같은 수치는 "
+                 "실행마다 조금 다를 수 있다(기준 §4).")
         L.append("")
     # 4. C1
     r1 = res["C1"]

@@ -656,6 +656,11 @@ def judge_c6(declared: dict, flows: dict, tap: Counter, ext_rx: Counter, inbound
 # ---------------------------------------------------------------------------------------------------------- C7
 
 
+def strip_numbers(text: str) -> str:
+    """반복 실행 비교용: 문구의 수치(건수·시간 차 등)를 #으로 바꾼다. 엔티티·작업 이름 안의 번호(uav-007)는 둔다"""
+    return re.sub(r"(?<![\w-])\d+(?:\.\d+)?(?:e[-+]?\d+)?", "#", text)
+
+
 APPLICABLE = ("해당", "부분")
 
 
