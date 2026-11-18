@@ -1,33 +1,33 @@
-커밋 `b80a848` · 계약 0.19.0 · agra_lacal `45274ce` · 실행 2026-11-17
+커밋 `2ee7ebb` · 계약 0.19.0 · agra_lacal `45274ce` · 실행 2026-11-18
 
 # 표준 적합성 점검 보고 (REQ-STD-001, DEC-092)
 
-이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-17`에 있다.
+이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-18`에 있다.
 자체 점검이다(기준 §4). 공식 A-GRA 적합성 도구와 Distribution D 문서는 쓰지 않았다.
 
 ## 1. 요약
 
 | 항목 | 내용 | 판정 | 핵심 수치 | 발견 |
 |---|---|---|---|---|
-| C1 | 적용 범위 표 | 실패 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 5 | D-38 |
-| C2 | 형식 검증 (UCI) | 실패 | 수신 9318건·실패 0, 부정 입력 10종 중 버스로 나감 1 | D-35 |
-| C3 | 값 의미 검증 (UCI) | 실패 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 36.43 s | D-36 |
+| C1 | 적용 범위 표 | 통과 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | — |
+| C2 | 형식 검증 (UCI) | 통과 | 수신 9317건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
+| C3 | 값 의미 검증 (UCI) | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | — |
 | C4 | A-GRA 기체 계층 경계 | 통과 | 구독 12·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | O-48, O-49, O-50 |
-| C5 | 상호작용 상태 흐름 | 실패 | 전이 위반 6건, 승인 필요 4건 중 위반 0 | D-37, O-47 |
-| C6 | OMS / LA-CAL 왕복 | 실패 | 선언 불일치 13, /tap 불일치 0 | D-39, O-45 |
+| C5 | 상호작용 상태 흐름 | 실패 | 전이 위반 2건, 승인 필요 4건 중 위반 0 | O-47 |
+| C6 | OMS / LA-CAL 왕복 | 통과 | 선언 불일치 0, /tap 불일치 0 | O-45 |
 | C7 | AMS-GRA 개념 차용 추적과 적용성 | 정보 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 | — |
 
-통과 1, 실패 5, 정보 1. 실패 항목은 고치지 않고 아래 발견으로 담당 WP에 보낸다.
+통과 5, 실패 1, 정보 1. 실패 항목은 고치지 않고 아래 발견으로 담당 WP에 보낸다.
 
 ## 2. 발견
 
 | ID | 항목 | 내용 | 담당 | 중요도 | 이번 실행 |
 |---|---|---|---|---|---|
-| D-35 | C2 | 시나리오에 없는 기체(uav-999)를 가리키는 외부 MA_TaskCommand가 버스로 나간다 | WP9 | 중간 | 재현 |
-| D-36 | C3 | UCI Timestamp가 모의 시각이 아니라 Gateway 벽시계다 | WP9 | 중간 | 재현 |
-| D-37 | C5 | 편대 추종기가 거부된 FlightCommand ID를 다시 써서 REJECTED 뒤 EXECUTING이 된다 | WP3(formation MA)·WP4(FA) | 낮음 | 재현 |
-| D-38 | C1 | STD로 표시됐지만 Gateway 변환기가 없는 메시지 5종 | WP0(분류)·WP9(변환기) | 낮음 | 재현 |
-| D-39 | C6 | external_c2의 declared.sub가 실제 구독과 다르다 | WP9 | 낮음 | 재현 |
+| D-35 | C2 | 시나리오에 없는 기체(uav-999)를 가리키는 외부 MA_TaskCommand가 버스로 나간다 | WP9 | 중간 | 이번 실행에 없음 |
+| D-36 | C3 | UCI Timestamp가 모의 시각이 아니라 Gateway 벽시계다 | WP9 | 중간 | 이번 실행에 없음 |
+| D-37 | C5 | 편대 추종기가 거부된 FlightCommand ID를 다시 써서 REJECTED 뒤 EXECUTING이 된다 | WP3(formation MA)·WP4(FA) | 낮음 | 이번 실행에 없음 |
+| D-38 | C1 | STD로 표시됐지만 Gateway 변환기가 없는 메시지 5종 | WP0(분류)·WP9(변환기) | 낮음 | 이번 실행에 없음 |
+| D-39 | C6 | external_c2의 declared.sub가 실제 구독과 다르다 | WP9 | 낮음 | 이번 실행에 없음 |
 | O-47 | C5 | 편대 리더 명령의 첫 상태 보고가 CANCELLED(superseded)다 | WP4(FA) | 매우 낮음 | 재현 |
 | O-48 | C4 | 내장 MA가 플러그인 API 밖의 Agent 런타임 모듈(swarm_agent.geo, swarm_agent.racetrack)을 import한다 | WP3·WP4 | 매우 낮음 | 재현 |
 | O-49 | C4 | Agent가 swarm/*/rx/** 와일드카드 구독으로 gcs-01 수신 키까지 받는다 | WP4 | 매우 낮음 | 재현 |
@@ -35,24 +35,11 @@
 | O-45 | C6 | 기본 MA에 무장 경로가 없어 StrikeActivity는 시험 전용 주입으로만 나온다 (기존 O-45) | WP3 | 낮음 (28차) | 해당 없음(문서·기존) |
 
 - **D-35** Gateway는 CapabilityID 표지의 엔티티 이름 형식만 보고 기체가 있는지는 보지 않는다. swarm/gcs-01/tx/c2/TaskCommand(dst uav-999)가 나가고 Datalink에서 버려진다. 거부 기록도 TaskStatus도 없어 외부는 명령이 처리되지 않았다는 것을 알 수 없다.
-  - 판정 문구: 부정 입력 neg-unknown: 버스로 나감 (swarm/gcs-01/tx/c2/TaskCommand id=neg-unknown dst=['uav-999'])
 - **D-36** ConvContext.now 기본값이 datetime.now(UTC)이고 변환기의 Position·DomainVelocity·Orientation Timestamp와 머리 Timestamp가 모두 이 값이다. (Timestamp − 메시지 모의 시각)이 실행 중 일시정지 시간만큼 커진다. lockstep 일시정지·배속 실행에서 외부가 보는 시각이 모의 시각과 어긋난다.
-  - 판정 문구: UCI Timestamp가 모의 시각을 따르지 않음: (Timestamp − 모의 시각) 변동 36.427 s > 0.5 s
 - **D-37** 첫 틱에 리더 정보가 없어 mode 없는 FlightCommand(<기체>-fmn-beta)를 내고 FA가 REJECTED(no mode)로 답한다. 다음 틱부터 같은 command_id로 유효한 명령을 내 EXECUTING이 된다. 끝 상태(REJECTED) 뒤 전이가 내부·외부 (MA_FlightCommandStatus REJECTED → ACCEPTED) 모두에 보인다.
-  - 판정 문구: FlightCommandStatus(내부) uav-007-fmn-beta: 허용 전이 밖 REJECTED→EXECUTING(끝 상태 뒤) (순서 REJECTED → EXECUTING)
-  - 판정 문구: FlightCommandStatus(내부) uav-008-fmn-beta: 허용 전이 밖 REJECTED→EXECUTING(끝 상태 뒤) (순서 REJECTED → EXECUTING)
-  - 판정 문구: MA_FlightCommandStatus(외부) uav-007-fmn-beta: 허용 전이 밖 REJECTED→ACCEPTED(끝 상태 뒤) (순서 REJECTED → ACCEPTED)
-  - 판정 문구: MA_FlightCommandStatus(외부) uav-008-fmn-beta: 허용 전이 밖 REJECTED→ACCEPTED(끝 상태 뒤) (순서 REJECTED → ACCEPTED)
 - **D-38** EngagementCriteria(MA_EngagementCriteria), SensorCommand(PO_Command), JammerCommand(EA_Command), StrikeCommand, FlightCommand(MA_FlightCommand). 기체 안쪽(MA→장비·FA) 메시지이거나 아직 가져오지 않는 계획 메시지다. 기준(§3 C1)은 'STD인데 변환기 없음'을 실패로 정한다. 분류를 바꿀지(예: 기체 안 STD는 Gateway 범위 밖으로 표시) 변환기를 둘지 결정이 필요하다.
-  - 판정 문구: EngagementCriteria (MA_EngagementCriteria): STD인데 변환기가 없다
-  - 판정 문구: SensorCommand (PO_Command): STD인데 변환기가 없다
-  - 판정 문구: JammerCommand (EA_Command): STD인데 변환기가 없다
-  - 판정 문구: StrikeCommand (StrikeCommand): STD인데 변환기가 없다
+  - 조치: DEC-094: 기체 내부 STD(계약 키 표상 swarm 밖 키로만 오감)는 'Gateway 범위 밖(기체 내부)'으로 표시하고 변환기 없음을 실패로 보지 않는다. 30차 도구부터 이 판정 문구가 나오지 않는다
 - **D-39** gateway/config/lacal_server.yaml의 external_c2 declared.sub는 MA_TaskStatus·MA_NavigationReport 둘뿐이다. 외부 클라이언트(gateway/README.md 교환 메시지 표대로)는 Gateway 발행 15흐름을 모두 구독해 받는다. accept_unknown_services=false여도 CAL Server는 선언 밖 구독을 막지 않는다.
-  - 판정 문구: external_c2 sub EA_Activity@swarm.ms: 선언 밖 교환 (70건)
-  - 판정 문구: external_c2 sub MA_ApprovalRequest@swarm.c2: 선언 밖 교환 (4건)
-  - 판정 문구: external_c2 sub MA_Entity@swarm.p2p: 선언 밖 교환 (117건)
-  - 판정 문구: external_c2 sub MA_FlightCapability@swarm.vi: 선언 밖 교환 (14건)
 - **O-47** 리더의 <기체>-fmn-lead가 접수된 같은 틱에 task-1 명령으로 바뀌어, 변화 보고(DEC-056)가 ACCEPTED 없이 CANCELLED만 보낸다. 받은 쪽은 접수된 적 없는 명령의 취소를 본다. 도구 전이 표(첫 보고 ACCEPTED·EXECUTING·REJECTED·FAILED)는 그대로 두었다. 첫 보고 CANCELLED를 허용할지는 기준 문서에서 정할 일이다.
   - 판정 문구: FlightCommandStatus(내부) uav-006-fmn-lead: 허용 전이 밖 시작→CANCELLED (순서 CANCELLED)
   - 판정 문구: MA_FlightCommandStatus(외부) uav-006-fmn-lead: 허용 전이 밖 시작→CANCELED (순서 CANCELED)
@@ -62,7 +49,7 @@
   - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
   - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:28 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - **O-49** Agent 런타임은 맡은 기체 수신만 쓰지만 구독은 엔티티 자리를 '*'로 연다. gcs-01(Gateway가 맡음)의 수신 표본도 Agent 프로세스로 온다. MA 포트 기록에는 SIM 표시 메시지가 없어 경계 위반은 아니고 받는 양만 늘어난다.
-  - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7288건
+  - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - **O-50** sim/ctrl/cmd(set_params, DEC-035)와 sim/clock/done/*(DEC-040·044)는 §3.3 본문이 Agent 구독을 정하지만 §3.2 표의 구독자 칸에는 Agent가 없다. swarm/<e>/rx/**는 §3.3(DEC-044) 표기이고 §3.2 표는 swarm/<dst>/rx/<iface>/<msg>다(Agent는 rx/**로 구독한다). 도구는 세 키를 근거와 함께 보충 허용 키로 둔다(judges.SUPPLEMENT_SUB). 기준 문서(docs/44)와 계약 문서는 고치지 않았다.
 - **O-45** 계획 strike(task-003)는 기본 TaskTracker가 보고 없이 거른다. 이번 실행은 관측기가 모의 30 s에 onboard/uav-005/StrikeCommand를 직접 내 StrikeActivity 흐름을 만들었다(Agent 발행이 아니라 C4 대상 밖).
 
@@ -73,10 +60,10 @@
 | 구분 | 내용 |
 |---|---|
 | 구성 | Logger(MCAP) · Datalink(participant datalink-0) · Agent(`agent_probe.py`가 감싼 swarm_agent.cli, agent-0) · Core(lockstep 1배속, 50 Hz, 평지) · CAL Server(agra_lacal, `lacal_server.yaml`에서 포트·server_id만 바꿈) · Gateway(`qa/gw_wrap.py`) · 외부 클라이언트(`qa/gw_ext_client.py`, external_c2) |
-| 시나리오 | `qa/out/conformance/2026-11-17/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
+| 시나리오 | `qa/out/conformance/2026-11-18/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
 | 포트 | CAL 28765/28766, Zenoh 48900~48930 (기본 데모 8765/8766·7447과 겹치지 않음) |
-| 시간 | 모의 70.0 s, 벽시계 72 s (점검 전체 152 s) |
-| 프로세스 종료 | 띄운 PID만 정리: {'logger': 8516, 'datalink': 12596, 'agent': 28072, 'core': 26668, 'calsrv': 28620, 'gateway.1': 22836, 'ext': 26756}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
+| 시간 | 모의 70.0 s, 벽시계 73 s (점검 전체 155 s) |
+| 프로세스 종료 | 띄운 PID만 정리: {'logger': 19300, 'datalink': 19648, 'agent': 3524, 'core': 9408, 'calsrv': 17256, 'gateway.1': 16180, 'ext': 6156}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
 | 로그 이상 | 0줄 |
 
 입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 관측기가 본 뒤 재개했다.
@@ -93,7 +80,7 @@
 | 22.0 | 1100 | send cancel x-hold uav-009 | +OK | TaskCommand x-hold |
 | 26.0 | 1300 | neg neg-xsd-cmdstate | -ERR Invalid-Message: schema validation failed: line 0: Elem |  |
 | 26.0 | 1300 | neg neg-strike | +OK |  |
-| 26.0 | 1300 | neg neg-unknown | +OK | TaskCommand neg-unknown |
+| 26.0 | 1300 | neg neg-unknown | +OK |  |
 | 26.0 | 1300 | neg neg-caplabel | +OK |  |
 | 26.0 | 1300 | neg neg-pending | +OK |  |
 | 26.0 | 1300 | neg neg-xsd-enum | -ERR Invalid-Message: schema validation failed: line 0: Elem |  |
@@ -103,82 +90,96 @@
 | 26.0 | 1300 | neg neg-xsd-route | -ERR Invalid-Message: schema validation failed: line 0: Elem |  |
 | 30.0 | 1500 | strike stimulus onboard/uav-005/StrikeCommand (시험 전용) |  |  |
 
-같은 커밋 재실행 2회의 판정 비교: 판정과 실패 문구(수치 제외)가 모두 같다. 수치(건수·시간 차)는 일부 다르다(표 참고)
+같은 커밋 재실행 2회의 판정 비교: 판정과 실패 문구(수치 제외)가 모두 같다
 
 | 항목 | 실행 1 | 실행 2 | 판정·문구 같음(수치 제외) | 수치까지 같음 |
 |---|---|---|---|---|
-| C2 | 실패 (1) | 실패 (1) | 예 | 예 |
-| C3 | 실패 (1) | 실패 (1) | 예 | 아니오 |
+| C2 | 통과 (0) | 통과 (0) | 예 | 예 |
+| C3 | 통과 (0) | 통과 (0) | 예 | 예 |
 | C4 | 통과 (0) | 통과 (0) | 예 | 예 |
-| C5 | 실패 (6) | 실패 (6) | 예 | 예 |
-| C6 | 실패 (13) | 실패 (13) | 예 | 예 |
+| C5 | 실패 (2) | 실패 (2) | 예 | 예 |
+| C6 | 통과 (0) | 통과 (0) | 예 | 예 |
 
 - 괄호는 실패 문구 수. 외부 클라이언트의 승인 응답과 수신은 실행 중에 오가므로 건수·Timestamp 차 같은 수치는 실행마다 조금 다를 수 있다(기준 §4).
 
 ## 4. C1 적용 범위 표
 
-판정: **실패**. 공개 XSD 최상위 요소 860개, 그중 `MA_` 179개. proto가 대응한 UCI 메시지 23개(`MA_` 15), 송신 14·수신 4. proto 구분 STD 22, EXT 5, SIM 14. 상태별 행 수 {'미구현': 18, '구현·시험됨': 19, '확장(외부 비공개)': 8}.
+판정: **통과**. 공개 XSD 최상위 요소 860개, 그중 `MA_` 179개. proto가 대응한 UCI 메시지 23개(`MA_` 15), 송신 14·수신 4. proto 구분 STD 22, EXT 5, SIM 14. 상태별 행 수 {'Gateway 범위 밖(기체 내부)': 5, '구현·시험됨': 19, '미구현': 13, '확장(외부 비공개)': 8}.
 
-구현·시험됨 = 변환기가 있고 이번 실행에서 외부와 실제로 오갔고 gateway/TRACE.md에 IMP·TC가 있다. 부분 = 변환기는 있으나 셋 중 하나가 없다. 미구현은 실패가 아니다(범위 표시).
+구현·시험됨 = 변환기가 있고 이번 실행에서 외부와 실제로 오갔고 gateway/TRACE.md에 IMP·TC가 있다. 부분 = 변환기는 있으나 셋 중 하나가 없다. 미구현은 실패가 아니다(범위 표시). Gateway 범위 밖(기체 내부) = GCS 경계를 넘지 않는 STD라 변환기 없음을 실패로 보지 않는다(DEC-094).
 
-| L1 | 상호작용 | UCI 메시지 | 방향 | 구분 | 내부 메시지 | 변환기 | 구현 ID | 시험 ID | 상태 |
-|---|---|---|---|---|---|---|---|---|---|
-| VI | 비행 명령(HSA/Waypoint/Curve)과 수락·거부 | MA_FlightCommand | — | STD | FlightCommand | 없음 |  |  | 미구현 |
-| VI | 비행 명령(HSA/Waypoint/Curve)과 수락·거부 | MA_FlightCommandStatus | 송신 | STD | FlightCommandStatus | 있음 | IMP-GW-005, IMP-GW-024, IMP-GW-027 | TC-GW-003, TC-GW-028, TC-GW-033 | 구현·시험됨 |
-| VI | 비행 성능 조회 | MA_FlightCapability | 송신 | STD | FlightCapability | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| VI | 비행 성능 조회 | MA_FlightCapabilityStatus | — | STD | — | 없음 |  |  | 미구현 |
-| VI | 기체 상태·위치 | PositionReport | — | STD | — | 없음 |  |  | 미구현 |
-| VI | 기체 상태·위치 | MA_PositionReport | 송신 | STD | PeerStatus | 있음 | IMP-GW-007, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| VI | 기체 상태·위치 | MA_PositionReport | 송신 | STD | NavigationReport | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| VI | 기체 상태·위치 | MA_NavigationReport | 송신 | STD | NavigationReport | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| VI | 하위 시스템 상태 | SystemStatus | 송신 | STD | SystemStatus | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| VI | 하위 시스템 상태 | SubsystemStatus | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 임무 부여 | MA_TaskCommand | 수신 | STD | TaskCommand | 있음 | IMP-GW-006, IMP-GW-011 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-010, TC-GW-011 | 구현·시험됨 |
-| C2 | 임무 부여 | MA_TaskStatus | 송신 | STD | TaskStatus | 있음 | IMP-GW-006, IMP-GW-024, IMP-GW-027 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-028, TC-GW-033 | 구현·시험됨 |
-| C2 | 팀(패키지) 구성 | MA_PackageManagementCommand | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 팀(패키지) 구성 | MA_PackageManagementCommandStatus | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 타격 승인 | MA_ApprovalRequest | 송신 | STD | ApprovalRequest | 있음 | IMP-GW-006, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
-| C2 | 타격 승인 | MA_ApprovalRequestStatus | 수신 | STD | ApprovalResponse | 있음 | IMP-GW-020 | TC-GW-019, TC-GW-020 | 구현·시험됨 |
-| C2 | 타격 승인 | StrikeConsentRequest | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 운용자 역할(RBAC) | MA_OperatorRole | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 운용자 역할(RBAC) | MA_Authorization | — | STD | — | 없음 |  |  | 미구현 |
-| C2 | 편대 형태 지정(RTS 명령) | — | — | EXT |  | — |  |  | 확장(외부 비공개) |
-| C2 | 항로점별 행위가 있는 항로 비행(`RouteTask`) | — | — | EXT |  | — |  |  | 확장(외부 비공개) |
-| P2P | 리더 선출 | MA_RaftVoteRequest | — | STD | — | 없음 |  |  | 미구현 |
-| P2P | 리더 선출 | MA_RaftAppendEntriesRequest | — | STD | — | 없음 |  |  | 미구현 |
-| P2P | 리더 선출 | MA_LeaderUpdateRequest | 송신 | STD | LeaderUpdate | 있음 | IMP-GW-007, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
-| P2P | COP 공유 | MA_Entity | 송신 | STD | TrackShare | 있음 | IMP-GW-007, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
-| P2P | COP 공유 | MA_PackagePartnerStatusReport | 송신 | STD | PeerStatus | 있음 | IMP-GW-007, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| MS | 데이터 전송(DMS) | MA_TxDataPayloadCommand | — | STD | — | 없음 |  |  | 미구현 |
-| MS | 데이터 전송(DMS) | MA_RxDataPayload | — | STD | — | 없음 |  |  | 미구현 |
-| MS | 카메라 | PO_Command | — | STD | SensorCommand | 없음 |  |  | 미구현 |
-| MS | 카메라 | PO_Activity | 송신 | STD | SensorActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| MS | 재밍 | EA_Command | — | STD | JammerCommand | 없음 |  |  | 미구현 |
-| MS | 재밍 | EA_Activity | 송신 | STD | JammerActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| MS | 타격·무장 | StrikeCommand | — | STD | StrikeCommand | 없음 |  |  | 미구현 |
-| MS | 타격·무장 | StrikeActivity | 송신 | STD | StrikeActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
-| MS | 타격·무장 | StoreLoadoutConfiguration | 송신 | STD | StoreLoadout | 있음 | IMP-GW-008, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
-| MS | 타격·무장 | MA_WEZ | — | STD | — | 없음 |  |  | 미구현 |
-| MP | 임무 계획, 교전 기준 | MA_MissionPlan | 수신 | STD | MissionPlan | 있음 | IMP-GW-021 | TC-GW-021, TC-GW-022, TC-GW-023, TC-GW-024 | 구현·시험됨 |
-| MP | 임무 계획, 교전 기준 | MA_EngagementCriteria | — | STD | EngagementCriteria | 없음 |  |  | 미구현 |
-| MP | 임무 계획, 교전 기준 | MA_RoutePlan | 수신 | STD | RoutePlan | 있음 | IMP-GW-021 | TC-GW-021, TC-GW-022, TC-GW-023, TC-GW-024 | 구현·시험됨 |
-| Sim | 일시정지, 배속, 고장 주입, 리셋 | — | — | EXT |  | — |  |  | 확장(외부 비공개) |
-| C2 | (proto EXT) | — | — | EXT | GcsHeartbeat | 없음 |  |  | 확장(외부 비공개) |
-| C2 | (proto EXT) | — | — | EXT | FormationCommand | 없음 |  |  | 확장(외부 비공개) |
-| C2 | (proto EXT) | — | — | EXT | GroupAssignment | 없음 |  |  | 확장(외부 비공개) |
-| MS | (proto EXT) | — | — | EXT | Detection | 없음 |  |  | 확장(외부 비공개) |
-| P2P | (proto EXT) | — | — | EXT | PeerAlgorithmMessage | 없음 |  |  | 확장(외부 비공개) |
+| L1 | 상호작용 | UCI 메시지 | 방향 | 구분 | 범위 | 내부 메시지 | 변환기 | 구현 ID | 시험 ID | 상태 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| VI | 비행 명령(HSA/Waypoint/Curve)과 수락·거부 | MA_FlightCommand | — | STD | 기체 내부 | FlightCommand | 없음 |  |  | Gateway 범위 밖(기체 내부) |
+| VI | 비행 명령(HSA/Waypoint/Curve)과 수락·거부 | MA_FlightCommandStatus | 송신 | STD | GCS 경계 | FlightCommandStatus | 있음 | IMP-GW-005, IMP-GW-024, IMP-GW-027 | TC-GW-003, TC-GW-028, TC-GW-033 | 구현·시험됨 |
+| VI | 비행 성능 조회 | MA_FlightCapability | 송신 | STD | GCS 경계 | FlightCapability | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| VI | 비행 성능 조회 | MA_FlightCapabilityStatus | — | STD | — | — | 없음 |  |  | 미구현 |
+| VI | 기체 상태·위치 | PositionReport | — | STD | — | — | 없음 |  |  | 미구현 |
+| VI | 기체 상태·위치 | MA_PositionReport | 송신 | STD | GCS 경계 | PeerStatus | 있음 | IMP-GW-007, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| VI | 기체 상태·위치 | MA_PositionReport | 송신 | STD | GCS 경계 | NavigationReport | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| VI | 기체 상태·위치 | MA_NavigationReport | 송신 | STD | GCS 경계 | NavigationReport | 있음 | IMP-GW-005, IMP-GW-024, IMP-GW-031 | TC-GW-003, TC-GW-028, TC-GW-038 | 구현·시험됨 |
+| VI | 하위 시스템 상태 | SystemStatus | 송신 | STD | GCS 경계 | SystemStatus | 있음 | IMP-GW-005, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| VI | 하위 시스템 상태 | SubsystemStatus | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 임무 부여 | MA_TaskCommand | 수신 | STD | GCS 경계 | TaskCommand | 있음 | IMP-GW-006, IMP-GW-011, IMP-GW-029 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-010, TC-GW-011, TC-GW-035, TC-GW-036 | 구현·시험됨 |
+| C2 | 임무 부여 | MA_TaskStatus | 송신 | STD | GCS 경계 | TaskStatus | 있음 | IMP-GW-006, IMP-GW-024, IMP-GW-027, IMP-GW-029, IMP-GW-031 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-028, TC-GW-033, TC-GW-035, TC-GW-036, TC-GW-038 | 구현·시험됨 |
+| C2 | 팀(패키지) 구성 | MA_PackageManagementCommand | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 팀(패키지) 구성 | MA_PackageManagementCommandStatus | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 타격 승인 | MA_ApprovalRequest | 송신 | STD | GCS 경계 | ApprovalRequest | 있음 | IMP-GW-006, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-007, TC-GW-008, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
+| C2 | 타격 승인 | MA_ApprovalRequestStatus | 수신 | STD | GCS 경계 | ApprovalResponse | 있음 | IMP-GW-020 | TC-GW-019, TC-GW-020 | 구현·시험됨 |
+| C2 | 타격 승인 | StrikeConsentRequest | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 운용자 역할(RBAC) | MA_OperatorRole | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 운용자 역할(RBAC) | MA_Authorization | — | STD | — | — | 없음 |  |  | 미구현 |
+| C2 | 편대 형태 지정(RTS 명령) | — | — | EXT | — |  | — |  |  | 확장(외부 비공개) |
+| C2 | 항로점별 행위가 있는 항로 비행(`RouteTask`) | — | — | EXT | — |  | — |  |  | 확장(외부 비공개) |
+| P2P | 리더 선출 | MA_RaftVoteRequest | — | STD | — | — | 없음 |  |  | 미구현 |
+| P2P | 리더 선출 | MA_RaftAppendEntriesRequest | — | STD | — | — | 없음 |  |  | 미구현 |
+| P2P | 리더 선출 | MA_LeaderUpdateRequest | 송신 | STD | GCS 경계 | LeaderUpdate | 있음 | IMP-GW-007, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
+| P2P | COP 공유 | MA_Entity | 송신 | STD | GCS 경계 | TrackShare | 있음 | IMP-GW-007, IMP-GW-024, IMP-GW-026, IMP-GW-030 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032, TC-GW-037 | 구현·시험됨 |
+| P2P | COP 공유 | MA_PackagePartnerStatusReport | 송신 | STD | GCS 경계 | PeerStatus | 있음 | IMP-GW-007, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| MS | 데이터 전송(DMS) | MA_TxDataPayloadCommand | — | STD | — | — | 없음 |  |  | 미구현 |
+| MS | 데이터 전송(DMS) | MA_RxDataPayload | — | STD | — | — | 없음 |  |  | 미구현 |
+| MS | 카메라 | PO_Command | — | STD | 기체 내부 | SensorCommand | 없음 |  |  | Gateway 범위 밖(기체 내부) |
+| MS | 카메라 | PO_Activity | 송신 | STD | GCS 경계 | SensorActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| MS | 재밍 | EA_Command | — | STD | 기체 내부 | JammerCommand | 없음 |  |  | Gateway 범위 밖(기체 내부) |
+| MS | 재밍 | EA_Activity | 송신 | STD | GCS 경계 | JammerActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| MS | 타격·무장 | StrikeCommand | — | STD | 기체 내부 | StrikeCommand | 없음 |  |  | Gateway 범위 밖(기체 내부) |
+| MS | 타격·무장 | StrikeActivity | 송신 | STD | GCS 경계 | StrikeActivity | 있음 | IMP-GW-008, IMP-GW-024 | TC-GW-003, TC-GW-028 | 구현·시험됨 |
+| MS | 타격·무장 | StoreLoadoutConfiguration | 송신 | STD | GCS 경계 | StoreLoadout | 있음 | IMP-GW-008, IMP-GW-024, IMP-GW-026 | TC-GW-003, TC-GW-028, TC-GW-031, TC-GW-032 | 구현·시험됨 |
+| MS | 타격·무장 | MA_WEZ | — | STD | — | — | 없음 |  |  | 미구현 |
+| MP | 임무 계획, 교전 기준 | MA_MissionPlan | 수신 | STD | GCS 경계 | MissionPlan | 있음 | IMP-GW-021, IMP-GW-029 | TC-GW-021, TC-GW-022, TC-GW-023, TC-GW-024, TC-GW-035, TC-GW-036 | 구현·시험됨 |
+| MP | 임무 계획, 교전 기준 | MA_EngagementCriteria | — | STD | 기체 내부 | EngagementCriteria | 없음 |  |  | Gateway 범위 밖(기체 내부) |
+| MP | 임무 계획, 교전 기준 | MA_RoutePlan | 수신 | STD | GCS 경계 | RoutePlan | 있음 | IMP-GW-021, IMP-GW-029 | TC-GW-021, TC-GW-022, TC-GW-023, TC-GW-024, TC-GW-035, TC-GW-036 | 구현·시험됨 |
+| Sim | 일시정지, 배속, 고장 주입, 리셋 | — | — | EXT | — |  | — |  |  | 확장(외부 비공개) |
+| C2 | (proto EXT) | — | — | EXT | — | GcsHeartbeat | 없음 |  |  | 확장(외부 비공개) |
+| C2 | (proto EXT) | — | — | EXT | — | FormationCommand | 없음 |  |  | 확장(외부 비공개) |
+| C2 | (proto EXT) | — | — | EXT | — | GroupAssignment | 없음 |  |  | 확장(외부 비공개) |
+| MS | (proto EXT) | — | — | EXT | — | Detection | 없음 |  |  | 확장(외부 비공개) |
+| P2P | (proto EXT) | — | — | EXT | — | PeerAlgorithmMessage | 없음 |  |  | 확장(외부 비공개) |
 
-실패 사유:
-- EngagementCriteria (MA_EngagementCriteria): STD인데 변환기가 없다
-- SensorCommand (PO_Command): STD인데 변환기가 없다
-- JammerCommand (EA_Command): STD인데 변환기가 없다
-- StrikeCommand (StrikeCommand): STD인데 변환기가 없다
-- FlightCommand (MA_FlightCommand): STD인데 변환기가 없다
+범위 구분(DEC-094, 기준 C1 '범위 구분'): 계약 docs/10_contracts.md §3.2 키 표의 메시지 칸(이름, `*Command` 같은 끝 맞춤, 그 메시지의 필드)이 가리키는 키를 모으고, §3.3 글머리 중 `swarm/` 키가 있는 덩어리에 이름이 나오는지 본다. swarm 밖 키로만 오가고 swarm 근거도 Gateway 변환기도 없으면 기체 내부다. 목록을 손으로 두지 않는다.
+
+| STD 메시지 | swarm 밖 키 | swarm 근거(§3.3) | 범위 |
+|---|---|---|---|
+| TaskCommand | sim/ctrl/cmd, sim/ctrl/scenario, onboard/<id>/<msg> | GCS Heartbeat와 링크 상실 행동 (DEC-078) | GCS 경계 |
+| MissionPlan | sim/ctrl/cmd, sim/ctrl/scenario | — | GCS 경계(변환기 있음) |
+| EngagementCriteria | sim/ctrl/cmd, sim/ctrl/scenario | — | 기체 내부 |
+| SensorCommand | onboard/<id>/<msg> | — | 기체 내부 |
+| SensorActivity | onboard/<id>/<msg> | 임무장비 상태 보고 (DEC-051) | GCS 경계 |
+| JammerCommand | onboard/<id>/<msg> | — | 기체 내부 |
+| JammerActivity | onboard/<id>/<msg> | 임무장비 상태 보고 (DEC-051) | GCS 경계 |
+| StrikeCommand | onboard/<id>/<msg> | — | 기체 내부 |
+| StrikeActivity | onboard/<id>/<msg> | 임무장비 상태 보고 (DEC-051) | GCS 경계 |
+| FlightCommand | onboard/<id>/<msg> | — | 기체 내부 |
+| NavigationReport | onboard_batch/NavigationBatch | 기체 VI 상태 보고 (DEC-071) | GCS 경계 |
+| SystemStatus | onboard/<id>/<msg> | 기체 VI 상태 보고 (DEC-071) | GCS 경계 |
+
+- 표에 없는 STD 메시지는 키 표가 swarm 밖 키로 가리키지 않아 `swarm/**`(LinkEnvelope)로 오가는 GCS 경계로 본다.
+
+- 정보: MissionPlan: 계약 키 표로는 swarm 밖 키(sim/ctrl/cmd, sim/ctrl/scenario)로만 오가지만 Gateway 변환기가 있어 GCS 경계로 본다
 
 ## 5. C2 형식 검증
 
-판정: **실패**. 외부 클라이언트가 공개 XSD를 따로 적재해 받은 메시지와 보낸 메시지를 다시 검증했다.
+판정: **통과**. 외부 클라이언트가 공개 XSD를 따로 적재해 받은 메시지와 보낸 메시지를 다시 검증했다.
 
 | 수신 UCI | 건수 | 재검증 실패 |
 |---|---|---|
@@ -186,12 +187,12 @@
 | MA_ApprovalRequest | 4 | 0 |
 | MA_Entity | 117 | 0 |
 | MA_FlightCapability | 14 | 0 |
-| MA_FlightCommandStatus | 27 | 0 |
+| MA_FlightCommandStatus | 25 | 0 |
 | MA_LeaderUpdateRequest | 1 | 0 |
 | MA_NavigationReport | 980 | 0 |
 | MA_PackagePartnerStatusReport | 1050 | 0 |
 | MA_PositionReport | 2030 | 0 |
-| MA_TaskStatus | 33 | 0 |
+| MA_TaskStatus | 34 | 0 |
 | PO_Activity | 4969 | 0 |
 | StoreLoadoutConfiguration | 8 | 0 |
 | StrikeActivity | 1 | 0 |
@@ -208,7 +209,7 @@
 |---|---|---|---|---|---|
 | neg-xsd-cmdstate | XSD 위반 CommandState | XSD 위반 | -ERR | CAL Server 거부: -ERR Invalid-Message: schema validation failed: line 0: Element '{https://www.vdl.afrl.af.mil/programs/oam}CommandState' | 아니오 |
 | neg-strike | 가져오기 범위 밖 작업(strike) | 통과 | +OK | Gateway 거부: rejected:MA_TaskCommand:TaskCommand: unsupported task kind(s) ['strike'] | 아니오 |
-| neg-unknown | 시나리오에 없는 기체 uav-999 | 통과 | +OK | 없음 | swarm/gcs-01/tx/c2/TaskCommand id=neg-unknown dst=['uav-999'] |
+| neg-unknown | 시나리오에 없는 기체 uav-999 | 통과 | +OK | Gateway 거부: rejected:MA_TaskCommand:TaskCommand: unknown entity ['uav-999'] (not in scenario or reports to gcs-01) | 아니오 |
 | neg-caplabel | CapabilityID 표지가 '<엔티티>/<작업>' 형식이 아님 | 통과 | +OK | Gateway 거부: rejected:MA_TaskCommand:TaskCommand: CapabilityID label 'not an entity' does not name an entity | 아니오 |
 | neg-pending | 최종 응답이 아닌 승인 상태(PENDING) | 통과 | +OK | Gateway 거부: rejected:MA_ApprovalRequestStatus:ApprovalResponse: ApprovalRequestProcessingState PENDING has no internal form | 아니오 |
 | neg-xsd-enum | XSD 위반 enum(RequestProcessingState DONE) | XSD 위반 | -ERR | CAL Server 거부: -ERR Invalid-Message: schema validation failed: line 0: Element '{https://www.vdl.afrl.af.mil/programs/oam}RequestProces | 아니오 |
@@ -217,11 +218,9 @@
 | neg-mission-unknown | 받은 적 없는 RoutePlan을 가리키는 MissionPlan | 통과 | +OK | Gateway 거부: rejected:MA_MissionPlan:MissionPlan: RoutePlan b16ac80f-ac7e-50c6-ae13-ec66e5360f62 was not received (or version differs) | 아니오 |
 | neg-xsd-route | XSD 위반(필수 요소 없음) | XSD 위반 | -ERR | CAL Server 거부: -ERR Invalid-Message: schema validation failed: line 0: Element '{https://www.vdl.afrl.af.mil/programs/oam}MessageData': | 아니오 |
 
-- 실패: 부정 입력 neg-unknown: 버스로 나감 (swarm/gcs-01/tx/c2/TaskCommand id=neg-unknown dst=['uav-999'])
-
 ## 6. C3 값 의미 검증
 
-판정: **실패**. Gateway 입력(GCS 수신 NavigationReport·PeerStatus, 도·m)과 UCI `MA_PositionReport`(swarm.vi·swarm.p2p, rad·m)를 기체·토픽별 도착 순서로 짝지어 2030쌍을 대조했다. 자세는 도구가 쿼터니언에서 회전행렬을 거쳐 따로 구한 ZYX 오일러각과 비교했다(Gateway 식과 다른 계산 경로).
+판정: **통과**. Gateway 입력(GCS 수신 NavigationReport·PeerStatus, 도·m)과 UCI `MA_PositionReport`(swarm.vi·swarm.p2p, rad·m)를 기체·토픽별 도착 순서로 짝지어 2030쌍을 대조했다. 자세는 도구가 쿼터니언에서 회전행렬을 거쳐 따로 구한 ZYX 오일러각과 비교했다(Gateway 식과 다른 계산 경로).
 
 | 대조 | 허용 오차 | 최대 차 | 판정 |
 |---|---|---|---|
@@ -229,15 +228,15 @@
 | 고도 MSL (m) | 1e-06 | 0 | 통과 |
 | NED 속도 (m/s) | 1e-09 | 0 | 통과 |
 | NED→FRD 오일러각 (rad) | 1e-06 | 0 | 통과 |
-| Timestamp − 모의 시각 변동 (s) | 0.5 | 36.4 | 실패 |
+| Timestamp − 모의 시각 변동 (s) | 0.5 | 2.38e-07 | 통과 |
 | 수신 RoutePlan 좌표 (°) / 고도 (m) | 1e-09 / 1e-09 | GCS 송신 mp/RoutePlan 0/0 (3→3점) · uav-011 수신 0/0 (3→3점) | 통과 |
 
-Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1794896005.318 s, 최대 1794896041.745 s. 값이 UNIX 시각 크기라 모의 시각 0에 묶인 기준이 아니고, 변동 폭이 실행 중 일시정지한 벽시계 시간과 비슷하다.
+Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1794968473.779 s, 최대 1794968473.779 s. 값이 UNIX 시각 크기라 모의 시각 0에 묶인 기준이 아니고, 변동 폭이 실행 중 일시정지한 벽시계 시간과 비슷하다.
 
 | 식별자 종류 | 참조 수 | 내부 ID 수 | 같은 ID에 UUID 여럿 | 같은 UUID에 표지 여럿 | 표지 없음 |
 |---|---|---|---|---|---|
-| SystemID | 4224 | 14 | 0 | 0 | 0 |
-| TaskID | 37 | 9 | 0 | 0 | 0 |
+| SystemID | 4225 | 15 | 0 | 0 | 0 |
+| TaskID | 38 | 10 | 0 | 0 | 0 |
 | CapabilityID | 5054 | 24 | 0 | 0 | 0 |
 | StoreLoadoutConfigurationID | 8 | 8 | 0 | 0 | 0 |
 | RequestID | 5 | 5 | 0 | 0 | 0 |
@@ -246,23 +245,23 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1794896005.318 s, 최�
 | RequestingSystemID | 1 | 1 | 0 | 0 | 0 |
 | ApplicablePackageID | 1 | 1 | 0 | 0 | 0 |
 | ProposedLeaderID | 1 | 1 | 0 | 0 | 0 |
-| CommandID | 1077 | 20 | 0 | 0 | 0 |
+| CommandID | 1075 | 20 | 0 | 0 | 0 |
 | SubsystemID | 5096 | 66 | 0 | 0 | 0 |
 | ActivityID | 5040 | 10 | 0 | 0 | 0 |
 | PackageID | 1050 | 1 | 0 | 0 | 0 |
 | EntityID | 117 | 2 | 0 | 0 | 0 |
 | AssociatedID | 117 | 1 | 0 | 0 | 0 |
 
-머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9318)].
+머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9317)].
 
-상태값(DEC-090): 내부↔외부 순서 짝 {'TaskStatus': 33, 'FlightCommandStatus': 27}. 표와 다른 대응 0종. 대응 표:
+상태값(DEC-090): 내부↔외부 순서 짝 {'TaskStatus': 33, 'FlightCommandStatus': 25}. 표와 다른 대응 0종. 대응 표:
 
 | 메시지 | UNSPECIFIED | ACCEPTED | EXECUTING | COMPLETED | REJECTED | FAILED | CANCELLED |
 |---|---|---|---|---|---|---|---|
 | TaskStatus | EXECUTION_PENDING | EXECUTION_PENDING | EXECUTING | COMPLETED | DROPPED | FAILED | CANCELED |
 | FlightCommandStatus | RECEIVED | ACCEPTED | ACCEPTED | ACCEPTED | REJECTED | REJECTED | CANCELED |
 
-- 실패: UCI Timestamp가 모의 시각을 따르지 않음: (Timestamp − 모의 시각) 변동 36.427 s > 0.5 s
+상태 보고 건수 차이(내부 ↔ 외부): TaskStatus uav-999/neg-unknown 0↔1
 
 ## 7. C4 기체 계층 경계
 
@@ -278,8 +277,10 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1794896005.318 s, 최�
 | 발행 | onboard/*/* | §3.2 `onboard/<id>/<msg>` 발행: Core ⇄ 해당 기체 런타임 |
 | 발행 | onboard_batch/ControlBatch/* | §3.2 `onboard_batch/ControlBatch/<participant>` 발행: Agent 런타임 |
 | 구독 | sim/clock/tick | §3.2 `sim/clock/tick` 구독: 모든 참여자의 런타임 |
-| 구독 | sim/ctrl/scenario | §3.2 `sim/ctrl/scenario` 구독: Datalink, Agent 런타임, Logger, UI (늦게 붙는 참여자 포함) |
-| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽) |
+| 구독 | sim/clock/done/* | §3.2 `sim/clock/done/<participant>` 구독: Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
+| 구독 | sim/ctrl/cmd | §3.2 `sim/ctrl/cmd` 구독: Core, Agent 런타임 (`set_params`, §3.3) |
+| 구독 | sim/ctrl/scenario | §3.2 `sim/ctrl/scenario` 구독: Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
+| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티의 Agent 런타임, UI(GCS), Gateway(GCS 쪽) |
 | 구독 | onboard/*/* | §3.2 `onboard/<id>/<msg>` 구독: 해당 기체 런타임, Core |
 | 구독 | onboard_batch/NavigationBatch | §3.2 `onboard_batch/NavigationBatch` 구독: Agent 런타임, Logger |
 | 구독 | sim/clock/done/* | §3.3 lockstep 수신 결정성(DEC-040)·송신 개수 장벽(DEC-044): Agent는 Datalink의 FrameDone을 받는다 |
@@ -301,7 +302,7 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1794896005.318 s, 최�
 | sim/ctrl/scenario | 예 |
 | swarm/*/rx/** | 예 |
 
-Agent 발행 키 125개(접두·종류별 {'onboard_batch/agent-0': 1, 'sim/done': 1, 'sim/uav-001': 2, 'sim/uav-002': 2, 'sim/uav-003': 2, 'sim/uav-004': 2, 'sim/uav-005': 2, 'sim/uav-006': 2, 'sim/uav-007': 2, 'sim/uav-008': 2, 'sim/uav-009': 2, 'sim/uav-010': 2, 'sim/uav-011': 2, 'sim/uav-012': 2, 'sim/uav-013': 2, 'sim/uav-014': 2, 'swarm/tx': 95}), 허용 밖 0개. MCAP 채널 480개, Agent 발행 키 중 MCAP에 없는 것 0개. truth 채널 ['truth/state']는 Core 발행이고 Agent 구독·수신 기록에는 없다.
+Agent 발행 키 125개(접두·종류별 {'onboard_batch/agent-0': 1, 'sim/done': 1, 'sim/uav-001': 2, 'sim/uav-002': 2, 'sim/uav-003': 2, 'sim/uav-004': 2, 'sim/uav-005': 2, 'sim/uav-006': 2, 'sim/uav-007': 2, 'sim/uav-008': 2, 'sim/uav-009': 2, 'sim/uav-010': 2, 'sim/uav-011': 2, 'sim/uav-012': 2, 'sim/uav-013': 2, 'sim/uav-014': 2, 'swarm/tx': 95}), 허용 밖 0개. MCAP 채널 479개, Agent 발행 키 중 MCAP에 없는 것 0개. truth 채널 ['truth/state']는 Core 발행이고 Agent 구독·수신 기록에는 없다.
 
 MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 10, '런타임 내부': 5}. 금지 목록: zenoh, swarm_api.bus, swarm_api.keys, swarm.v1.truth_pb2, swarm.v1.sim_pb2, swarm.v1.link_pb2, swarm.v1.fa_pb2, swarm_core, swarm_bus, swarm_bridge, swarm_gateway, swarm_datalink, swarm_logger, swarm_agent.runtime, swarm_agent.cli, swarm_agent.vehicle, swarm_agent.ports.
 
@@ -323,11 +324,11 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | P2P | MA<- | swarm.v1.LeaderUpdate | 5 | P2P | STD | 예 |
 | P2P | MA<- | swarm.v1.PeerStatus | 7350 | P2P | STD | 예 |
 | P2P | MA<- | swarm.v1.TrackShare | 702 | P2P | STD | 예 |
-| VI | MA-> | swarm.v1.FlightCommand | 17519 | VI | STD | 예 |
-| VI | MA<- | swarm.v1.FlightCommandStatus | 17539 | VI | STD | 예 |
+| VI | MA-> | swarm.v1.FlightCommand | 17509 | VI | STD | 예 |
+| VI | MA<- | swarm.v1.FlightCommandStatus | 17529 | VI | STD | 예 |
 | VI | MA<- | swarm.v1.NavigationReport | 53565 | VI | STD | 예 |
 
-- 정보: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7288건
+- 정보: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - 정보: algorithms/src/swarm_algorithms/common.py:17 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - 정보: algorithms/src/swarm_algorithms/common.py:18 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - 정보: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
@@ -346,14 +347,14 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | 표 | 대상 수 | 위반 대상 |
 |---|---|---|
 | TaskStatus(내부) | 15 | 없음 |
-| FlightCommandStatus(내부) | 19 | uav-007-fmn-beta, uav-008-fmn-beta, uav-006-fmn-lead |
-| MA_TaskStatus(외부) | 15 | 없음 |
-| MA_FlightCommandStatus(외부) | 19 | uav-007-fmn-beta, uav-008-fmn-beta, uav-006-fmn-lead |
+| FlightCommandStatus(내부) | 19 | uav-006-fmn-lead |
+| MA_TaskStatus(외부) | 16 | 없음 |
+| MA_FlightCommandStatus(외부) | 19 | uav-006-fmn-lead |
 
 | 기체 | 작업 | 승인 필요 | 요청 | 응답 | 응답 모의 s | 첫 EXECUTING 모의 s | 판정 |
 |---|---|---|---|---|---|---|---|
-| uav-001 | ap-yes | 예 | 예 | approved | 10.86 | 10.98 | 통과 |
-| uav-002 | ap-no | 예 | 예 | rejected | 10.86 | — | 통과 |
+| uav-001 | ap-yes | 예 | 예 | approved | 10.72 | 10.86 | 통과 |
+| uav-002 | ap-no | 예 | 예 | rejected | 10.74 | — | 통과 |
 | uav-003 | ap-to | 예 | 예 | 없음 | — | — | 통과 |
 | uav-004 | task-001 | 예 | 예 | approved | 0.06 | 0.2 | 통과 |
 | uav-009 | x-hold | 아니오 | 아니오 | 없음 | — | 10.12 | 통과 |
@@ -368,16 +369,12 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | 외부 return_to_base | uav-010 | x-rtb | ACCEPTED, COMPLETED, EXECUTING | 있음 |
 | 외부 cancel | uav-009 | x-hold | ACCEPTED, CANCELLED, EXECUTING | 있음 |
 
-- 실패: FlightCommandStatus(내부) uav-007-fmn-beta: 허용 전이 밖 REJECTED→EXECUTING(끝 상태 뒤) (순서 REJECTED → EXECUTING)
-- 실패: FlightCommandStatus(내부) uav-008-fmn-beta: 허용 전이 밖 REJECTED→EXECUTING(끝 상태 뒤) (순서 REJECTED → EXECUTING)
 - 실패: FlightCommandStatus(내부) uav-006-fmn-lead: 허용 전이 밖 시작→CANCELLED (순서 CANCELLED)
-- 실패: MA_FlightCommandStatus(외부) uav-007-fmn-beta: 허용 전이 밖 REJECTED→ACCEPTED(끝 상태 뒤) (순서 REJECTED → ACCEPTED)
-- 실패: MA_FlightCommandStatus(외부) uav-008-fmn-beta: 허용 전이 밖 REJECTED→ACCEPTED(끝 상태 뒤) (순서 REJECTED → ACCEPTED)
 - 실패: MA_FlightCommandStatus(외부) uav-006-fmn-lead: 허용 전이 밖 시작→CANCELED (순서 CANCELED)
 
 ## 9. C6 OMS / LA-CAL 왕복
 
-판정: **실패**. 선언은 실행에 쓴 `lacal_server.yaml`(gateway/config에서 포트·server_id만 바꿈)의 declared, 실제 교환은 종료 직전 CAL Server `/graph`의 pub·sub 간선이다. `/tap`은 외부 클라이언트가 시작부터 연 관리 포트 WebSocket으로 센 Gateway 발신 건수다.
+판정: **통과**. 선언은 실행에 쓴 `lacal_server.yaml`(gateway/config에서 포트·server_id만 바꿈)의 declared, 실제 교환은 종료 직전 CAL Server `/graph`의 pub·sub 간선이다. `/tap`은 외부 클라이언트가 시작부터 연 관리 포트 WebSocket으로 센 Gateway 발신 건수다.
 
 | 서비스 | 방향 | 흐름 | 건수 | 상태 |
 |---|---|---|---|---|
@@ -385,13 +382,13 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | swarm_gateway | pub | MA_ApprovalRequest@swarm.c2 | 4 | 일치 |
 | swarm_gateway | pub | MA_Entity@swarm.p2p | 117 | 일치 |
 | swarm_gateway | pub | MA_FlightCapability@swarm.vi | 14 | 일치 |
-| swarm_gateway | pub | MA_FlightCommandStatus@swarm.vi | 27 | 일치 |
+| swarm_gateway | pub | MA_FlightCommandStatus@swarm.vi | 25 | 일치 |
 | swarm_gateway | pub | MA_LeaderUpdateRequest@swarm.p2p | 1 | 일치 |
 | swarm_gateway | pub | MA_NavigationReport@swarm.vi | 980 | 일치 |
 | swarm_gateway | pub | MA_PackagePartnerStatusReport@swarm.p2p | 1050 | 일치 |
 | swarm_gateway | pub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
 | swarm_gateway | pub | MA_PositionReport@swarm.vi | 980 | 일치 |
-| swarm_gateway | pub | MA_TaskStatus@swarm.c2 | 33 | 일치 |
+| swarm_gateway | pub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
 | swarm_gateway | pub | PO_Activity@swarm.ms | 4969 | 일치 |
 | swarm_gateway | pub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
 | swarm_gateway | pub | StrikeActivity@swarm.ms | 1 | 일치 |
@@ -404,21 +401,21 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | external_c2 | pub | MA_MissionPlan@swarm.mp | 2 | 일치 |
 | external_c2 | pub | MA_RoutePlan@swarm.mp | 3 | 일치 |
 | external_c2 | pub | MA_TaskCommand@swarm.c2 | 9 | 일치 |
-| external_c2 | sub | EA_Activity@swarm.ms | 70 | 선언 밖 |
-| external_c2 | sub | MA_ApprovalRequest@swarm.c2 | 4 | 선언 밖 |
-| external_c2 | sub | MA_Entity@swarm.p2p | 117 | 선언 밖 |
-| external_c2 | sub | MA_FlightCapability@swarm.vi | 14 | 선언 밖 |
-| external_c2 | sub | MA_FlightCommandStatus@swarm.vi | 27 | 선언 밖 |
-| external_c2 | sub | MA_LeaderUpdateRequest@swarm.p2p | 1 | 선언 밖 |
+| external_c2 | sub | EA_Activity@swarm.ms | 70 | 일치 |
+| external_c2 | sub | MA_ApprovalRequest@swarm.c2 | 4 | 일치 |
+| external_c2 | sub | MA_Entity@swarm.p2p | 117 | 일치 |
+| external_c2 | sub | MA_FlightCapability@swarm.vi | 14 | 일치 |
+| external_c2 | sub | MA_FlightCommandStatus@swarm.vi | 25 | 일치 |
+| external_c2 | sub | MA_LeaderUpdateRequest@swarm.p2p | 1 | 일치 |
 | external_c2 | sub | MA_NavigationReport@swarm.vi | 980 | 일치 |
-| external_c2 | sub | MA_PackagePartnerStatusReport@swarm.p2p | 1050 | 선언 밖 |
-| external_c2 | sub | MA_PositionReport@swarm.p2p | 1050 | 선언 밖 |
-| external_c2 | sub | MA_PositionReport@swarm.vi | 980 | 선언 밖 |
-| external_c2 | sub | MA_TaskStatus@swarm.c2 | 33 | 일치 |
-| external_c2 | sub | PO_Activity@swarm.ms | 4969 | 선언 밖 |
-| external_c2 | sub | StoreLoadoutConfiguration@swarm.ms | 8 | 선언 밖 |
-| external_c2 | sub | StrikeActivity@swarm.ms | 1 | 선언 밖 |
-| external_c2 | sub | SystemStatus@swarm.vi | 14 | 선언 밖 |
+| external_c2 | sub | MA_PackagePartnerStatusReport@swarm.p2p | 1050 | 일치 |
+| external_c2 | sub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
+| external_c2 | sub | MA_PositionReport@swarm.vi | 980 | 일치 |
+| external_c2 | sub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
+| external_c2 | sub | PO_Activity@swarm.ms | 4969 | 일치 |
+| external_c2 | sub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
+| external_c2 | sub | StrikeActivity@swarm.ms | 1 | 일치 |
+| external_c2 | sub | SystemStatus@swarm.vi | 14 | 일치 |
 
 | 흐름 | /tap | 외부 수신 | 일치 |
 |---|---|---|---|
@@ -426,13 +423,13 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | MA_ApprovalRequest@swarm.c2 | 4 | 4 | 예 |
 | MA_Entity@swarm.p2p | 117 | 117 | 예 |
 | MA_FlightCapability@swarm.vi | 14 | 14 | 예 |
-| MA_FlightCommandStatus@swarm.vi | 27 | 27 | 예 |
+| MA_FlightCommandStatus@swarm.vi | 25 | 25 | 예 |
 | MA_LeaderUpdateRequest@swarm.p2p | 1 | 1 | 예 |
 | MA_NavigationReport@swarm.vi | 980 | 980 | 예 |
 | MA_PackagePartnerStatusReport@swarm.p2p | 1050 | 1050 | 예 |
 | MA_PositionReport@swarm.p2p | 1050 | 1050 | 예 |
 | MA_PositionReport@swarm.vi | 980 | 980 | 예 |
-| MA_TaskStatus@swarm.c2 | 33 | 33 | 예 |
+| MA_TaskStatus@swarm.c2 | 34 | 34 | 예 |
 | PO_Activity@swarm.ms | 4969 | 4969 | 예 |
 | StoreLoadoutConfiguration@swarm.ms | 8 | 8 | 예 |
 | StrikeActivity@swarm.ms | 1 | 1 | 예 |
@@ -440,19 +437,6 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 
 외부 송신 → 버스(GCS 송신, neg- 제외): MA_ApprovalRequestStatus 3건, MA_MissionPlan 1건, MA_RoutePlan 1건, MA_TaskCommand 6건. 기체 반영은 C5 상태 보고 표에서 본다.
 
-- 실패: external_c2 sub EA_Activity@swarm.ms: 선언 밖 교환 (70건)
-- 실패: external_c2 sub MA_ApprovalRequest@swarm.c2: 선언 밖 교환 (4건)
-- 실패: external_c2 sub MA_Entity@swarm.p2p: 선언 밖 교환 (117건)
-- 실패: external_c2 sub MA_FlightCapability@swarm.vi: 선언 밖 교환 (14건)
-- 실패: external_c2 sub MA_FlightCommandStatus@swarm.vi: 선언 밖 교환 (27건)
-- 실패: external_c2 sub MA_LeaderUpdateRequest@swarm.p2p: 선언 밖 교환 (1건)
-- 실패: external_c2 sub MA_PackagePartnerStatusReport@swarm.p2p: 선언 밖 교환 (1050건)
-- 실패: external_c2 sub MA_PositionReport@swarm.p2p: 선언 밖 교환 (1050건)
-- 실패: external_c2 sub MA_PositionReport@swarm.vi: 선언 밖 교환 (980건)
-- 실패: external_c2 sub PO_Activity@swarm.ms: 선언 밖 교환 (4969건)
-- 실패: external_c2 sub StoreLoadoutConfiguration@swarm.ms: 선언 밖 교환 (8건)
-- 실패: external_c2 sub StrikeActivity@swarm.ms: 선언 밖 교환 (1건)
-- 실패: external_c2 sub SystemStatus@swarm.vi: 선언 밖 교환 (14건)
 
 ## 10. C7 AMS-GRA 개념 차용 추적과 적용성
 
@@ -464,7 +448,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 |---|---|---|---|---|
 | ASB(Abstract Service Bus) | `open_bus` 추상 계층, Zenoh 백엔드 | PRP-NET-001, DEC-002, DEC-026 | 모든 프로세스가 `open_bus`로만 버스를 여는지 소스 점검 | 진입점 6/6이 open_bus 사용 (Sim Core, Datalink, Logger, Agent, Bridge, Gateway). 버스 계층 밖 직접 열기 0건 |
 | OMS 서비스 분해 | 임무장비를 서비스(카메라·재머·무장)별 Command/Activity로 모델링 | PRP-PAY-001 | MS 메시지가 장비 서비스별로 나뉘는지 C1 표에서 확인 | Sensor: SensorCommand(STD, PO_Command), SensorActivity(STD, PO_Activity); 기타: Detection(EXT); Jammer: JammerCommand(STD, EA_Command), JammerActivity(STD, EA_Activity); Strike: StrikeCommand(STD, StrikeCommand), StrikeActivity(STD, StrikeActivity); Store: StoreLoadout(STD, StoreLoadoutConfiguration) |
-| Time Distribution | Sim Core 고정 프레임, lockstep 장벽 | DEC-005, DEC-043 | lockstep 결정론 시험 결과 링크 | docs/21_qa_report.md §28(20차, TC-QA-106~113): 같은 시드 lockstep 반복에서 truth 궤적·LinkOutcome·GCS 수신이 같았다(손실 없음·있음, 고장 주입, 임무장비, 50기, Gateway 포함 외부 입력 없는 구성). §31(23차 회귀)에서 다시 같았다. 이 도구의 같은 커밋 2회 실행: 판정과 실패 문구(수치 제외)가 모두 같다. 수치(건수·시간 차)는 일부 다르다(표 참고) |
+| Time Distribution | Sim Core 고정 프레임, lockstep 장벽 | DEC-005, DEC-043 | lockstep 결정론 시험 결과 링크 | docs/21_qa_report.md §28(20차, TC-QA-106~113): 같은 시드 lockstep 반복에서 truth 궤적·LinkOutcome·GCS 수신이 같았다(손실 없음·있음, 고장 주입, 임무장비, 50기, Gateway 포함 외부 입력 없는 구성). §31(23차 회귀)에서 다시 같았다. 이 도구의 같은 커밋 2회 실행: 판정과 실패 문구(수치 제외)가 모두 같다 |
 | Armament | 무장 서비스·탑재 구성 명명(`StoreLoadoutConfiguration`) | DEC-019, DEC-088 | C1 표의 MS 행 | StrikeActivity (StrikeActivity, 송신, 구현·시험됨); StoreLoadoutConfiguration (StoreLoadout, 송신, 구현·시험됨) |
 
 ### 10.2 요구별 적용성 ([46_amsgra_applicability.md](46_amsgra_applicability.md) §3)
