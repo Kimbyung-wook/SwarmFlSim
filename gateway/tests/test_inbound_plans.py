@@ -250,6 +250,7 @@ def test_invalid_xml_is_rejected(gateway, bus, name, data):
 def test_publisher_and_seq_per_key(bus, codec):
     """TC-GW-025: 모든 발행에 publisher를 채우고 seq는 키별로 매긴다"""
     gw = Gateway(bus, GatewayConfig(S.GCS, participant="gateway-7"), codec=codec, sink=lambda t, o: None)
+    gw.entities.on_scenario(S.scenario_bytes())
     got = capture(bus)
     external(gw, "MA_ApprovalRequestStatus", approval_data())
     external(gw, "MA_ApprovalRequestStatus", approval_data())
@@ -280,9 +281,9 @@ def test_publish_scope_is_c2_and_mp(gateway, bus):
     external(gateway, "MA_ApprovalRequestStatus", approval_data())
     external(gateway, "MA_RoutePlan", route_data())
     external(gateway, "MA_MissionPlan", mission_data())
-    own = {k for k in bus.published if not k.startswith("swarm/gcs-01/rx/")}
+    own = {k for k in bus.published if not k.startswith(("swarm/gcs-01/rx/", "sim/ctrl/"))}
     assert own == {"swarm/gcs-01/tx/c2/TaskCommand", "swarm/gcs-01/tx/c2/ApprovalResponse",
                    "swarm/gcs-01/tx/mp/RoutePlan", "swarm/gcs-01/tx/mp/MissionPlan"}
-    assert bus.subscribed == ["swarm/gcs-01/rx/**"]
+    assert bus.subscribed == ["swarm/gcs-01/rx/**", "sim/ctrl/scenario"]
     with pytest.raises(ValueError):
         gateway.publish_inbound(gateway.table.by_full_name("swarm.v1.NavigationReport"), S.nav(), [])

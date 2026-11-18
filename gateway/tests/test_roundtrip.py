@@ -42,6 +42,7 @@ async def test_roundtrip_with_cal_server(cal_server, bus, codec):
     url = f"ws://127.0.0.1:{cal_server.port}"
     running = await start_gateway(bus, GatewayConfig(S.GCS), url, codec=codec)
     gw = running.gateway
+    S.load_scenario(bus)
     ext = LaCalClient(url, "external_c2")
     await ext.connect()
     received: list[tuple[str, dict]] = []
@@ -140,6 +141,7 @@ async def test_external_plans_and_approval_roundtrip(cal_server, bus, codec):
     url = f"ws://127.0.0.1:{cal_server.port}"
     running = await start_gateway(bus, GatewayConfig(S.GCS, participant="gateway-3"), url, codec=codec)
     gw = running.gateway
+    S.load_scenario(bus)
     ext = LaCalClient(url, "external_c2")
     await ext.connect()
     tx = []

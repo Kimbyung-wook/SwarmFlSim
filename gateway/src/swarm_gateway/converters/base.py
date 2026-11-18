@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import logging
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
@@ -54,16 +56,71 @@ class BoundedStore:
         return found[1]
 
 
+def _wall() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+class SimClock:
+    """모의 시각(µs) → UCI 시각(UTC) (IMP-GW-030, QA D-36).
+
+    UTC = 기준 시각(epoch) + 모의 시각. 계약에 모의 시각 0의 UTC가 없어(OPN 요청) 기준 시각은
+    설정값(`--sim-epoch`)을 쓰고, 없으면 처음 받은 메시지에서 한 번 정한다(그때 벽시계 − 그 모의 시각).
+    정한 뒤에는 바꾸지 않으므로 일시정지·배속에서도 (UCI 시각 − 모의 시각)이 일정하다.
+    """
+
+    def __init__(self, epoch: dt.datetime | None = None, wall: Callable[[], dt.datetime] = _wall):
+        self.epoch = epoch
+        self.wall = wall
+        self.last_us: int | None = None
+        self._lock = threading.Lock()
+
+    def _anchor(self, sim_us: int) -> dt.datetime:
+        if self.epoch is None:
+            self.epoch = self.wall() - dt.timedelta(microseconds=sim_us)
+            logging.getLogger("swarm_gateway").info(
+                "gateway: UCI time = %s + sim time (anchored at sim %.3f s)", uci_timestamp(self.epoch), sim_us / 1e6)
+        return self.epoch
+
+    def at(self, sim_us: int) -> dt.datetime:
+        """메시지 모의 시각의 UTC. 현재 모의 시각으로 기억한다"""
+        with self._lock:
+            epoch = self._anchor(sim_us)
+            self.last_us = sim_us
+        return epoch + dt.timedelta(microseconds=sim_us)
+
+    def utc(self, sim_us: int) -> dt.datetime:
+        """다른 모의 시각(예: 관측 시각)의 UTC. 현재 모의 시각은 바꾸지 않는다"""
+        with self._lock:
+            epoch = self._anchor(sim_us)
+        return epoch + dt.timedelta(microseconds=sim_us)
+
+    def now(self) -> dt.datetime:
+        """마지막으로 본 모의 시각의 UTC. 아직 메시지를 받지 않았으면 벽시계"""
+        with self._lock:
+            if self.epoch is None or self.last_us is None:
+                return self.wall()
+            return self.epoch + dt.timedelta(microseconds=self.last_us)
+
+
 @dataclass
 class ConvContext:
     ids: IdMap
     gcs: str
-    now: Callable[[], dt.datetime] = field(default=lambda: dt.datetime.now(dt.timezone.utc))
+    clock: SimClock = field(default_factory=SimClock)
+    now: Callable[[], dt.datetime] | None = None    # 비우면 clock.now. 1단계는 메시지마다 그 모의 시각으로 바꿔 쓴다
     routes: BoundedStore = field(default_factory=BoundedStore)      # 수신한 RoutePlan (UUID → 메시지, DEC-076)
     approvals: BoundedStore = field(default_factory=BoundedStore)   # 내보낸 ApprovalRequest (request_id → 요청 기체)
 
+    def __post_init__(self) -> None:
+        if self.now is None:
+            self.now = self.clock.now
+
     def ts(self) -> str:
         return uci_timestamp(self.now())
+
+    def sim_ts(self, sim_us: int) -> str:
+        """메시지 안의 다른 모의 시각(예: TrackShare.observed_time_us)의 UCI 시각"""
+        return uci_timestamp(self.clock.utc(sim_us))
 
     def system(self, entity_id: str) -> dict:
         return self.ids.ref("system", entity_id)

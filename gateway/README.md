@@ -14,7 +14,7 @@ flowchart LR
     CAL <--> EXT["외부 C2 / A-GRA 시스템"]
 ```
 
-- 구독은 `swarm/<gcs>/rx/**` 하나뿐이다. 발행은 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`뿐이다. 발행하는 `LinkEnvelope.publisher`에 Gateway 참여자 ID를 채운다 (DEC-077). `truth/**`, `onboard/**`, `link/**`는 쓰지 않는다.
+- 구독은 `swarm/<gcs>/rx/**`와 `sim/ctrl/scenario`(알려진 기체 목록, D-35)뿐이다. 발행은 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`뿐이다. 발행하는 `LinkEnvelope.publisher`에 Gateway 참여자 ID를 채운다 (DEC-077). `truth/**`, `onboard/**`, `link/**`는 쓰지 않는다.
 - 버스는 `open_bus(BusConfig)`로 연다 (DEC-026).
 - 매핑은 proto 옵션 `(uci_name)`, `(uci_also)`, `(mapping)`, `(l1)`을 descriptor에서 읽어 만든다. STD만 외부로 내보내고 EXT·SIM은 내보내지 않는다 (DEC-014).
 - 내부 메시지 하나를 받으면 `uci_name`과 `uci_also`의 UCI 메시지를 각각 따로 변환·검증·발행한다. 하나가 실패해도 나머지는 나간다 (DEC-072).
@@ -69,6 +69,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen` | | `BusConfig` 항목 |
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--lacal-admin` | `--lacal` 호스트의 8766 | CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 보낸다 (DEC-089). `none`이면 끈다 |
+| `--sim-epoch` | 첫 메시지 때 정함 | 모의 시각 0의 UTC (ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`). UCI 시각 = 이 값 + 메시지 모의 시각 (D-36) |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
 외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다.
@@ -102,6 +103,18 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 - 구독 시점은 CAL Server 관리 포트의 그래프 이벤트(`/graph/events`)로 안다. OWP에는 구독 알림이 없기 때문이다. 관리 포트에 붙지 못하면 경고를 남기고 2 s마다 다시 시도한다. 나머지 동작은 그대로다.
 - 다시 보낸 값은 같은 토픽의 기존 구독자에게도 한 번 더 간다. Gateway가 재기동하면 보관 값이 없다.
 - 외부 상태 표현은 공개 XSD enum 그대로다 (DEC-090). `MA_FlightCommandStatus`에는 EXECUTING·COMPLETED가 없어 ACCEPTED로 보이므로 수행·완료는 `MA_TaskStatus`에서 읽는다.
+
+### UCI 시각 (D-36)
+
+- UCI 머리 `Timestamp`와 위치·속도·자세 시각은 벽시계가 아니라 메시지 모의 시각(`header.sim_time_us`)의 UTC다. `MA_Entity`의 운동·식별 시각은 관측 모의 시각(`observed_time_us`)이다.
+- UTC = 기준 시각 + 모의 시각. 계약에는 모의 시각 0의 UTC가 없다(OPN 요청). `--sim-epoch`가 없으면 처음 받은 메시지에서 한 번 정하고(그때 벽시계 − 그 모의 시각) 로그 `UCI time = ... + sim time`에 남긴다.
+- 정한 뒤에는 바꾸지 않으므로 일시정지·배속에서도 (Timestamp − 모의 시각)이 일정하다.
+
+### 알려진 기체 (D-35)
+
+- 외부 `MA_TaskCommand`·`MA_RoutePlan`·`MA_MissionPlan`이 가리키는 기체는 모두 알려진 기체여야 한다. 하나라도 모르면 버스에 내지 않고 거부로 기록한다(`Gateway.rejections`, 카운터 `ext_rejected`).
+- 알려진 기체 = `sim/ctrl/scenario`의 `ENTITY_KIND_UAV` 엔티티 + 이 GCS rx로 보고를 보낸 엔티티. truth는 읽지 않는다. 시나리오가 바뀌면 둘 다 새로 시작한다.
+- 작업 ID가 있는 명령(`MA_TaskCommand`, `MA_MissionPlan`)을 거부하면 모르는 기체별로 `MA_TaskStatus`(`ExecutionState` = `DROPPED`, 사유 포함)를 `swarm.c2`로 내 외부에 알린다. `MA_RoutePlan`은 알릴 상태 메시지가 없어 거부 기록만 남는다.
 
 ## 교환 메시지
 
@@ -176,7 +189,8 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms, mp)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
 | `src/swarm_gateway/gateway.py` | 1단계·2단계 처리, 카운터, 거부 기록 |
 | `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결) |
+| `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |
 | `src/swarm_gateway/__main__.py` | 진입점 |
 | `src/swarm_gateway/lacal_server.py` | agra_lacal CAL Server 기동 래퍼 |
-| `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`) |
+| `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`. `external_c2`는 교환 표의 발행 15개 흐름을 모두 구독으로 선언한다, D-39) |

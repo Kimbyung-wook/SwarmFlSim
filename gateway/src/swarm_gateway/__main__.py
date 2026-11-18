@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
 import json
 import logging
 import sys
@@ -22,6 +23,16 @@ NO_ZENOH_MESSAGE = (
 )
 
 
+def _utc(text: str) -> dt.datetime:
+    try:
+        t = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"ISO 8601 UTC 시각이 아니다: {text}") from exc
+    if t.tzinfo is None:
+        raise argparse.ArgumentTypeError(f"시간대가 없다(Z 또는 +00:00을 붙인다): {text}")
+    return t.astimezone(dt.timezone.utc)
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python -m swarm_gateway",
                                  description="A-GRA Gateway: swarm/<gcs>/rx/** <-> LA-CAL (DEC-068)")
@@ -30,6 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--lacal-admin", default="",
                     help="CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 다시 보낸다 (DEC-089). "
                          "기본은 --lacal 호스트의 8766, none이면 끈다")
+    ap.add_argument("--sim-epoch", type=_utc, default=None,
+                    help="모의 시각 0의 UTC (예: 2026-01-01T00:00:00Z). UCI 시각 = 이 값 + 모의 시각. "
+                         "비우면 처음 받은 메시지에서 정한다 (D-36)")
     ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
                     help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")
@@ -52,7 +66,8 @@ async def _run(args) -> None:
     bus = open_bus(BusConfig(backend=args.bus, zenoh_config_file=args.zenoh_config, zenoh_mode=args.zenoh_mode,
                              connect=args.connect, listen=args.listen,
                              multicast_scouting=not args.no_multicast))
-    running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix), args.lacal,
+    running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix,
+                                                     sim_epoch=args.sim_epoch), args.lacal,
                                   service_id=args.service, inbound_topic=args.inbound_topic,
                                   admin_url=None if args.lacal_admin.lower() == "none" else args.lacal_admin)
     try:

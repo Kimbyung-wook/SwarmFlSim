@@ -63,7 +63,7 @@ class TrackShareConverter(Converter):
     proto = "swarm.v1.TrackShare"
 
     def to_uci(self, msg: p2p_pb2.TrackShare, ctx: ConvContext) -> dict:
-        ts = ctx.ts()
+        ts = ctx.sim_ts(msg.observed_time_us) if msg.observed_time_us else ctx.ts()   # 관측 모의 시각 (D-36)
         p = msg.position
         finite(p.lat_deg, p.lon_deg, p.alt_m)
         v = msg.velocity_ned_mps
