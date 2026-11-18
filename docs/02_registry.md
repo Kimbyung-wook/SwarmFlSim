@@ -170,6 +170,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-093 | AMS-GRA는 개념 차용을 유지하고 준수로 바꾸지 않는다. 요구별 적용성 표(`docs/46_amsgra_applicability.md`)로 범위를 보인다(해당·부분·해당없음과 근거). 하드웨어 MPU, 보안·사이버·암호, MPU 납품·인증 산출물, 실시간 시각 동기, AMS-GRA 고유 버스·API 요구는 해당없음으로 둔다 | REQ-STD-001, DEC-092, 사용자: "차용 유지+적용성 표" | Confirmed |
 | DEC-094 | 표준 점검 C1에서 GCS 경계를 넘지 않는 STD 메시지(기체 안 MA↔장비·FA, `onboard/**`로만 오감)는 "Gateway 범위 밖(기체 내부)"으로 표시하고 변환기 없음을 실패로 보지 않는다. STD 표시는 UCI 메시지 대응을 뜻하고 Gateway 송출을 뜻하지 않는다 | QA D-38, DEC-092, 사용자 답변 "기체 내부로 분류" | Confirmed |
 | DEC-095 | 표준 점검은 실행마다 이력을 남긴다. 도구가 실행 기록(대상 커밋, 계약 버전, agra_lacal 커밋, 기준 문서 커밋, 도구 커밋, 시드, 항목별 판정·핵심 수치·발견 ID)을 `qa/conformance/history.jsonl`에 덧붙이고, 이를 읽어 `docs/47_conformance_history.md`(실행 이력, 점검 조건 변경 이력, 발견 추적)를 만든다. 이력 행은 고치거나 지우지 않는다 | DEC-092, 사용자 요청(점검 조건·결과의 커밋별 이력표) | Confirmed |
+| DEC-096 | Gateway는 `sim/ctrl/scenario`를 읽기만 하는 구독자다. 외부 명령이 가리키는 기체의 존재는 시나리오의 UAV 엔티티와 그 GCS가 받은 보고로 판단하고 truth는 쓰지 않는다. 계약 §3.2 키 표 문구 정정이며 계약 버전은 바꾸지 않는다 | OPN-069, QA D-35, DEC-013, DEC-068 | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -243,6 +244,8 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-066 | GCS 링크 상실 판단의 입력과 기본 행동. 지상→기체 주기 메시지가 없고 MA는 링크·truth를 볼 수 없다(DEC-013) | Resolved by DEC-078 |
 | OPN-067 | P1 성능 개선의 방법과 완료 수치. Python Agent 병목 측정 후 선택지(프로세스 분할, 일괄 처리, 메시지 축소 등)와 REQ-PRF-002 달성 가능성을 제시한다 | Resolved by DEC-080 |
 | OPN-068 | 기본 FA의 C++ 이전 위치. 선택: (A) Core 안에서 실행하고 Agent는 `FlightCommand`를 보낸다 (B) Agent 프로세스의 네이티브 확장. 제안: A(세 툴체인에서 Python 확장 빌드가 필요 없다). 1단계(DEC-081) 실측 후 정한다 | Resolved by DEC-082 |
+| OPN-069 | Gateway의 `sim/ctrl/scenario` 구독(WP9 OPN-GW-001, QA D-35). 외부 명령이 가리키는 기체가 있는지 truth 없이 판단할 목록이 필요하다. 선택: (A) 키 표 구독자에 Gateway를 더한다(읽기만) (B) 수신 보고만으로 판단한다(기동 직후 기체 명령이 거부됨). 제안: A | Resolved by DEC-096 |
+| OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | 미결 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

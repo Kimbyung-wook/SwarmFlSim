@@ -82,7 +82,7 @@ flowchart LR
 | `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
 | `sim/ctrl/cmd` | `SimCommand` | UI | Core, Agent 런타임 (`set_params`, §3.3) |
 | `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
-| `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI (늦게 붙는 참여자 포함) |
+| `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임, UI(GCS), Gateway(GCS 쪽) |
