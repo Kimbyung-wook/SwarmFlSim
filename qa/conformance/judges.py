@@ -23,14 +23,33 @@ def verdict(fails: list, info_only: bool = False) -> str:
 # ---------------------------------------------------------------------------------------------------------- C1
 
 
+INSIDE = "Gateway 범위 밖(기체 내부)"
+
+
 def judge_c1(proto: list[dict], xsd: set[str], converters: list[dict], also: list[dict], registry: list[dict],
-             trace: dict[str, dict], effective_import: list[str], observed: set[str] | None = None) -> dict:
-    """적용 범위 표와 실패 조건(STD의 uci_name·uci_also가 XSD에 없음, STD인데 변환기 없음, 변환기는 있는데 STD 아님)"""
+             trace: dict[str, dict], effective_import: list[str], observed: set[str] | None = None,
+             scope: dict[str, dict] | None = None) -> dict:
+    """적용 범위 표와 실패 조건(STD의 uci_name·uci_also가 XSD에 없음, GCS 경계 STD인데 변환기 없음, 변환기는 있는데 STD 아님).
+
+    scope: static.contract_scope 결과(DEC-094). 계약상 swarm 밖 키로만 오가고 Gateway 변환기도 없는 STD는 기체 내부로 보고
+    변환기 없음을 실패로 보지 않는다. 변환기가 있으면 실제로 경계를 넘으므로 GCS 경계다(계약과 다르면 정보로 적는다).
+    scope가 없으면 모든 STD를 GCS 경계로 본다(DEC-094 전 동작).
+    """
     fails: list[str] = []
+    info: list[str] = []
     by_full = {p["full_name"]: p for p in proto}
     conv = {c["proto"]: c for c in converters}
     also_by = {a["uci"]: a for a in also}
     std = [p for p in proto if p["mapping"] == "STD"]
+    scope = scope or {}
+    inside: dict[str, bool] = {}
+    for p in std:
+        sc = scope.get(p["short"], {})
+        has_conv = p["full_name"] in conv or any(also_by.get(u) for u in p["uci_also"])
+        inside[p["short"]] = bool(sc.get("inside")) and not has_conv
+        if sc.get("inside") and has_conv:
+            info.append(f"{p['short']}: 계약 키 표로는 swarm 밖 키({', '.join(sc['named_keys'])})로만 오가지만 Gateway 변환기가 "
+                        "있어 GCS 경계로 본다")
     for p in std:
         if not p["uci_name"]:
             fails.append(f"{p['short']}: STD인데 uci_name이 없다")
@@ -40,9 +59,9 @@ def judge_c1(proto: list[dict], xsd: set[str], converters: list[dict], also: lis
             if u not in xsd:
                 fails.append(f"{p['short']}: uci_also {u}이 XSD 최상위 요소에 없다")
             a = also_by.get(u)
-            if a is None or (a["protos"] and p["full_name"] not in a["protos"]):
+            if not inside[p["short"]] and (a is None or (a["protos"] and p["full_name"] not in a["protos"])):
                 fails.append(f"{p['short']}: STD인데 uci_also {u} 변환기가 없다")
-        if p["full_name"] not in conv:
+        if p["full_name"] not in conv and not inside[p["short"]]:
             fails.append(f"{p['short']} ({p['uci_name']}): STD인데 변환기가 없다")
     for c in converters:
         p = by_full.get(c["proto"])
@@ -76,7 +95,9 @@ def judge_c1(proto: list[dict], xsd: set[str], converters: list[dict], also: lis
         tr_u = trace.get(uci, {})
         imps = sorted(set(tr.get("imp", [])) | set(tr_u.get("imp", [])))
         tcs = sorted(set(tr.get("tc", [])) | set(tr_u.get("tc", [])))
-        if not has or p["mapping"] != "STD":
+        if p["mapping"] == "STD" and inside.get(p["short"]):
+            status = INSIDE
+        elif not has or p["mapping"] != "STD":
             status = "미구현"
         elif uci in observed and imps and tcs:
             status = "구현·시험됨"
@@ -84,7 +105,9 @@ def judge_c1(proto: list[dict], xsd: set[str], converters: list[dict], also: lis
             status = "부분"
         return {"l1": l1, "interaction": inter, "uci": uci, "dir": direction, "cls": p["mapping"],
                 "internal": p["short"], "converter": "있음" if has else "없음", "imp": ", ".join(imps),
-                "tc": ", ".join(tcs), "status": status, "source": src, "observed": uci in observed}
+                "tc": ", ".join(tcs), "status": status, "source": src, "observed": uci in observed,
+                "scope": "기체 내부" if inside.get(p["short"]) else "GCS 경계",
+                "scope_why": _scope_why(scope.get(p["short"], {}), inside.get(p["short"], False))}
 
     by_uci: dict[str, list[dict]] = defaultdict(list)
     for p in std:
@@ -123,8 +146,18 @@ def judge_c1(proto: list[dict], xsd: set[str], converters: list[dict], also: lis
         "std": len(std), "ext": sum(1 for p in proto if p["mapping"] == "EXT"),
         "sim": sum(1 for p in proto if p["mapping"] == "SIM"),
         "status": dict(Counter(r["status"] for r in rows)),
+        "inside": sorted(k for k, v in inside.items() if v),
     }
-    return {"verdict": verdict(fails), "fail": fails, "rows": rows, "summary": summary}
+    return {"verdict": verdict(fails), "fail": fails, "info": info, "rows": rows, "summary": summary,
+            "scope": {k: {**scope.get(k, {}), "inside_eff": v} for k, v in inside.items()}}
+
+
+def _scope_why(sc: dict, inside: bool) -> str:
+    if inside:
+        return "계약 키 " + ", ".join(sc.get("named_keys", [])) + "로만 오감"
+    if sc.get("swarm_ctx"):
+        return "계약 " + sc["swarm_ctx"][0].lstrip("- ").strip()
+    return "swarm/** 교환(LinkEnvelope)"
 
 
 # ---------------------------------------------------------------------------------------------------------- C2

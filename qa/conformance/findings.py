@@ -30,7 +30,9 @@ FINDINGS = [
      "detail": "EngagementCriteria(MA_EngagementCriteria), SensorCommand(PO_Command), JammerCommand(EA_Command), "
                "StrikeCommand, FlightCommand(MA_FlightCommand). 기체 안쪽(MA→장비·FA) 메시지이거나 아직 가져오지 않는 "
                "계획 메시지다. 기준(§3 C1)은 'STD인데 변환기 없음'을 실패로 정한다. 분류를 바꿀지(예: 기체 안 STD는 "
-               "Gateway 범위 밖으로 표시) 변환기를 둘지 결정이 필요하다."},
+               "Gateway 범위 밖으로 표시) 변환기를 둘지 결정이 필요하다.",
+     "resolution": "DEC-094: 기체 내부 STD(계약 키 표상 swarm 밖 키로만 오감)는 'Gateway 범위 밖(기체 내부)'으로 표시하고 "
+                   "변환기 없음을 실패로 보지 않는다. 30차 도구부터 이 판정 문구가 나오지 않는다"},
     {"id": "D-39", "item": "C6", "wp": "WP9", "level": "낮음",
      "match": ["external_c2 sub", "선언 밖 교환"],
      "title": "external_c2의 declared.sub가 실제 구독과 다르다",
