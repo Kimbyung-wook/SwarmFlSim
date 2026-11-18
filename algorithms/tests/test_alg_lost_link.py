@@ -353,7 +353,7 @@ def test_tc_agt_108_other_mas():
     assert fa(h)._kind == "orbit"
     beat(h)
     h.core.step(2)
-    assert fa(h)._kind == "hsa" and fa(h)._cmd_id == f"{A}-hold"
+    assert fa(h)._kind == "hsa" and fa(h)._cmd_id == f"{A}-hold-2"   # 재개는 새 ID (D-37)
     h2 = lost_waypoint(ma="hold", task=False)
     beat(h2)
     h2.core.step(2)
