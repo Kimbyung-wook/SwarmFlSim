@@ -10,18 +10,21 @@ Gateway는 지상 참여자다. GCS 엔티티의 `swarm/<gcs>/rx/**`만 구독�
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 from collections import Counter, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Awaitable, Callable
 
 from google.protobuf.message import DecodeError
-from swarm.v1 import link_pb2, options_pb2
+from swarm.v1 import c2_pb2, common_pb2, link_pb2, options_pb2
 from swarm_api import keys
 from swarm_api.bus import Bus, Sample, protobuf_encoding
 
 from .converters import (AlsoConverter, ConvContext, ConversionError, Converter, load_also_converters,
                          load_converters)
+from .converters.base import SimClock
+from .entities import KnownEntities
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
@@ -49,6 +52,7 @@ class GatewayConfig:
     classification: str = "U"
     owner_producer: str = "USA"      # 공개 스키마 예제 값 (SecurityInformation 필수 항목)
     rejection_log: int = 200
+    sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC. 비우면 처음 받은 메시지에서 정한다 (D-36)
 
     def __post_init__(self) -> None:
         keys.check_entity_id(self.gcs)
@@ -83,7 +87,9 @@ class Gateway:
         self.also_converters = also_converters if also_converters is not None else load_also_converters()
         self.codec = codec or load_codec()
         self.ids = ids or IdMap()
-        self.ctx = ConvContext(ids=self.ids, gcs=config.gcs)
+        self.clock = SimClock(config.sim_epoch)
+        self.ctx = ConvContext(ids=self.ids, gcs=config.gcs, clock=self.clock)
+        self.entities = KnownEntities(config.gcs)   # 외부 명령이 가리킬 수 있는 기체 (D-35)
         self.sink = sink
         self.system_uuid = OFFLINE_SYSTEM_UUID
         self.counters: Counter[str] = Counter()
@@ -133,13 +139,14 @@ class Gateway:
 
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
-        """버스 구독: swarm/<gcs>/rx/** 하나뿐이다"""
+        """버스 구독: swarm/<gcs>/rx/**와 시나리오(sim/ctrl/scenario, 알려진 기체 목록용 D-35)"""
         try:
             self._loop = asyncio.get_running_loop()
             self._outbox = asyncio.Queue()
         except RuntimeError:
             self._loop = None
         self._subs.append(self.bus.subscribe(keys.rx_all(self.config.gcs), self._on_sample))
+        self._subs.append(self.bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_scenario))
         log.info("gateway %s: subscribed %s; export %d UCI targets, import %s", self.config.gcs,
                  keys.rx_all(self.config.gcs), len(self.export_targets()), self.import_names())
 
@@ -149,11 +156,12 @@ class Gateway:
         self._subs.clear()
 
     # ------------------------------------------------------------------ UCI 봉투·검증
-    def envelope(self, uci_name: str, data: dict) -> dict:
+    def envelope(self, uci_name: str, data: dict, at: dt.datetime | None = None) -> dict:
+        """at: UCI 시각. 1단계는 메시지 모의 시각의 UTC(D-36), 비우면 마지막으로 본 모의 시각"""
         return {uci_name: {
             "SecurityInformation": {"Classification": self.config.classification,
                                     "OwnerProducer": [{"GovernmentIdentifier": self.config.owner_producer}]},
-            "MessageHeader": {"SystemID": {"UUID": self.system_uuid}, "Timestamp": uci_timestamp(self.ctx.now()),
+            "MessageHeader": {"SystemID": {"UUID": self.system_uuid}, "Timestamp": uci_timestamp(at or self.ctx.now()),
                               "SchemaVersion": SCHEMA_VERSION, "Mode": self.config.mode},
             "MessageData": data,
         }}
@@ -170,6 +178,11 @@ class Gateway:
             self.counters["internal_error"] += 1
             log.exception("gateway: unexpected error on %s", sample.key)
 
+    def _on_scenario(self, sample: Sample) -> None:
+        if not self.entities.on_scenario(sample.payload):
+            self.counters["bad_scenario"] += 1
+            log.warning("gateway: cannot parse %s", sample.key)
+
     def handle_rx(self, key: str, payload: bytes) -> Outcome:
         self.counters["rx"] += 1
         env = link_pb2.LinkEnvelope()
@@ -177,6 +190,7 @@ class Gateway:
             env.ParseFromString(payload)
         except DecodeError as exc:
             return self._reject(Outcome("rejected", key=key, reason=f"bad LinkEnvelope: {exc}"))
+        self.entities.on_report(env.header.source)   # 이 GCS에 보고를 보낸 기체 (D-35)
         entry = self.table.by_full_name(env.msg_type)
         if entry is None:
             return self._reject(Outcome("unmapped", proto=env.msg_type, key=key, reason="unknown msg_type"))
@@ -197,8 +211,11 @@ class Gateway:
                                         reason=f"bad payload: {exc}"))
         if not msg.header.source:
             msg.header.source = env.header.source
+        # UCI 시각 = 메시지 모의 시각의 UTC (D-36). 메시지 머리가 비면 봉투 머리 시각
+        at = self.clock.at(msg.header.sim_time_us or env.header.sim_time_us)
+        ctx = replace(self.ctx, now=lambda: at)
         # uci_name과 uci_also 각각을 따로 변환·검증·발행한다 (DEC-072). 하나가 실패해도 나머지는 나간다
-        outcomes = [self._export_one(entry, uci, msg, key) for uci in entry.uci_targets]
+        outcomes = [self._export_one(entry, uci, msg, key, ctx, at) for uci in entry.uci_targets]
         first = outcomes[0]
         first.also = outcomes[1:]
         return first
@@ -212,13 +229,13 @@ class Gateway:
                 conv = None
         return conv if conv is not None and conv.supports_export() else None
 
-    def _export_one(self, entry: MappingEntry, uci: str, msg, key: str) -> Outcome:
+    def _export_one(self, entry: MappingEntry, uci: str, msg, key: str, ctx: ConvContext, at: dt.datetime) -> Outcome:
         conv = self.converter_for(entry, uci)
         if conv is None:
             return self._reject(Outcome("unmapped", proto=entry.full_name, uci_name=uci, key=key,
                                         reason="no converter"))
         try:
-            obj = self.envelope(uci, conv.to_uci(msg, self.ctx))
+            obj = self.envelope(uci, conv.to_uci(msg, ctx), at)
             self.to_xml(obj)
         except (ConversionError, InvalidMessage, ValueError, TypeError, KeyError) as exc:
             self.counters["invalid"] += 1
@@ -291,6 +308,12 @@ class Gateway:
             if result is None:
                 continue
             msg, dst = result
+            unknown = self.entities.unknown(dst)
+            if unknown:   # 시나리오에도 수신 보고에도 없는 기체 (D-35). 버스에 내지 않는다
+                reason = f"unknown entity {unknown} (not in scenario or reports to {self.config.gcs})"
+                errors.append(f"{entry.short_name}: {reason}")
+                self._notify_rejected(msg, unknown, reason)
+                continue
             key = self.publish_inbound(entry, msg, dst)
             self.counters["ext_published"] += 1
             return Outcome("published", proto=entry.full_name, uci_name=uci_name, key=key)
@@ -312,6 +335,24 @@ class Gateway:
         env.header.seq = seq
         self.bus.put(key, env.SerializeToString(), protobuf_encoding(env.DESCRIPTOR.full_name))
         return key
+
+    def _notify_rejected(self, msg, entities: list[str], reason: str) -> None:
+        """거부한 외부 작업 명령을 외부에 알린다 (D-35): 기체별 MA_TaskStatus(DROPPED).
+        작업 ID가 없는 것(항로 계획만)은 거부 기록만 남는다"""
+        if not isinstance(msg, c2_pb2.TaskCommand) or not msg.task_id:
+            return
+        entry = self.table.by_full_name(c2_pb2.TaskStatus.DESCRIPTOR.full_name)
+        at = self.ctx.now()
+        ctx = replace(self.ctx, now=lambda: at)
+        for eid in entities:
+            st = c2_pb2.TaskStatus(task_id=msg.task_id, state=common_pb2.COMMAND_STATE_REJECTED,
+                                   reason=f"rejected by gateway: {reason}"[:200])
+            st.header.source = eid
+            if self.clock.last_us is not None:
+                st.header.sim_time_us = self.clock.last_us
+            out = self._export_one(entry, entry.uci_name, st, "", ctx, at)
+            if out.status == "exported":
+                self.counters["ext_rejected_notified"] += 1
 
     # ------------------------------------------------------------------
     def _reject(self, out: Outcome) -> Outcome:

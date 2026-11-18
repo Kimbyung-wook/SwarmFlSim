@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from google.protobuf.message import Message
-from swarm.v1 import c2_pb2, common_pb2, entity_pb2, link_pb2, ms_pb2, options_pb2, p2p_pb2, vi_pb2
+from swarm.v1 import c2_pb2, common_pb2, entity_pb2, link_pb2, ms_pb2, options_pb2, p2p_pb2, sim_pb2, vi_pb2
 from swarm_api import keys
 from swarm_api.bus import protobuf_encoding
 
@@ -138,6 +138,25 @@ def envelope(msg: Message, dst: str = GCS) -> link_pb2.LinkEnvelope:
 
 def rx_key(msg: Message, dst: str = GCS) -> str:
     return keys.rx(dst, keys.Iface(iface_of(msg)), msg.DESCRIPTOR.name)
+
+
+# 시험 시나리오의 기체 (D-35: 외부 명령은 시나리오·수신 보고에 있는 기체만 가리킬 수 있다)
+FLEET = (UAV, "uav-002", "uav-003")
+
+
+def scenario_bytes(*uavs: str, name: str = "test", others: tuple[tuple[str, int], ...] = ()) -> bytes:
+    sc = sim_pb2.Scenario(name=name)
+    sc.entities.add(id=GCS, kind=entity_pb2.ENTITY_KIND_GCS)
+    for u in uavs or FLEET:
+        sc.entities.add(id=u, kind=entity_pb2.ENTITY_KIND_UAV, controlling_gcs=GCS)
+    for eid, kind in others:
+        sc.entities.add(id=eid, kind=kind)
+    return sc.SerializeToString()
+
+
+def load_scenario(bus, *uavs: str, **kw) -> None:
+    """Core가 sim/ctrl/scenario에 다시 발행하는 시나리오를 흉내 낸다"""
+    bus.put(keys.SIM_CTRL_SCENARIO, scenario_bytes(*uavs, **kw), protobuf_encoding("swarm.v1.Scenario"))
 
 
 def deliver(bus, msg: Message, dst: str = GCS) -> None:

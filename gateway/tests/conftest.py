@@ -9,6 +9,7 @@ from swarm_api import InMemoryBus  # noqa: E402
 from swarm_gateway.gateway import Gateway, GatewayConfig  # noqa: E402
 from swarm_gateway.lacal import load_codec  # noqa: E402
 
+import samples as S  # noqa: E402
 from samples import GCS  # noqa: E402
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
@@ -50,5 +51,6 @@ def sent():
 def gateway(bus, codec, sent):
     gw = Gateway(bus, GatewayConfig(GCS), codec=codec, sink=lambda topic, obj: sent.append((topic, obj)))
     gw.start()
+    S.load_scenario(bus)
     yield gw
     gw.close()

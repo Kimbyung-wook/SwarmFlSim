@@ -1,4 +1,4 @@
-"""TC-GW-009: Gateway는 swarm/<gcs>/rx/**만 구독하고 swarm/<gcs>/tx/c2/**에만 발행한다 (DEC-068)"""
+"""TC-GW-009: Gateway는 swarm/<gcs>/rx/**와 sim/ctrl/scenario(D-35)만 구독하고 swarm/<gcs>/tx/c2/**에만 발행한다 (DEC-068)"""
 import asyncio
 
 import pytest
@@ -10,8 +10,8 @@ import samples as S
 
 
 def test_subscribes_only_gcs_rx(gateway, bus):
-    assert bus.subscribed == ["swarm/gcs-01/rx/**"]
-    for prefix in ("truth/", "onboard/", "link/", "sim/"):
+    assert bus.subscribed == ["swarm/gcs-01/rx/**", "sim/ctrl/scenario"]   # 시나리오는 알려진 기체 목록용 (D-35)
+    for prefix in ("truth/", "onboard/", "link/", "sim/clock", "sim/param", "sim/ctrl/cmd", "sim/ctrl/status"):
         assert not any(k.startswith(prefix) for k in bus.subscribed)
 
 
@@ -32,7 +32,7 @@ def test_publishes_only_gcs_tx_c2(gateway, bus):
     for m in S.EXPORT_SAMPLES.values():
         S.deliver(bus, m())
     gateway.handle_external("MA_TaskCommand", _task_command(gateway))
-    own = [k for k in bus.published if not k.startswith("swarm/gcs-01/rx/")]   # 시험이 주입한 rx 제외
+    own = [k for k in bus.published if not k.startswith(("swarm/gcs-01/rx/", "sim/ctrl/"))]   # 시험이 주입한 rx·시나리오 제외
     assert own == ["swarm/gcs-01/tx/c2/TaskCommand"]      # 임무 계획까지 보낸 경우는 TC-GW-026
 
 
