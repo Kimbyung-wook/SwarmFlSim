@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043, TC-QA-158~161, TC-QA-164~172 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, IMP-UI-076, IMP-AGT-032~035, IMP-CORE-028 | TC-GW-001~027, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, TC-CORE-043, TC-QA-158~161, TC-QA-164~172, TC-QA-173~177 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -286,6 +286,11 @@
 | TC-QA-170 | 적합성 C7 판정: 버스 직접 열기 실패, docs/46 해당·부분 근거 파일·DEC 없음은 실패, 요약 건수 불일치는 정보. 발견 대응·반복 비교 수치 제거 | `qa/conformance/tests/test_judges.py` | DEC-092, DEC-093 |
 | TC-QA-171 | 결과 파일 쓰기: Windows `os.replace` PermissionError 재시도, 끝내 실패해도 예외 없이 임시 파일 정리 | `qa/conformance/tests/test_judges.py` | DEC-092 |
 | TC-QA-172 | 표준 적합성 점검 도구 실제 실행(lockstep 고정 시드, 2회 반복) → `docs/45_standards_report.md` | `qa/conformance/run.py` | DEC-092, DEC-093, REQ-STD-001 |
+| TC-QA-173 | C1 범위 구분: 계약 §3.2 키 표·§3.3 swarm 규칙에서 기체 내부 STD를 도출, 기체 내부는 변환기 없음을 실패로 보지 않음, 실제 계약에서 D-38 5종이 기체 내부 | `qa/conformance/tests/test_history.py` | DEC-094, REQ-STD-001 |
+| TC-QA-174 | 점검 이력 한 줄의 필드(대상 커밋·dirty·계약·agra_lacal·기준·도구 커밋·시드·반복·C1~C7·발견), 없는 값은 미확인, 덧붙이기만 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
+| TC-QA-175 | docs/47 표: 이전 실행과 바뀐 판정 표시, 발견 처음·마지막 재현·사라짐·상태, 발견 모르는 실행 건너뜀, 표 3개 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
+| TC-QA-176 | 소급 기록: result.json에서 이력 한 줄, 29차 실행이 첫 줄 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
+| TC-QA-177 | 점검 조건 변경 이력: docs/44·qa/conformance를 바꾼 커밋(병합 제외)과 관련 DEC를 git에서 얻음 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
 
 ## 시험 결과
 
@@ -483,6 +488,11 @@
 | TC-QA-170 | 통과 | 2026-11-17 | 위반 입력 3종 실패, 해당없음 행 근거는 보지 않음 (§37.4) |
 | TC-QA-171 | 통과 | 2026-11-17 | 2회 실패 뒤 성공, 계속 실패 시 False·임시 파일 없음 (§37.4) |
 | TC-QA-172 | 측정 | 2026-11-17 | C4 통과, C1·C2·C3·C5·C6 실패(D-35~39), C7 정보. 2회 판정 같음 (§37) |
+| TC-QA-173 | 자동 | 2026-11-18 | 통과. 실제 계약에서 기체 내부 = EngagementCriteria·SensorCommand·JammerCommand·StrikeCommand·FlightCommand(+MissionPlan은 변환기 있어 정보). 29차 자료 재판정 C1 통과 (§38) |
+| TC-QA-174 | 자동 | 2026-11-18 | 통과 (§38) |
+| TC-QA-175 | 자동 | 2026-11-18 | 통과 (§38) |
+| TC-QA-176 | 자동 | 2026-11-18 | 통과. history.jsonl 첫 줄 = 29차(b80a848) (§38) |
+| TC-QA-177 | 자동 | 2026-11-18 | 통과 (§38) |
 
 ## 프로세스 결정
 
