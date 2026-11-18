@@ -12,7 +12,7 @@ import math
 from swarm.v1 import vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
-from .common import LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, LostLinkGuard, TrackSharer, assigned_task
+from .common import LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, CommandIds, LostLinkGuard, TrackSharer, assigned_task
 
 LOST_LINK_ORBIT_M = 300.0     # orbit_radius_m이 0일 때 링크 상실 선회 반경
 
@@ -27,6 +27,7 @@ class Hold(MissionAutonomy):
 
     def on_init(self, ctx: AgentContext) -> None:
         self.sent = False
+        self.ids = CommandIds()       # 보낼 때마다 새 ID: 대신된 명령의 ID를 다시 쓰지 않는다 (D-37)
         self.orbit_radius_m = float(ctx.params.get("orbit_radius_m", 0.0))
         self.link = LostLinkGuard(ctx)
         self.cmd: vi_pb2.FlightCommand | None = None
@@ -49,11 +50,16 @@ class Hold(MissionAutonomy):
         if action == "hold":
             self.link.orbit_here(nav, self.orbit_radius_m or LOST_LINK_ORBIT_M)
         elif action == "resume" and self.cmd is not None:
-            ctx.ports.vi.command(self.cmd)
+            # 선회가 대신해 끝난(CANCELLED) ID는 다시 쓰지 않는다 (D-37)
+            cmd = vi_pb2.FlightCommand()
+            cmd.CopyFrom(self.cmd)
+            cmd.command_id = self.ids.new(f"{ctx.entity_id}-hold")
+            ctx.ports.vi.command(cmd)
+            self.cmd = cmd
         if self.link.held or self.sent or nav is None:
             return
         k = nav.kinematics
-        cmd = vi_pb2.FlightCommand(command_id=f"{ctx.entity_id}-hold")
+        cmd = vi_pb2.FlightCommand(command_id=self.ids.new(f"{ctx.entity_id}-hold"))
         speed = math.hypot(k.velocity_ned_mps.x, k.velocity_ned_mps.y)
         if self.orbit_radius_m > 0:
             o = cmd.curve.orbit

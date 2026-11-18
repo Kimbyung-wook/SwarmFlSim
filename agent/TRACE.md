@@ -165,7 +165,7 @@ flowchart LR
 | TC-AGT-137 | 링크 복구: 평소·시간 제한 안 공백은 재송신 없음, 상실 뒤 복구 시 SystemStatus·StoreLoadout·FlightCapability 한 번씩, `lost_link_timeout_s` 반영. 모두 켠 lockstep 실행 2회의 GCS 수신이 바이트 단위로 같음 | `tests/test_agent_agra.py` | IMP-AGT-046~049 | Pass |
 | TC-AGT-138 | 시작 계획(O-45): waypoint·flocking 모두 미지원 strike는 REJECTED(`unsupported task strike`)를 첫 보고로 한 번, 종류 없는 작업도 REJECTED, 지원 작업은 ACCEPTED, require_approval이어도 ApprovalRequest 없음, 배정 안 된 기체는 보고 안 함. lockstep 2회 GCS 수신 바이트 동일 | `tests/test_agent_agra.py` | IMP-AGT-050 | Pass |
 
-시험 결과(2026-11-16): agent 118, algorithms 102 passed
+시험 결과(2026-11-18): agent 118, algorithms 105 passed
 
 ## FA 성능 측정 (IMP-AGT-010)
 

@@ -26,7 +26,7 @@ from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_agent.geo import ned_offset, offset_geo
 
-from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, PlanWatcher, TaskPilot, TrackSharer,
+from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, CommandIds, PlanWatcher, TaskPilot, TrackSharer,
                      assigned_task, every, peer_status)
 
 F = c2_pb2
@@ -101,6 +101,7 @@ class Formation(MissionAutonomy):
         self.term = 0                  # 리더 변경 횟수 (LeaderUpdate.term)
         self._announce = False         # 다음 틱에 LeaderUpdate를 보낸다
         self.tracks = TrackSharer(ctx)
+        self.ids = CommandIds()        # 끝 상태에 이른 command_id를 다시 쓰지 않는다 (D-37)
         self.group = p.get("group")
         self.plans = PlanWatcher(ctx)
         self._apply_plan(ctx, self.plans.initial)
@@ -134,6 +135,7 @@ class Formation(MissionAutonomy):
             self._announce = self.leader == self._id
         self.offsets = slot_offsets(cmd, self.leader)
         self._leader_init = False
+        self.ids.end()
         self.pilot.link.release()
 
     @property
@@ -163,7 +165,8 @@ class Formation(MissionAutonomy):
         if self.is_leader:
             if not self._leader_init and nav is not None:
                 self._leader_init = True
-                cmd = vi_pb2.FlightCommand(command_id=f"{ctx.entity_id}-fmn-lead")
+                cmd = vi_pb2.FlightCommand(command_id=self.ids.new(f"{ctx.entity_id}-fmn-lead"))
+                self.ids.end()            # 뒤이은 작업 명령이 이 명령을 대신한다
                 cmd.hsa.speed_mps = self.leader_speed
                 ctx.ports.vi.command(cmd)
             self.pilot.step(other)
@@ -174,6 +177,7 @@ class Formation(MissionAutonomy):
                 link.release()
             if link.update(other, nav is not None) == "hold":
                 link.orbit_here(nav, self.pilot.hold_radius_m)
+                self.ids.end()            # 선회가 추종 명령을 대신했다. 재개하면 새 ID
             if nav is not None and not link.held:
                 self._follow(ctx, nav)
 
@@ -185,10 +189,9 @@ class Formation(MissionAutonomy):
     def _follow(self, ctx: AgentContext, nav: vi_pb2.NavigationReport) -> None:
         ls = self.peers.get(self.leader)
         age = ctx.sim_time_s - ls.header.sim_time_us * 1e-6 if ls is not None else math.inf
-        cmd = vi_pb2.FlightCommand(command_id=f"{ctx.entity_id}-fmn-{self.cmd.group_id}")
         if age > self.timeout_s:
-            ctx.ports.vi.command(cmd)  # 빈 HSA: 현재 목표 유지
-            return
+            return  # 리더 정보가 없거나 오래됐다: 명령을 내지 않아 FA가 지금 목표를 유지한다 (D-37)
+        cmd = vi_pb2.FlightCommand(command_id=self.ids.current(f"{ctx.entity_id}-fmn-{self.cmd.group_id}"))
         k = ls.kinematics
         vn, ve = k.velocity_ned_mps.x, k.velocity_ned_mps.y
         if math.hypot(vn, ve) > 1.0:

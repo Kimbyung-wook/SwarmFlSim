@@ -1,5 +1,5 @@
-"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038, IMP-AGT-046~047): 작업 추적·승인, 작업 → 비행 구간, PeerStatus,
-TrackShare, 링크 상실 행동.
+"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038, IMP-AGT-046~047, IMP-AGT-051): 작업 추적·승인, 작업 → 비행 구간,
+PeerStatus, TrackShare, 링크 상실 행동, 비행 명령 ID.
 
 플러그인은 ctx.ports로만 송수신한다 (DEC-013). 여기 함수들도 ctx 밖의 상태를 보지 않는다.
 """
@@ -101,6 +101,35 @@ class PlanWatcher:
             return None
         self._seen.add(plan.plan_id)
         return plan
+
+
+class CommandIds:
+    """같은 목적의 FlightCommand 흐름에 command_id를 낸다 (IMP-AGT-051, D-37).
+
+    흐름이 이어지는 동안 current()는 같은 ID를 돌려줘 FA가 목표만 갱신한다. 다른 명령으로 바뀌었거나(선회·작업 명령)
+    흐름을 다시 시작할 때 end()를 부르면 다음 current()는 새 ID다. 끝 상태(취소·거부)에 이른 ID를 다시 쓰지 않기 위해서다.
+    첫 ID는 base 그대로, 같은 base의 다음 흐름은 base-2, base-3 순이다.
+    """
+
+    def __init__(self) -> None:
+        self._n: dict[str, int] = {}
+        self._id: str | None = None
+        self._base = ""
+
+    def current(self, base: str) -> str:
+        if self._id is None or self._base != base:
+            n = self._n.get(base, 0) + 1
+            self._n[base] = n
+            self._id, self._base = (base if n == 1 else f"{base}-{n}"), base
+        return self._id
+
+    def new(self, base: str) -> str:
+        """한 번 보내고 마는 명령의 ID. 지금 흐름을 끝내고 새 ID를 낸다"""
+        self.end()
+        return self.current(base)
+
+    def end(self) -> None:
+        self._id = None
 
 
 class LinkMonitor:
