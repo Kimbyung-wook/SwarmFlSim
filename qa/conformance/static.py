@@ -175,3 +175,95 @@ def conformance_limits(md: str) -> list[str]:
     """docs/44 §4 한계 → 항목 문구(앞의 '- ' 제외). 보고서 한계 절에 그대로 싣는다"""
     sec = md.split("## 4. 한계", 1)[1].split("\n## ", 1)[0]
     return [ln[2:].strip() for ln in sec.splitlines() if ln.startswith("- ")]
+
+
+# ---------------------------------------------------------------------------- C1 범위 구분 (DEC-094)
+CONTRACT_DOC = ROOT / "docs" / "10_contracts.md"
+PROTO_DIR = ROOT / "proto" / "swarm" / "v1"
+SCALARS = {"double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64",
+           "sfixed32", "sfixed64", "bool", "string", "bytes"}
+
+
+def proto_fields(src: Path = PROTO_DIR) -> dict[str, set[str]]:
+    """proto 파일 → {메시지 짧은 이름: 필드 메시지 타입 짧은 이름 집합}. 중첩 메시지·map·oneof 안 필드도 센다(얕은 파서)"""
+    out: dict[str, set[str]] = {}
+    for f in sorted(src.glob("*.proto")):
+        stack: list[str] = []
+        for raw in f.read_text(encoding="utf-8").splitlines():
+            ln = raw.split("//", 1)[0].strip()
+            m = re.match(r"(message|enum|oneof)\s+(\w+)\s*\{", ln)
+            if m:
+                stack.append(m.group(2) if m.group(1) == "message" else ("" if m.group(1) == "enum" else "@"))
+                if m.group(1) == "message":
+                    out.setdefault(m.group(2), set())
+                continue
+            if ln.startswith("}"):
+                if stack:
+                    stack.pop()
+                continue
+            owner = next((s for s in reversed(stack) if s != "@"), None)
+            if not owner:
+                continue
+            fm = re.match(r"(?:repeated\s+|optional\s+)?(?:map<\s*\w+\s*,\s*([\w.]+)\s*>|([\w.]+))\s+\w+\s*=\s*\d+", ln)
+            if fm:
+                t = (fm.group(1) or fm.group(2)).split(".")[-1]
+                if t not in SCALARS:
+                    out[owner].add(t)
+    return out
+
+
+def _bullet_blocks(md: str) -> list[str]:
+    """§3.3 규칙의 최상위 글머리('- ')와 그 하위 줄을 한 덩어리로 묶는다"""
+    sec = md.split("### 3.3", 1)[1].split("\n### ", 1)[0]
+    blocks: list[list[str]] = []
+    for ln in sec.splitlines():
+        if ln.startswith("- "):
+            blocks.append([ln])
+        elif ln.startswith((" ", "\t")) and blocks:
+            blocks[-1].append(ln)
+    return ["\n".join(b) for b in blocks]
+
+
+def contract_scope(md: str, shorts: list[str], fields: dict[str, set[str]]) -> dict[str, dict]:
+    """계약 키 표(§3.2)와 §3.3 규칙에서 STD 메시지의 범위를 가른다 (DEC-094, docs/44 C1 '범위 구분').
+
+    - 키 표의 메시지 칸이 이름(`SystemStatus`), 끝 맞춤 패턴(`*Command`), 또는 그 메시지의 필드(`Scenario` → EngagementCriteria)로
+      메시지를 가리키는 키를 모은다. `swarm/**` 행은 `LinkEnvelope`라 메시지를 가리키지 않는다.
+    - §3.3 글머리 덩어리 중 `swarm/` 키가 있는 덩어리에 메시지 이름이 나오면 GCS 경계 근거로 본다.
+    - 반환 {short: {named_keys: [키], swarm_ctx: [덩어리 첫 줄], inside: bool}}. inside는 swarm 밖 키만 가리키고 swarm 근거가 없을 때 참.
+      Gateway 변환기 유무는 여기서 보지 않는다(판정 함수가 본다).
+    """
+    rows = []
+    sec = md.split("### 3.2 키 목록", 1)[1].split("### 3.3", 1)[0]
+    for ln in sec.splitlines():
+        if not ln.startswith("| `"):
+            continue
+        c = [x.strip() for x in ln.strip().strip("|").split("|")]
+        rows.append((c[0].strip("`"), re.findall(r"`([*\w]+)`", c[1])))
+    blocks = [b for b in _bullet_blocks(md) if "swarm/" in b]
+    out: dict[str, dict] = {}
+    for s in shorts:
+        named = []
+        for key, names in rows:
+            if key.startswith("swarm/"):
+                continue
+            for n in names:
+                hit = (n == s) or (n.startswith("*") and s.endswith(n[1:]) and len(s) > len(n) - 1) \
+                    or (n in fields and s in _closure(n, fields))
+                if hit:
+                    named.append(key)
+                    break
+        ctx = [b.splitlines()[0].lstrip("- ").strip()[:80] for b in blocks if re.search(rf"(?<![A-Za-z0-9]){re.escape(s)}(?![A-Za-z0-9])", b)]
+        out[s] = {"named_keys": named, "swarm_ctx": ctx, "inside": bool(named) and not ctx}
+    return out
+
+
+def _closure(root: str, fields: dict[str, set[str]]) -> set[str]:
+    seen, todo = set(), [root]
+    while todo:
+        x = todo.pop()
+        for t in fields.get(x, ()):
+            if t not in seen:
+                seen.add(t)
+                todo.append(t)
+    return seen

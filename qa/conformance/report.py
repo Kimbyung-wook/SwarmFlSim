@@ -67,6 +67,8 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     L.append("")
     for f in R["findings"]:
         L.append(f"- **{f['id']}** {f['detail']}")
+        if f.get("resolution"):
+            L.append(f"  - 조치: {f['resolution']}")
         for h in f["hits"][:4]:
             L.append(f"  - 판정 문구: {h}")
     L.append("")
@@ -124,15 +126,33 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
              f"EXT {s['ext']}, SIM {s['sim']}. 상태별 행 수 {s['status']}.")
     L.append("")
     L.append("구현·시험됨 = 변환기가 있고 이번 실행에서 외부와 실제로 오갔고 gateway/TRACE.md에 IMP·TC가 있다. 부분 = 변환기는 있으나 "
-             "셋 중 하나가 없다. 미구현은 실패가 아니다(범위 표시).")
+             "셋 중 하나가 없다. 미구현은 실패가 아니다(범위 표시). "
+             f"{J.INSIDE} = GCS 경계를 넘지 않는 STD라 변환기 없음을 실패로 보지 않는다(DEC-094).")
     L.append("")
-    L += table(["L1", "상호작용", "UCI 메시지", "방향", "구분", "내부 메시지", "변환기", "구현 ID", "시험 ID", "상태"],
-               [[x["l1"], x["interaction"], x["uci"], x["dir"], x["cls"], x["internal"], x["converter"], x["imp"], x["tc"],
-                 x["status"]] for x in r1["rows"]])
+    L += table(["L1", "상호작용", "UCI 메시지", "방향", "구분", "범위", "내부 메시지", "변환기", "구현 ID", "시험 ID", "상태"],
+               [[x["l1"], x["interaction"], x["uci"], x["dir"], x["cls"], x.get("scope", "—"), x["internal"], x["converter"],
+                 x["imp"], x["tc"], x["status"]] for x in r1["rows"]])
     L.append("")
+    sc = r1.get("scope") or {}
+    if sc:
+        L.append("범위 구분(DEC-094, 기준 C1 '범위 구분'): 계약 docs/10_contracts.md §3.2 키 표의 메시지 칸(이름, `*Command` 같은 끝 "
+                 "맞춤, 그 메시지의 필드)이 가리키는 키를 모으고, §3.3 글머리 중 `swarm/` 키가 있는 덩어리에 이름이 나오는지 본다. "
+                 "swarm 밖 키로만 오가고 swarm 근거도 Gateway 변환기도 없으면 기체 내부다. 목록을 손으로 두지 않는다.")
+        L.append("")
+        L += table(["STD 메시지", "swarm 밖 키", "swarm 근거(§3.3)", "범위"],
+                   [[k, ", ".join(v.get("named_keys", [])) or "—", "; ".join(v.get("swarm_ctx", [])) or "—",
+                     "기체 내부" if v["inside_eff"] else ("GCS 경계(변환기 있음)" if v.get("inside") else "GCS 경계")]
+                    for k, v in sc.items() if v.get("named_keys") or v["inside_eff"]])
+        L.append("")
+        L.append("- 표에 없는 STD 메시지는 키 표가 swarm 밖 키로 가리키지 않아 `swarm/**`(LinkEnvelope)로 오가는 GCS 경계로 본다.")
+        L.append("")
     if r1["fail"]:
         L.append("실패 사유:")
         L += [f"- {t}" for t in r1["fail"]]
+        L.append("")
+    for t in r1.get("info", []):
+        L.append(f"- 정보: {t}")
+    if r1.get("info"):
         L.append("")
     # 5. C2
     r2 = res["C2"]

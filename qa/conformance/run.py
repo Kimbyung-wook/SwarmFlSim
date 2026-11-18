@@ -6,6 +6,7 @@ uv run python qa/conformance/run.py --out qa/out/conformance/<날짜>
    open_bus 소스 점검
 2. 점검 실행(harness_run.py): lockstep 고정 시드. --repeat N이면 같은 커밋으로 N번 돌려 판정이 같은지 비교한다
 3. 판정(judges.py) → <out>/result.json, <out>/c1_table.json, docs/45_standards_report.md (--no-doc이면 <out>/report.md만)
+4. 이력(history.py, DEC-095) → qa/conformance/history.jsonl에 한 줄 덧붙이고 docs/47_conformance_history.md를 다시 만든다
 
 옵션: --reuse <폴더>  점검 실행 없이 이전 실행 폴더(run1 등)를 다시 판정한다
 """
@@ -23,6 +24,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import analyze as A  # noqa: E402
 import findings as F  # noqa: E402
+import history as H  # noqa: E402
 import judges as J  # noqa: E402
 import report  # noqa: E402
 import static  # noqa: E402
@@ -106,8 +108,10 @@ def main() -> int:  # noqa: PLR0915
         res, extra = judge_run(rd, st)
         all_res.append((res, extra))
     res, extra = all_res[0]
+    std_shorts = [p["short"] for p in gwd["proto"] if p["mapping"] == "STD"]
+    scope = static.contract_scope(static.CONTRACT_DOC.read_text(encoding="utf-8"), std_shorts, static.proto_fields())
     res["C1"] = J.judge_c1(gwd["proto"], st["xsd"], gwd["converters"], gwd["also_converters"], st["registry"],
-                           st["trace"], gwd["effective_import"], extra["observed"])
+                           st["trace"], gwd["effective_import"], extra["observed"], scope)
     direct, entries = static.bus_open_scan()
     loadout = [f"{x['uci']} ({x['internal']}, {x['dir']}, {x['status']})" for x in res["C1"]["rows"]
                if x["l1"] == "MS" and x["uci"] in ("StoreLoadoutConfiguration", "StrikeActivity")]
@@ -162,6 +166,10 @@ def main() -> int:  # noqa: PLR0915
     if not a.no_doc:
         REPORT_DOC.write_text(md, encoding="utf-8", newline="\n")
         print(f"[conf] 보고서 → {REPORT_DOC.relative_to(ROOT)}", flush=True)
+        # DEC-095: 실행마다 이력 한 줄을 덧붙이고 docs/47을 다시 만든다 (--no-doc 실행은 남기지 않는다)
+        H.append(H.make_entry(R, repeat=len(all_res), mode="reuse" if a.reuse else "run"))
+        H.write_doc()
+        print(f"[conf] 이력 → {H.HISTORY.relative_to(ROOT)}, {H.HISTORY_DOC.relative_to(ROOT)}", flush=True)
     for k, _ in report.ITEMS:
         print(f"[conf] {k} {res[k]['verdict']}  {R['key'][k]}", flush=True)
     print(f"[conf] 미분류 실패 {len(loose)}, 걸린 시간 {R['meta']['elapsed_s']} s", flush=True)
