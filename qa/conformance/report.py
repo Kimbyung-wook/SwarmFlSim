@@ -260,11 +260,12 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     L.append("## 8. C5 상호작용 상태 흐름")
     L.append("")
     L.append(f"판정: **{r5['verdict']}**. 허용 전이 표(도구 `judges.py`에 있는 그대로). 같은 상태 반복은 허용(변화 보고 재송신), "
-             "끝 상태 뒤 다른 상태는 위반.")
+             "끝 상태 뒤 다른 상태는 위반. '끝 상태 뒤 반복도 위반' 표시가 있는 표는 끝 상태 뒤 같은 상태 반복도 위반(DEC-097).")
     L.append("")
     for name, t in r5["tables"].items():
         L.append(f"- {name}: " + "; ".join(f"{'(첫 보고)' if a == 'None' else a} → {', '.join(b)}"
-                                          for a, b in t["transitions"].items()) + f". 끝 상태 {', '.join(t['terminal'])}")
+                                          for a, b in t["transitions"].items()) + f". 끝 상태 {', '.join(t['terminal'])}"
+                 + (". 끝 상태 뒤 반복도 위반" if t.get("strict_terminal") else ""))
     L.append("")
     L += table(["표", "대상 수", "위반 대상"], [[k, x["targets"], ", ".join(x["bad"]) or "없음"] for k, x in r5["seq"].items()])
     L.append("")
