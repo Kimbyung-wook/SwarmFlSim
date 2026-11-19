@@ -118,3 +118,5 @@
 | 2026-11-18 | `a1c8a57` | DEC-096, OPN-069, OPN-070 | 계약 §3.2 `sim/ctrl/scenario` 구독자에 Gateway(읽기만). 모의 시각 기준 시각 OPN-070 미결 등록 | 없음 | 미처리 | |
 | 2026-11-18 | `9fb27f5` | TC-QA-178, DEC-092, DEC-095 | QA 31차 재점검(2ee7ebb, 2회 같음): C1·C2·C3·C4·C6 통과, C5 실패(O-47만), C7 정보. D-35~39 해소. docs/47 실행 이력 2행 | 없음 | 미처리 | |
 | 2026-11-19 | `da9287c` | DEC-097, O-47, REQ-STD-001 | 외부 명령 상태를 UCI Command-2 상태 기계로: ACCEPTED·REJECTED·CANCELED 끝 상태, 끝 상태 뒤 보고 금지, 첫 보고 CANCELLED 허용. docs/44 C5 명령 상태 행 | 표준 점검(C5 판정 기준) | 미처리 | |
+| 2026-11-19 | `ee7aad2` | IMP-GW-032, TC-GW-039~041, DEC-097 | WP9: 외부 명령 상태는 ID별 끝 상태 한 번만, 끝 상태 뒤 보고 안 냄. 재기동 뒤 동작은 gateway/README | 없음 | 미처리 | |
+| 2026-11-19 | `095abb3` | TC-QA-179~181, DEC-097 | QA 32차 준비: C5 외부 명령 전이 표를 Command-2로, 내부 첫 보고 CANCELLED 허용(O-47 해소) | 없음 | 미처리 | |
