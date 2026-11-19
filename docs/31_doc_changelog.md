@@ -117,3 +117,4 @@
 | 2026-11-18 | `f1f632a` | IMP-AGT-051, TC-AGT-139~141 | WP3: 끝 상태에 이른 FlightCommand ID 재사용 금지, 편대 추종기가 리더 정보 없으면 명령 안 냄(D-37) | 없음 | 미처리 | |
 | 2026-11-18 | `a1c8a57` | DEC-096, OPN-069, OPN-070 | 계약 §3.2 `sim/ctrl/scenario` 구독자에 Gateway(읽기만). 모의 시각 기준 시각 OPN-070 미결 등록 | 없음 | 미처리 | |
 | 2026-11-18 | `9fb27f5` | TC-QA-178, DEC-092, DEC-095 | QA 31차 재점검(2ee7ebb, 2회 같음): C1·C2·C3·C4·C6 통과, C5 실패(O-47만), C7 정보. D-35~39 해소. docs/47 실행 이력 2행 | 없음 | 미처리 | |
+| 2026-11-19 | `da9287c` | DEC-097, O-47, REQ-STD-001 | 외부 명령 상태를 UCI Command-2 상태 기계로: ACCEPTED·REJECTED·CANCELED 끝 상태, 끝 상태 뒤 보고 금지, 첫 보고 CANCELLED 허용. docs/44 C5 명령 상태 행 | 표준 점검(C5 판정 기준) | 미처리 | |
