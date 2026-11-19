@@ -42,12 +42,12 @@ def _none(m: Message) -> tuple:
 
 
 # 보관하는 변화 보고 (내부 메시지 전체 이름 → 키 규칙). 주기 보고(NavigationReport, PeerStatus)와
-# 사건성 메시지(ApprovalRequest, LeaderUpdate, TrackShare)는 넣지 않는다
+# 사건성 메시지(ApprovalRequest, LeaderUpdate, TrackShare)는 넣지 않는다.
+# FlightCommandStatus(MA_FlightCommandStatus)도 넣지 않는다: 외부 명령 상태는 끝 상태 뒤 다시 내지 않는다(DEC-097).
+# 다시 PUB하면 OWP에 수신자 지정이 없어 기존 구독자에게 같은 CommandID 보고가 한 번 더 간다
 RETAINED: dict[str, RetainRule] = {
     "swarm.v1.SystemStatus": RetainRule(_none),                                  # 기체당 하나 (DEC-071)
     "swarm.v1.FlightCapability": RetainRule(_none),                              # 시작 시 1회 (DEC-071)
-    "swarm.v1.FlightCommandStatus": RetainRule(lambda m: (m.command_id,),
-                                               lambda m: m.state in COMMAND_TERMINAL),
     "swarm.v1.SensorActivity": RetainRule(lambda m: (m.payload_id,)),            # DEC-051, DEC-056
     "swarm.v1.JammerActivity": RetainRule(lambda m: (m.payload_id,)),
     "swarm.v1.StrikeActivity": RetainRule(lambda m: (m.payload_id, m.weapon_entity),   # DEC-063

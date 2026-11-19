@@ -98,11 +98,20 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 ### 늦게 붙은 외부 시스템 (DEC-089)
 
 - 변화 보고는 값이 바뀔 때만 나간다. Gateway는 내보낸 변화 보고를 키별 마지막 값으로 들고 있다가, 외부 시스템이 그 메시지를 새로 구독하면 한 번 다시 보낸다.
-- 대상: `SystemStatus`, `MA_FlightCapability`, `MA_FlightCommandStatus`(명령별), `PO_Activity`·`EA_Activity`(장비별), `StrikeActivity`(무장별), `StoreLoadoutConfiguration`, `MA_TaskStatus`(작업별). 종료 상태가 된 명령·작업·무장은 지운다.
+- 대상: `SystemStatus`, `MA_FlightCapability`, `PO_Activity`·`EA_Activity`(장비별), `StrikeActivity`(무장별), `StoreLoadoutConfiguration`, `MA_TaskStatus`(작업별). 종료 상태가 된 작업·무장은 지운다. `MA_FlightCommandStatus`는 다시 보내지 않는다(명령 상태 규칙, DEC-097).
 - 주기 보고(`MA_NavigationReport`, `MA_PositionReport`, `MA_PackagePartnerStatusReport`)와 `MA_ApprovalRequest`, `MA_LeaderUpdateRequest`, `MA_Entity`는 다시 보내지 않는다.
 - 구독 시점은 CAL Server 관리 포트의 그래프 이벤트(`/graph/events`)로 안다. OWP에는 구독 알림이 없기 때문이다. 관리 포트에 붙지 못하면 경고를 남기고 2 s마다 다시 시도한다. 나머지 동작은 그대로다.
 - 다시 보낸 값은 같은 토픽의 기존 구독자에게도 한 번 더 간다. Gateway가 재기동하면 보관 값이 없다.
 - 외부 상태 표현은 공개 XSD enum 그대로다 (DEC-090). `MA_FlightCommandStatus`에는 EXECUTING·COMPLETED가 없어 ACCEPTED로 보이므로 수행·완료는 `MA_TaskStatus`에서 읽는다.
+
+### 명령 상태 (DEC-097)
+
+- `MessageData`에 `CommandID`와 `CommandProcessingState`가 있는 메시지(지금은 `MA_FlightCommandStatus`)는 UCI Command-2 상태 기계를 따른다. ACCEPTED·REJECTED·CANCELED가 끝 상태다.
+- 한 (보고 기체, CommandID)에 끝 상태를 한 번 내면 그 ID의 상태는 더 내지 않는다. 내부의 이후 EXECUTING·COMPLETED·CANCELLED·FAILED와 같은 끝 상태 반복도 내지 않는다(카운터 `skipped_command_state`). RECEIVED 반복도 내지 않는다.
+- 첫 보고는 무엇이든 낸다. 접수 전에 대체된 명령의 첫 CANCELED, 처음 본 보고가 EXECUTING인 명령의 ACCEPTED가 그렇다.
+- 늦게 붙은 외부 시스템에 다시 보내지 않는다. 다시 보낸 값은 기존 구독자에게도 가서 같은 ID의 두 번째 보고가 되기 때문이다.
+- Gateway가 재기동하면 끝난 ID를 기억하지 못한다. 재기동 뒤 처음 보는 ID의 보고는 첫 보고로 보고 한 번 낸다. 그래서 재기동 앞뒤로 같은 끝 상태가 ID당 최대 한 번 더 나갈 수 있다. 그 뒤는 다시 막는다. 외부는 재기동 전 끝 상태를 받은 ID의 다음 보고를 무시하면 된다.
+- 수행 상태(`MA_FlightActivity`)는 내지 않는다.
 
 ### UCI 시각 (D-36)
 
@@ -189,6 +198,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms, mp)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
 | `src/swarm_gateway/gateway.py` | 1단계·2단계 처리, 카운터, 거부 기록 |
 | `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결) |
+| `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |
 | `src/swarm_gateway/__main__.py` | 진입점 |

@@ -24,6 +24,7 @@ from swarm_api.bus import Bus, Sample, protobuf_encoding
 from .converters import (AlsoConverter, ConvContext, ConversionError, Converter, load_also_converters,
                          load_converters)
 from .converters.base import SimClock
+from .command_state import CommandStateGate
 from .entities import KnownEntities
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
@@ -89,7 +90,8 @@ class Gateway:
         self.ids = ids or IdMap()
         self.clock = SimClock(config.sim_epoch)
         self.ctx = ConvContext(ids=self.ids, gcs=config.gcs, clock=self.clock)
-        self.entities = KnownEntities(config.gcs)   # 외부 명령이 가리킬 수 있는 기체 (D-35)
+        self.entities = KnownEntities(config.gcs)
+        self.commands = CommandStateGate()   # 외부 명령 상태 상태 기계 (DEC-097)   # 외부 명령이 가리킬 수 있는 기체 (D-35)
         self.sink = sink
         self.system_uuid = OFFLINE_SYSTEM_UUID
         self.counters: Counter[str] = Counter()
@@ -241,6 +243,12 @@ class Gateway:
             self.counters["invalid"] += 1
             return self._reject(Outcome("rejected", proto=entry.full_name, uci_name=uci, key=key,
                                         reason=f"{type(exc).__name__}: {exc}"))
+        ok, why = self.commands.admit(uci, obj, msg.header.source)
+        if not ok:   # 끝 상태를 낸 CommandID의 이후 상태, RECEIVED 반복 (DEC-097)
+            self.counters["skipped_command_state"] += 1
+            log.debug("gateway: %s %s from %s not sent: %s", uci, getattr(msg, "command_id", ""),
+                      msg.header.source, why)
+            return Outcome("skipped_command_state", proto=entry.full_name, uci_name=uci, key=key, reason=why)
         topic = self.config.topic(entry.iface)
         self.counters["exported"] += 1
         self.counters[f"exported.{uci}"] += 1
