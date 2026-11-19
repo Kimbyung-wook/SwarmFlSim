@@ -166,6 +166,10 @@ def _entries():  # noqa: ANN202
     return [e1, e2, e3]
 
 
+def _between(a, b):  # noqa: ANN001, ANN202
+    return {("c1", "c2"): ["`k1` 기준"]}.get((a, b), [])
+
+
 def test_run_rows_mark_changed_verdicts():
     rows = H.run_rows(_entries())
     c1 = 8                                        # #, 날짜, 폴더, 대상, 기준, 도구, 시드, 반복 다음
@@ -177,26 +181,27 @@ def test_run_rows_mark_changed_verdicts():
 
 
 def test_finding_rows_track_first_last_gone():
-    rows = {r[0]: r for r in H.finding_rows(_entries(), ["D-1", "D-2", "O-3", "O-9"])}
-    assert rows["D-1"][1:] == ["1 (`c1`)", "1 (`c1`)", "2 (`c2`)", "해소"]
-    assert rows["D-2"][1:] == ["1 (`c1`)", "3 (`c3`)", "—", "재현"]
-    assert rows["O-3"][1:] == ["3 (`c3`)", "3 (`c3`)", "—", "재현"]
+    rows = {r[0]: r for r in H.finding_rows(_entries(), ["D-1", "D-2", "O-3", "O-9"], _between)}
+    assert rows["D-1"][1:] == ["1 (`c1`)", "1 (`c1`)", "2 (`c2`)", "해소", "`k1` 기준", "제품 변경"]
+    assert rows["D-2"][1:] == ["1 (`c1`)", "3 (`c3`)", "—", "재현", "—", "—"]
+    assert rows["O-3"][1:] == ["3 (`c3`)", "3 (`c3`)", "—", "재현", "—", "—"]
     assert "O-9" not in rows                      # 한 번도 재현되지 않은 목록 항목은 싣지 않는다
 
 
 def test_finding_rows_skip_unknown_runs():
     es = _entries()
     es.insert(1, {**es[1], "findings": H.UNKNOWN, "commit": "cx"})   # 발견을 모르는 실행은 사라진 실행으로 치지 않는다
-    rows = {r[0]: r for r in H.finding_rows(es)}
+    rows = {r[0]: r for r in H.finding_rows(es, between=_between)}
     assert rows["D-1"][3] == "3 (`c2`)"
 
 
 def test_build_md_has_three_tables():
     md = H.build_md(_entries(), [{"commit": "k1", "date": "2026-11-18", "subject": "DEC-094 기준", "what": ["기준(docs/44)"],
-                                  "decs": ["DEC-094"]}], ["D-1"])
+                                  "decs": ["DEC-094"]}], ["D-1", "O-9"], _between)
     assert "## 1. 실행 이력" in md and "## 2. 점검 조건 변경 이력" in md and "## 3. 발견 추적" in md
     assert "| `k1` | 2026-11-18 | 기준(docs/44) | DEC-094 기준 | DEC-094 |" in md
     assert md.count("\n| 3 |") >= 1
+    assert "나온 적 없는 발견: O-9" in md
 
 
 # ------------------------------------------------------------------------------------------- TC-QA-176 소급 기록
@@ -235,3 +240,32 @@ def test_condition_changes_from_git():
     assert "도구(qa/conformance)" in ch["a904a3b"]["what"] and ch["a904a3b"]["decs"] == ["DEC-092", "DEC-093"]
     assert "6e0dd5c" not in ch                     # 병합 커밋은 뺀다
     assert all(c["what"] for c in ch.values())     # 이력 파일만 바꾼 커밋은 나오지 않는다
+
+
+# ------------------------------------------------------------------------------------------- TC-QA-182 해소 원인 구분
+
+def test_finding_gone_by_product_change_marked():
+    es = _entries()
+    rows = {r[0]: r for r in H.finding_rows(es, between=lambda a, b: [])}
+    assert rows["D-1"][5] == "없음(제품 변경)"
+    rows = {r[0]: r for r in H.finding_rows(es, between=lambda a, b: H.UNKNOWN)}
+    assert rows["D-1"][5] == H.UNKNOWN
+
+
+def test_changes_between_from_git():
+    """31차(2ee7ebb)와 32차 준비 병합(b763a74) 사이: 기준 da9287c(DEC-097), 도구 fd1b8e1. 병합 커밋은 없다"""
+    ch = H.changes_between("2ee7ebb", "b763a74")
+    assert "`fd1b8e1` 도구" in ch
+    assert not any(c.startswith(("`095abb3`", "`ee7aad2`", "`5e8cee7`")) for c in ch)
+    assert H.changes_between(H.UNKNOWN, "b763a74") == H.UNKNOWN
+    assert "`da9287c` 기준(DEC-097)" in ch
+
+
+def test_gone_cause_criteria_vs_product():
+    ch = ["`t1` 도구", "`k1` 기준(DEC-097)"]
+    assert H.gone_cause(ch, "DEC-097: 첫 보고 CANCELLED 허용") == "기준 변경(DEC-097 `k1`)"
+    assert H.gone_cause(ch, "") == "제품 변경"                       # 조치 DEC가 없으면 제품 변경
+    assert H.gone_cause(["`t1` 도구", "`k2` 기준(DEC-094)"], "DEC-097") == "제품 변경"
+    assert H.gone_cause(H.UNKNOWN, "DEC-097") == H.UNKNOWN
+    rows = {r[0]: r for r in H.finding_rows(_entries(), between=lambda a, b: ch, resolutions={"D-1": "DEC-097"})}
+    assert rows["D-1"][6] == "기준 변경(DEC-097 `k1`)"

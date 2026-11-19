@@ -117,6 +117,21 @@ def condition_changes() -> list[dict]:
     return out
 
 
+def changes_between(a: str, b: str) -> list[str] | str:
+    """두 실행 대상 커밋 사이(a..b)에 점검 조건(docs/44·qa/conformance, 이력 파일 제외)을 바꾼 커밋.
+    '`<해시>` 기준|도구', 기준 커밋에는 제목·본문의 DEC를 괄호에 붙인다(해소 원인 판단용)"""
+    if UNKNOWN in (a, b) or not a or not b:
+        return UNKNOWN
+    out = []
+    for h in git("log", "--no-merges", "--format=%h", f"{a}..{b}", "--", CRITERIA_PATH, TOOL_PATH, TOOL_EXCLUDE).split():
+        files = git("show", "--name-only", "--format=", h).splitlines()
+        what = (["기준"] if CRITERIA_PATH in files else []) + (
+            ["도구"] if any(f.startswith(TOOL_PATH + "/") and not f.endswith("history.jsonl") for f in files) else [])
+        decs = sorted(set(DEC_RE.findall(git("show", "-s", "--format=%s%n%b", h)))) if "기준" in what else []
+        out.append(f"`{h}` {'·'.join(what)}" + (f"({', '.join(decs)})" if decs else ""))
+    return out
+
+
 # ------------------------------------------------------------------------------------------------ docs/47
 
 def _cell(x) -> str:
@@ -159,8 +174,24 @@ def run_rows(entries: list[dict]) -> list[list]:
     return rows
 
 
-def finding_rows(entries: list[dict], known: list[str] | None = None) -> list[list]:
-    """발견 추적 표: 처음 나온 실행·커밋, 마지막 재현, 사라진 실행·커밋, 상태"""
+def gone_cause(changes: list[str] | str, resolution: str) -> str:
+    """해소 원인: 발견의 조치 문구(findings.py resolution)에 적힌 DEC가 사이의 기준 커밋 DEC와 겹치면 기준 변경, 아니면 제품 변경"""
+    if isinstance(changes, str):
+        return UNKNOWN
+    want = set(DEC_RE.findall(resolution or ""))
+    hit = []
+    for c in changes:
+        if "기준" in c:
+            h = c.split("`")[1]
+            hit += [f"{d} `{h}`" for d in DEC_RE.findall(c) if d in want]
+    return f"기준 변경({', '.join(hit)})" if hit else "제품 변경"
+
+
+def finding_rows(entries: list[dict], known: list[str] | None = None, between=None,  # noqa: ANN001
+                 resolutions: dict[str, str] | None = None) -> list[list]:
+    """발견 추적 표: 처음 나온 실행·커밋, 마지막 재현, 사라진 실행·커밋, 상태, 사라질 때 바뀐 점검 조건.
+    between(a, b): 두 대상 커밋 사이의 조건 변경 커밋 목록(기본 changes_between). 비어 있으면 제품 변경으로 사라진 것이다"""
+    between = between or changes_between
     ids: list[str] = []
     for i in known or []:
         if i not in ids:
@@ -180,12 +211,19 @@ def finding_rows(entries: list[dict], known: list[str] | None = None) -> list[li
                      if isinstance(entries[n - 1].get("findings"), list)), None)
         e1, el = entries[first - 1], entries[last - 1]
         status = "재현" if last == len(entries) else ("해소" if gone else UNKNOWN)
-        rows.append([fid, f"{first} (`{e1.get('commit', UNKNOWN)}`)", f"{last} (`{el.get('commit', UNKNOWN)}`)",
-                     f"{gone} (`{entries[gone - 1].get('commit', UNKNOWN)}`)" if gone else "—", status])
+        cond = cause = "—"
+        if gone:
+            ch = between(el.get("commit", UNKNOWN), entries[gone - 1].get("commit", UNKNOWN))
+            cond = ch if isinstance(ch, str) else (", ".join(ch) or "없음(제품 변경)")
+            cause = gone_cause(ch, (resolutions or {}).get(fid, ""))
+        rows.append([fid, f"{first} (`{e1.get('commit', UNKNOWN)}`)",
+                     f"{last} (`{el.get('commit', UNKNOWN)}`)",
+                     f"{gone} (`{entries[gone - 1].get('commit', UNKNOWN)}`)" if gone else "—", status, cond, cause])
     return rows
 
 
-def build_md(entries: list[dict], changes: list[dict], known: list[str] | None = None) -> str:
+def build_md(entries: list[dict], changes: list[dict], known: list[str] | None = None, between=None,  # noqa: ANN001
+             resolutions: dict[str, str] | None = None) -> str:
     L = ["# 표준 점검 이력 (DEC-095)", "",
          "이 문서는 `qa/conformance/history.py`가 `qa/conformance/history.jsonl`과 git 기록으로 만든다(손으로 고치지 않는다). "
          "기준은 [44_standards_conformance.md](44_standards_conformance.md) §6이고, 마지막 실행의 상세 결과는 "
@@ -217,17 +255,26 @@ def build_md(entries: list[dict], changes: list[dict], known: list[str] | None =
     L.append("")
     L += ["## 3. 발견 추적", "",
           "발견 ID는 `qa/conformance/findings.py`의 match 규칙으로 실행마다 같은 현상에 같은 ID가 붙는다. "
-          "상태: 재현 = 마지막 실행에서도 나왔다, 해소 = 나온 뒤 이후 실행에서 사라졌다.", ""]
-    L += _table(["발견", "처음 나온 실행 (커밋)", "마지막 재현 (커밋)", "사라진 실행 (커밋)", "상태"],
-                finding_rows(entries, known))
+          "상태: 재현 = 마지막 실행에서도 나왔다, 해소 = 나온 뒤 이후 실행에서 사라졌다. "
+          "'사이 조건 변경'은 마지막 재현 실행과 사라진 실행의 대상 커밋 사이에 점검 조건(2절)을 바꾼 커밋이다. "
+          "'해소 원인'은 발견의 조치 문구(`findings.py` resolution)에 적힌 DEC가 그 사이 기준 커밋의 DEC와 겹치면 "
+          "'기준 변경', 아니면 '제품 변경'이다.", ""]
+    frows = finding_rows(entries, known, between, resolutions)
+    L += _table(["발견", "처음 나온 실행 (커밋)", "마지막 재현 (커밋)", "사라진 실행 (커밋)", "상태", "사이 조건 변경",
+                 "해소 원인"], frows)
     L.append("")
+    never = [i for i in (known or []) if i not in {r[0] for r in frows}]
+    if never:
+        L += [f"도구 발견 목록에는 있지만 기록된 실행에서 나온 적 없는 발견: {', '.join(never)}. "
+              "기록 전 실행에서 나왔거나, 원자료 재판정에서만 나왔거나, 문서 항목이다(docs/21).", ""]
     return "\n".join(L) + "\n"
 
 
 def write_doc(entries: list[dict] | None = None, path: Path = HISTORY_DOC) -> str:
     import findings as F
     entries = load() if entries is None else entries
-    md = build_md(entries, condition_changes(), [f["id"] for f in F.FINDINGS])
+    md = build_md(entries, condition_changes(), [f["id"] for f in F.FINDINGS],
+                  resolutions={f["id"]: f.get("resolution", "") for f in F.FINDINGS})
     path.write_text(md, encoding="utf-8", newline="\n")
     return md
 

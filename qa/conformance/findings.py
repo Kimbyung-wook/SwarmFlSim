@@ -39,12 +39,14 @@ FINDINGS = [
      "detail": "gateway/config/lacal_server.yaml의 external_c2 declared.sub는 MA_TaskStatus·MA_NavigationReport 둘뿐이다. "
                "외부 클라이언트(gateway/README.md 교환 메시지 표대로)는 Gateway 발행 15흐름을 모두 구독해 받는다. "
                "accept_unknown_services=false여도 CAL Server는 선언 밖 구독을 막지 않는다."},
-    {"id": "D-40", "item": "C5", "wp": "WP9(Gateway)", "level": "낮음 (32차 미리보기, ID 가칭)",
+    {"id": "D-40", "item": "C5", "wp": "WP9(Gateway)", "level": "낮음",
      "match": ["MA_FlightCommandStatus(외부)", "허용 전이 밖 ACCEPTED→"],
      "title": "Gateway가 끝 상태 ACCEPTED를 보낸 CommandID에 상태를 더 보낸다(DEC-097)",
      "detail": "외부 MA_FlightCommandStatus에서 ACCEPTED 뒤 CANCELED(내부 CANCELLED를 그대로 냄)나 ACCEPTED 반복이 나온다. "
                "DEC-097은 ACCEPTED·REJECTED·CANCELED를 끝 상태로 두고, 같은 CommandID에 그 뒤 보고를 내지 않게 한다. "
-               "29·31차 원자료를 32차 도구로 다시 판정해 찾았다(실제 재점검 전)."},
+               "29·31차 원자료를 32차 도구로 다시 판정해 찾았다(실제 재점검 전).",
+     "resolution": "IMP-GW-032(ee7aad2): Gateway가 CommandID마다 끝 상태를 보낸 뒤 상태를 더 보내지 않는다. 32차 실행(2026-11-19)에서 "
+                   "나오지 않았다"},
     {"id": "O-47", "item": "C5", "wp": "WP4(FA)", "level": "매우 낮음",
      "match": ["fmn-lead: 허용 전이 밖 시작→CANCEL"],
      "title": "편대 리더 명령의 첫 상태 보고가 CANCELLED(superseded)다",
