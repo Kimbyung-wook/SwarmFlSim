@@ -21,7 +21,7 @@ def test_change_reports_are_retained_by_key(gateway, sent):
     """변화 보고만 키별 마지막 값으로 남는다. 주기 보고·사건성 메시지는 남지 않는다"""
     for make in S.EXPORT_SAMPLES.values():
         S.deliver(gateway.bus, make())
-    # 표본 FlightCommandStatus는 REJECTED(종료 상태)라 남지 않는다
+    # FlightCommandStatus는 보관하지 않는다: 끝 상태 뒤 다시 내지 않는다 (DEC-097)
     assert _retained_names(gateway) == sorted([
         "SystemStatus", "MA_FlightCapability", "MA_TaskStatus",
         "PO_Activity", "EA_Activity", "StrikeActivity", "StoreLoadoutConfiguration"])
@@ -64,10 +64,7 @@ def test_terminal_states_remove_the_key(gateway):
     fcs = S.flight_command_status()
     fcs.state = common_pb2.COMMAND_STATE_EXECUTING
     S.deliver(gateway.bus, fcs)
-    assert len(gateway.retained.latest("MA_FlightCommandStatus", "swarm.vi")) == 1
-    fcs.state = common_pb2.COMMAND_STATE_COMPLETED
-    S.deliver(gateway.bus, fcs)
-    assert gateway.retained.latest("MA_FlightCommandStatus", "swarm.vi") == []
+    assert gateway.retained.latest("MA_FlightCommandStatus", "swarm.vi") == []   # 보관 안 함 (DEC-097)
     ts = S.task_status()
     S.deliver(gateway.bus, ts)
     ts.state = common_pb2.COMMAND_STATE_CANCELLED
