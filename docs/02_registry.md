@@ -171,6 +171,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-094 | 표준 점검 C1에서 GCS 경계를 넘지 않는 STD 메시지(기체 안 MA↔장비·FA, `onboard/**`로만 오감)는 "Gateway 범위 밖(기체 내부)"으로 표시하고 변환기 없음을 실패로 보지 않는다. STD 표시는 UCI 메시지 대응을 뜻하고 Gateway 송출을 뜻하지 않는다 | QA D-38, DEC-092, 사용자 답변 "기체 내부로 분류" | Confirmed |
 | DEC-095 | 표준 점검은 실행마다 이력을 남긴다. 도구가 실행 기록(대상 커밋, 계약 버전, agra_lacal 커밋, 기준 문서 커밋, 도구 커밋, 시드, 항목별 판정·핵심 수치·발견 ID)을 `qa/conformance/history.jsonl`에 덧붙이고, 이를 읽어 `docs/47_conformance_history.md`(실행 이력, 점검 조건 변경 이력, 발견 추적)를 만든다. 이력 행은 고치거나 지우지 않는다 | DEC-092, 사용자 요청(점검 조건·결과의 커밋별 이력표) | Confirmed |
 | DEC-096 | Gateway는 `sim/ctrl/scenario`를 읽기만 하는 구독자다. 외부 명령이 가리키는 기체의 존재는 시나리오의 UAV 엔티티와 그 GCS가 받은 보고로 판단하고 truth는 쓰지 않는다. 계약 §3.2 키 표 문구 정정이며 계약 버전은 바꾸지 않는다 | OPN-069, QA D-35, DEC-013, DEC-068 | Confirmed |
+| DEC-097 | 외부 `MA_*CommandStatus`는 공개 UCI Command-2 상태 기계를 따른다. `CommandProcessingState`의 ACCEPTED·REJECTED·CANCELED는 끝 상태이고, 첫 보고는 RECEIVED 없이 끝 상태여도 된다. Gateway는 한 CommandID에 끝 상태를 보낸 뒤 그 ID의 상태를 더 보내지 않는다(내부의 이후 EXECUTING·COMPLETED·CANCELLED·FAILED는 외부 명령 상태로 내지 않음). 내부 `FlightCommandStatus`는 접수 전에 대체된 명령의 첫 보고 CANCELLED를 허용한다. 수행 상태를 `MA_FlightActivity`로 내는 것은 이 결정의 범위 밖이다 | QA O-47, DEC-090, 공개 A-GRA 6.0a XSD `CommandProcessingStateEnum` 주석, UCI 2.5 설계 규격 Command-2(§5.1.1)·NIS §4.6, 사용자 답변 "표준대로 둘 다 적용" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 

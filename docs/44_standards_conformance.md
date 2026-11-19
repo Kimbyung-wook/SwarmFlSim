@@ -1,6 +1,6 @@
 # 표준 적합성 점검 기준
 
-- 근거: REQ-STD-001, DEC-092, DEC-093, DEC-094(C1 범위 구분), DEC-095(이력). 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
+- 근거: REQ-STD-001, DEC-092, DEC-093, DEC-094(C1 범위 구분), DEC-095(이력), DEC-097(명령 상태). 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
 - 점검 결과는 [45_standards_report.md](45_standards_report.md)에 둔다. 도구가 만든다.
 - 이 점검은 자체 점검이다. 공식 A-GRA 적합성 시험이나 외부 검토를 대신하지 않는다.
 
@@ -90,6 +90,7 @@ DEC-013: MA는 L1 포트로만 통신하고 시뮬레이터 내부 상태나 `tr
 | 입력 | 점검 실행의 `TaskStatus`, `FlightCommandStatus`, `ApprovalRequest`·`ApprovalResponse` 흐름 (내부 메시지와 외부 UCI 둘 다) |
 | 기준 | 상호작용별 허용 전이 표. 예: 작업은 접수 → 수행 → 끝 상태(완료·취소·실패·거부) 중 하나로 끝나고, 끝 상태 뒤에 다시 수행으로 가지 않는다. 승인이 필요한 작업은 승인 응답 전에 수행하지 않는다 |
 | 대응 | 외부 표현은 DEC-090 그대로(내부 EXECUTING·COMPLETED → 외부 ACCEPTED, 수행·완료는 상태 보고에서 읽는다) |
+| 명령 상태 (DEC-097) | 외부 `MA_*CommandStatus`: 첫 보고는 RECEIVED·ACCEPTED·REJECTED·CANCELED, RECEIVED 뒤는 ACCEPTED·REJECTED·CANCELED. ACCEPTED·REJECTED·CANCELED는 끝 상태이고 같은 CommandID에 그 뒤 보고가 있으면 실패. 내부 `FlightCommandStatus`는 첫 보고 CANCELLED(접수 전 대체)를 허용한다 |
 | 실패 조건 | 허용 전이 표 밖의 전이 1건 이상. 명령에 대한 상태 보고 누락(링크 정상 구간) |
 
 - 허용 전이 표는 도구 안에 두고 보고서에 그대로 싣는다.
