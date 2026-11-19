@@ -182,9 +182,9 @@ def test_run_rows_mark_changed_verdicts():
 
 def test_finding_rows_track_first_last_gone():
     rows = {r[0]: r for r in H.finding_rows(_entries(), ["D-1", "D-2", "O-3", "O-9"], _between)}
-    assert rows["D-1"][1:] == ["1 (`c1`)", "1 (`c1`)", "2 (`c2`)", "해소", "`k1` 기준"]
-    assert rows["D-2"][1:] == ["1 (`c1`)", "3 (`c3`)", "—", "재현", "—"]
-    assert rows["O-3"][1:] == ["3 (`c3`)", "3 (`c3`)", "—", "재현", "—"]
+    assert rows["D-1"][1:] == ["1 (`c1`)", "1 (`c1`)", "2 (`c2`)", "해소", "`k1` 기준", "제품 변경"]
+    assert rows["D-2"][1:] == ["1 (`c1`)", "3 (`c3`)", "—", "재현", "—", "—"]
+    assert rows["O-3"][1:] == ["3 (`c3`)", "3 (`c3`)", "—", "재현", "—", "—"]
     assert "O-9" not in rows                      # 한 번도 재현되지 않은 목록 항목은 싣지 않는다
 
 
@@ -255,6 +255,17 @@ def test_finding_gone_by_product_change_marked():
 def test_changes_between_from_git():
     """31차(2ee7ebb)와 32차 준비 병합(b763a74) 사이: 기준 da9287c(DEC-097), 도구 fd1b8e1. 병합 커밋은 없다"""
     ch = H.changes_between("2ee7ebb", "b763a74")
-    assert "`da9287c` 기준" in ch and "`fd1b8e1` 도구" in ch
+    assert "`fd1b8e1` 도구" in ch
     assert not any(c.startswith(("`095abb3`", "`ee7aad2`", "`5e8cee7`")) for c in ch)
     assert H.changes_between(H.UNKNOWN, "b763a74") == H.UNKNOWN
+    assert "`da9287c` 기준(DEC-097)" in ch
+
+
+def test_gone_cause_criteria_vs_product():
+    ch = ["`t1` 도구", "`k1` 기준(DEC-097)"]
+    assert H.gone_cause(ch, "DEC-097: 첫 보고 CANCELLED 허용") == "기준 변경(DEC-097 `k1`)"
+    assert H.gone_cause(ch, "") == "제품 변경"                       # 조치 DEC가 없으면 제품 변경
+    assert H.gone_cause(["`t1` 도구", "`k2` 기준(DEC-094)"], "DEC-097") == "제품 변경"
+    assert H.gone_cause(H.UNKNOWN, "DEC-097") == H.UNKNOWN
+    rows = {r[0]: r for r in H.finding_rows(_entries(), between=lambda a, b: ch, resolutions={"D-1": "DEC-097"})}
+    assert rows["D-1"][6] == "기준 변경(DEC-097 `k1`)"

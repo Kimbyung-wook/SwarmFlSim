@@ -44,7 +44,9 @@ FINDINGS = [
      "title": "Gateway가 끝 상태 ACCEPTED를 보낸 CommandID에 상태를 더 보낸다(DEC-097)",
      "detail": "외부 MA_FlightCommandStatus에서 ACCEPTED 뒤 CANCELED(내부 CANCELLED를 그대로 냄)나 ACCEPTED 반복이 나온다. "
                "DEC-097은 ACCEPTED·REJECTED·CANCELED를 끝 상태로 두고, 같은 CommandID에 그 뒤 보고를 내지 않게 한다. "
-               "29·31차 원자료를 32차 도구로 다시 판정해 찾았다(실제 재점검 전)."},
+               "29·31차 원자료를 32차 도구로 다시 판정해 찾았다(실제 재점검 전).",
+     "resolution": "IMP-GW-032(ee7aad2): Gateway가 CommandID마다 끝 상태를 보낸 뒤 상태를 더 보내지 않는다. 32차 실행(2026-11-19)에서 "
+                   "나오지 않았다"},
     {"id": "O-47", "item": "C5", "wp": "WP4(FA)", "level": "매우 낮음",
      "match": ["fmn-lead: 허용 전이 밖 시작→CANCEL"],
      "title": "편대 리더 명령의 첫 상태 보고가 CANCELLED(superseded)다",
