@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, 029~031, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028 | TC-GW-001~027, 035~038, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, TC-QA-158~161, TC-QA-164~172, TC-QA-173~178 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, 029~031, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028 | TC-GW-001~027, 035~038, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, TC-QA-158~161, TC-QA-164~172, TC-QA-173~181 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -292,6 +292,9 @@
 | TC-QA-176 | 소급 기록: result.json에서 이력 한 줄, 29차 실행이 첫 줄 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
 | TC-QA-177 | 점검 조건 변경 이력: docs/44·qa/conformance를 바꾼 커밋(병합 제외)과 관련 DEC를 git에서 얻음 | `qa/conformance/tests/test_history.py` | DEC-095, REQ-STD-001 |
 | TC-QA-178 | WP9·WP3 수정 뒤 표준 적합성 재점검(lockstep 시드 20261117, 2회 반복) → docs/45·docs/47 | `qa/conformance/run.py` | DEC-092, DEC-094, DEC-095, DEC-096, REQ-STD-001 |
+| TC-QA-179 | 외부 MA_*CommandStatus 전이 표(DEC-097): 첫 보고 RECEIVED·ACCEPTED·REJECTED·CANCELED, 끝 상태 ACCEPTED·REJECTED·CANCELED, 끝 상태 뒤 다른 상태 실패 | `qa/conformance/tests/test_dec097.py` | DEC-097, REQ-STD-001 |
+| TC-QA-180 | 외부 명령 상태는 끝 상태 뒤 같은 상태 반복도 실패, 다른 표와 끝 상태가 아닌 반복은 허용 | `qa/conformance/tests/test_dec097.py` | DEC-097, REQ-STD-001 |
+| TC-QA-181 | 내부 FlightCommandStatus 첫 보고 CANCELLED 허용, O-47 해소, D-40 분류 | `qa/conformance/tests/test_dec097.py` | DEC-097, REQ-STD-001 |
 
 ## 시험 결과
 
@@ -495,6 +498,9 @@
 | TC-QA-176 | 자동 | 2026-11-18 | 통과. history.jsonl 첫 줄 = 29차(b80a848) (§38) |
 | TC-QA-177 | 자동 | 2026-11-18 | 통과 (§38) |
 | TC-QA-178 | 측정 | 2026-11-18 | C1·C2·C3·C4·C6 통과, C5 실패(O-47만), C7 정보. D-35~39 해소, 신규 없음, 2회 같음 (§39) |
+| TC-QA-179 | 자동 | 2026-11-19 | 통과 (§40) |
+| TC-QA-180 | 자동 | 2026-11-19 | 통과 (§40) |
+| TC-QA-181 | 자동 | 2026-11-19 | 통과. 31차 원자료 재판정 C5 위반 6건은 모두 D-40(가칭) (§40) |
 
 ## 프로세스 결정
 

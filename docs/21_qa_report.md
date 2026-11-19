@@ -4536,3 +4536,60 @@ O-50 관련: 도구의 보충 구독 키 3개 중 `sim/clock/done/*`·`sim/ctrl/
 
 - **결함 39건**: 해소 30, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
 - **관찰 50건**: 해소 10, 결정됨 22, 아직 열림 18, 사용자 결정 필요 0.
+
+## 40. 32차 준비: C5 명령 상태 전이를 DEC-097에 맞춤 (2026-11-19)
+
+wp0-contracts 최신(16c4e29)을 병합했다. 9fb27f5(31차 병합)와 da9287c(DEC-097)가 들어 있다. 기준은 docs/44 C5 "명령 상태" 행이다. 도구 커밋은 fd1b8e1이다. 실제 재점검은 하지 않았고 이력에도 남기지 않았다. 재점검은 WP9 수정이 병합된 뒤 PM이 요청한다.
+
+### 40.1 바꾼 전이 표 (`qa/conformance/judges.py`)
+
+| 표 | 첫 보고 | 전이 | 끝 상태 | 끝 상태 뒤 반복 |
+|---|---|---|---|---|
+| 외부 MA_FlightCommandStatus | RECEIVED·ACCEPTED·REJECTED·CANCELED | RECEIVED → ACCEPTED·REJECTED·CANCELED | ACCEPTED·REJECTED·CANCELED | **실패** |
+| 내부 FlightCommandStatus | ACCEPTED·EXECUTING·REJECTED·**CANCELLED** | 그대로 | 그대로 | 허용 |
+| 내부 TaskStatus, 외부 MA_TaskStatus | 그대로 | 그대로 | 그대로 | 허용 |
+
+`check_sequence`는 같은 상태 반복을 허용한다. 변화 보고 재송신을 위반으로 보지 않기 위해서다.
+
+DEC-097은 "같은 CommandID에 그 뒤 보고가 있으면 실패"라고 적는다. 같은 상태인지는 따로 말하지 않는다. 그래서 외부 명령 상태 표만 끝 상태 뒤 같은 상태 반복도 실패로 본다. 실패 문구는 "끝 상태 뒤 반복"이다(`TABLES` 셋째 값 `strict_terminal`). 끝 상태가 아닌 반복(RECEIVED → RECEIVED)과 다른 표의 반복은 이전처럼 허용한다. docs/45 C5 절에 표마다 이 규칙을 적는다.
+
+TC-QA-168의 통과 예시 하나를 DEC-097에 맞게 바꿨다. 외부 `ACCEPTED → CANCELED`는 이제 위반이라 `RECEIVED → ACCEPTED`로 고쳤다.
+
+### 40.2 미리보기 (원자료 재판정, `--reuse --no-doc`)
+
+`qa/out/conformance/qa32_preview_<날짜>_run1·run2`에 두었다. run1·run2의 판정이 같았고 미분류 실패는 0이다.
+
+| 원자료 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C5 위반 |
+|---|---|---|---|---|---|---|---|---|
+| 29차 (b80a848) | 통과 | 실패 | 실패 | 통과 | 실패 | 실패 | 정보 | 10건: D-37 4, D-40 6 |
+| 31차 (2ee7ebb, 현재 Gateway) | 통과 | 통과 | 통과 | 통과 | 실패 | 통과 | 정보 | 6건: D-40 6 |
+
+- O-47의 두 줄(uav-006-fmn-lead 첫 보고 CANCELLED·CANCELED)은 두 원자료 모두에서 나오지 않는다.
+- 현재 Gateway에서 새 규칙으로 나오는 실패는 외부 MA_FlightCommandStatus 6건이다.
+  - ACCEPTED 뒤 CANCELED 5건: uav-001·009·010·011-task-1, uav-011-task-2. 내부 CANCELLED가 외부로 나간다.
+  - ACCEPTED 반복 1건: uav-010-task-2.
+  - DEC-097의 "끝 상태를 보낸 뒤 그 ID의 상태를 더 보내지 않는다"에 어긋난다.
+- 이 6건을 발견 D-40(가칭, WP9, 낮음)으로 `findings.py`에 등록했다. ID는 PM이 정한다.
+  - 29차에도 같은 6건이 있었다. 이전 표에서는 ACCEPTED 뒤 CANCELED가 허용이었고 ACCEPTED 반복은 반복 허용으로 넘어갔다.
+
+### 40.3 시험
+
+`uv run python -m pytest qa/conformance/tests -q`: 75개 통과.
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-179 | 외부 명령 상태 표가 DEC-097과 같음, 허용 순서 통과, 끝 상태 뒤 다른 상태 실패 | 통과 |
+| TC-QA-180 | 외부 명령 상태는 끝 상태 뒤 같은 상태 반복도 실패. 다른 표와 끝 상태가 아닌 반복은 허용 | 통과 |
+| TC-QA-181 | 내부 FlightCommandStatus 첫 보고 CANCELLED 허용(그 뒤는 실패), O-47 문구 없어짐, D-40 분류가 D-37과 겹치지 않음 | 통과 |
+
+### 40.4 결함·관찰 현황 갱신
+
+| ID | 이전 상태 | 현재 상태 | 근거 |
+|---|---|---|---|
+| O-47 | 아직 열림 | 해소 | DEC-097, fd1b8e1, TC-QA-181. 실제 실행 확인은 다음 점검 |
+| D-40 (가칭) | (신규) | 아직 열림 | WP9, 낮음 (§40.2, 원자료 재판정) |
+
+갱신 뒤 합계:
+
+- **결함 40건**: 해소 30, 결정됨 9, 아직 열림 1, 사용자 결정 필요 0.
+- **관찰 50건**: 해소 11, 결정됨 22, 아직 열림 17, 사용자 결정 필요 0.

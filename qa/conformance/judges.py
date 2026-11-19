@@ -522,9 +522,10 @@ TRANS_INT = {
     "ACCEPTED": {"EXECUTING", "REJECTED", "CANCELLED", "FAILED"},
     "EXECUTING": {"COMPLETED", "CANCELLED", "FAILED"},
 }
-# 내부 FlightCommandStatus: FA는 수락하면 곧바로 끝낼 수 있다(goto 도착 COMPLETED)
+# 내부 FlightCommandStatus: FA는 수락하면 곧바로 끝낼 수 있다(goto 도착 COMPLETED).
+# 첫 보고 CANCELLED는 접수 전에 대체된 명령이다(DEC-097, O-47)
 TRANS_FCS = {
-    None: {"ACCEPTED", "EXECUTING", "REJECTED"},
+    None: {"ACCEPTED", "EXECUTING", "REJECTED", "CANCELLED"},
     "ACCEPTED": {"EXECUTING", "COMPLETED", "REJECTED", "CANCELLED", "FAILED"},
     "EXECUTING": {"COMPLETED", "CANCELLED", "FAILED"},
 }
@@ -535,23 +536,29 @@ TRANS_EXT_TASK = {
     "EXECUTION_PENDING": {"EXECUTING", "DROPPED", "CANCELED", "FAILED"},
     "EXECUTING": {"COMPLETED", "CANCELED", "FAILED"},
 }
-TERMINAL_EXT_CMD = {"REJECTED", "CANCELED"}
-# 외부 MA_FlightCommandStatus CommandProcessingState. EXECUTING·COMPLETED는 ACCEPTED로 보인다(DEC-090)
+# 외부 MA_*CommandStatus CommandProcessingState: 공개 UCI Command-2 상태 기계(DEC-097, docs/44 C5 "명령 상태").
+# ACCEPTED·REJECTED·CANCELED는 끝 상태다. 첫 보고는 RECEIVED 없이 끝 상태여도 된다
+TERMINAL_EXT_CMD = {"ACCEPTED", "REJECTED", "CANCELED"}
 TRANS_EXT_CMD = {
-    None: {"RECEIVED", "ACCEPTED", "REJECTED"},
+    None: {"RECEIVED", "ACCEPTED", "REJECTED", "CANCELED"},
     "RECEIVED": {"ACCEPTED", "REJECTED", "CANCELED"},
-    "ACCEPTED": {"REJECTED", "CANCELED"},
 }
-TABLES = {"TaskStatus(내부)": (TRANS_INT, TERMINAL_INT), "FlightCommandStatus(내부)": (TRANS_FCS, TERMINAL_INT),
-          "MA_TaskStatus(외부)": (TRANS_EXT_TASK, TERMINAL_EXT_TASK),
-          "MA_FlightCommandStatus(외부)": (TRANS_EXT_CMD, TERMINAL_EXT_CMD)}
+# 표 이름 → (전이 표, 끝 상태, 끝 상태 뒤 같은 상태 반복도 실패인가)
+# 외부 명령 상태는 DEC-097 "끝 상태 뒤 보고가 있으면 실패": 같은 CommandID에 끝 상태를 보낸 뒤에는 같은 상태도 다시 보내지 않는다
+TABLES = {"TaskStatus(내부)": (TRANS_INT, TERMINAL_INT, False),
+          "FlightCommandStatus(내부)": (TRANS_FCS, TERMINAL_INT, False),
+          "MA_TaskStatus(외부)": (TRANS_EXT_TASK, TERMINAL_EXT_TASK, False),
+          "MA_FlightCommandStatus(외부)": (TRANS_EXT_CMD, TERMINAL_EXT_CMD, True)}
 
 
-def check_sequence(states: list[str], table: dict, terminal: set[str]) -> list[str]:
-    """같은 상태 반복은 허용(변화 보고 재송신). 끝 상태 뒤의 다른 상태와 표 밖 전이를 돌려준다"""
+def check_sequence(states: list[str], table: dict, terminal: set[str], strict_terminal: bool = False) -> list[str]:
+    """같은 상태 반복은 허용(변화 보고 재송신). 끝 상태 뒤의 다른 상태와 표 밖 전이를 돌려준다.
+    strict_terminal이면 끝 상태 뒤의 같은 상태 반복도 실패다(DEC-097 외부 명령 상태)"""
     bad, prev = [], None
     for s in states:
         if s == prev:
+            if strict_terminal and prev in terminal:
+                bad.append(f"{prev}→{s}(끝 상태 뒤 반복)")
             continue
         if prev in terminal:
             bad.append(f"{prev}→{s}(끝 상태 뒤)")
@@ -568,10 +575,10 @@ def judge_c5(seqs: dict[str, dict[str, list[str]]], approvals: list[dict], comma
     fails: list[str] = []
     res = {}
     for name, per in seqs.items():
-        table, term = TABLES[name]
+        table, term, strict = TABLES[name]
         bad_all = {}
         for tgt, st in per.items():
-            bad = check_sequence(st, table, term)
+            bad = check_sequence(st, table, term, strict)
             if bad:
                 bad_all[tgt] = bad
                 fails.append(f"{name} {tgt}: 허용 전이 밖 {', '.join(bad)} (순서 {' → '.join(st)})")
@@ -595,8 +602,9 @@ def judge_c5(seqs: dict[str, dict[str, list[str]]], approvals: list[dict], comma
         fails.append("외부 명령 0건")
     return {"verdict": verdict(fails), "fail": fails, "seq": res, "approvals": ap_rows,
             "commands": {"n": len(commands), "missing": len(miss)},
-            "tables": {k: {"transitions": {str(a): sorted(b) for a, b in t.items()}, "terminal": sorted(term)}
-                       for k, (t, term) in TABLES.items()}}
+            "tables": {k: {"transitions": {str(a): sorted(b) for a, b in t.items()}, "terminal": sorted(term),
+                           "strict_terminal": strict}
+                       for k, (t, term, strict) in TABLES.items()}}
 
 
 # ---------------------------------------------------------------------------------------------------------- C6

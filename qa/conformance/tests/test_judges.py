@@ -313,7 +313,7 @@ def test_c5_clean_passes():
     r = _c5(seqs={"TaskStatus(내부)": {"u/t": ["ACCEPTED", "ACCEPTED", "EXECUTING", "COMPLETED"]},
                   "MA_TaskStatus(외부)": {"u/t": ["EXECUTION_PENDING", "EXECUTING", "COMPLETED"]},
                   "FlightCommandStatus(내부)": {"c": ["ACCEPTED", "COMPLETED"]},
-                  "MA_FlightCommandStatus(외부)": {"c": ["ACCEPTED", "CANCELED"]}},
+                  "MA_FlightCommandStatus(외부)": {"c": ["RECEIVED", "ACCEPTED"]}},   # DEC-097: ACCEPTED는 끝 상태
             approvals=[{"entity": "u", "task": "t", "need": True, "response": "approved", "t_resp": 1.0, "t_exec": 1.2}])
     assert r["verdict"] == PASS, r["fail"]
 
