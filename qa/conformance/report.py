@@ -31,6 +31,20 @@ def fmt(x: float) -> str:
     return f"{x:.3g}"
 
 
+def _epoch_rows(ep: dict, tol: dict) -> list[list]:
+    """C3 대조 표의 DEC-098 행 (a) epoch 일치 (b) Gateway epoch_changed"""
+    if not ep.get("checked"):
+        return [["Timestamp − 모의 시각 = 시나리오 epoch (s)", tol["ts_spread_s"], "—", "확인 안 함"],
+                ["Gateway epoch_changed", 0, "—", "확인 안 함"]]
+    d = ep.get("dev_s")
+    bad_a = any("epoch_utc_us" in t or "sim/ctrl/scenario" in t for t in ep["fail"])
+    gw = ep.get("gw")
+    return [["Timestamp − 모의 시각 = 시나리오 epoch (s)", tol["ts_spread_s"], f"{d['abs_max']:.6f}" if d else "—",
+             "실패" if bad_a or not d else "통과"],
+            ["Gateway epoch_changed", 0, gw.get("epoch_changed", 0) if gw else "—",
+             "통과" if gw is not None and not gw.get("epoch_changed", 0) else "실패"]]
+
+
 def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     v, res, meta = R["versions"], R["results"], R["meta"]
     L: list[str] = []
@@ -192,11 +206,20 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
         ["수신 RoutePlan 좌표 (°) / 고도 (m)", f"{tol['route_deg']} / {tol['route_alt_m']}",
          " · ".join(f"{x['where']} {fmt(x['deg_max'])}/{fmt(x['alt_max'])} ({x['n_sent']}→{x['n_bus']}점)" for x in r3["routes"]),
          "통과" if not any("수신 경로" in t for t in r3["fail"]) else "실패"],
-    ])
+    ] + _epoch_rows(r3.get("epoch") or {}, tol))
     L.append("")
     if ts:
-        L.append(f"Timestamp: {ts['n']}건, (Timestamp − 모의 시각) 최소 {ts['min']:.3f} s, 최대 {ts['max']:.3f} s. 값이 UNIX 시각 "
-                 "크기라 모의 시각 0에 묶인 기준이 아니고, 변동 폭이 실행 중 일시정지한 벽시계 시간과 비슷하다.")
+        L.append(f"Timestamp: {ts['n']}건, (Timestamp − 모의 시각) 최소 {ts['min']:.6f} s, 최대 {ts['max']:.6f} s.")
+        L.append("")
+    ep = r3.get("epoch") or {}
+    if ep.get("checked"):
+        L.append(f"시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us {ep.get('scenario_epochs')}, "
+                 f"Gateway 카운터 {ep.get('gw')}. Gateway 로그의 기준 관련 줄 {len(ep.get('log', []))}건"
+                 + (": " + " / ".join(f"`{x}`" for x in ep["log"][:3]) if ep.get("log") else "") + ".")
+        L.append("")
+    for t in ep.get("info", []):
+        L.append(f"- 정보: {t}")
+    if ep.get("info"):
         L.append("")
     un = {k: x for k, x in r3["unpaired"].items() if k not in ("states", "header_system_uuid")}
     if un:

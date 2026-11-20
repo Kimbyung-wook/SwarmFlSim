@@ -257,9 +257,45 @@ def compare_position(bus: dict, uci: dict) -> dict:
     return out
 
 
+def judge_epoch(epoch: dict | None, ts_offsets: list[float]) -> dict:
+    """DEC-098 (a) UCI Timestamp − 모의 시각 = sim/ctrl/scenario의 epoch_utc_us (허용 오차 TOL ts_spread_s),
+    (b) Gateway epoch_changed 카운터 0. 관측한 epoch가 둘 이상이면 마지막 값과 비교하고 정보로 적는다"""
+    out: dict = {"checked": epoch is not None, "fail": [], "info": []}
+    if epoch is None:
+        out["info"].append("시각 기준(DEC-098) 확인 안 함: 원자료에 sim/ctrl/scenario epoch 기록이 없다(33차 이전)")
+        return out
+    vals = [e["epoch_utc_us"] for e in epoch.get("scenario", [])]
+    nz = [v for v in vals if v > 0]
+    out["scenario_epochs"] = vals
+    out["log"] = epoch.get("log", [])
+    if not vals:
+        out["fail"].append("sim/ctrl/scenario 관측 0건: 시각 기준 epoch를 확인하지 못함")
+    elif not nz:
+        out["fail"].append("sim/ctrl/scenario의 run.epoch_utc_us가 0이다(Core가 적재 때 채우지 않음, DEC-098)")
+    else:
+        if len(set(nz)) > 1:
+            out["info"].append(f"관측한 epoch_utc_us 값 {len(set(nz))}개: {sorted(set(nz))}. 마지막 값과 비교한다")
+        e_s = nz[-1] * 1e-6
+        out["epoch_utc_us"] = nz[-1]
+        if ts_offsets:
+            dev = [o - e_s for o in ts_offsets]
+            out["dev_s"] = {"n": len(dev), "min": min(dev), "max": max(dev), "abs_max": max(abs(d) for d in dev)}
+            if out["dev_s"]["abs_max"] > TOL["ts_spread_s"]:
+                out["fail"].append(f"UCI Timestamp − 모의 시각이 시나리오 epoch_utc_us와 다름: 최대 차 "
+                                   f"{out['dev_s']['abs_max']:.3f} s > {TOL['ts_spread_s']} s (DEC-098)")
+    gw = epoch.get("gw")
+    out["gw"] = gw
+    if gw is None:
+        out["fail"].append("Gateway 카운터 기록 없음: epoch_changed를 확인하지 못함")
+    elif gw.get("epoch_changed", 0):
+        out["fail"].append(f"Gateway epoch_changed {gw['epoch_changed']}: 실행 중 UCI 시각 기준이 바뀌었다(DEC-098)")
+    return out
+
+
 def judge_c3(pos_pairs: list[dict], ts_offsets: list[float], ids: dict, states: list[dict], routes: list[dict],
-             unpaired: dict | None = None) -> dict:
+             unpaired: dict | None = None, epoch: dict | None = None) -> dict:
     """pos_pairs: compare_position 결과에 {who, topic} 추가. ts_offsets: UCI Timestamp − 모의 시각(s)
+    epoch: analyze.c3_epoch 결과(DEC-098). None이면 시각 기준 확인을 건너뛰고 정보로 적는다(33차 이전 원자료)
     ids: {kind: [(label, uuid), ...]}. states: [{msg, internal, external}]. routes: [{route, sent:[(lat,lon,alt)], bus:[...]}]"""
     fails: list[str] = []
     worst = {"lat": 0.0, "lon": 0.0, "alt": 0.0, "vel": 0.0, "att": 0.0}
@@ -291,6 +327,8 @@ def judge_c3(pos_pairs: list[dict], ts_offsets: list[float], ids: dict, states: 
                          f"> {TOL['ts_spread_s']} s")
     else:
         fails.append("Timestamp 대조 0건")
+    ep = judge_epoch(epoch, ts_offsets)
+    fails += ep["fail"]
     id_res = {}
     for kind, pairs in ids.items():
         by_label, by_uuid = defaultdict(set), defaultdict(set)
@@ -335,7 +373,7 @@ def judge_c3(pos_pairs: list[dict], ts_offsets: list[float], ids: dict, states: 
             fails.append(f"수신 경로 {r['route']}({r.get('where', '')}): 좌표·순서 차 {dmax:.3g}°, 고도 {amax:.3g} m")
     if not routes:
         fails.append("수신 경로 대조 0건")
-    return {"verdict": verdict(fails), "fail": fails, "n_pos": len(pos_pairs), "worst": worst, "ts": ts,
+    return {"verdict": verdict(fails), "fail": fails, "n_pos": len(pos_pairs), "worst": worst, "ts": ts, "epoch": ep, "info": ep["info"],
             "ids": id_res, "states": {"n": dict(st_n), "bad": [list(k) + [v] for k, v in st_bad.items()]},
             "routes": r_res, "unpaired": unpaired or {}, "tol": TOL}
 
