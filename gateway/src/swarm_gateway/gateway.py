@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from typing import Awaitable, Callable
 
 from google.protobuf.message import DecodeError
-from swarm.v1 import c2_pb2, common_pb2, link_pb2, options_pb2
+from swarm.v1 import c2_pb2, common_pb2, link_pb2, options_pb2, sim_pb2
 from swarm_api import keys
 from swarm_api.bus import Bus, Sample, protobuf_encoding
 
@@ -53,7 +53,7 @@ class GatewayConfig:
     classification: str = "U"
     owner_producer: str = "USA"      # 공개 스키마 예제 값 (SecurityInformation 필수 항목)
     rejection_log: int = 200
-    sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC. 비우면 처음 받은 메시지에서 정한다 (D-36)
+    sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
         keys.check_entity_id(self.gcs)
@@ -181,9 +181,17 @@ class Gateway:
             log.exception("gateway: unexpected error on %s", sample.key)
 
     def _on_scenario(self, sample: Sample) -> None:
-        if not self.entities.on_scenario(sample.payload):
+        sc = sim_pb2.Scenario()
+        try:
+            sc.ParseFromString(sample.payload)
+        except DecodeError:
             self.counters["bad_scenario"] += 1
             log.warning("gateway: cannot parse %s", sample.key)
+            return
+        self.entities.on_scenario(sc)
+        what = self.clock.on_scenario_epoch(sc.run.epoch_utc_us)   # 계약 §1 시간 규칙 (DEC-098)
+        if what:
+            self.counters[f"epoch_{what}"] += 1
 
     def handle_rx(self, key: str, payload: bytes) -> Outcome:
         self.counters["rx"] += 1

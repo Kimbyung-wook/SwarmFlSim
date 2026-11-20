@@ -61,25 +61,58 @@ def _wall() -> dt.datetime:
 
 
 class SimClock:
-    """모의 시각(µs) → UCI 시각(UTC) (IMP-GW-030, QA D-36).
+    """모의 시각(µs) → UCI 시각(UTC) (IMP-GW-030 D-36, IMP-GW-033 DEC-098).
 
-    UTC = 기준 시각(epoch) + 모의 시각. 계약에 모의 시각 0의 UTC가 없어(OPN 요청) 기준 시각은
-    설정값(`--sim-epoch`)을 쓰고, 없으면 처음 받은 메시지에서 한 번 정한다(그때 벽시계 − 그 모의 시각).
-    정한 뒤에는 바꾸지 않으므로 일시정지·배속에서도 (UCI 시각 − 모의 시각)이 일정하다.
+    UTC = 기준 시각(epoch) + 모의 시각 (계약 §1). 기준 시각의 출처와 우선순위:
+    1. `override`: `--sim-epoch`(명시 재정의, 재현 시험용). 시나리오 값이 와도 바꾸지 않는다.
+    2. `scenario`: `sim/ctrl/scenario`의 `Scenario.run.epoch_utc_us`(0이 아닐 때). 새 시나리오가 다른 값을 실으면 다시 정한다.
+    3. `first_message`: 시나리오를 받기 전 처음 받은 메시지에서 정한다(그때 벽시계 − 그 모의 시각, 로그).
+       그 뒤 시나리오 값이 오면 시나리오 값으로 바꾼다(다른 참여자와 같은 기준). 바뀐 차이는 경고 로그에 남긴다.
+    한 기준 안에서는 일시정지·배속에서도 (UCI 시각 − 모의 시각)이 일정하다.
     """
+    OVERRIDE, SCENARIO, FIRST = "override", "scenario", "first_message"
 
     def __init__(self, epoch: dt.datetime | None = None, wall: Callable[[], dt.datetime] = _wall):
         self.epoch = epoch
+        self.source: str | None = self.OVERRIDE if epoch is not None else None
         self.wall = wall
         self.last_us: int | None = None
+        self.changes = 0                     # 기준을 바꾼 횟수 (첫 메시지 기준 → 시나리오, 시나리오 → 새 시나리오)
         self._lock = threading.Lock()
 
     def _anchor(self, sim_us: int) -> dt.datetime:
         if self.epoch is None:
             self.epoch = self.wall() - dt.timedelta(microseconds=sim_us)
-            logging.getLogger("swarm_gateway").info(
-                "gateway: UCI time = %s + sim time (anchored at sim %.3f s)", uci_timestamp(self.epoch), sim_us / 1e6)
+            self.source = self.FIRST
+            logging.getLogger("swarm_gateway").warning(
+                "gateway: no scenario epoch yet; UCI time = %s + sim time (wall clock at sim %.3f s)",
+                uci_timestamp(self.epoch), sim_us / 1e6)
         return self.epoch
+
+    def on_scenario_epoch(self, epoch_utc_us: int) -> str | None:
+        """시나리오의 기준 시각. 처음 정했으면 "set", 바꿨으면 "changed", 그대로면 None"""
+        if epoch_utc_us <= 0:
+            return None
+        new = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=epoch_utc_us)
+        log = logging.getLogger("swarm_gateway")
+        with self._lock:
+            if self.source == self.OVERRIDE:
+                if new != self.epoch:
+                    log.info("gateway: scenario epoch %s ignored (--sim-epoch %s)", uci_timestamp(new),
+                             uci_timestamp(self.epoch))
+                return None
+            if self.source == self.SCENARIO and new == self.epoch:
+                return None
+            old, old_source = self.epoch, self.source
+            self.epoch, self.source = new, self.SCENARIO
+            if old is not None:
+                self.changes += 1
+        if old is None:
+            log.info("gateway: UCI time = %s + sim time (scenario epoch)", uci_timestamp(new))
+            return "set"
+        log.warning("gateway: UCI time base changed %s -> %s (%s -> scenario, shift %+.3f s)",
+                    uci_timestamp(old), uci_timestamp(new), old_source, (new - old).total_seconds())
+        return "changed"
 
     def at(self, sim_us: int) -> dt.datetime:
         """메시지 모의 시각의 UTC. 현재 모의 시각으로 기억한다"""

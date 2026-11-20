@@ -69,7 +69,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--zenoh-config`, `--zenoh-mode`, `--connect`, `--listen` | | `BusConfig` 항목 |
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--lacal-admin` | `--lacal` 호스트의 8766 | CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 보낸다 (DEC-089). `none`이면 끈다 |
-| `--sim-epoch` | 첫 메시지 때 정함 | 모의 시각 0의 UTC (ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`). UCI 시각 = 이 값 + 메시지 모의 시각 (D-36) |
+| `--sim-epoch` | 없음(시나리오 값) | 모의 시각 0의 UTC 명시 재정의, 재현 시험용 (ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`). 시나리오 값보다 우선한다 (DEC-098) |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
 외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다.
@@ -113,11 +113,16 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 - Gateway가 재기동하면 끝난 ID를 기억하지 못한다. 재기동 뒤 처음 보는 ID의 보고는 첫 보고로 보고 한 번 낸다. 그래서 재기동 앞뒤로 같은 끝 상태가 ID당 최대 한 번 더 나갈 수 있다. 그 뒤는 다시 막는다. 외부는 재기동 전 끝 상태를 받은 ID의 다음 보고를 무시하면 된다.
 - 수행 상태(`MA_FlightActivity`)는 내지 않는다.
 
-### UCI 시각 (D-36)
+### UCI 시각 (D-36, DEC-098)
 
 - UCI 머리 `Timestamp`와 위치·속도·자세 시각은 벽시계가 아니라 메시지 모의 시각(`header.sim_time_us`)의 UTC다. `MA_Entity`의 운동·식별 시각은 관측 모의 시각(`observed_time_us`)이다.
-- UTC = 기준 시각 + 모의 시각. 계약에는 모의 시각 0의 UTC가 없다(OPN 요청). `--sim-epoch`가 없으면 처음 받은 메시지에서 한 번 정하고(그때 벽시계 − 그 모의 시각) 로그 `UCI time = ... + sim time`에 남긴다.
-- 정한 뒤에는 바꾸지 않으므로 일시정지·배속에서도 (Timestamp − 모의 시각)이 일정하다.
+- UTC = 기준 시각 + 모의 시각 (계약 §1). 기준 시각의 우선순위:
+  1. `--sim-epoch` (명시 재정의, 재현 시험용). 시나리오 값이 와도 바꾸지 않는다(로그만).
+  2. `sim/ctrl/scenario`의 `Scenario.run.epoch_utc_us` (0이 아닐 때). Core가 적재 때 채워 알리므로 보통 이 값이다.
+  3. 시나리오를 받기 전에 온 첫 메시지: 그때 벽시계 − 그 모의 시각. 경고 로그 `no scenario epoch yet`를 남긴다.
+- 3으로 정한 뒤 시나리오 값이 오면 **시나리오 값으로 바꾼다**. 다른 참여자(Logger·UI 등)와 같은 기준을 써야 하고, 시나리오 값이 실행 전체의 기준이기 때문이다. 바꾼 차이는 경고 로그 `UCI time base changed ... shift ±N s`와 카운터 `epoch_changed`에 남는다.
+- 새 시나리오를 적재해 다른 값이 오면 그 값으로 다시 정한다(`epoch_changed`). 같은 값의 재발행과 값 0은 기준을 바꾸지 않는다.
+- C3 기준((Timestamp − 모의 시각)이 한 실행 안에서 일정)과의 관계: 한 기준 안에서는 일시정지·배속에서도 차이가 일정하다. 차이가 바뀌는 곳은 (a) 시나리오를 받기 전 첫 메시지 기준으로 낸 보고에서 시나리오 기준으로 넘어갈 때 한 번, (b) 새 시나리오 적재(새 실행)뿐이다. (a)는 Gateway가 Core보다 늦게 켜져도 `sim/ctrl/scenario`를 곧 받으므로(늦게 붙는 참여자 포함) 보통 일어나지 않는다. 일어나면 로그·카운터로 그 시점이 보인다.
 
 ### 알려진 기체 (D-35)
 
