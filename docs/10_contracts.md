@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.19.0
+- 계약 버전: 0.20.0
+  - 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(모의 시각 0의 UTC). Core가 비어 있으면 적재 때 채워 `sim/ctrl/scenario`로 알린다 (DEC-098)
   - 0.19.0: `link/state` 발행을 주기 안의 여러 프레임에 나눈다 (DEC-084)
   - 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독 (DEC-083)
   - 0.17.0: 항법·제어 일괄 `NavigationBatch`·`ControlBatch`, 키 `onboard_batch/**`. 기체별 `NavigationReport`·`ControlOutput`의 `onboard` 발행을 대체 (DEC-081)
@@ -41,6 +42,10 @@
 - 자세: NED → 기체 FRD 회전 쿼터니언 (w, x, y, z)
 - 각속도: 기체 FRD(rad/s)
 - 시간: 시뮬레이션 시각 `sim_time_us`(uint64, µs), 프레임 번호 `frame`
+  - UTC = `Scenario.run.epoch_utc_us` + `sim_time_us` (DEC-098). 모든 참여자가 같은 기준을 쓴다. 일시정지·배속에서도 이 대응은 바뀌지 않는다.
+  - 시나리오 JSON은 `run.epoch_utc`(ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`)로 적고 변환기가 µs로 바꾼다. 적지 않아도 된다.
+  - 값이 0이면 Core가 시나리오를 적재할 때 그때의 벽시계 UTC로 채우고, 채운 값을 `sim/ctrl/scenario`의 `Scenario.run`에 실어 낸다. `Reset` 뒤 다시 적재하면 시나리오에 적힌 값이 없을 때만 다시 채운다.
+  - 참여자 우선순위: 명시 재정의(예: Gateway `--sim-epoch`, 재현 시험용) > `sim/ctrl/scenario`의 값 > (시나리오를 받기 전) 첫 메시지의 벽시계 기준. 마지막 경우는 로그에 남긴다.
 - 각도 필드는 이름에 단위를 붙인다(`_deg`, `_rad`). 단위가 없는 각도 필드는 rad이다.
 
 ## 3. Zenoh 키 체계 (PRP-NET-003)

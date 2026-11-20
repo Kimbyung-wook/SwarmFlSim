@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, IMP-GW-001~023, 029~032, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028 | TC-GW-001~027, 035~041, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, TC-QA-158~161, TC-QA-164~172, TC-QA-173~183 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, 024, IMP-GW-001~023, 029~032, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028 | TC-API-010, TC-GW-001~027, 035~041, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, TC-QA-158~161, TC-QA-164~172, TC-QA-173~183 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -86,6 +86,7 @@
 | IMP-API-021 | 계약 0.13.0: `StrikeActivity` 무장별 보고 키, 종료 무장 키의 전체 보고 제외 | `docs/10_contracts.md` §3 임무장비 상태 보고 | DEC-063 |
 | IMP-API-022 | 계약 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독, ZenohBus 직접 콜백 | `api/python/src/swarm_api/bus.py`, `docs/10_contracts.md` §3.4 | DEC-083 |
 | IMP-API-023 | D-34: Zenoh 미발견 시 CMake 경고, `SWARM_REQUIRE_ZENOH=ON`이면 구성 실패 | `bus/CMakeLists.txt` | DEC-022, DEC-026 |
+| IMP-API-024 | 모의 시각 기준 `RunSpec.epoch_utc_us`, 계약 0.20.0, 계약 §1 시간 규칙 | `proto/swarm/v1/sim.proto`, `api/python/src/swarm_api/__init__.py`, `docs/10_contracts.md` | DEC-098 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |
@@ -95,6 +96,7 @@
 | TC-API-007 | 허용 목록 밖 문자열은 `choice`로 거부하고 기존 값을 유지한다 | `api/python/tests/test_plugin.py` | IMP-API-013 |
 | TC-API-008 | 두 Zenoh 세션 사이에서 서로 다른 키 둘을 번갈아 보낼 때 `ordered=True` 구독 둘의 콜백 순서가 송신 순서와 같다. memory 백엔드도 `ordered`를 받는다 | `api/python/tests/test_open_bus.py` | IMP-API-022 |
 | TC-API-009 | Zenoh put 경로 비용 측정 도구 (`swarm_bus_bench`, ctest 제외). 2026-11-15 측정 2.5~3.2 µs/put, 키 정규화 생략은 이득 없음 | `bus/bench/bench_put.cpp` | DEC-086 |
+| TC-API-010 | 계약 버전 0.20.0, `epoch_utc_us` 기본 0과 직렬화 왕복 | `api/python/tests/test_contract_epoch.py` | DEC-098 |
 
 | ID | 내용 | 위치 | 근거 |
 |---|---|---|---|

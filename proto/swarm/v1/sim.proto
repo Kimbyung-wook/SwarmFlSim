@@ -48,6 +48,7 @@ message RunSpec {
   double rate = 4;                    // 목표 배속. REALTIME은 1
   double duration_s = 5;              // 0이면 제한 없음
   repeated string participants = 6;   // lockstep 장벽 참여자 (sim/clock/done/<participant>)
+  int64 epoch_utc_us = 7;             // 모의 시각 0의 UTC (Unix epoch µs). 0이면 Core가 적재 때 채운다 (DEC-098)
 }
 
 // 시나리오 (DEC-024). 필드 구성은 scenario/ JSON Schema와 같다

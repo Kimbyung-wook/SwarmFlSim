@@ -172,6 +172,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-095 | 표준 점검은 실행마다 이력을 남긴다. 도구가 실행 기록(대상 커밋, 계약 버전, agra_lacal 커밋, 기준 문서 커밋, 도구 커밋, 시드, 항목별 판정·핵심 수치·발견 ID)을 `qa/conformance/history.jsonl`에 덧붙이고, 이를 읽어 `docs/47_conformance_history.md`(실행 이력, 점검 조건 변경 이력, 발견 추적)를 만든다. 이력 행은 고치거나 지우지 않는다 | DEC-092, 사용자 요청(점검 조건·결과의 커밋별 이력표) | Confirmed |
 | DEC-096 | Gateway는 `sim/ctrl/scenario`를 읽기만 하는 구독자다. 외부 명령이 가리키는 기체의 존재는 시나리오의 UAV 엔티티와 그 GCS가 받은 보고로 판단하고 truth는 쓰지 않는다. 계약 §3.2 키 표 문구 정정이며 계약 버전은 바꾸지 않는다 | OPN-069, QA D-35, DEC-013, DEC-068 | Confirmed |
 | DEC-097 | 외부 `MA_*CommandStatus`는 공개 UCI Command-2 상태 기계를 따른다. `CommandProcessingState`의 ACCEPTED·REJECTED·CANCELED는 끝 상태이고, 첫 보고는 RECEIVED 없이 끝 상태여도 된다. Gateway는 한 CommandID에 끝 상태를 보낸 뒤 그 ID의 상태를 더 보내지 않는다(내부의 이후 EXECUTING·COMPLETED·CANCELLED·FAILED는 외부 명령 상태로 내지 않음). 내부 `FlightCommandStatus`는 접수 전에 대체된 명령의 첫 보고 CANCELLED를 허용한다. 수행 상태를 `MA_FlightActivity`로 내는 것은 이 결정의 범위 밖이다 | QA O-47, DEC-090, 공개 A-GRA 6.0a XSD `CommandProcessingStateEnum` 주석, UCI 2.5 설계 규격 Command-2(§5.1.1)·NIS §4.6, 사용자 답변 "표준대로 둘 다 적용" | Confirmed |
+| DEC-098 | 모의 시각 0의 UTC(기준 시각)를 시나리오에 둔다. `RunSpec.epoch_utc_us`(시나리오 JSON `run.epoch_utc`, ISO 8601)이고, 비어 있으면 Core가 적재 때 벽시계 UTC로 채워 `sim/ctrl/scenario`로 알린다. 모든 참여자는 UTC = 기준 시각 + `sim_time_us`로 쓴다. 명시 재정의가 시나리오 값보다, 시나리오 값이 첫 메시지 기준보다 앞선다. 계약 0.20.0 | OPN-070, QA D-36, DEC-005, DEC-096, 사용자 답변 "시나리오에 필드 추가" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -246,7 +247,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-067 | P1 성능 개선의 방법과 완료 수치. Python Agent 병목 측정 후 선택지(프로세스 분할, 일괄 처리, 메시지 축소 등)와 REQ-PRF-002 달성 가능성을 제시한다 | Resolved by DEC-080 |
 | OPN-068 | 기본 FA의 C++ 이전 위치. 선택: (A) Core 안에서 실행하고 Agent는 `FlightCommand`를 보낸다 (B) Agent 프로세스의 네이티브 확장. 제안: A(세 툴체인에서 Python 확장 빌드가 필요 없다). 1단계(DEC-081) 실측 후 정한다 | Resolved by DEC-082 |
 | OPN-069 | Gateway의 `sim/ctrl/scenario` 구독(WP9 OPN-GW-001, QA D-35). 외부 명령이 가리키는 기체가 있는지 truth 없이 판단할 목록이 필요하다. 선택: (A) 키 표 구독자에 Gateway를 더한다(읽기만) (B) 수신 보고만으로 판단한다(기동 직후 기체 명령이 거부됨). 제안: A | Resolved by DEC-096 |
-| OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | 미결 |
+| OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | Resolved by DEC-098 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
