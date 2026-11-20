@@ -220,6 +220,25 @@ def c3_inputs(r: Run) -> tuple[list, list, dict, list, list, dict]:
     return pairs, ts_off, ids, states, routes, unpaired
 
 
+GW_EPOCH_LOG = ("no scenario epoch yet", "UCI time base changed")
+
+
+def c3_epoch(r: Run) -> dict | None:
+    """DEC-098 시각 기준: 관측한 sim/ctrl/scenario epoch, Gateway epoch 카운터, Gateway 로그의 기준 관련 줄.
+    33차 이전 원자료(obs.json에 scenario_epochs 없음)는 None"""
+    if "scenario_epochs" not in r.obs:
+        return None
+    log = r.d / "stack" / "gateway.1.log"
+    lines = []
+    if log.exists():
+        lines = [ln.strip()[:200] for ln in log.read_text(encoding="utf-8", errors="replace").splitlines()
+                 if any(k in ln for k in GW_EPOCH_LOG)]
+    c = (r.gw or {}).get("counters")
+    return {"scenario": r.obs["scenario_epochs"],
+            "gw": None if c is None else {k: c.get(k, 0) for k in ("epoch_set", "epoch_changed")},
+            "log": lines}
+
+
 def _route_points(md: dict) -> list[tuple[float, float, float]]:
     """MA_RoutePlan의 구간을 FirstInPathSegmentID → NextPathSegment 순으로 따라가 (도, 도, m)"""
     path = (md.get("Plan", {}).get("Route", {}).get("Path") or [{}])[0]

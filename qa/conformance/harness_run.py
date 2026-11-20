@@ -183,6 +183,26 @@ class ConfObserver(gp.PlanObserver):
         from swarm.v1 import common_pb2, ms_pb2, vi_pb2
         self.common, self.ms, self.vi2 = common_pb2, ms_pb2, vi_pb2
         self.bus_in: list[list] = []      # [sim_s, short, source, hdr_us, detail]
+        self.scen_epochs: list[dict] = []  # sim/ctrl/scenario의 run.epoch_utc_us가 바뀔 때마다 (DEC-098, 33차 C3)
+
+    def watch_scenario(self) -> None:
+        """sim/ctrl/scenario를 구독해 epoch_utc_us 값이 바뀔 때마다 {epoch_utc_us, wall, n}을 남긴다"""
+        from swarm.v1 import sim_pb2
+
+        def cb(s) -> None:  # noqa: ANN001
+            try:
+                sc = sim_pb2.Scenario.FromString(bytes(s.payload))
+            except Exception as e:  # noqa: BLE001
+                with self.lock:
+                    self.add("decode", f"scenario: {e}")
+                return
+            v = int(sc.run.epoch_utc_us)
+            with self.lock:
+                if self.scen_epochs and self.scen_epochs[-1]["epoch_utc_us"] == v:
+                    self.scen_epochs[-1]["n"] += 1
+                else:
+                    self.scen_epochs.append({"epoch_utc_us": v, "wall": time.time(), "n": 1})
+        self.subs.append(self.bus.subscribe("sim/ctrl/scenario", cb))
 
     def _state(self, v: int) -> str:
         return self.common.CommandState.Name(v).removeprefix("COMMAND_STATE_")
@@ -361,6 +381,7 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
         time.sleep(st.settle)
         ob = ConfObserver([st.endpoint()])
         ob.watch_onboard()
+        ob.watch_scenario()
         time.sleep(1.0)
         st.start_one("core")
         pids = {n: p.p.pid for n, p in st.procs.items()} | {p.name: p.p.pid for p in extra}
@@ -418,7 +439,8 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
         marks["snapshot"] = ob.snapshot()
         with ob.lock:
             obs = {"bus_in": list(ob.bus_in), "tx": list(ob.tx), "rx": list(ob.rx), "ts": list(ob.ts),
-                   "onboard": dict(ob.onboard), "status_hist": list(ob.status_hist)[-5:]}
+                   "onboard": dict(ob.onboard), "status_hist": list(ob.status_hist)[-5:],
+                   "scenario_epochs": list(ob.scen_epochs)}
         ob.close()
         write_json(out / "obs.json", obs)
     finally:

@@ -166,7 +166,7 @@ def run_rows(entries: list[dict]) -> list[list]:
             pv = prev.get("items", {}).get(k, {}).get("verdict") if prev else None
             cells.append(f"**{vd}** (← {pv})" if pv is not None and pv != vd else vd)
         fl = e.get("findings")
-        rows.append([i, e.get("date", UNKNOWN), f"`{e.get('out', UNKNOWN)}`", _target(e),
+        rows.append([i, e.get("date", UNKNOWN), f"`{e.get('out', UNKNOWN)}`", _target(e), e.get("contract", UNKNOWN),
                      f"`{e.get('criteria_commit', UNKNOWN)}`", f"`{e.get('tool_commit', UNKNOWN)}`",
                      e.get("seed", UNKNOWN), e.get("repeat", UNKNOWN), *cells,
                      ", ".join(fl) if isinstance(fl, list) and fl else ("없음" if fl == [] else UNKNOWN)])
@@ -232,7 +232,7 @@ def build_md(entries: list[dict], changes: list[dict], known: list[str] | None =
           "실행마다 한 행. 판정이 이전 실행과 다르면 굵게 쓰고 이전 판정을 괄호에 적는다. 기준 커밋은 그 실행 시점에 "
           "`docs/44`를 마지막으로 바꾼 커밋, 도구 커밋은 `qa/conformance/`(이력 파일 제외)를 마지막으로 바꾼 커밋이다. "
           f"원자료에 없는 값은 '{UNKNOWN}'이다.", ""]
-    L += _table(["#", "날짜", "결과 폴더", "대상 커밋", "기준 커밋", "도구 커밋", "시드", "반복", *ITEMS, "발견"],
+    L += _table(["#", "날짜", "결과 폴더", "대상 커밋", "계약", "기준 커밋", "도구 커밋", "시드", "반복", *ITEMS, "발견"],
                 run_rows(entries))
     L.append("")
     notes = [(n, e) for n, e in enumerate(entries, 1) if e.get("mode") == "backfill"]

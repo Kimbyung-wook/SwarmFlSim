@@ -172,11 +172,11 @@ def _between(a, b):  # noqa: ANN001, ANN202
 
 def test_run_rows_mark_changed_verdicts():
     rows = H.run_rows(_entries())
-    c1 = 8                                        # #, 날짜, 폴더, 대상, 기준, 도구, 시드, 반복 다음
+    c1 = 9                                        # #, 날짜, 폴더, 대상, 계약, 기준, 도구, 시드, 반복 다음
     assert rows[0][c1] == FAIL
     assert rows[1][c1] == f"**{PASS}** (← {FAIL})"
     assert rows[2][c1] == PASS                     # 바뀌지 않으면 표시 없음
-    assert rows[2][3] == "`c3` (dirty)"
+    assert rows[2][3] == "`c3` (dirty)" and rows[2][4] == "0.19.0"
     assert rows[1][-1] == "D-2"
 
 

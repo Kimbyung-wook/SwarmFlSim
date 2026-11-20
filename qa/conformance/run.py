@@ -40,7 +40,7 @@ def judge_run(rd: Path, st: dict) -> tuple[dict, dict]:
     rx, sent, negs = A.c2_inputs(r)
     c2 = J.judge_c2(rx, sent, negs)
     pairs, ts, ids, states, routes, unp = A.c3_inputs(r)
-    c3 = J.judge_c3(pairs, ts, ids, states, routes, unp)
+    c3 = J.judge_c3(pairs, ts, ids, states, routes, unp, A.c3_epoch(r))
     c4 = J.judge_c4(**A.c4_inputs(r, gwd["proto"]))
     seqs, approvals, commands = A.c5_inputs(r)
     c5 = J.judge_c5(seqs, approvals, commands)

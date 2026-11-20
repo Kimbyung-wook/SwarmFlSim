@@ -1,8 +1,8 @@
-커밋 `e91a5fe` · 계약 0.19.0 · agra_lacal `45274ce` · 실행 2026-11-19
+커밋 `cc8ddcc` · 계약 0.20.0 · agra_lacal `45274ce` · 실행 2026-11-20
 
 # 표준 적합성 점검 보고 (REQ-STD-001, DEC-092)
 
-이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-19`에 있다.
+이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-20`에 있다.
 자체 점검이다(기준 §4). 공식 A-GRA 적합성 도구와 Distribution D 문서는 쓰지 않았다.
 
 ## 1. 요약
@@ -10,7 +10,7 @@
 | 항목 | 내용 | 판정 | 핵심 수치 | 발견 |
 |---|---|---|---|---|
 | C1 | 적용 범위 표 | 통과 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | — |
-| C2 | 형식 검증 (UCI) | 통과 | 수신 9312건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
+| C2 | 형식 검증 (UCI) | 통과 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
 | C3 | 값 의미 검증 (UCI) | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | — |
 | C4 | A-GRA 기체 계층 경계 | 통과 | 구독 12·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | O-48, O-49, O-50 |
 | C5 | 상호작용 상태 흐름 | 통과 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | — |
@@ -42,6 +42,7 @@
   - 조치: DEC-094: 기체 내부 STD(계약 키 표상 swarm 밖 키로만 오감)는 'Gateway 범위 밖(기체 내부)'으로 표시하고 변환기 없음을 실패로 보지 않는다. 30차 도구부터 이 판정 문구가 나오지 않는다
 - **D-39** gateway/config/lacal_server.yaml의 external_c2 declared.sub는 MA_TaskStatus·MA_NavigationReport 둘뿐이다. 외부 클라이언트(gateway/README.md 교환 메시지 표대로)는 Gateway 발행 15흐름을 모두 구독해 받는다. accept_unknown_services=false여도 CAL Server는 선언 밖 구독을 막지 않는다.
 - **D-40** 외부 MA_FlightCommandStatus에서 ACCEPTED 뒤 CANCELED(내부 CANCELLED를 그대로 냄)나 ACCEPTED 반복이 나온다. DEC-097은 ACCEPTED·REJECTED·CANCELED를 끝 상태로 두고, 같은 CommandID에 그 뒤 보고를 내지 않게 한다. 29·31차 원자료를 32차 도구로 다시 판정해 찾았다(실제 재점검 전).
+  - 조치: IMP-GW-032(ee7aad2): Gateway가 CommandID마다 끝 상태를 보낸 뒤 상태를 더 보내지 않는다. 32차 실행(2026-11-19)에서 나오지 않았다
 - **O-47** 리더의 <기체>-fmn-lead가 접수된 같은 틱에 task-1 명령으로 바뀌어, 변화 보고(DEC-056)가 ACCEPTED 없이 CANCELLED만 보낸다. 받은 쪽은 접수된 적 없는 명령의 취소를 본다. 도구 전이 표(첫 보고 ACCEPTED·EXECUTING·REJECTED·FAILED)는 그대로 두었다. 첫 보고 CANCELLED를 허용할지는 기준 문서에서 정할 일이다.
   - 조치: DEC-097: 내부 FlightCommandStatus는 첫 보고 CANCELLED(접수 전 대체)를 허용하고, 외부 MA_*CommandStatus는 첫 보고 CANCELED를 허용한다(UCI Command-2 상태 기계). 32차 도구부터 이 판정 문구가 나오지 않는다
 - **O-48** 버스·truth·Core 모듈은 아니어서 DEC-013 경계 위반은 아니다(정보). 계약 §5 플러그인 API에 기하 도우미가 없어 런타임 모듈을 직접 쓴다. 외부 플러그인이 같은 도우미를 쓰려면 API로 올리거나 algorithms 안에 두어야 한다.
@@ -50,7 +51,7 @@
   - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
   - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:28 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - **O-49** Agent 런타임은 맡은 기체 수신만 쓰지만 구독은 엔티티 자리를 '*'로 연다. gcs-01(Gateway가 맡음)의 수신 표본도 Agent 프로세스로 온다. MA 포트 기록에는 SIM 표시 메시지가 없어 경계 위반은 아니고 받는 양만 늘어난다.
-  - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7287건
+  - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - **O-50** sim/ctrl/cmd(set_params, DEC-035)와 sim/clock/done/*(DEC-040·044)는 §3.3 본문이 Agent 구독을 정하지만 §3.2 표의 구독자 칸에는 Agent가 없다. swarm/<e>/rx/**는 §3.3(DEC-044) 표기이고 §3.2 표는 swarm/<dst>/rx/<iface>/<msg>다(Agent는 rx/**로 구독한다). 도구는 세 키를 근거와 함께 보충 허용 키로 둔다(judges.SUPPLEMENT_SUB). 기준 문서(docs/44)와 계약 문서는 고치지 않았다.
 - **O-45** 계획 strike(task-003)는 기본 TaskTracker가 보고 없이 거른다. 이번 실행은 관측기가 모의 30 s에 onboard/uav-005/StrikeCommand를 직접 내 StrikeActivity 흐름을 만들었다(Agent 발행이 아니라 C4 대상 밖).
 
@@ -61,10 +62,10 @@
 | 구분 | 내용 |
 |---|---|
 | 구성 | Logger(MCAP) · Datalink(participant datalink-0) · Agent(`agent_probe.py`가 감싼 swarm_agent.cli, agent-0) · Core(lockstep 1배속, 50 Hz, 평지) · CAL Server(agra_lacal, `lacal_server.yaml`에서 포트·server_id만 바꿈) · Gateway(`qa/gw_wrap.py`) · 외부 클라이언트(`qa/gw_ext_client.py`, external_c2) |
-| 시나리오 | `qa/out/conformance/2026-11-19/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
+| 시나리오 | `qa/out/conformance/2026-11-20/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
 | 포트 | CAL 28765/28766, Zenoh 48900~48930 (기본 데모 8765/8766·7447과 겹치지 않음) |
-| 시간 | 모의 70.0 s, 벽시계 77 s (점검 전체 171 s) |
-| 프로세스 종료 | 띄운 PID만 정리: {'logger': 20632, 'datalink': 31228, 'agent': 35132, 'core': 21648, 'calsrv': 6052, 'gateway.1': 15096, 'ext': 35352}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
+| 시간 | 모의 70.0 s, 벽시계 79 s (점검 전체 171 s) |
+| 프로세스 종료 | 띄운 PID만 정리: {'logger': 21880, 'datalink': 16260, 'agent': 17296, 'core': 22760, 'calsrv': 26736, 'gateway.1': 29140, 'ext': 20400}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
 | 로그 이상 | 0줄 |
 
 입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 관측기가 본 뒤 재개했다.
@@ -194,7 +195,7 @@
 | MA_PackagePartnerStatusReport | 1050 | 0 |
 | MA_PositionReport | 2030 | 0 |
 | MA_TaskStatus | 34 | 0 |
-| PO_Activity | 4970 | 0 |
+| PO_Activity | 4969 | 0 |
 | StoreLoadoutConfiguration | 8 | 0 |
 | StrikeActivity | 1 | 0 |
 | SystemStatus | 14 | 0 |
@@ -231,14 +232,18 @@
 | NED→FRD 오일러각 (rad) | 1e-06 | 0 | 통과 |
 | Timestamp − 모의 시각 변동 (s) | 0.5 | 2.38e-07 | 통과 |
 | 수신 RoutePlan 좌표 (°) / 고도 (m) | 1e-09 / 1e-09 | GCS 송신 mp/RoutePlan 0/0 (3→3점) · uav-011 수신 0/0 (3→3점) | 통과 |
+| Timestamp − 모의 시각 = 시나리오 epoch (s) | 0.5 | 0.000000 | 통과 |
+| Gateway epoch_changed | 0 | 0 | 통과 |
 
-Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795068467.355 s, 최대 1795068467.355 s. 값이 UNIX 시각 크기라 모의 시각 0에 묶인 기준이 아니고, 변동 폭이 실행 중 일시정지한 벽시계 시간과 비슷하다.
+Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795139595.984765 s, 최대 1795139595.984765 s.
+
+시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795139595984765], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
 
 | 식별자 종류 | 참조 수 | 내부 ID 수 | 같은 ID에 UUID 여럿 | 같은 UUID에 표지 여럿 | 표지 없음 |
 |---|---|---|---|---|---|
 | SystemID | 4225 | 15 | 0 | 0 | 0 |
 | TaskID | 38 | 10 | 0 | 0 | 0 |
-| CapabilityID | 5055 | 24 | 0 | 0 | 0 |
+| CapabilityID | 5054 | 24 | 0 | 0 | 0 |
 | StoreLoadoutConfigurationID | 8 | 8 | 0 | 0 | 0 |
 | RequestID | 5 | 5 | 0 | 0 | 0 |
 | OperatorRoleID | 4 | 1 | 0 | 0 | 0 |
@@ -247,13 +252,13 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795068467.355 s, 최�
 | ApplicablePackageID | 1 | 1 | 0 | 0 | 0 |
 | ProposedLeaderID | 1 | 1 | 0 | 0 | 0 |
 | CommandID | 1069 | 20 | 0 | 0 | 0 |
-| SubsystemID | 5097 | 66 | 0 | 0 | 0 |
-| ActivityID | 5041 | 10 | 0 | 0 | 0 |
+| SubsystemID | 5096 | 66 | 0 | 0 | 0 |
+| ActivityID | 5040 | 10 | 0 | 0 | 0 |
 | PackageID | 1050 | 1 | 0 | 0 | 0 |
 | EntityID | 117 | 2 | 0 | 0 | 0 |
 | AssociatedID | 117 | 1 | 0 | 0 | 0 |
 
-머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9312)].
+머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9311)].
 
 상태값(DEC-090): 내부↔외부 순서 짝 {'TaskStatus': 33, 'FlightCommandStatus': 19}. 표와 다른 대응 0종. 대응 표:
 
@@ -329,7 +334,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | VI | MA<- | swarm.v1.FlightCommandStatus | 17529 | VI | STD | 예 |
 | VI | MA<- | swarm.v1.NavigationReport | 53565 | VI | STD | 예 |
 
-- 정보: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7287건
+- 정보: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - 정보: algorithms/src/swarm_algorithms/common.py:17 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - 정보: algorithms/src/swarm_algorithms/common.py:18 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - 정보: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
@@ -354,10 +359,10 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 
 | 기체 | 작업 | 승인 필요 | 요청 | 응답 | 응답 모의 s | 첫 EXECUTING 모의 s | 판정 |
 |---|---|---|---|---|---|---|---|
-| uav-001 | ap-yes | 예 | 예 | approved | 10.48 | 10.62 | 통과 |
-| uav-002 | ap-no | 예 | 예 | rejected | 10.5 | — | 통과 |
+| uav-001 | ap-yes | 예 | 예 | approved | 10.78 | 10.92 | 통과 |
+| uav-002 | ap-no | 예 | 예 | rejected | 10.8 | — | 통과 |
 | uav-003 | ap-to | 예 | 예 | 없음 | — | — | 통과 |
-| uav-004 | task-001 | 예 | 예 | approved | 0.04 | 0.18 | 통과 |
+| uav-004 | task-001 | 예 | 예 | approved | 0.12 | 0.26 | 통과 |
 | uav-009 | x-hold | 아니오 | 아니오 | 없음 | — | 10.12 | 통과 |
 | uav-010 | x-rtb | 아니오 | 아니오 | 없음 | — | 10.14 | 통과 |
 
@@ -388,7 +393,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | swarm_gateway | pub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
 | swarm_gateway | pub | MA_PositionReport@swarm.vi | 980 | 일치 |
 | swarm_gateway | pub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
-| swarm_gateway | pub | PO_Activity@swarm.ms | 4970 | 일치 |
+| swarm_gateway | pub | PO_Activity@swarm.ms | 4969 | 일치 |
 | swarm_gateway | pub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
 | swarm_gateway | pub | StrikeActivity@swarm.ms | 1 | 일치 |
 | swarm_gateway | pub | SystemStatus@swarm.vi | 14 | 일치 |
@@ -411,7 +416,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | external_c2 | sub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
 | external_c2 | sub | MA_PositionReport@swarm.vi | 980 | 일치 |
 | external_c2 | sub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
-| external_c2 | sub | PO_Activity@swarm.ms | 4970 | 일치 |
+| external_c2 | sub | PO_Activity@swarm.ms | 4969 | 일치 |
 | external_c2 | sub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
 | external_c2 | sub | StrikeActivity@swarm.ms | 1 | 일치 |
 | external_c2 | sub | SystemStatus@swarm.vi | 14 | 일치 |
@@ -429,7 +434,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | MA_PositionReport@swarm.p2p | 1050 | 1050 | 예 |
 | MA_PositionReport@swarm.vi | 980 | 980 | 예 |
 | MA_TaskStatus@swarm.c2 | 34 | 34 | 예 |
-| PO_Activity@swarm.ms | 4970 | 4970 | 예 |
+| PO_Activity@swarm.ms | 4969 | 4969 | 예 |
 | StoreLoadoutConfiguration@swarm.ms | 8 | 8 | 예 |
 | StrikeActivity@swarm.ms | 1 | 1 | 예 |
 | SystemStatus@swarm.vi | 14 | 14 | 예 |
