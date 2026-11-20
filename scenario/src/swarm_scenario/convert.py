@@ -16,7 +16,7 @@ from google.protobuf.message import Message
 from swarm.v1 import common_pb2, entity_pb2, link_pb2, mp_pb2, sim_pb2
 
 from .enums import from_proto_json, full_to_short, short_to_full, to_proto_json
-from .validate import check
+from .validate import check, format_epoch_utc, parse_epoch_utc
 
 SCHEMA_VERSION = "0.1"
 
@@ -42,6 +42,7 @@ class Scenario:
     mission_plan: mp_pb2.MissionPlan | None = None
     engagement_criteria: mp_pb2.EngagementCriteria | None = None
     link_profiles: list[link_pb2.LinkProfile] = field(default_factory=list)  # DEC-029
+    epoch_utc_us: int = 0  # 모의 시각 0의 UTC (Unix epoch µs). 0이면 Core가 채운다 (DEC-098)
 
     def entity(self, entity_id: str) -> entity_pb2.EntitySpec:
         return next(e for e in self.entities if e.id == entity_id)
@@ -78,6 +79,7 @@ def from_dict(doc: dict[str, Any]) -> Scenario:
         start=start,
         duration_s=run.get("duration_s"),
         participants=list(run.get("participants", [])),
+        epoch_utc_us=parse_epoch_utc(run["epoch_utc"]) if "epoch_utc" in run else 0,
         entities=[_parse(e, entity_pb2.EntitySpec()) for e in doc["entities"]],
         mission_plan=_parse(doc["mission_plan"], mp_pb2.MissionPlan()) if "mission_plan" in doc else None,
         engagement_criteria=(_parse(doc["engagement_criteria"], mp_pb2.EngagementCriteria())
@@ -98,6 +100,8 @@ def to_dict(sc: Scenario) -> dict[str, Any]:
         run["duration_s"] = sc.duration_s
     if sc.participants:
         run["participants"] = list(sc.participants)
+    if sc.epoch_utc_us:
+        run["epoch_utc"] = format_epoch_utc(sc.epoch_utc_us)
     doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION, "name": sc.name}
     if sc.description:
         doc["description"] = sc.description
@@ -131,6 +135,7 @@ def to_proto(sc: Scenario) -> sim_pb2.Scenario:
             rate=sc.start.rate,
             duration_s=sc.duration_s or 0.0,
             participants=sc.participants,
+            epoch_utc_us=sc.epoch_utc_us,
         ),
         entities=sc.entities,
         link_profiles=sc.link_profiles,
@@ -153,6 +158,7 @@ def from_proto(msg: sim_pb2.Scenario) -> Scenario:
         start=sim_pb2.Start(mode=run.mode, rate=run.rate, frame_hz=run.frame_hz, seed=run.seed),
         duration_s=run.duration_s or None,
         participants=list(run.participants),
+        epoch_utc_us=run.epoch_utc_us,
         entities=list(msg.entities),
         mission_plan=msg.mission_plan if msg.HasField("mission_plan") else None,
         engagement_criteria=msg.engagement_criteria if msg.HasField("engagement_criteria") else None,

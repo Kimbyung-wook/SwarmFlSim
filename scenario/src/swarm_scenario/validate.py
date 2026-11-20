@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from functools import cache
 from importlib import resources
 from typing import Any
@@ -53,6 +54,24 @@ def _inside(extent: dict[str, float], pos: dict[str, Any]) -> bool:
             and extent["west_deg"] <= pos["lon_deg"] <= extent["east_deg"])
 
 
+_UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def parse_epoch_utc(text: str) -> int:
+    """ISO 8601(시간대 필수) → Unix epoch µs (DEC-098). 형식이 틀리면 ValueError"""
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        raise ValueError("시간대가 없다 (Z 또는 +hh:mm 필수)")
+    d = dt - _UNIX_EPOCH
+    return (d.days * 86400 + d.seconds) * 1_000_000 + d.microseconds
+
+
+def format_epoch_utc(us: int) -> str:
+    """Unix epoch µs → 'YYYY-MM-DDTHH:MM:SS[.ffffff]Z'"""
+    dt = _UNIX_EPOCH + timedelta(microseconds=us)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S") + (f".{dt.microsecond:06d}" if dt.microsecond else "") + "Z"
+
+
 def _semantic(doc: dict[str, Any]) -> list[Issue]:
     issues: list[Issue] = []
     extent = doc["map"]["extent"]
@@ -64,6 +83,13 @@ def _semantic(doc: dict[str, Any]) -> list[Issue]:
         issues.append(Issue("/map/extent", f"한반도 범위 {KOREA_BOUNDS} 밖이다 (DEC-016)"))
     if not _inside(extent, doc["map"]["origin"]):
         issues.append(Issue("/map/origin", "맵 범위 밖이다"))
+
+    if "epoch_utc" in doc["run"]:
+        try:
+            if parse_epoch_utc(doc["run"]["epoch_utc"]) == 0:
+                issues.append(Issue("/run/epoch_utc", "1970-01-01T00:00:00Z는 쓸 수 없다(0은 '비움'이다, DEC-098)"))
+        except ValueError as e:
+            issues.append(Issue("/run/epoch_utc", f"올바른 ISO 8601 시각이 아니다: {e}"))
 
     kinds: dict[str, str] = {}
     for i, ent in enumerate(doc["entities"]):
