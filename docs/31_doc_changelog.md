@@ -124,3 +124,4 @@
 | 2026-11-20 | `e872a09` | DEC-098, OPN-070, IMP-API-024, TC-API-010 | 계약 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(시나리오 JSON `run.epoch_utc`), 계약 §1 시간 규칙 | 시나리오 작성(`run.epoch_utc`), 시각 해석 | 미처리 | |
 | 2026-11-20 | `553e539` | IMP-SCN-012, TC-SCN-015~016, DEC-098 | WP7: 시나리오 JSON `run.epoch_utc`(ISO 8601, 시간대 필수) ⇄ `RunSpec.epoch_utc_us` | 시나리오 작성(`run.epoch_utc`) | 미처리 | |
 | 2026-11-20 | `a16c074` | IMP-GW-033, TC-GW-042~043, DEC-098 | WP9: UCI 시각 기준 = `--sim-epoch` > 시나리오 `epoch_utc_us` > 첫 메시지, 첫 메시지 기준 뒤 시나리오 값이 오면 바꿈(`epoch_changed`) | Gateway `--sim-epoch` 설명 | 미처리 | |
+| 2026-11-20 | `38f05d3` | IMP-CORE-031, TC-CORE-046, DEC-098 | WP1: Core가 시나리오 적재·Reset 때 `epoch_utc_us`가 비면 벽시계 UTC로 채워 `sim/ctrl/scenario`로 발행. msvc ctest 74/74, mingw·linux 미빌드 | 없음 | 미처리 | |
