@@ -4662,3 +4662,99 @@ wp0-contracts 최신(b763a74)을 병합했다. ee7aad2(WP9 IMP-GW-032)와 095abb
 
 - **결함 40건**: 해소 31, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
 - **관찰 50건**: 해소 11, 결정됨 22, 아직 열림 17, 사용자 결정 필요 0.
+
+## 42. 33차 점검: 계약 0.20.0(DEC-098 모의 시각 기준) 뒤 표준 적합성 재점검 (2026-11-20)
+
+wp0-contracts 최신(4185d7f)을 병합했다(fast-forward). 들어온 것은 다음과 같다.
+
+- e872a09: 계약 0.20.0, `RunSpec.epoch_utc_us`
+- 553e539: WP7 `run.epoch_utc`
+- a16c074: WP9, UCI 시각 기준 = 시나리오 epoch
+- 38f05d3: WP1 Core, 적재 때 epoch를 채움
+
+C3에 DEC-098 확인을 더해 커밋했다(cc8ddcc). 작업 트리가 깨끗한 cc8ddcc에서 다음 명령으로 실행했다. 시드는 20261117이고, 2회 반복했다. 걸린 시간은 171 s다.
+
+`uv run python qa/conformance/run.py --out qa/out/conformance/2026-11-20 --repeat 2`
+
+실행 뒤에 docs/47 실행 이력에 계약 버전 열을 더했다(a658f3d, 문서 생성만).
+
+### 42.1 실행 준비에서 생긴 일
+
+- 처음 실행은 시나리오 변환에서 멈췄다(`RunSpec has no "epoch_utc_us" field`).
+  - 원인: `api/python/src/swarm/v1/*_pb2.py`가 git 밖 생성물인데 0.20.0 proto로 다시 만들지 않았다.
+  - `uv run python scripts/gen_proto.py`로 다시 만들었다. 프로세스는 하나도 뜨지 않았다.
+- 두 번째 실행에서 C3가 실패했다. `sim/ctrl/scenario`의 `epoch_utc_us`가 0이었다.
+  - 원인: 점검 하네스는 `build/msvc-release`의 Core를 쓰는데(`harness_run.py` `h.BUILD`), msvc-debug만 다시 빌드했다. release Core에는 IMP-CORE-031이 없었다.
+  - 이 실행의 이력 줄은 커밋 전에 되돌렸다. 낡은 빌드로 얻은 판정이라 실행 이력으로 남기지 않는다. 원자료는 `qa/out/conformance/2026-11-20_stale_release`에 두었다.
+  - msvc-release를 Zenoh 1.10.2(`CMAKE_PREFIX_PATH=C:/dev/zenoh`, `SWARM_BUS_WITH_ZENOH=ON`)로 다시 빌드하고 다시 실행했다.
+- 이 실행에서도 Gateway epoch_changed는 0이었다. 시나리오 epoch가 0이라 기준을 정하지 못했고, 첫 메시지 기준(`no scenario epoch yet`)에 머물렀다. 그래서 확인 (b)만으로는 시각 기준 잘못을 잡지 못한다. 확인 (a)가 함께 있어야 한다.
+
+### 42.2 판정
+
+| 항목 | 32차 | 33차 | 핵심 수치(33차) |
+|---|---|---|---|
+| C1 | 통과 | 통과 | 실패 0 |
+| C2 | 통과 | 통과 | 수신 9311건·실패 0 |
+| C3 | 통과 | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s, epoch 차 0.000000 s, epoch_changed 0 |
+| C4 | 통과 | 통과 | 허용 밖 0 |
+| C5 | 통과 | 통과 | 전이 위반 0건 |
+| C6 | 통과 | 통과 | 선언 불일치 0 |
+| C7 | 정보 | 정보 | 버스 직접 열기 0, open_bus 6/6 |
+
+- 2회 반복에서 판정과 실패 문구가 같았다.
+- 미분류 실패는 0이다.
+- 띄운 프로세스 7개는 모두 끝났다(PID로 확인).
+- 발견은 O-48·O-49만 재현했다(C4 정보성). 해소·신규는 없다.
+
+### 42.3 C3 시각 기준 확인 (DEC-098)
+
+| 확인 | 기준 | run1 | run2 |
+|---|---|---|---|
+| (a) UCI Timestamp − 모의 시각 = `sim/ctrl/scenario` epoch_utc_us | 차 ≤ 0.5 s (기존 C3 `ts_spread_s`) | 2030건, 최대 차 2.4e-7 s, epoch 1795139595984765 | 같은 판정, epoch 1795139678716424 |
+| (b) Gateway epoch_changed | 0 | 0 (epoch_set 1) | 0 (epoch_set 1) |
+
+- Core 로그 첫 줄: `epoch_utc_us=… (wall clock)`. 시나리오에 값이 없어 적재 때 벽시계로 채웠다.
+- Gateway 로그: `UCI time = 2026-11-20T01:53:15.984765Z + sim time (scenario epoch)`. `no scenario epoch yet` 경고는 없다.
+- 실행마다 epoch가 다르다(벽시계로 채움). 반복 비교는 수치를 빼고 비교하므로 판정에는 영향이 없다.
+
+도구 변경은 다음과 같다.
+
+- 관측기가 `sim/ctrl/scenario`를 구독해 epoch 값이 바뀔 때마다 `obs.json` `scenario_epochs`에 남긴다.
+- Gateway 카운터는 `gw1.json`에서 읽는다.
+- Gateway 로그의 기준 관련 줄(`no scenario epoch yet`, `UCI time base changed`)을 함께 싣는다.
+- 33차 이전 원자료에는 epoch 기록이 없다. 이런 원자료는 이 확인을 건너뛰고 정보로 적는다. 32차 원자료 재판정은 C3 통과다(`qa/out/conformance/qa33_rejudge32`).
+
+### 42.4 기동 순서와 epoch_changed
+
+하네스는 CAL Server → Logger → Datalink → Agent → Gateway → 외부 클라이언트 → 관측기 → Core 순으로 띄운다. Gateway가 Core보다 먼저 뜬다. 그래도 epoch_changed는 0이었다.
+
+- Core는 적재 직후, 첫 틱 전에 `sim/ctrl/scenario`를 발행한다. lockstep 준비 대기 중에는 1초마다 다시 발행한다.
+- Gateway가 첫 버스 메시지(`swarm/<gcs>/rx/**`)를 받는 것은 기체가 보고를 시작한 뒤, 즉 첫 틱 뒤다.
+- 그래서 Gateway는 첫 메시지보다 시나리오를 먼저 받아 'scenario' 기준으로 정한다(epoch_set 1).
+
+epoch_changed가 0이 아닐 수 있는 경우는 다음과 같다.
+
+- Gateway가 Core의 마지막 재발행 뒤(실행 중)에 붙는 경우: 첫 메시지 기준으로 시작한다. Core는 실행 중에 시나리오를 다시 발행하지 않으므로 기준이 바뀌지 않는다. epoch_changed는 0인 채로 기준만 틀린다. (a)가 이를 잡는다.
+- 실행 중 새 시나리오 적재·Reset: epoch가 바뀌면 epoch_changed가 1 이상이 된다. 의도된 변경이다.
+
+결론: 지금 하네스의 기동 순서는 바꿀 필요가 없다. 기준 문서 보완이 필요한 점은 아래 PM 전달 사항에 적었다.
+
+### 42.5 PM에게 넘기는 것 (docs/44, QA는 고치지 않음)
+
+- docs/44 C3 행에 DEC-098 확인 두 가지를 적어야 한다. (a) Timestamp − 모의 시각 = `sim/ctrl/scenario` epoch_utc_us, 허용 오차 0.5 s. (b) Gateway epoch_changed 0.
+- (b)는 (a)와 함께 써야 한다는 문구가 필요하다. 시나리오 epoch가 0이거나 Gateway가 실행 중에 붙으면 (b)는 0이어도 기준이 틀릴 수 있다.
+- 점검 전 빌드 조건: 하네스는 msvc-release Core를 쓴다. 계약 proto가 바뀌면 `scripts/gen_proto.py`도 다시 돌려야 한다. docs/44 §5 실행 절차에 적을지는 PM이 정한다.
+
+### 42.6 시험
+
+`uv run python -m pytest qa/conformance/tests -q`: 85개 통과.
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-184 | (a) epoch 일치·불일치, 관측 0건·값 0 실패, 값 여럿이면 마지막 값과 비교하고 정보, 33차 이전 원자료는 건너뜀 | 통과 |
+| TC-QA-185 | (b) epoch_changed 0 통과·1 이상 실패·카운터 없음 실패, C3 결과와 docs/45 표 행 | 통과 |
+| TC-QA-186 | 실제 재점검 2회(§42.2) | 측정 |
+
+### 42.7 결함·관찰 현황
+
+변화 없음. 결함 40건은 해소 31, 결정됨 9, 아직 열림 0이다. 관찰 50건은 해소 11, 결정됨 22, 아직 열림 17이다.
