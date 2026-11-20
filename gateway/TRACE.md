@@ -1,7 +1,8 @@
 # gateway 추적표 (모듈 코드 GW)
 
-- 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-075(외부 승인 응답), DEC-076(임무 계획 수신), DEC-077(`publisher`), DEC-088(A-GRA 송신 4종), DEC-089(변화 보고 복구), DEC-090(XSD 상태 표현), DEC-097(외부 명령 상태 Command-2 상태 기계), QA 29차 D-35·D-36·D-39(`docs/45_standards_report.md` §2, 기준 `docs/44_standards_conformance.md`), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
-- 계약 버전: 0.19.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 16c4e29 병합. 3bc27f5 O-50·da9287c DEC-097은 등록부·계약 문서 문구, 계약 버전 변경 없음). 0.16.0~0.19.0의 바뀐 점(`GcsHeartbeat`·`lost_link_policy` EXT, `NavigationBatch`·`ControlBatch` SIM, `ordered` 구독, `link/state` 분산)은 Gateway 동작에 영향이 없다. 새 EXT·SIM은 descriptor 매핑으로 내보내지 않는다
+- 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-075(외부 승인 응답), DEC-076(임무 계획 수신), DEC-077(`publisher`), DEC-088(A-GRA 송신 4종), DEC-089(변화 보고 복구), DEC-090(XSD 상태 표현), DEC-097(외부 명령 상태 Command-2 상태 기계), DEC-098(모의 시각 기준 시각), DEC-096(`sim/ctrl/scenario` 구독자), QA 29차 D-35·D-36·D-39(`docs/45_standards_report.md` §2, 기준 `docs/44_standards_conformance.md`), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
+- 계약 버전: 0.20.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 0d984a1 병합). 0.20.0은 `RunSpec.epoch_utc_us`(DEC-098)와 §3.2 `sim/ctrl/scenario` 구독자에 Gateway(DEC-096)를 더했다. `gateway/uv.lock`의 swarm-api 버전을 갱신했다. 0.16.0~0.19.0의 바뀐 점(`GcsHeartbeat`·`lost_link_policy` EXT, `NavigationBatch`·`ControlBatch` SIM, `ordered` 구독, `link/state` 분산)은 Gateway 동작에 영향이 없다. 새 EXT·SIM은 descriptor 매핑으로 내보내지 않는다
+- 8차(2026-11-20): DEC-098(UCI 시각 기준 = 시나리오 `run.epoch_utc_us`), OPN-GW-001·002 해소
 - 7차(2026-11-19): DEC-097(외부 명령 상태: 끝 상태 뒤 보고하지 않음, QA D-37·O-47의 Gateway 쪽)
 - 6차(2026-11-18): QA 29차 D-35(알려지지 않은 기체 명령 거부·외부 통지), D-36(UCI 시각 = 모의 시각), D-39(`external_c2` `declared.sub`)
 - 5차(2026-11-16): DEC-089(늦게 붙은 외부 시스템에 변화 보고 마지막 값), DEC-088(송신 4종 시험), DEC-090(상태 enum 확인), QA O-20(`declared.pub`)
@@ -46,6 +47,7 @@
 | IMP-GW-030 | UCI 시각 = 모의 시각: 머리 `Timestamp`와 위치·속도·자세 시각은 메시지 `header.sim_time_us`(비면 봉투 머리)의 UTC다. `MA_Entity`의 운동·식별 시각은 `observed_time_us`. UTC = 기준 시각 + 모의 시각이며, 기준 시각은 `--sim-epoch`(ISO 8601, 시간대 필수) 또는 처음 받은 메시지에서 한 번 정한다(벽시계 − 그 모의 시각, 로그에 남김). 정한 뒤 바꾸지 않아 일시정지·배속에서 (Timestamp − 모의 시각)이 일정하다. 계약에 대응이 없어 OPN-GW-002로 올린다 | `src/swarm_gateway/converters/base.py`(`SimClock`), `converters/p2p.py`, `gateway.py`, `__main__.py` | QA D-36 | TC-GW-037 통과 |
 | IMP-GW-031 | CAL Server 설정 `external_c2` `declared.sub`를 Gateway가 외부로 내는 흐름 15개 전부(= `swarm_gateway` `declared.pub`, README 교환 표 발행 행)로 고쳤다. 전에는 `MA_TaskStatus`, `MA_NavigationReport` 둘뿐이었다 | `config/lacal_server.yaml` | QA D-39 | TC-GW-038 통과 |
 | IMP-GW-032 | 외부 명령 상태 상태 기계: 내보낼 OMS JSON의 `MessageData`에 `CommandID`·`CommandProcessingState`가 있는 메시지(메시지 이름 하드코딩 없음, 지금은 `MA_FlightCommandStatus`)를 (UCI 메시지, 보고 기체, CommandID)별로 본다. 끝 상태(ACCEPTED·REJECTED·CANCELED)를 낸 뒤의 보고와 RECEIVED 반복은 내지 않는다(`skipped_command_state`, 결과 `skipped_command_state`). 첫 보고는 무엇이든 낸다(첫 CANCELED 포함). 기억은 최근 65536개 ID. `FlightCommandStatus`를 변화 보고 보관(IMP-GW-024)에서 뺐다. 재기동하면 기억이 비고, 처음 보는 ID의 보고를 첫 보고로 낸다(README) | `src/swarm_gateway/command_state.py`, `gateway.py`, `retain.py` | DEC-097 | TC-GW-039~041 통과 |
+| IMP-GW-033 | UCI 시각 기준 시각의 출처와 우선순위(계약 0.20.0 §1): `--sim-epoch`(명시 재정의) > `sim/ctrl/scenario`의 `Scenario.run.epoch_utc_us`(0이 아닐 때) > 시나리오 전 첫 메시지 벽시계 기준(경고 로그). 첫 메시지 기준으로 정한 뒤 시나리오 값이 오면 시나리오 값으로 바꾸고 차이를 경고 로그와 `epoch_changed`에 남긴다. 새 시나리오의 다른 값이면 다시 정하고, 같은 값 재발행·0은 그대로 둔다. `--sim-epoch`가 있으면 시나리오 값은 로그만 남긴다. 시나리오는 한 번 해석해 알려진 기체(IMP-GW-029)와 시각에 함께 쓴다 | `src/swarm_gateway/converters/base.py`(`SimClock.on_scenario_epoch`), `gateway.py`, `entities.py`, `__main__.py` | DEC-098, QA D-36 | TC-GW-042, TC-GW-043 통과 |
 | IMP-GW-013 | CAL Server 설정(서비스 `swarm_gateway`, `external_c2`, 토픽 `swarm.*`)과 기동 래퍼(서브모듈 수정 없음) | `config/lacal_server.yaml`, `src/swarm_gateway/lacal_server.py` | DEC-069 | TC-GW-010 통과, 수동 기동 확인 |
 
 ## 시험 (TC)
@@ -91,10 +93,12 @@
 | TC-GW-039 | 내부 ACCEPTED→EXECUTING→COMPLETED·CANCELLED·FAILED, REJECTED→EXECUTING, 첫 CANCELLED(→ACCEPTED), RECEIVED 반복→ACCEPTED→COMPLETED, 첫 보고 EXECUTING, ACCEPTED 반복이 외부로 끝 상태 한 번(docs/44 C5 '명령 상태' 규칙 통과). ID·기체별 분리, `MA_TaskStatus`는 상태 기계 밖 | `tests/test_command_state.py` | IMP-GW-032 | 통과 |
 | TC-GW-040 | 게이트 단위 규칙(RECEIVED 반복, 끝 상태 뒤 거부, 명령 상태가 아닌 메시지, 상한). 재기동한 Gateway는 끝난 ID의 다음 보고를 한 번 내고 그 뒤 막음 | `tests/test_command_state.py` | IMP-GW-032 | 통과 |
 | TC-GW-041 | `MA_FlightCommandStatus`는 늦게 붙은 구독자 전달 대상이 아님 | `tests/test_command_state.py`, `tests/test_late_join.py` | IMP-GW-032, IMP-GW-024 | 통과 |
+| TC-GW-042 | 우선순위: 시나리오 기준 시각을 씀(`epoch_set`), `--sim-epoch`가 시나리오 값보다 우선, 시나리오 값 0이면 첫 메시지 벽시계 기준과 경고 로그 | `tests/test_epoch.py` | IMP-GW-033 | 통과 |
+| TC-GW-043 | 첫 메시지 기준 뒤 시나리오 값이 오면 바꾸고 경고(`epoch_changed`), 그 뒤 (Timestamp − 모의 시각) 일정. 같은 값 재발행은 그대로, 새 시나리오 다른 값은 다시 정함, 0은 그대로. `SimClock` 단위 규칙, proto 필드 번호 | `tests/test_epoch.py` | IMP-GW-033 | 통과 |
 | TC-GW-034 | `lacal_server.yaml`의 `swarm_gateway` `declared.pub`·`sub`이 Gateway의 실제 PUB·SUB와 같음(`MA_PositionReport` 포함), `external_c2` pub = Gateway 수신 | `tests/test_reports_088.py` | IMP-GW-028 | 통과 |
 | TC-GW-015 | 실제 CAL Server 접속에서 로그 순서: connected/not ready → XSD → SUB → ready | `tests/test_roundtrip.py` | IMP-GW-017 | 통과 |
 
-시험 결과: `cd gateway && uv run pytest` → 131 passed (2026-11-19, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 6차는 117 passed (2026-11-18, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 5차는 106 passed (2026-11-16, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 4차는 85 passed(`--extra zenoh` 환경 84 passed, 1 skipped). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
+시험 결과: `cd gateway && uv run pytest` → 137 passed (2026-11-20, Windows 11, Python 3.12, 계약 0.20.0, Zenoh 미설치 환경). 7차는 131 passed (2026-11-19, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 6차는 117 passed (2026-11-18, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 5차는 106 passed (2026-11-16, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 4차는 85 passed(`--extra zenoh` 환경 84 passed, 1 skipped). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
 
 ## 매핑 표 (descriptor에서 생성, `MappingTable.markdown()`)
 
@@ -155,13 +159,13 @@
 | CR-GW-007 | proto `mp`/`c2`, 등록부 §5 | `MA_MissionPlan`의 `TaskPlanID` 내용을 받으려면 `MA_TaskPlan`·`MA_Task`에 대응하는 내부 STD 매핑이 필요하다. 영역 탐색 등 경로가 아닌 위치 작업은 이 매핑 뒤에 받는다 | 공개 XSD의 `MA_MissionPlan`은 하위 계획을 ID로만 참조하고, 작업 내용은 별도 메시지 `MA_Task`(TaskType 선택)에 있다. proto에 대응 메시지가 없다 |
 | CR-GW-008 | WP3 Agent, `algorithms/` (`TaskTracker`) | 실행 중 받은 `MissionPlan`을 작업 대기열에 반영한다. 지금은 `TaskTracker`와 `formation`이 `mission_plan()`을 초기화 때 한 번만 읽어, `MPPortImpl`이 받은 새 계획을 수행하지 않는다 | Gateway는 `tx/mp/MissionPlan`까지 보내지만 내장 MA가 쓰지 않는다. 실행 중 바로 수행되는 경로는 `waypoint` MA의 `RoutePlan`뿐이다 (`algorithms/src/swarm_algorithms/common.py:71`, `waypoint.py:36`) |
 | CR-GW-009 | 등록부(DEC), 시나리오 | 계획 대상 `ApplicableToIDs`의 `PackageID`·`ALL`을 엔티티로 펴는 규칙. 필요하면 그룹 ↔ 패키지 대응과 GCS가 지휘하는 기체 목록을 Gateway에 알리는 방법을 정한다 | Gateway는 그룹 구성원을 읽지 않아 `dst`를 채울 수 없다. 지금은 거부한다. 6차부터 시나리오 엔티티 목록은 읽는다(IMP-GW-029) |
-| OPN-GW-001 | 계약 §3.2 키 표 `sim/ctrl/scenario` 구독자 | 구독자에 Gateway를 더한다(용도: 알려진 기체 목록, 읽기만) | D-35는 "알려진 엔티티를 truth가 아니라 Gateway가 받을 수 있는 정보로" 정하라고 했다. 시나리오는 늦게 켠 참여자도 받는 유일한 엔티티 목록이다. 지금 표에는 Datalink·Agent·Logger·UI만 있다. 계약 변경 없이 쓰려면 수신 보고만으로 정해야 하는데, 그러면 아직 보고하지 않은 기체(기동 직후)에 대한 정상 명령이 거부된다 |
-| OPN-GW-002 | 계약 시각 규칙(`Header.sim_time_us`), `Scenario` | 모의 시각 0의 UTC(기준 시각)를 계약에 정한다. 예: `Scenario`에 `epoch_utc` 필드를 두거나 "UTC = 시나리오 시작 벽시계 + 모의 시각" 규칙을 적는다 | D-36은 "모의 시각과 UTC 기준 시각의 대응은 기존 계약을 따르라"고 했으나 계약에는 대응이 없다. Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정해 (Timestamp − 모의 시각)을 일정하게 했다. 참여자마다(Logger·UI 등) 기준이 다를 수 있고, Gateway 재기동 시 기준이 바뀐다(`--sim-epoch`로 고정 가능) |
+| ~~OPN-GW-001~~ | 해소: DEC-096 (계약 0.20.0 §3.2 표에 Gateway 추가). 원문 대상: 계약 §3.2 키 표 `sim/ctrl/scenario` 구독자 | 구독자에 Gateway를 더한다(용도: 알려진 기체 목록, 읽기만) | D-35는 "알려진 엔티티를 truth가 아니라 Gateway가 받을 수 있는 정보로" 정하라고 했다. 시나리오는 늦게 켠 참여자도 받는 유일한 엔티티 목록이다. 지금 표에는 Datalink·Agent·Logger·UI만 있다. 계약 변경 없이 쓰려면 수신 보고만으로 정해야 하는데, 그러면 아직 보고하지 않은 기체(기동 직후)에 대한 정상 명령이 거부된다 |
+| ~~OPN-GW-002~~ | 해소: DEC-098 (계약 0.20.0 `RunSpec.epoch_utc_us`), IMP-GW-033. 원문 대상: 계약 시각 규칙(`Header.sim_time_us`), `Scenario` | 모의 시각 0의 UTC(기준 시각)를 계약에 정한다. 예: `Scenario`에 `epoch_utc` 필드를 두거나 "UTC = 시나리오 시작 벽시계 + 모의 시각" 규칙을 적는다 | D-36은 "모의 시각과 UTC 기준 시각의 대응은 기존 계약을 따르라"고 했으나 계약에는 대응이 없다. Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정해 (Timestamp − 모의 시각)을 일정하게 했다. 참여자마다(Logger·UI 등) 기준이 다를 수 있고, Gateway 재기동 시 기준이 바뀐다(`--sim-epoch`로 고정 가능) |
 | (원문) CR-GW-001 | `proto/swarm/v1/vi.proto`, `p2p.proto`, 등록부 §5 | `NavigationReport`의 `uci_name`을 `MA_PositionReport`로 바꾸거나, 한 내부 메시지가 UCI 메시지 여러 개에 대응할 수 있게 옵션을 늘린다(예: `repeated string uci_also`). `PeerStatus`의 운동 상태도 같은 방식으로 `MA_PositionReport`에 싣는다 | 공개 XSD의 `MA_NavigationReport`·`MA_PackagePartnerStatusReport`에는 위치가 없다. 위치는 `MA_PositionReport`(InertialState: Position·DomainVelocity·Orientation)에 있다. 등록부 §5도 후보로 `MA_PositionReport`를 적었다 |
 | CR-GW-004 | 루트 `pyproject.toml` | `[tool.uv.workspace] members`, `[tool.uv.sources]`, dev 그룹, `testpaths`에 `gateway`(`swarm-gateway`)를 추가한다. 루트 시험에 넣으려면 CI·개발 환경에서 서브모듈 초기화가 필요하다 | 지금은 `gateway/` 밖 수정 금지라 독립 uv 프로젝트(`gateway/uv.lock`)로 두었다 |
 | CR-GW-006 | 등록부 §5 | §5 표를 proto 기준으로 갱신한다: STD 21종의 실제 대응(예: `PeerStatus`→`MA_PackagePartnerStatusReport`, `TrackShare`→`MA_Entity`) | 계약 §4: 어긋나면 proto가 기준. Gateway가 descriptor로 만든 표(위)를 그대로 옮기면 된다 |
 
-남은 요청: CR-GW-004, CR-GW-006, CR-GW-007, CR-GW-008, CR-GW-009, OPN-GW-001, OPN-GW-002. CR-GW-006(등록부 §5 갱신)에는 `uci_also`(`MA_PositionReport`) 열도 넣어야 한다. CR-GW-002·003·005의 원문은 위 해소 줄로 정리했다.
+남은 요청: CR-GW-004, CR-GW-006, CR-GW-007, CR-GW-008, CR-GW-009. OPN-GW-001(DEC-096)·OPN-GW-002(DEC-098)는 해소. CR-GW-006(등록부 §5 갱신)에는 `uci_also`(`MA_PositionReport`) 열도 넣어야 한다. CR-GW-002·003·005의 원문은 위 해소 줄로 정리했다.
 
 ## 제안 (동작 변경, 미구현)
 
@@ -180,6 +184,6 @@
 - QA O-14(재기동 시 `header.seq`가 0부터): DEC-077에 따라 seq는 발행자·키별이고 `publisher`로 구분한다. 재기동한 Gateway가 같은 `publisher`로 0부터 다시 매기는 것은 새 발행 세션으로 보며, 이번에 동작을 바꾸지 않았다. Datalink·Agent는 seq 연속성에 의존하지 않는다(QA 15차 TC-QA-073).
 
 - SecurityInformation은 스키마 필수 요소라 공개 스키마 예제와 같은 값(`U`, `USA`)을 기본으로 넣는다. `GatewayConfig.classification`, `owner_producer`로 바꾼다.
-- 시각은 메시지 모의 시각의 UTC다(IMP-GW-030, `SimClock`). 메시지를 하나도 받기 전 시각(예: 첫 보고 전 거부 통지)만 벽시계다. `MA_ApprovalRequest.RespondBy`는 그 보고 시각 + 승인 창이다.
+- 시각은 메시지 모의 시각의 UTC다(IMP-GW-030, `SimClock`). 기준 시각은 시나리오 값(IMP-GW-033)이다. 메시지를 하나도 받기 전 시각(예: 첫 보고 전 거부 통지)만 벽시계다. `MA_ApprovalRequest.RespondBy`는 그 보고 시각 + 승인 창이다.
 - D-35 거부 통지 `MA_TaskStatus`는 Gateway가 만든 상태 보고다. `ExecutingSystemOrPackage`는 명령이 가리킨 기체, 머리 `SystemID`는 Gateway 서비스다. 시각은 마지막으로 본 모의 시각이다.
 - 외부 C2 수신은 LA-CAL 쪽 검증(서버)과 Gateway 쪽 검증(코덱)을 모두 거친다.

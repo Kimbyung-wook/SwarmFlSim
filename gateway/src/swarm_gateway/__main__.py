@@ -42,8 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 다시 보낸다 (DEC-089). "
                          "기본은 --lacal 호스트의 8766, none이면 끈다")
     ap.add_argument("--sim-epoch", type=_utc, default=None,
-                    help="모의 시각 0의 UTC (예: 2026-01-01T00:00:00Z). UCI 시각 = 이 값 + 모의 시각. "
-                         "비우면 처음 받은 메시지에서 정한다 (D-36)")
+                    help="모의 시각 0의 UTC 명시 재정의 (예: 2026-01-01T00:00:00Z, 재현 시험용). UCI 시각 = 이 값 + 모의 시각. "
+                         "비우면 시나리오의 run.epoch_utc_us, 시나리오 전에는 첫 메시지 기준 (DEC-098)")
     ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
                     help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")

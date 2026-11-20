@@ -26,13 +26,16 @@ class KnownEntities:
         self._reported: set[str] = set()
         self._lock = threading.Lock()
 
-    def on_scenario(self, payload: bytes) -> bool:
-        """sim/ctrl/scenario 표본. 해석하지 못하면 False"""
-        sc = sim_pb2.Scenario()
-        try:
-            sc.ParseFromString(payload)
-        except DecodeError:
-            return False
+    def on_scenario(self, payload: bytes | sim_pb2.Scenario) -> bool:
+        """sim/ctrl/scenario 표본(바이트 또는 해석한 Scenario). 해석하지 못하면 False"""
+        if isinstance(payload, sim_pb2.Scenario):
+            sc = payload
+        else:
+            sc = sim_pb2.Scenario()
+            try:
+                sc.ParseFromString(payload)
+            except DecodeError:
+                return False
         ids = frozenset(e.id for e in sc.entities if e.kind in COMMANDABLE_KINDS and e.id)
         with self._lock:
             if ids == self._scenario:

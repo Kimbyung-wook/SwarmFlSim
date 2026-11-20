@@ -144,8 +144,10 @@ def rx_key(msg: Message, dst: str = GCS) -> str:
 FLEET = (UAV, "uav-002", "uav-003")
 
 
-def scenario_bytes(*uavs: str, name: str = "test", others: tuple[tuple[str, int], ...] = ()) -> bytes:
+def scenario_bytes(*uavs: str, name: str = "test", others: tuple[tuple[str, int], ...] = (),
+                   epoch_utc_us: int = 0) -> bytes:
     sc = sim_pb2.Scenario(name=name)
+    sc.run.epoch_utc_us = epoch_utc_us             # 0이면 기준 시각 없음 (DEC-098)
     sc.entities.add(id=GCS, kind=entity_pb2.ENTITY_KIND_GCS)
     for u in uavs or FLEET:
         sc.entities.add(id=u, kind=entity_pb2.ENTITY_KIND_UAV, controlling_gcs=GCS)
