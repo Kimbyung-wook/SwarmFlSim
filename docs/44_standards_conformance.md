@@ -1,6 +1,6 @@
 # 표준 적합성 점검 기준
 
-- 근거: REQ-STD-001, DEC-092, DEC-093, DEC-094(C1 범위 구분), DEC-095(이력), DEC-097(명령 상태). 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
+- 근거: REQ-STD-001, DEC-092, DEC-093, DEC-094(C1 범위 구분), DEC-095(이력), DEC-097(명령 상태), DEC-098(시각 기준). 관련 결정: DEC-013(기체 계층 경계), DEC-014(확장 메시지), DEC-068·069(Gateway·agra_lacal), DEC-072(`uci_also`), DEC-075·076(외부 수신), DEC-088·089·090.
 - 점검 결과는 [45_standards_report.md](45_standards_report.md)에 둔다. 도구가 만든다.
 - 이 점검은 자체 점검이다. 공식 A-GRA 적합성 시험이나 외부 검토를 대신하지 않는다.
 
@@ -66,6 +66,7 @@ XSD는 형식만 본다. 단위·기준·좌표계가 맞는지는 변환 전후
 | 위치 | Gateway 입력(버스의 `NavigationReport`, 도·m) ↔ UCI(`MA_PositionReport`·`MA_NavigationReport`, rad·m). 도→rad 변환 뒤 차이가 수치 오차 이내, 고도 기준 MSL |
 | 속도·자세 | NED 속도 일치, NED→FRD 자세 변환 뒤 오일러각 일치 |
 | 시각 | UCI Timestamp가 메시지 모의 시각과 맞음 |
+| 시각 기준 (DEC-098) | UCI Timestamp − 모의 시각 = `sim/ctrl/scenario`의 `run.epoch_utc_us` (허용 오차 0.5 s). Gateway `epoch_changed` 카운터 0. epoch 관측 0건이거나 값이 0이면 실패 |
 | 식별자 | 같은 기체·작업은 실행 내내 같은 UUID, DescriptiveLabel = 내부 ID |
 | 상태값 | 내부 상태 → XSD enum 대응이 DEC-090 표와 같음 |
 | 수신 | 외부 `MA_RoutePlan`의 rad 좌표 → 내부 도 좌표, 항로점 순서(`NextPathSegment`)가 그대로 |
@@ -137,6 +138,7 @@ DEC-013: MA는 L1 포트로만 통신하고 시뮬레이터 내부 상태나 `tr
 uv run python qa/conformance/run.py --out qa/out/conformance/<날짜>
 ```
 
+- 점검 전에 msvc-release Core를 빌드한다. 계약 proto가 바뀌었으면 `scripts/gen_proto.py`로 생성 코드를 다시 만든다.
 - 점검 실행을 띄우고(C2~C6), 정적 점검(C1, C4 소스, C7)을 하고, `docs/45_standards_report.md`와 결과 폴더(JSON, 표)를 만든다.
 - 실행 중 띄운 프로세스는 끝날 때 PID로 정리한다.
 - 보고서 첫 줄에 커밋, 계약 버전, agra_lacal 커밋, 실행 날짜를 적는다.
