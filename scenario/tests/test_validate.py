@@ -152,3 +152,28 @@ def test_implemented_dynamics_pass(doc, dyn):
 
 def test_dynamics_allowlist_single_place():
     assert {"dof2", "dof3"} <= IMPLEMENTED_DYNAMICS and not {"dof5", "dof6"} & IMPLEMENTED_DYNAMICS
+
+
+# TC-SCN-015: run.epoch_utc (DEC-098) — 시간대 필수, 형식 오류는 검증 오류
+@pytest.mark.parametrize("value", ["2026-01-01T00:00:00Z", "2026-01-01T09:00:00+09:00", "2026-01-01T00:00:00.250000Z"])
+def test_epoch_utc_accepted(doc, value):
+    doc["run"]["epoch_utc"] = value
+    assert validate(doc) == []
+
+
+@pytest.mark.parametrize("value", [
+    "2026-01-01T00:00:00",        # 시간대 없음
+    "2026-01-01",                 # 날짜만
+    "2026-13-01T00:00:00Z",       # 없는 달
+    "2026-01-01 00:00:00Z",       # T 없음
+    "not a time",
+    "1970-01-01T00:00:00Z",       # 0은 '비움'
+    "1970-01-01T09:00:00+09:00",  # 같은 시각
+    1767225600,                   # 숫자
+])
+def test_epoch_utc_rejected(doc, value):
+    doc["run"]["epoch_utc"] = value
+    issues = validate(doc)
+    assert any(i.path == "/run/epoch_utc" for i in issues), issues
+    with pytest.raises(ScenarioError):
+        check(doc)

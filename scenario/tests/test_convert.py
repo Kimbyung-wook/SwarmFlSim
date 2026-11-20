@@ -140,6 +140,7 @@ _ENUMS = {
 def test_schema_fields_match_proto(name):
     props = set(schema()["$defs"][name]["properties"])
     fields = {f.name for f in _SCHEMA_TO_PROTO[name].DESCRIPTOR.fields} - {"header"}
+    fields = {"epoch_utc" if f == "epoch_utc_us" else f for f in fields}  # JSON은 ISO 8601 문자열 (DEC-098)
     assert props == fields
 
 
@@ -232,3 +233,25 @@ def test_entity_params_round_trip(doc):
     assert e.autonomy.ma_params["avoid"] is True
     out = to_dict(from_proto(msg))["entities"][0]
     assert out["dynamics_params"] == ent["dynamics_params"] and out["autonomy"] == ent["autonomy"]
+
+
+# TC-SCN-016: run.epoch_utc ⇄ RunSpec.epoch_utc_us (DEC-098)
+def test_epoch_utc_conversion(doc):
+    doc["run"]["epoch_utc"] = "2026-01-01T09:00:00+09:00"
+    sc = from_dict(doc)
+    assert sc.epoch_utc_us == 1767225600 * 1_000_000  # 2026-01-01T00:00:00Z
+    msg = to_proto(sc)
+    assert msg.run.epoch_utc_us == 1767225600 * 1_000_000
+    back = to_dict(from_proto(msg))
+    assert back["run"]["epoch_utc"] == "2026-01-01T00:00:00Z"  # 역변환은 UTC로 적는다
+    assert from_dict(back).epoch_utc_us == sc.epoch_utc_us
+
+
+def test_epoch_utc_microseconds_and_omitted(doc):
+    doc["run"]["epoch_utc"] = "2026-01-01T00:00:00.250000Z"
+    assert from_dict(doc).epoch_utc_us == 1767225600 * 1_000_000 + 250_000
+    assert to_dict(from_dict(doc))["run"]["epoch_utc"] == "2026-01-01T00:00:00.250000Z"
+    del doc["run"]["epoch_utc"]
+    sc = from_dict(doc)
+    assert sc.epoch_utc_us == 0 and to_proto(sc).run.epoch_utc_us == 0
+    assert "epoch_utc" not in to_dict(sc)["run"]

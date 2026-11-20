@@ -15,6 +15,7 @@
 | IMP-SCN-009 | 계약 0.6.0: `EntitySpec.dynamics_params` 스키마 | `schema/scenario.schema.json` | DEC-035 |
 | IMP-SCN-010 | P5 페이로드 예제 시나리오: 고정익 5기(카메라 eo_wide·eo_narrow·ir_generic, AGM·AAM·FPV 혼합), 이동 지상 표적 3·공중 표적 1(스크립트), 재머 기지 1(아군 경로 중간을 덮음), 카메라 `overrides` 재정의 1건. 엔티티 ID ≤25자 | `examples/p5_payload_demo_5.json` | DEC-046, DEC-017, DEC-019, REQ-PAY-001 |
 | IMP-SCN-011 | 미구현 동역학 거부: 스키마·proto는 dof5·dof6를 담지만 검증기가 "미구현(로드맵 P3)"로 거부한다. 허용 목록 `IMPLEMENTED_DYNAMICS` 한 곳에서 관리하며 P3에서 5·6-DoF가 구현되면 여기에 더한다 | `src/swarm_scenario/validate.py` | REQ-CFG-002, DEC-005 |
+| IMP-SCN-012 | `run.epoch_utc`(ISO 8601, 시간대 필수) ⇄ `RunSpec.epoch_utc_us`. 스키마 pattern + 의미 검증(`parse_epoch_utc`), 변환기 양방향(역변환은 UTC `Z`로 적음), 비우면 0(Core가 채움). `1970-01-01T00:00:00Z`는 0과 구분되지 않아 거부 | `src/swarm_scenario/schema/scenario.schema.json`, `validate.py`, `convert.py` | REQ-CFG-001, DEC-098 |
 
 ## 시험
 
@@ -36,5 +37,9 @@
 | TC-SCN-012 | P5 예제가 스키마·의미 검증을 통과하고 구성(고정익 4~6, 스크립트 표적, 재머), 형식 혼합, 재정의 1건, ID ≤25자, 프로파일·재정의 키가 `payload/profiles`에 있음, 재머가 경로 일부를 덮음 | `tests/test_p5_example.py` | IMP-SCN-010 | Pass |
 | TC-SCN-013 | 변환한 .pb를 `swarm_core`가 적재(11 엔티티, 거부 없음)하고 1000 프레임 진행. 빌드가 없으면 건너뜀 | `tests/test_p5_example.py` | IMP-SCN-010, IMP-CORE-022 | Pass |
 | TC-SCN-014 | dof5·dof6가 `/entities/N/dynamics` 경로와 "미구현(로드맵 P3)" 메시지로 거부되고(`check`도 예외), 구현된 DoF(dof2·dof3·scripted·static)는 통과, 허용 목록에 dof5·dof6 없음 | `tests/test_validate.py` | IMP-SCN-011 | Pass |
+| TC-SCN-015 | `run.epoch_utc` 허용(Z·+09:00·마이크로초)과 거부(시간대 없음·날짜만·없는 달·T 없음·숫자·0 시각)가 `/run/epoch_utc` 경로의 검증 오류로 나온다 | `tests/test_validate.py` | IMP-SCN-012 | Pass |
+| TC-SCN-016 | `epoch_utc` ⇄ `epoch_utc_us` 변환(+09:00 → UTC µs), proto·JSON 왕복, 마이크로초 보존, 생략 시 0이고 JSON에 안 나온다. 스키마·proto 필드명 일치 시험은 `epoch_utc`↔`epoch_utc_us`를 같은 필드로 본다 | `tests/test_convert.py` | IMP-SCN-012 | Pass |
 
 시험 결과(2026-11-05): 78 passed (TC-SCN-012~013 추가, 예제 검증 파라미터화 1건 포함)
+
+시험 결과(2026-11-20): 99 passed (TC-SCN-015~016 추가, 계약 0.20.0 병합 상태)
