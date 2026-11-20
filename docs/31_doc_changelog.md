@@ -122,3 +122,5 @@
 | 2026-11-19 | `095abb3` | TC-QA-179~181, DEC-097 | QA 32차 준비: C5 외부 명령 전이 표를 Command-2로, 내부 첫 보고 CANCELLED 허용(O-47 해소) | 없음 | 미처리 | |
 | 2026-11-19 | `d51ef12` | TC-QA-182~183, DEC-095, DEC-097 | QA 32차 재점검(e91a5fe, 2회 같음): C1~C6 통과, C7 정보. O-47 해소(기준 변경), D-40 해소. docs/47 실행 3행, 발견 추적에 해소 원인 열 | 표준 점검(이력표의 해소 원인 열) | 미처리 | |
 | 2026-11-20 | `e872a09` | DEC-098, OPN-070, IMP-API-024, TC-API-010 | 계약 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(시나리오 JSON `run.epoch_utc`), 계약 §1 시간 규칙 | 시나리오 작성(`run.epoch_utc`), 시각 해석 | 미처리 | |
+| 2026-11-20 | `553e539` | IMP-SCN-012, TC-SCN-015~016, DEC-098 | WP7: 시나리오 JSON `run.epoch_utc`(ISO 8601, 시간대 필수) ⇄ `RunSpec.epoch_utc_us` | 시나리오 작성(`run.epoch_utc`) | 미처리 | |
+| 2026-11-20 | `a16c074` | IMP-GW-033, TC-GW-042~043, DEC-098 | WP9: UCI 시각 기준 = `--sim-epoch` > 시나리오 `epoch_utc_us` > 첫 메시지, 첫 메시지 기준 뒤 시나리오 값이 오면 바꿈(`epoch_changed`) | Gateway `--sim-epoch` 설명 | 미처리 | |
