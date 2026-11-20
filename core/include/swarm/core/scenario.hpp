@@ -28,6 +28,9 @@ struct Scenario {
   std::uint64_t seed = 0;
   std::vector<std::string> participants;  // lockstep 장벽 참여자 (sim/clock/done/<participant>)
   std::vector<v1::EntitySpec> entities;
+  // IMP-CORE-031: 모의 시각 0의 UTC(Unix epoch µs). 시나리오에 적힌 값이고 0이면 적히지 않은 것이다.
+  // Core가 적재·Reset 때 채운 값은 SimCore::epoch_utc_us()에 두고 여기는 바꾸지 않는다 (DEC-098)
+  std::int64_t epoch_utc_us = 0;
   std::optional<v1::Scenario> source;  // proto로 받은 시나리오 원본. 재발행에 쓴다 (DEC-037)
 };
 

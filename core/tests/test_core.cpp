@@ -5,11 +5,14 @@
 // TC-CORE-041: DEM 아래 시작 공중 엔티티 적재 경고·시작 프레임 kill (DEC-060)
 // TC-CORE-043: onboard/<id>/SystemStatus 변화·1 Hz 발행, 다중 고장, 결정성 (DEC-073)
 // TC-CORE-044~045: 항법·제어 일괄 메시지 (DEC-081)
+// TC-CORE-046: 모의 시각 기준 epoch_utc_us 채우기 (DEC-098)
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <numbers>
@@ -1101,6 +1104,9 @@ void test_scenario_publish() {
   const auto t0 = Clock::now();
   sim.poll(t0);
   CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && got.size() == 1 && encoding_ok);
+  // run.epoch_utc_us는 Core가 적재 때 채운다(DEC-098, TC-CORE-046). 그 필드만 맞추고 나머지는 원본 그대로다
+  CHECK(got[0].run().epoch_utc_us() != 0);
+  msg.mutable_run()->set_epoch_utc_us(got[0].run().epoch_utc_us());
   CHECK(got[0].SerializeAsString() == msg.SerializeAsString());
 
   sim.poll(t0 + 300ms);
@@ -2238,6 +2244,110 @@ void test_control_batch() {
   CHECK(!a.empty() && a == b);
 }
 
+// TC-CORE-046: 모의 시각 기준 (IMP-CORE-031, DEC-098)
+// - 적히지 않은 시나리오는 적재 때 벽시계 UTC로 채우고, 적재 직후·LOADED 1초 재발행·lockstep 준비 대기 재발행에 같은 값을 싣는다
+// - Reset은 적히지 않았을 때만 다시 채운다. LoadScenario로 다시 적재해도 같다. 적힌 값은 그대로 쓰고 벽시계를 읽지 않는다
+// - 원본 없는 시나리오(내장·최소 JSON)도 같다. proto JSON 파일(--scenario)의 run.epochUtcUs를 읽는다
+// - 시계를 끼우지 않으면 system_clock(지금 ±1분)이다
+void test_epoch_utc() {
+  constexpr std::int64_t kWall = 1'763'600'000'000'000;  // 가짜 벽시계 시작값
+  constexpr std::int64_t kWritten = 1'767'225'600'000'000;  // 2026-01-01T00:00:00Z
+  InMemoryBus bus;
+  std::vector<v1::Scenario> got;
+  auto sub = bus.subscribe(keys::kSimCtrlScenario, [&](const Sample& s) { got.push_back(decode<v1::Scenario>(s)); });
+  int reads = 0;
+  core::CoreConfig cfg = quiet();
+  cfg.utc_now_us = [&] { return kWall + 1'000'000 * reads++; };
+  core::SimCore sim(bus, core::mock::provider(), cfg);
+
+  v1::Scenario msg;
+  msg.set_name("epoch");
+  msg.mutable_run()->set_mode(v1::RUN_MODE_FREERUN);
+  for (const auto& e : one_uav().entities) *msg.add_entities() = e;
+  auto load_cmd = [](const v1::Scenario& m) {
+    v1::SimCommand c;
+    *c.mutable_load()->mutable_scenario() = m;
+    return c;
+  };
+  const auto t0 = Clock::now();
+  sim.submit(load_cmd(msg));
+  sim.poll(t0);
+  CHECK(got.size() == 1 && reads == 1);
+  CHECK(sim.epoch_utc_us() == kWall && got.back().run().epoch_utc_us() == kWall);
+  sim.poll(t0 + 1200ms);  // LOADED 1초 재발행: 같은 값, 벽시계를 다시 읽지 않는다
+  CHECK(got.size() == 2 && got.back().run().epoch_utc_us() == kWall && reads == 1);
+
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 3);
+  CHECK(sim.epoch_utc_us() == kWall);  // 실행 중에는 바뀌지 않는다
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(t0 + 3s);
+  CHECK(reads == 2 && sim.epoch_utc_us() == kWall + 1'000'000);
+  CHECK(got.back().run().epoch_utc_us() == kWall + 1'000'000);
+  sim.submit(load_cmd(msg));  // 다시 적재해도 적히지 않았으니 다시 채운다
+  sim.poll(t0 + 4s);
+  CHECK(reads == 3 && got.back().run().epoch_utc_us() == kWall + 2'000'000);
+
+  // 적힌 값은 적재·Reset·재발행 모두 그대로다
+  v1::Scenario written = msg;
+  written.mutable_run()->set_epoch_utc_us(kWritten);
+  sim.submit(load_cmd(written));
+  sim.poll(t0 + 5s);
+  CHECK(sim.epoch_utc_us() == kWritten && got.back().run().epoch_utc_us() == kWritten);
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(t0 + 6s);
+  sim.poll(t0 + 8s);
+  CHECK(got.back().run().epoch_utc_us() == kWritten && reads == 3);
+  const auto expected = [&] {
+    v1::Scenario m = written;
+    return m.SerializeAsString();
+  }();
+  CHECK(got.back().SerializeAsString() == expected);  // 원본 그대로
+
+  // 원본 없는 시나리오
+  core::Scenario plain = one_uav();
+  CHECK(sim.load(plain));
+  CHECK(reads == 4 && got.back().run().epoch_utc_us() == kWall + 3'000'000);
+  plain.epoch_utc_us = kWritten;
+  CHECK(sim.load(plain));
+  CHECK(reads == 4 && got.back().run().epoch_utc_us() == kWritten);
+  CHECK(core::to_proto(plain).run().epoch_utc_us() == kWritten);
+
+  // lockstep 준비 대기 중 1초 재발행에도 싣는다
+  core::Scenario ls = one_uav();
+  ls.mode = v1::RUN_MODE_LOCKSTEP;
+  ls.participants = {"agent-host-1"};
+  CHECK(sim.load(ls));
+  const auto filled = sim.epoch_utc_us();
+  sim.submit(start_cmd(v1::RUN_MODE_LOCKSTEP, 0.0, 50));
+  const auto t1 = t0 + 20s;
+  sim.poll(t1);
+  const auto before = got.size();
+  sim.poll(t1 + 1200ms);
+  CHECK(sim.state() == v1::SIM_RUN_STATE_RUNNING && sim.frame() == 0);
+  CHECK(got.size() == before + 1 && got.back().run().epoch_utc_us() == filled && filled == kWall + 4'000'000);
+
+  // --scenario 파일(proto JSON)의 값
+  const auto path = std::filesystem::temp_directory_path() / "swarm_tc_core_046.json";
+  {
+    std::ofstream f(path);
+    f << R"({"name": "epoch-file", "run": {"mode": "RUN_MODE_FREERUN", "frameHz": 50, "epochUtcUs": "1767225600000000"},
+             "entities": [{"id": "uav-001", "kind": "ENTITY_KIND_UAV", "dynamics": "DYNAMICS_KIND_DOF2",
+                           "initial": {"position": {"latDeg": 37.0, "lonDeg": 127.0, "altM": 500}}}]})";
+  }
+  const core::Scenario from_file = core::read_scenario_file(path.string());
+  std::filesystem::remove(path);
+  CHECK(from_file.epoch_utc_us == kWritten);
+
+  // 시계를 끼우지 않으면 system_clock
+  InMemoryBus bus2;
+  core::SimCore real(bus2, core::mock::provider(), quiet());
+  CHECK(real.load(one_uav()));
+  const std::int64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::system_clock::now().time_since_epoch()).count();
+  CHECK(std::llabs(real.epoch_utc_us() - now) < 60'000'000);
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -2279,6 +2389,7 @@ int main() {
   test_system_status();
   test_nav_batch();
   test_control_batch();
+  test_epoch_utc();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

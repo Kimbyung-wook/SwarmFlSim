@@ -150,6 +150,7 @@ Scenario from_proto(const v1::Scenario& msg) {
   if (run.mode() != v1::RUN_MODE_UNSPECIFIED) sc.mode = run.mode();
   if (run.rate() != 0.0) sc.rate = run.rate();
   sc.seed = run.seed();
+  sc.epoch_utc_us = run.epoch_utc_us();
   sc.participants.assign(run.participants().begin(), run.participants().end());
   sc.entities.assign(msg.entities().begin(), msg.entities().end());
   sc.source = msg;
@@ -181,6 +182,7 @@ v1::Scenario to_proto(const Scenario& sc) {
   run->set_frame_hz(sc.frame_hz);
   run->set_seed(sc.seed);
   run->set_rate(sc.rate);
+  run->set_epoch_utc_us(sc.epoch_utc_us);
   for (const auto& p : sc.participants) run->add_participants(p);
   for (const auto& e : sc.entities) *msg.add_entities() = e;
   return msg;

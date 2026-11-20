@@ -47,6 +47,8 @@ struct CoreConfig {
   NavNoiseFn nav_noise;
   LogFn log;                              // 비우면 stderr
   std::uint64_t stop_after_frames = 0;    // 0이 아니면 이 프레임에 도달한 뒤 정지(STOPPED)
+  // IMP-CORE-031: 벽시계 UTC(Unix epoch µs). 비우면 std::chrono::system_clock. 시험에서 바꿔 끼운다 (DEC-098)
+  std::function<std::int64_t()> utc_now_us;
 };
 
 class SimCore {
@@ -61,6 +63,9 @@ class SimCore {
 
   // 시나리오를 읽어 LOADED로 둔다. RUNNING/PAUSED이면 거부(false). 검증 실패(DEC-038)도 거부하고 기존 상태를 그대로 둔다
   bool load(const Scenario& sc);
+
+  // IMP-CORE-031: 이번 적재(또는 Reset)의 모의 시각 0 UTC(µs). 시나리오 값, 없으면 그때의 벽시계 (DEC-098)
+  std::int64_t epoch_utc_us() const { return epoch_utc_us_; }
 
   // 명령을 큐에 넣는다. sim/ctrl/cmd 구독과 같은 경로로 처리된다. 어느 스레드에서나 호출할 수 있다
   void submit(const v1::SimCommand& cmd);
@@ -160,6 +165,8 @@ class SimCore {
   std::vector<double> u_scratch_;
   std::vector<std::uint32_t> nav_seq_;
   std::uint32_t nav_batch_seq_ = 0;
+  std::int64_t epoch_utc_us_ = 0;  // IMP-CORE-031
+  void fill_epoch();
   std::vector<std::string> participants_;
   // IMP-CORE-022: 임무장비·무장 계산기 (WP8, DEC-046). 시나리오를 적재할 때 만든다
   std::unique_ptr<payload::PayloadSystem> payload_;

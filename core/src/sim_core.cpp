@@ -4,6 +4,7 @@
 // IMP-CORE-026: DEM 아래 시작 공중 엔티티 경고·시작 프레임 kill (DEC-060)
 // IMP-CORE-028: onboard/<id>/SystemStatus 발행 (DEC-073)
 // IMP-CORE-029·030: 항법·제어 일괄 메시지 (DEC-081)
+// IMP-CORE-031: 모의 시각 기준 RunSpec.epoch_utc_us 채우기 (DEC-098)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -152,6 +153,7 @@ bool SimCore::load(const Scenario& sc) {
   frame_hz_ = sc.frame_hz;
   rate_ = mode_ == v1::RUN_MODE_REALTIME ? 1.0 : sc.rate;
   seed_ = sc.seed;
+  fill_epoch();
   reset_run_state();
   ready_.clear();
 
@@ -366,7 +368,26 @@ void SimCore::publish_params(std::size_t i) {
   publish(keys::sim_param(store_.id(i), "dynamics"), ep);
 }
 
-void SimCore::publish_scenario() { publish(std::string(keys::kSimCtrlScenario), to_proto(scenario_)); }
+// IMP-CORE-031: 적재·Reset 직후와 대기 중 1초 재발행 모두 채운 기준 시각을 싣는다 (DEC-098)
+void SimCore::publish_scenario() {
+  v1::Scenario msg = to_proto(scenario_);
+  msg.mutable_run()->set_epoch_utc_us(epoch_utc_us_);
+  publish(std::string(keys::kSimCtrlScenario), msg);
+}
+
+// IMP-CORE-031: 시나리오에 적힌 값이 있으면 그대로, 없으면 지금의 벽시계 UTC로 채운다 (DEC-098)
+void SimCore::fill_epoch() {
+  if (scenario_.epoch_utc_us != 0) {
+    epoch_utc_us_ = scenario_.epoch_utc_us;
+    log("epoch_utc_us=" + std::to_string(epoch_utc_us_) + " (scenario)");
+    return;
+  }
+  epoch_utc_us_ = cfg_.utc_now_us ? cfg_.utc_now_us()
+                                  : std::chrono::duration_cast<std::chrono::microseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
+  log("epoch_utc_us=" + std::to_string(epoch_utc_us_) + " (wall clock)");
+}
 
 void SimCore::publish_all_params() {
   for (std::size_t i = 0; i < store_.size(); ++i) publish_params(i);
@@ -415,6 +436,7 @@ void SimCore::handle(const v1::SimCommand& cmd, Clock::time_point now) {
     case C::kReset:
       if (state_ == v1::SIM_RUN_STATE_IDLE) break;
       reset_run_state();
+      fill_epoch();  // 시나리오에 적힌 값이 없을 때만 다시 채운다 (DEC-098)
       publish_truth();
       publish_all_params();
       publish_scenario();
