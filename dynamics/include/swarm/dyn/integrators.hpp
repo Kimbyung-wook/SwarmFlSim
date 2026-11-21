@@ -31,7 +31,10 @@ class Rk4Integrator final : public Integrator {
     double event_time_tol_s = 1e-6;  // 이벤트 시점 이분 탐색 허용치
   };
 
-  explicit Rk4Integrator(Config cfg = {}) : cfg_(cfg) {}
+  // IMP-DYN-010 (DEC-022): 기본 인자 `= {}` 대신 위임 생성자. GCC는 바깥 클래스 완성 전 중첩 구조체의
+  // 기본 멤버 초기화를 기본 인자에서 쓰지 못한다
+  Rk4Integrator() : Rk4Integrator(Config{}) {}
+  explicit Rk4Integrator(Config cfg) : cfg_(cfg) {}
   std::string_view name() const override { return "rk4"; }
   StepResult step(const DynamicsModel& model, double t0, double dt, std::span<double> x,
                   std::span<const double> u, const Environment& env, const EventFn* event = nullptr) override;
@@ -57,7 +60,8 @@ class Rk45Integrator final : public Integrator {
     int max_substeps = 10000;   // 시도(거부 포함) 상한. 넘으면 std::runtime_error
   };
 
-  explicit Rk45Integrator(Config cfg = {}) : cfg_(cfg) {}
+  Rk45Integrator() : Rk45Integrator(Config{}) {}  // IMP-DYN-010
+  explicit Rk45Integrator(Config cfg) : cfg_(cfg) {}
   std::string_view name() const override { return "rk45"; }
   StepResult step(const DynamicsModel& model, double t0, double dt, std::span<double> x,
                   std::span<const double> u, const Environment& env, const EventFn* event = nullptr) override;

@@ -18,7 +18,7 @@ if(SWARM_BUILD_TESTS)
   foreach(tc
       TC-DYN-001 TC-DYN-002 TC-DYN-003 TC-DYN-004 TC-DYN-005 TC-DYN-006
       TC-DYN-007 TC-DYN-008 TC-DYN-009 TC-DYN-010 TC-DYN-011 TC-DYN-012 TC-DYN-013 TC-DYN-014
-      TC-DYN-015)
+      TC-DYN-015 TC-DYN-016)
     add_test(NAME dyn.${tc} COMMAND swarm_dynamics_tests ${tc})
   endforeach()
 endif()
