@@ -129,3 +129,4 @@
 | 2026-11-20 | (이 커밋) | DEC-098 | PM: docs/44 C3에 시각 기준(DEC-098) 대조 행, §5에 점검 전 빌드 조건(msvc-release Core, gen_proto) | 없음 | 미처리 | |
 | 2026-11-21 | (이 커밋) | OPN-071, DEC-002, DEC-022 | PM: OPN-071 등록(A-GRA L1 DDS 요구와 DEC-002 충돌, 제안 보류). WSL Ubuntu 24.04 GCC 13 linux-debug·release 확인: `dynamics/` 기본 인자 `= {}` 컴파일 오류(WP2), 우회 시 ctest 73/74, logger 골든 해시가 protobuf 버전(3.21 vs 7.36)에 따라 다름(WP7) | 없음 | 미처리 | |
 | 2026-11-21 | (이 커밋) | DEC-099, OPN-071 | PM: DEC-099 등록(A-GRA L1 DDS 요구에 맞춘 미들웨어 변경 보류, DEC-002 유지), OPN-071 해소, docs/44 §4 한계에 DEC-099 표시 | 없음 | 미처리 | |
+| 2026-11-21 | `d56b0a7` | IMP-LOG-013, TC-LOG-012, DEC-022 | WP7: logger 골든 시험이 파일 바이트 대신 메시지 내용을 해시해 protobuf 버전과 무관, msvc·linux 통과 | 없음 | 미처리 | |
