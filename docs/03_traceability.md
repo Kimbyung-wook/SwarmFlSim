@@ -520,4 +520,4 @@
 |---|---|
 | DEC-015 | 전체 개발 프로세스: WBS 작업 패키지별 병렬 세션, WP0 계약 우선 |
 | DEC-021 | 저장소 구조: 모노레포, WP별 디렉터리, worktree 병렬 작업 |
-| DEC-022 | 빌드 환경: MSVC+vcpkg, MSYS2 GCC, Linux/WSL2 GCC 프리셋 병행 (IMP-API-001) |
+| DEC-022 | 빌드 환경: MSVC+vcpkg, MSYS2 GCC, Linux/WSL2 GCC 프리셋 병행 (IMP-API-001, IMP-DYN-010, TC-DYN-016) |

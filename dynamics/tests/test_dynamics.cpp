@@ -12,6 +12,7 @@
 #include <numbers>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "swarm/dyn/factory.hpp"
@@ -565,11 +566,51 @@ void tc015() {
              15.0, 1e-12, "tc015 int16 bilinear");
 }
 
+// TC-DYN-016: 기본 생성자 = 기본값 Config/Params 생성자, 설정 생성자는 explicit 유지 (IMP-DYN-010, DEC-022)
+static_assert(std::is_default_constructible_v<Rk4Integrator> && !std::is_convertible_v<Rk4Integrator::Config, Rk4Integrator>);
+static_assert(std::is_default_constructible_v<Rk45Integrator> && !std::is_convertible_v<Rk45Integrator::Config, Rk45Integrator>);
+static_assert(std::is_default_constructible_v<Dof2Model> && !std::is_convertible_v<Dof2Model::Params, Dof2Model>);
+static_assert(std::is_default_constructible_v<Dof3Model> && !std::is_convertible_v<Dof3Model::Params, Dof3Model>);
+
+void tc016() {
+  const Rk4Integrator r4;
+  const Rk4Integrator::Config c4{};
+  check(r4.config().max_step_s == c4.max_step_s && r4.config().event_time_tol_s == c4.event_time_tol_s, "tc016 rk4");
+  const Rk45Integrator r45;
+  const Rk45Integrator::Config c45{};
+  check(r45.config().rtol == c45.rtol && r45.config().atol == c45.atol && r45.config().min_step_s == c45.min_step_s &&
+            r45.config().max_step_s == c45.max_step_s && r45.config().event_time_tol_s == c45.event_time_tol_s &&
+            r45.config().max_substeps == c45.max_substeps,
+        "tc016 rk45");
+  const Dof2Model m2;
+  const Dof2Model::Params p2{};
+  check(m2.params().tau_speed_s == p2.tau_speed_s && m2.params().tau_heading_rate_s == p2.tau_heading_rate_s &&
+            m2.params().tau_climb_s == p2.tau_climb_s && m2.params().min_speed_mps == p2.min_speed_mps &&
+            m2.params().max_speed_mps == p2.max_speed_mps &&
+            m2.params().max_heading_rate_rps == p2.max_heading_rate_rps &&
+            m2.params().max_climb_rate_mps == p2.max_climb_rate_mps,
+        "tc016 dof2");
+  const Dof3Model m3;
+  const Dof3Model::Params p3{};
+  check(m3.params().tau_speed_s == p3.tau_speed_s && m3.params().tau_bank_s == p3.tau_bank_s &&
+            m3.params().tau_gamma_s == p3.tau_gamma_s && m3.params().min_speed_mps == p3.min_speed_mps &&
+            m3.params().max_speed_mps == p3.max_speed_mps && m3.params().max_bank_rad == p3.max_bank_rad &&
+            m3.params().max_climb_rate_mps == p3.max_climb_rate_mps && m3.params().max_gamma_rad == p3.max_gamma_rad,
+        "tc016 dof3");
+  // 설정 생성자 경로는 그대로 값을 받는다
+  Rk4Integrator::Config c4b;
+  c4b.max_step_s = 0.01;
+  check(Rk4Integrator(c4b).config().max_step_s == 0.01, "tc016 rk4 cfg");
+  Dof3Model::Params p3b;
+  p3b.tau_bank_s = 0.7;
+  check(Dof3Model(p3b).params().tau_bank_s == 0.7, "tc016 dof3 params");
+}
+
 const Case kCases[] = {
     {"TC-DYN-001", tc001}, {"TC-DYN-002", tc002}, {"TC-DYN-003", tc003}, {"TC-DYN-004", tc004},
     {"TC-DYN-005", tc005}, {"TC-DYN-006", tc006}, {"TC-DYN-007", tc007}, {"TC-DYN-008", tc008},
     {"TC-DYN-009", tc009}, {"TC-DYN-010", tc010}, {"TC-DYN-011", tc011}, {"TC-DYN-012", tc012}, {"TC-DYN-013", tc013},
-    {"TC-DYN-014", tc014}, {"TC-DYN-015", tc015},
+    {"TC-DYN-014", tc014}, {"TC-DYN-015", tc015}, {"TC-DYN-016", tc016},
 };
 
 }  // namespace

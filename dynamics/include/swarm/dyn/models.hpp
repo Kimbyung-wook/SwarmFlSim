@@ -32,7 +32,10 @@ class Dof2Model final : public DynamicsModel, public ErrorScaleProvider {
     double max_climb_rate_mps = 50.0;
   };
 
-  explicit Dof2Model(Params p = {}) : p_(p) {}
+  // IMP-DYN-010 (DEC-022): 기본 인자 `= {}` 대신 위임 생성자. GCC는 바깥 클래스 완성 전 중첩 구조체의
+  // 기본 멤버 초기화를 기본 인자에서 쓰지 못한다
+  Dof2Model() : Dof2Model(Params{}) {}
+  explicit Dof2Model(Params p) : p_(p) {}
   std::string_view name() const override { return "dof2"; }
   int dof() const override { return 2; }
   std::size_t state_size() const override { return kStateSize; }
@@ -71,7 +74,8 @@ class Dof3Model final : public DynamicsModel, public ErrorScaleProvider {
     double max_gamma_rad = 0.5235987755982988;  // 30°
   };
 
-  explicit Dof3Model(Params p = {}) : p_(p) {}
+  Dof3Model() : Dof3Model(Params{}) {}  // IMP-DYN-010
+  explicit Dof3Model(Params p) : p_(p) {}
   std::string_view name() const override { return "dof3"; }
   int dof() const override { return 3; }
   std::size_t state_size() const override { return kStateSize; }
