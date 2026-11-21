@@ -248,6 +248,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-068 | 기본 FA의 C++ 이전 위치. 선택: (A) Core 안에서 실행하고 Agent는 `FlightCommand`를 보낸다 (B) Agent 프로세스의 네이티브 확장. 제안: A(세 툴체인에서 Python 확장 빌드가 필요 없다). 1단계(DEC-081) 실측 후 정한다 | Resolved by DEC-082 |
 | OPN-069 | Gateway의 `sim/ctrl/scenario` 구독(WP9 OPN-GW-001, QA D-35). 외부 명령이 가리키는 기체가 있는지 truth 없이 판단할 목록이 필요하다. 선택: (A) 키 표 구독자에 Gateway를 더한다(읽기만) (B) 수신 보고만으로 판단한다(기동 직후 기체 명령이 거부됨). 제안: A | Resolved by DEC-096 |
 | OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | Resolved by DEC-098 |
+| OPN-071 | A-GRA MA L1의 DDS 요구(MA-L1-009~012·025, docs/44 §4)와 DEC-002(Zenoh만 사용)의 충돌. 선택: (A) 공용 버스를 DDS로 교체 (B) `open_bus`에 DDS 백엔드를 추가해 MA L1 포트만 DDS로 연다 (C) Zenoh를 유지하고 L1 포트를 DDS로 내보내는 브리지를 둔다 (D) 보류. 공식 L1 준수 문서·자동 시험 도구와 DDS 토픽·QoS 규칙(배포 제한 문서)을 입수한 뒤 정한다. 제안: D. 입수 전에는 어느 안으로도 L1 준수 판정을 받을 수 없다. 착수 시 B | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
