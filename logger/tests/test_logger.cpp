@@ -375,7 +375,7 @@ void test_unindexed_order(const std::filesystem::path& path) {
 }
 // TC-LOG-011: 같은 입력이면 파일 바이트가 같다 (IMP-LOG-012 전후 동일성).
 // 채널 여러 개(protobuf, 알 수 없는 타입, 인코딩 없음, text/plain), 빈 페이로드, 시계 역행, 키 같고 인코딩 다른 경우를 섞는다.
-// kGolden은 IMP-LOG-012 이전 구현으로 만든 파일의 FNV-1a 해시다.
+// kGolden은 IMP-LOG-012 이전 구현으로 만든 파일의 메시지 내용 FNV-1a 해시다 (바이트 해시는 protobuf 버전에 따라 달라 쓰지 않는다).
 void test_file_golden(const std::filesystem::path& path) {
   std::uint64_t t = 7'000'000'000;
   swarm::InMemoryBus bus;
@@ -407,17 +407,36 @@ void test_file_golden(const std::filesystem::path& path) {
       }
     }
   }
-  std::ifstream in(path, std::ios::binary);
+  // 파일 바이트가 아니라 메시지 내용을 해시한다. 스키마 레코드의 FileDescriptorSet 직렬화는 protobuf 버전마다 다르다.
+  // 해시 대상: 채널 id, 토픽, 메시지 인코딩, 스키마 이름, log_time, publish_time, sequence, 페이로드.
+  mcap::McapReader r;
+  check(r.open(path.string()).ok(), "golden: open");
   std::uint64_t h = 1469598103934665603ull;
-  char c;
   std::uint64_t n = 0;
-  while (in.get(c)) {
-    h = (h ^ static_cast<unsigned char>(c)) * 1099511628211ull;
+  const auto mix = [&](const void* p, std::size_t len) {
+    const auto* b = static_cast<const unsigned char*>(p);
+    for (std::size_t i = 0; i < len; ++i) h = (h ^ b[i]) * 1099511628211ull;
+  };
+  const auto mix_str = [&](const std::string& s) {
+    const std::uint64_t len = s.size();
+    mix(&len, sizeof len);
+    mix(s.data(), s.size());
+  };
+  for (const auto& mv : r.readMessages()) {
+    const std::uint64_t f[4] = {mv.channel->id, mv.message.logTime, mv.message.publishTime, mv.message.sequence};
+    mix(f, sizeof f);
+    mix_str(mv.channel->topic);
+    mix_str(mv.channel->messageEncoding);
+    mix_str(mv.schema ? mv.schema->name : std::string());
+    const std::uint64_t len = mv.message.dataSize;
+    mix(&len, sizeof len);
+    mix(mv.message.data, mv.message.dataSize);
     ++n;
   }
-  constexpr std::uint64_t kGolden = 128735877181429900ull;  // 이전 구현의 해시로 채운다
-  if (std::getenv("LOG_GOLDEN_PRINT")) std::printf("golden: size=%llu fnv=%llu\n", static_cast<unsigned long long>(n), static_cast<unsigned long long>(h));
-  check(h == kGolden, "golden: file bytes equal pre-IMP-LOG-012 output");
+  r.close();
+  constexpr std::uint64_t kGolden = 4037387424296859868ull;  // IMP-LOG-012 이전 구현(9930206^)으로 만든 값
+  if (std::getenv("LOG_GOLDEN_PRINT")) std::printf("golden: messages=%llu fnv=%llu\n", static_cast<unsigned long long>(n), static_cast<unsigned long long>(h));
+  check(h == kGolden, "golden: message content equal pre-IMP-LOG-012 output");
 }
 }  // namespace
 
