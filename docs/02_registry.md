@@ -174,6 +174,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-097 | 외부 `MA_*CommandStatus`는 공개 UCI Command-2 상태 기계를 따른다. `CommandProcessingState`의 ACCEPTED·REJECTED·CANCELED는 끝 상태이고, 첫 보고는 RECEIVED 없이 끝 상태여도 된다. Gateway는 한 CommandID에 끝 상태를 보낸 뒤 그 ID의 상태를 더 보내지 않는다(내부의 이후 EXECUTING·COMPLETED·CANCELLED·FAILED는 외부 명령 상태로 내지 않음). 내부 `FlightCommandStatus`는 접수 전에 대체된 명령의 첫 보고 CANCELLED를 허용한다. 수행 상태를 `MA_FlightActivity`로 내는 것은 이 결정의 범위 밖이다 | QA O-47, DEC-090, 공개 A-GRA 6.0a XSD `CommandProcessingStateEnum` 주석, UCI 2.5 설계 규격 Command-2(§5.1.1)·NIS §4.6, 사용자 답변 "표준대로 둘 다 적용" | Confirmed |
 | DEC-098 | 모의 시각 0의 UTC(기준 시각)를 시나리오에 둔다. `RunSpec.epoch_utc_us`(시나리오 JSON `run.epoch_utc`, ISO 8601)이고, 비어 있으면 Core가 적재 때 벽시계 UTC로 채워 `sim/ctrl/scenario`로 알린다. 모든 참여자는 UTC = 기준 시각 + `sim_time_us`로 쓴다. 명시 재정의가 시나리오 값보다, 시나리오 값이 첫 메시지 기준보다 앞선다. 계약 0.20.0 | OPN-070, QA D-36, DEC-005, DEC-096, 사용자 답변 "시나리오에 필드 추가" | Confirmed |
 | DEC-099 | A-GRA MA L1의 DDS 요구(MA-L1-009~012·025)에 맞춘 미들웨어 변경은 보류한다. DEC-002(Zenoh만 사용)를 유지한다. 공식 L1 준수 문서·자동 시험 도구와 DDS 토픽·QoS 규칙을 입수하면 다시 연다. 그때는 `open_bus`에 DDS 백엔드를 추가해 MA L1 포트만 DDS로 여는 안(OPN-071 B)부터 검토한다 | OPN-071, DEC-002, DEC-026, docs/44 §4, 사용자 답변 "보류" | Confirmed |
+| DEC-100 | Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`와 `onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독(IMP-AGT-043)은 쓰지 않는다. 실제 기체는 물리적으로 분리된 수신 형상을 갖고 멀티캐스트·메시 네트워크에서 자기 앞 수신만 받으므로 시뮬레이션도 기체별 수신 형상을 유지한다. 성능은 DEC-086(2) 방식으로 다시 판정하고, 미달이면 의미를 바꾸지 않는 비용 축소부터 한 뒤 사용자에게 묻는다 | OPN-072, QA O-49, DEC-044, DEC-086, 사용자 답변 "기체별 구독 필요" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -250,6 +251,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-069 | Gateway의 `sim/ctrl/scenario` 구독(WP9 OPN-GW-001, QA D-35). 외부 명령이 가리키는 기체가 있는지 truth 없이 판단할 목록이 필요하다. 선택: (A) 키 표 구독자에 Gateway를 더한다(읽기만) (B) 수신 보고만으로 판단한다(기동 직후 기체 명령이 거부됨). 제안: A | Resolved by DEC-096 |
 | OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | Resolved by DEC-098 |
 | OPN-071 | A-GRA MA L1의 DDS 요구(MA-L1-009~012·025, docs/44 §4)와 DEC-002(Zenoh만 사용)의 충돌. 선택: (A) 공용 버스를 DDS로 교체 (B) `open_bus`에 DDS 백엔드를 추가해 MA L1 포트만 DDS로 연다 (C) Zenoh를 유지하고 L1 포트를 DDS로 내보내는 브리지를 둔다 (D) 보류. 공식 L1 준수 문서·자동 시험 도구와 DDS 토픽·QoS 규칙(배포 제한 문서)을 입수한 뒤 정한다. 제안: D. 입수 전에는 어느 안으로도 L1 준수 판정을 받을 수 없다. 착수 시 B | Resolved by DEC-099 |
+| OPN-072 | Agent 수신 구독 범위(QA O-49)와 DEC-086 성능 조치(IMP-AGT-043)의 충돌. 계약 §3.2는 Agent가 자기 기체 `swarm/<dst>/rx/**`를 구독한다고 적는데, 맡을 수 있는 기체를 모두 맡은 Agent는 `swarm/*/rx/**` 하나로 열고 맡지 않은 기체·GCS 수신은 해석 전에 버린다(구독 600개면 put마다 수십 µs). 선택: (A) 항상 기체별로 구독(IMP-AGT-043 되돌림, DEC-086 재측정 필요) (B) 와일드카드를 유지하고 계약 §3.2에 이 동작을 적는다 | Resolved by DEC-100 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

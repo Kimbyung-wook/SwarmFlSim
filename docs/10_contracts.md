@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.20.0
+- 계약 버전: 0.21.0
+  - 0.21.0: Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`·`onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독 금지 (DEC-100)
   - 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(모의 시각 0의 UTC). Core가 비어 있으면 적재 때 채워 `sim/ctrl/scenario`로 알린다 (DEC-098)
   - 0.19.0: `link/state` 발행을 주기 안의 여러 프레임에 나눈다 (DEC-084)
   - 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독 (DEC-083)
@@ -90,7 +91,7 @@ flowchart LR
 | `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
-| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임(자기 기체 `swarm/<dst>/rx/**`로 구독, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
+| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임(맡은 기체마다 `swarm/<dst>/rx/**`로 따로 구독, 엔티티 자리 와일드카드 금지 DEC-100, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
 | `onboard/<id>/<msg>` | `SystemStatus`(DEC-073), `Detection`, `*Activity`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `onboard_batch/NavigationBatch` | `NavigationBatch` (DEC-081) | Core | Agent 런타임, Logger |
 | `onboard_batch/ControlBatch/<participant>` | `ControlBatch` (DEC-081) | Agent 런타임 | Core, Logger |
