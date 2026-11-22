@@ -1,7 +1,7 @@
 # 프로젝트 개괄
 
 - 바로 돌려 보려면 §6으로 간다. 구현 범위는 §2, 진행 상태는 §8에 있다.
-- 기준: 계약 0.19.0, 로드맵 P1·P2·P6 완료(2026-11-15).
+- 기준: 계약 0.20.0, 로드맵 P1·P2·P6 완료(2026-11-22).
 - 설계 근거는 [제안 계획서](00_proposal.md)와 [등록부](02_registry.md), 계약은 [10_contracts.md](10_contracts.md)가 기준이다.
 
 ## 1. 목적과 범위
@@ -36,8 +36,9 @@ SwarmFlSim은 군집·편대 알고리즘을 설계하고 검증하는 연구용
 | UI | 역할별 권한 | 미구현 (P6 이후, DEC-020). 지금은 control/observer만 구분 |
 | Traffic Monitor | 엔티티별 트래픽 통계, 손실 사유, 시퀀스 타임라인, 메시지 해석 (실시간·재생) | 구현 |
 | 기록·재생 | 전 채널 MCAP 기록, 배속 재생 | 구현 |
-| A-GRA Gateway | 1단계: GCS가 받은 기체 상태(VI·C2·P2P·MS)를 UCI 메시지로 LA-CAL에 발행, 위치는 `MA_PositionReport`로도 발행(DEC-072). 2단계: 외부 `MA_TaskCommand`(hold·귀환·취소), 승인 응답 `MA_ApprovalRequestStatus`, 임무 계획 `MA_RoutePlan`·`MA_MissionPlan` 수신(DEC-075, DEC-076) | 구현 (P6 완료, DEC-074). 미결: 경로가 아닌 외부 작업(CR-GW-007), 패키지·`ALL` 대상(CR-GW-009) |
-| A-GRA | L1 전면 준수, PX4/ArduPilot SITL | 미구현 (P7, P8) |
+| A-GRA Gateway | 1단계: GCS가 받은 기체 상태(VI·C2·P2P·MS)를 UCI 메시지로 LA-CAL에 발행, 위치는 `MA_PositionReport`로도 발행(DEC-072). 기체 MA가 낸 승인 요청 `MA_ApprovalRequest`, 리더 변경 `MA_LeaderUpdateRequest`, 탐지 공유 `MA_Entity`, 적재 구성 `StoreLoadoutConfiguration`도 내보낸다(DEC-088). 늦게 붙은 외부 시스템에는 변화 보고의 마지막 값을 다시 보낸다(DEC-089). 2단계: 외부 `MA_TaskCommand`(hold·귀환·취소), 승인 응답 `MA_ApprovalRequestStatus`, 임무 계획 `MA_RoutePlan`·`MA_MissionPlan` 수신(DEC-075, DEC-076) | 구현 (P6 완료, DEC-074). 미결: 경로가 아닌 외부 작업(CR-GW-007), 패키지·`ALL` 대상(CR-GW-009) |
+| 표준 점검 | UCI·A-GRA·OMS/LA-CAL·AMS-GRA 적용을 자체 도구로 점검(C1~C7), 실행마다 이력을 남긴다 | 구현 (DEC-092~095). 공식 적합성 시험을 대신하지 않는다. AMS-GRA는 준수가 아니라 개념 차용이다(DEC-093) |
+| A-GRA | L1 전면 준수, PX4/ArduPilot SITL | 미구현 (P7, P8). L1의 DDS 요구에 맞춘 미들웨어 변경은 보류했다. Zenoh만 쓴다(DEC-099, DEC-002) |
 
 ## 3. 구성 요소
 
@@ -155,7 +156,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. 진행 상태
 
-완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-15 기준이다.
+완료 기준은 [제안서 §13](00_proposal.md#13-로드맵). 상태는 2026-11-22 기준이다.
 
 | 단계 | 완료 기준 | 상태 | 근거 |
 |---|---|---|---|
@@ -194,3 +195,4 @@ uv run python scripts/run_p0_demo.py live --monitor
 | 키·메시지·프로토콜·빌드의 정확한 규칙 | [10_contracts.md](10_contracts.md) |
 | 설계 근거와 결정 이력 | [00_proposal.md](00_proposal.md), [02_registry.md](02_registry.md) |
 | 시험 결과와 알려진 결함 | [21_qa_report.md](21_qa_report.md) |
+| 표준 적용 범위와 점검 결과 | 기준 [44](44_standards_conformance.md), 보고서 [45](45_standards_report.md), AMS-GRA 적용성 [46](46_amsgra_applicability.md), 점검 이력 [47](47_conformance_history.md) |

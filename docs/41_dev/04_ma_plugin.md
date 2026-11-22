@@ -141,11 +141,11 @@ sequenceDiagram
 
 | 포트 | 메서드 | 내용 |
 |---|---|---|
-| `c2` | `inbox()`, `send(msg)` | 통제 GCS의 작업 수신, `TaskStatus` 등 송신 |
+| `c2` | `inbox()`, `send(msg)` | 통제 GCS의 작업·`ApprovalResponse` 수신, `TaskStatus`·`ApprovalRequest` 등 송신 |
 | `vi` | `nav()`, `capability()`, `system_status()`, `command(cmd)`, `command_status()` | 항법 보고, FA 능력, 기체 상태, 비행 명령과 그 상태 |
 | `ms` | `loadout()`, `detections()`, `command(msg)`, `activities()` | 탑재 장비 목록, 탐지 결과, 장비 명령(`SensorCommand`, `JammerCommand`, `StrikeCommand`), 장비 상태 |
 | `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | 시나리오의 계획과 실행 중 받은 계획 |
-| `p2p` | `send(msg, to=None)`, `inbox()` | 기체 간 통신. `to`가 없으면 방송. 데이터링크를 거쳐 손실·지연이 있다 |
+| `p2p` | `send(msg, to=None)`, `inbox()` | 기체 간 통신. `to`가 없으면 방송. 데이터링크를 거쳐 손실·지연이 있다. 같은 편 GCS도 방송을 받으므로 `LeaderUpdate`, `TrackShare`는 Gateway를 거쳐 외부로도 나간다 |
 | `md` | `record(name, value)` | 분석용 값 기록. 지금은 런타임 메모리에만 남고 버스나 MCAP으로 나가지 않는다 |
 
 - 다른 기체 상태는 `p2p`로 받은 것만 쓴다. `nav()`는 잡음이 포함된 자기 항법값이다.
@@ -209,6 +209,8 @@ stateDiagram-v2
 - `assignees`가 비어 있는 작업은 거부한다. 자기가 없는 작업은 무시한다.
 - 같은 `task_id`가 다시 오면 내용을 바꾼다. 이전 작업을 취소로 보고하지 않는다(DEC-033).
 - `cancel`이 참이면 해당 작업을 `CANCELLED`로 끝낸다.
+- 시작 계획(`mp.mission_plan()`)의 미지원·잘못된 작업도 첫 틱에 `REJECTED`로 한 번 보고한다(O-45).
+- 승인을 받는 작업은 응답 전에 `TaskStatus`를 보내지 않는다. 승인되면 `ACCEPTED`, 거부·시간 제한이면 `REJECTED`다([4.7](#47-재사용-부품)).
 
 ## 4.7 재사용 부품
 
@@ -220,6 +222,17 @@ stateDiagram-v2
 | `TaskPilot(ctx, acceptance_m, hold_radius_m, speed_mps, supported)` | `TaskTracker`에 비행 수행까지 더한 것. `step()` 호출 하나로 MoveTo, Hold, RTB, SearchArea, Route를 처리 |
 | `every(ctx, hz)` | 기체마다 위상을 달리한 주기 판정 |
 | `peer_status(nav, group_id, task_id)` | `PeerStatus` 구성 |
+| `TrackSharer` | `track_share_hz` > 0이면 `ms.detections()`를 표적별 최신으로 모아 주기마다 표적당 `TrackShare` 한 건을 방송. 0이면 `detections()`를 건드리지 않는다 |
+| `CommandIds` | 비행 명령 ID 발급. 같은 목적의 흐름은 같은 ID, 흐름이 끝나면(`end()`) 새 ID(`base`, `base-2`, `base-3` …) |
+
+`TaskTracker`의 승인 규칙(IMP-AGT-046, DEC-088):
+
+- MA 변수 `approval_tasks`(쉼표 구분 작업 종류)에 든 작업, 또는 `EngagementCriteria.require_approval`이 참인 교전 작업은 시작 전에 `c2`로 `ApprovalRequest`(`request_id` = `<기체>-approval-<n>`)를 보낸다. 내장 MA는 `APPROVAL_PARAMS`를 `PARAMS`에 더한다.
+- 같은 `request_id`의 `ApprovalResponse`가 승인이면 C2 명령처럼 시작한다. 거부는 `REJECTED`(`approval denied`), `approval_timeout_s` 초과는 `REJECTED`(`approval timeout`)다. 모르는 요청과 끝난 요청의 응답은 무시한다.
+- 기다리는 동안 지금 작업을 밀어내지 않는다. 대기 중 취소는 `CANCELLED`, 새 작업·새 계획·단독 항로는 대기 작업을 `CANCELLED`(`preempted`)로 끝낸다. 계획 작업도 꺼낼 때 승인을 받는다.
+- MD에 `approval_requested`, `approval`을 남긴다.
+
+비행 명령 ID 규칙(IMP-AGT-051): 끝 상태에 이른 `FlightCommand` ID를 다시 쓰지 않는다. 같은 ID로 다시 내면 끝 상태 뒤에 상태가 이어져 외부 명령 상태 규칙(DEC-097)과 표준 점검 C5에 걸린다. 직접 명령을 내는 MA는 `CommandIds`를 쓴다.
 
 [patrol.py](../../examples/plugins/src/swarm_plugin_examples/patrol.py)는 `self.pilot.step()`만 부르고, 작업이 없을 때의 행동만 직접 정한다.
 
@@ -243,7 +256,7 @@ stateDiagram-v2
 |---|---|---|---|
 | `hold` | [hold.py](../../algorithms/src/swarm_algorithms/hold.py) | 첫 항법 상태의 침로·속도·고도 유지. 작업을 처리하지 않는다 | `orbit_radius_m`(0이면 직진) |
 | `waypoint` | [waypoint.py](../../algorithms/src/swarm_algorithms/waypoint.py) | `TaskPilot`으로 작업 수행 | `acceptance_m`, `hold_radius_m`, `speed_mps` |
-| `formation` | [formation.py](../../algorithms/src/swarm_algorithms/formation.py) | 리더-추종 편대. 리더는 `waypoint`처럼, 추종기는 슬롯을 HSA로 추종 | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` 등 |
+| `formation` | [formation.py](../../algorithms/src/swarm_algorithms/formation.py) | 리더-추종 편대. 리더는 `waypoint`처럼, 추종기는 슬롯을 HSA로 추종. 리더가 정해지거나 바뀌면 새 리더가 `LeaderUpdate`(`term` = 그 기체가 본 리더 변경 횟수)를 방송. 추종기는 리더 정보가 없거나 `leader_timeout_s`보다 오래되면 명령을 내지 않는다 | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` 등 |
 | `flocking` | [flocking.py](../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds 분리·정렬·응집 일괄 MA. Route는 거부 | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
 
 `flocking_basic`은 예제 시나리오용 변형이다. 전체 항목은 [algorithms/TRACE.md](../../algorithms/TRACE.md).

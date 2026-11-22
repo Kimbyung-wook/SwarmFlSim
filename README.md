@@ -43,7 +43,7 @@ flowchart LR
     GW <-->|WebSocket| CAL["LA-CAL<br/>agra_lacal"]
 ```
 
-- **통신**: Zenoh만 사용, DDS 미사용 (DEC-002). 프로세스는 `open_bus`로 버스를 연다 (DEC-026)
+- **통신**: Zenoh만 사용, DDS 미사용 (DEC-002). A-GRA L1의 DDS 요구에 맞춘 변경은 보류 (DEC-099). 프로세스는 `open_bus`로 버스를 연다 (DEC-026)
 - **브라우저**: WebSocket 브리지로만 버스에 접속 (DEC-027)
 - **채널 분리**
   - `swarm/**`: 기체 간·지상-기체 간 메시지 (tx → Datalink → rx)

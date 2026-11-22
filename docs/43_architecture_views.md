@@ -1,7 +1,7 @@
 # 관점별 아키텍처 그림
 
 - 목적: 아키텍처를 여러 관점의 그림으로 보여 주고 설계 피드백을 받는다. 피드백 질문은 [§11](#11-사용자-피드백-질문)에 있다.
-- 기준: `wp0-contracts` 커밋 `45c939f`, 계약 0.19.0, 로드맵 P1·P2·P6 완료. 계획(제안서)과 구현이 다르면 구현을 그리고 차이를 "계획 대비"로 적는다.
+- 기준: `wp0-contracts` 커밋 `eefde25`, 계약 0.20.0, 로드맵 P1·P2·P6 완료. 계획(제안서)과 구현이 다르면 구현을 그리고 차이를 "계획 대비"로 적는다.
 - 표지: **[추정]**은 코드나 기록으로 확인하지 않은 해석이다. **[미구현]**은 계획에만 있는 것이다.
 - 그림마다 "보여 주는 것 / 근거 / 판단할 지점"을 붙였다. 판단할 지점은 §11 질문 번호(Q)와 이어진다.
 - 매뉴얼과 달리 이 문서는 설계 검토용이다. 사용법은 [개괄](40_overview.md), [개발자 매뉴얼](41_dev/README.md), [사용자 매뉴얼](42_user/README.md)에 있다.
@@ -323,12 +323,15 @@ flowchart LR
 | 재밍 (`jam`) | C2 | 없음(REJECTED) | MS `JammerCommand`(사용자 MA) | — |
 | 센서 운용 | — | 없음 | MS `SensorCommand`(사용자 MA) | — |
 | 링크 상실 행동 | C2 `GcsHeartbeat` 끊김 | hold, waypoint, formation, flocking | Orbit(제자리) | Orbit / Hold 벡터장 |
+| 실행 전 승인 | `approval_tasks`의 작업 → C2 `ApprovalRequest`, 응답 `ApprovalResponse` | waypoint, formation(리더), flocking | 승인 뒤 그 작업의 명령 | 그 작업과 같음 |
+| 리더 변경 보고 | 편대 리더가 정해지거나 바뀜 → P2P `LeaderUpdate` 방송 | formation | — | — |
+| 탐지 공유 | `track_share_hz` > 0 → P2P `TrackShare` 방송 | hold, waypoint, formation, flocking | — | — |
 | 예제: 선회·순찰·랑데부 | — | example_turn, example_patrol, example_rendezvous | — | — |
 
 | 항목 | 내용 |
 |---|---|
 | 보여 주는 것 | 행동마다 어느 메시지로 들어와 어느 MA가 처리하고 어떤 VI 명령으로 내려가는지 |
-| 근거 | [c2.proto](../proto/swarm/v1/c2.proto) `TaskCommand`, `common.py` `PILOT_TASKS`·`TaskPilot._plan`, `formation.py`·`flocking.py`·`hold.py` 머리 주석, DEC-033·034·078 |
+| 근거 | [c2.proto](../proto/swarm/v1/c2.proto) `TaskCommand`, `common.py` `PILOT_TASKS`·`TaskPilot._plan`, `formation.py`·`flocking.py`·`hold.py` 머리 주석, DEC-033·034·078·088 |
 | 판단할 지점 | 임무장비 작업(track·strike·jam)을 받는 내장 MA가 없다. 사용자 MA 몫으로 둘지, 기본 MA에 넣을지(Q9) |
 
 ### 6.3 링크 상실 정책 (DEC-078)
@@ -542,7 +545,7 @@ flowchart TB
 
 | 위치 | 내용 |
 |---|---|
-| [계약 §3.5](10_contracts.md) welcome 예시 | `"contract":"0.16.0"`. 현재 0.19.0 **[추정: 예시라 갱신하지 않은 것]** |
+| [계약 §3.5](10_contracts.md) welcome 예시 | `"contract":"0.16.0"`. 현재 0.20.0 **[추정: 예시라 갱신하지 않은 것]** |
 
 ## 11. 사용자 피드백 질문
 

@@ -13,7 +13,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 | 화면 | 주소 |
 |---|---|
 | GCS UI | `http://localhost:5173/?source=bus&gcs=gcs-01&bridge=ws://127.0.0.1:8765/bus` |
-| Traffic Monitor | `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus` |
+| Traffic Monitor | `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus` |
 
 ## 2.2 기체 움직이기
 

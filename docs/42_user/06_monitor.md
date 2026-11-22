@@ -2,7 +2,9 @@
 
 데이터링크를 지나는 메시지를 집계해 보여 주는 화면이다. 관찰만 하고 명령을 보내지 않는다. 실행기에 `--monitor`를 주면 함께 뜬다.
 
-주소: `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus`
+주소: `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus`
+
+브리지 주소는 GCS UI와 같이 `bridge=`로 준다. 예전 이름 `url=`도 받는다. 둘 다 있으면 `bridge=`가 앞선다(DEC-091).
 
 | 인자 | 뜻 |
 |---|---|
