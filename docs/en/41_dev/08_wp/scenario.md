@@ -1,6 +1,6 @@
 # 8. WP7 Scenarios (`scenario/`)
 
-> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `cfa687f`.
+> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `a4167c5`.
 
 ## Responsibilities
 
@@ -39,6 +39,7 @@ uv run pytest scenario/tests
 - `validate` does not include all of Core's checks. IDs over 25 characters and two jammers are refused by Core.
 - `validate` refuses `dof5` and `dof6` as not implemented (roadmap P3). When they are implemented, add them to `IMPLEMENTED_DYNAMICS` in `validate.py`.
 - `run.rate` must be greater than 0. Maximum speed is given with Core's `--rate 0`.
+- `run.epoch_utc` (ISO 8601, time zone required) converts to `RunSpec.epoch_utc_us` (Unix epoch µs). The reverse conversion writes UTC `Z`. Empty means 0, and Core fills it in. `1970-01-01T00:00:00Z` cannot be told apart from 0 and is rejected (IMP-SCN-012, DEC-098).
 
 Traceability: [scenario/TRACE.md](../../../../scenario/TRACE.md).
 

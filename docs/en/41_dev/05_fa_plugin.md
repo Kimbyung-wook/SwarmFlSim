@@ -1,6 +1,6 @@
 # 5. Writing an FA plugin
 
-> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `cfa687f`.
+> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `a4167c5`.
 
 An FA (Flight Autonomy) turns the MA's flight commands into dynamics control output. Use the default FA as it is, and write your own only when comparing other guidance and control laws.
 

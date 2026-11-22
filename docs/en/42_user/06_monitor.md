@@ -1,10 +1,12 @@
 # 6. Traffic Monitor
 
-> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `cfa687f`.
+> Source: [docs/42_user/06_monitor.md](../../42_user/06_monitor.md) at commit `a4167c5`.
 
 This screen aggregates and shows the messages passing through the datalink. It only observes and sends no commands. Pass `--monitor` to the runner to start it as well. The UI is in Korean. Labels are written as shown on screen, with the English meaning in parentheses.
 
-Address: `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus`
+Address: `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus`
+
+Give the bridge address with `bridge=`, as in the GCS UI. The old name `url=` is still accepted. If both are present, `bridge=` wins (DEC-091).
 
 | Argument | Meaning |
 |---|---|

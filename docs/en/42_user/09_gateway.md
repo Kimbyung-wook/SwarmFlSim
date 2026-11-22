@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `cfa687f`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `a4167c5`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -14,7 +14,7 @@ flowchart LR
     GW -- "swarm/gcs-01/tx/c2/* · tx/mp/*" --> SIM
 ```
 
-The full table of exchanged messages is in [gateway/README.md](../../../gateway/README.md#교환-메시지). It exports vehicle position (`MA_NavigationReport`, `MA_PositionReport`), task status (`MA_TaskStatus`) and flight command status (`MA_FlightCommandStatus`), and receives `MA_TaskCommand`, `MA_ApprovalRequestStatus`, `MA_RoutePlan` and `MA_MissionPlan`.
+The full table of exchanged messages is in [gateway/README.md](../../../gateway/README.md#교환-메시지). It exports vehicle position (`MA_NavigationReport`, `MA_PositionReport`), task status (`MA_TaskStatus`), flight command status (`MA_FlightCommandStatus`), and the approval requests (`MA_ApprovalRequest`), leader changes (`MA_LeaderUpdateRequest`), shared detections (`MA_Entity`) and store loadout (`StoreLoadoutConfiguration`, DEC-088) sent by vehicles, and receives `MA_TaskCommand`, `MA_ApprovalRequestStatus`, `MA_RoutePlan` and `MA_MissionPlan`.
 
 ## 9.1 Preparation
 
@@ -68,6 +68,11 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 
 The ports in `--connect` follow the runner's `--base-port` (default 17600). `--participant <id>` is the Gateway's publisher ID (default `gateway-0`).
 
+| Option | Meaning |
+|---|---|
+| `--sim-epoch <UTC>` | Fixes the epoch of UCI times. ISO 8601 with a required time zone (for example `2026-01-01T00:00:00Z`). Takes precedence over the scenario value. For reproducible tests. Normally leave it out and use the scenario value ([UCI time](#uci-time)) |
+| `--lacal-admin <url>` | CAL Server admin address. Default is port 8766 on the `--lacal` host. Used to detect new external subscriptions and send them the last values. `none` turns it off |
+
 **4. Attach external C2.** Connect to the same CAL Server as the `external_c2` service and send `MA_TaskCommand` and `MA_ApprovalRequestStatus` on the `swarm.c2` topic, and `MA_RoutePlan` and `MA_MissionPlan` on the `swarm.mp` topic. A test client implementation is in [qa/gw_ext_client.py](../../../qa/gw_ext_client.py).
 
 ## 9.3 Right after start
@@ -100,6 +105,7 @@ Sending `hold` yields `EXECUTION_PENDING` → `EXECUTING` in `MA_TaskStatus`. Th
 
 `MA_ApprovalRequestStatus` is received on `swarm.c2` and sent as `ApprovalResponse` (DEC-075).
 
+- Approval requests on the vehicle side are turned on with the MA variable `approval_tasks` ([3.6](03_scenario.md#36-autonomy-plugins-autonomy)). Requests go out as `MA_ApprovalRequest`, and `RespondBy` is the report time plus the approval wait time.
 - Only messages with `RequestProcessingState` of `COMPLETED` and `ApprovalRequestProcessingState` of `APPROVED` or `REJECTED` are accepted. Other states are rejected.
 - If the Gateway sent out the request, the response goes only to the requesting vehicle. For an unknown request (including after a restart), `dst` is left empty and receivers sort it out by `request_id`.
 
@@ -124,6 +130,41 @@ Baseline MAs reflect plans received during a run as follows.
 - `flocking` rejects `route` tasks with two or more route points.
 - `flocking` does not send `EXECUTING`, so the last value seen externally stays `EXECUTION_PENDING` (O-28).
 
+### State and time sent to external systems
+
+These are the rules external systems see. Details are in [gateway/README.md](../../../gateway/README.md#늦게-붙은-외부-시스템-dec-089) (Korean).
+
+#### External systems that join late
+
+- Change reports (vehicle status, flight capability, payload status, store loadout, task status) go out only when the value changes. The Gateway keeps the last value and sends it once more when an external system newly subscribes to that message (DEC-089).
+- Periodic reports such as position, approval requests, leader changes, shared detections and flight command status are not resent.
+- A resent value also reaches existing subscribers of the same topic once more. After a Gateway restart there are no kept values.
+- External state values follow the public XSD enums. `MA_FlightCommandStatus` has no executing or completed value, so those show as `ACCEPTED`. Read execution and completion from `MA_TaskStatus` (DEC-090).
+
+#### Command state
+
+- `MA_FlightCommandStatus` follows the UCI Command-2 state machine. `ACCEPTED`, `REJECTED` and `CANCELED` are end states (DEC-097).
+- After an end state has been sent once for a vehicle's `CommandID`, no more states are sent for that ID. Repeated `RECEIVED` is not sent either. The blocked count is in the counter `skipped_command_state`.
+- The first report is always sent. A command replaced before acceptance can have `CANCELED` as its first report.
+- After a Gateway restart it does not remember finished IDs, so the same end state can go out at most once more per ID.
+
+#### UCI time
+
+The UCI header `Timestamp` and the position, velocity and attitude times are not wall-clock times but the UTC of the message's simulation time. UTC = epoch + simulation time, and the epoch is chosen in this order (DEC-098).
+
+1. `--sim-epoch`. It does not change when a scenario value arrives.
+2. The scenario's `run.epoch_utc`. If not written, the value Core filled in ([3.4](03_scenario.md#34-map-run)). This is the usual case.
+3. The first message that arrives before the scenario: the wall clock at that time minus its simulation time. The warning log `no scenario epoch yet` appears.
+
+- If the epoch was set by 3 and a scenario value then arrives, the Gateway switches to the scenario value. The warning log `UCI time base changed` and the counter `epoch_changed` record it. A different value in a new scenario is handled the same way.
+- Within one epoch, (Timestamp − simulation time) stays constant through pause and rate changes.
+
+#### Commands that name unknown vehicles
+
+- If any vehicle named by an external `MA_TaskCommand`, `MA_RoutePlan` or `MA_MissionPlan` is unknown, the Gateway does not publish it to the bus and rejects it (D-35). The warning log `unknown entity [...]` and the counter `ext_rejected` record it.
+- Known vehicles are the UAVs in the scenario (`sim/ctrl/scenario`, which the Gateway only reads) and the vehicles this GCS has received reports from. Truth is not used (DEC-096).
+- When an `MA_TaskCommand` or `MA_MissionPlan` is rejected, the Gateway sends an `MA_TaskStatus` (`DROPPED`, with the reason) for each unknown vehicle to inform the external side. `MA_RoutePlan` has no status message to report with, so only the rejection is recorded.
+
 ## 9.7 Counters and rejection
 
 A `counters` log appears every `--stats-s` period.
@@ -135,11 +176,13 @@ A `counters` log appears every `--stats-s` period.
 | `sent` | Number sent to LA-CAL |
 | `ext_rx` | Commands received externally |
 | `ext_published` | Commands published to the bus |
+| `ext_rejected` | External commands rejected because they named an unknown vehicle |
+| `skipped_command_state` | Command states not sent because they came after an end state |
+| `replayed` | Values resent to late external subscribers |
+| `epoch_changed` | Times the UCI epoch was switched to the scenario value |
 
 - Messages failing XSD validation or conversion are not exported and are recorded in logs and counters. The Gateway keeps running.
 - Even if one position mapping message fails, the other mapped messages are exported.
-
-> Known limitation: `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20). In a test run the messages were forwarded anyway.
 
 > In lockstep, external input breaks same-seed reproduction. The Gateway publishes at the tick in which the input arrived, so the trajectories of the vehicles that received it differ between runs. Without external input, trajectories, link results and GCS receptions match.
 

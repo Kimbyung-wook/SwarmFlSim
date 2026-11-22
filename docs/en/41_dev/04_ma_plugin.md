@@ -1,6 +1,6 @@
 # 4. Writing an MA plugin
 
-> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `cfa687f`.
+> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `a4167c5`.
 
 An MA (Mission Autonomy) is a Python class that makes the mission decisions for one vehicle or a swarm. It takes tasks and turns them into flight commands and equipment commands.
 
@@ -143,11 +143,11 @@ Plugins communicate with the outside only through `ctx.ports` (DEC-013). They do
 
 | Port | Methods | Contents |
 |---|---|---|
-| `c2` | `inbox()`, `send(msg)` | Receives tasks from the controlling GCS, sends `TaskStatus` and others |
+| `c2` | `inbox()`, `send(msg)` | Receives tasks and `ApprovalResponse` from the controlling GCS, sends `TaskStatus`, `ApprovalRequest` and others |
 | `vi` | `nav()`, `capability()`, `system_status()`, `command(cmd)`, `command_status()` | Navigation report, FA capability, vehicle status, flight commands and their status |
 | `ms` | `loadout()`, `detections()`, `command(msg)`, `activities()` | Payload list, detection results, equipment commands (`SensorCommand`, `JammerCommand`, `StrikeCommand`), equipment status |
 | `mp` | `mission_plan()`, `route_plans()`, `engagement_criteria()` | Plans from the scenario and plans received during a run |
-| `p2p` | `send(msg, to=None)`, `inbox()` | Vehicle-to-vehicle communication. Broadcast if `to` is absent. Passes through the datalink, with loss and latency |
+| `p2p` | `send(msg, to=None)`, `inbox()` | Vehicle-to-vehicle communication. Broadcast if `to` is absent. Passes through the datalink, with loss and latency. The GCS on the same side also receives broadcasts, so `LeaderUpdate` and `TrackShare` also go out through the Gateway |
 | `md` | `record(name, value)` | Records values for analysis. For now they stay in runtime memory and do not go to the bus or MCAP |
 
 - Use only what arrived on `p2p` for the state of other vehicles. `nav()` is the vehicle's own navigation value, including noise.
@@ -211,6 +211,8 @@ stateDiagram-v2
 - Reject a task whose `assignees` is empty. Ignore a task that does not include you.
 - If the same `task_id` arrives again, change the content. Do not report the previous task as cancelled (DEC-033).
 - If `cancel` is true, end that task with `CANCELLED`.
+- Unsupported or invalid tasks in the starting plan (`mp.mission_plan()`) are also reported once as `REJECTED` on the first tick (O-45).
+- A task that needs approval sends no `TaskStatus` before the response. If approved it is `ACCEPTED`; if denied or timed out it is `REJECTED` ([4.7](#47-reusable-parts)).
 
 ## 4.7 Reusable parts
 
@@ -222,6 +224,17 @@ The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](.
 | `TaskPilot(ctx, acceptance_m, hold_radius_m, speed_mps, supported)` | `TaskTracker` plus flight execution. One `step()` call handles MoveTo, Hold, RTB, SearchArea, Route |
 | `every(ctx, hz)` | Periodic check with a different phase per vehicle |
 | `peer_status(nav, group_id, task_id)` | Builds a `PeerStatus` |
+| `TrackSharer` | If `track_share_hz` > 0, gathers `ms.detections()` into the latest per target and broadcasts one `TrackShare` per target each period. At 0 it does not touch `detections()` |
+| `CommandIds` | Issues flight command IDs. One flow for the same purpose keeps one ID; after the flow ends (`end()`) a new ID (`base`, `base-2`, `base-3` …) |
+
+Approval rules in `TaskTracker` (IMP-AGT-046, DEC-088):
+
+- A task listed in the MA variable `approval_tasks` (comma-separated task kinds), or an engagement task whose `EngagementCriteria.require_approval` is true, sends an `ApprovalRequest` (`request_id` = `<vehicle>-approval-<n>`) on `c2` before it starts. Baseline MAs add `APPROVAL_PARAMS` to `PARAMS`.
+- If the `ApprovalResponse` with the same `request_id` approves, the task starts like a C2 command. A denial gives `REJECTED` (`approval denied`), exceeding `approval_timeout_s` gives `REJECTED` (`approval timeout`). Responses to unknown or finished requests are ignored.
+- The current task is not displaced while waiting. A cancel during the wait gives `CANCELLED`; a new task, a new plan or a standalone route ends the waiting task with `CANCELLED` (`preempted`). Plan tasks also ask for approval when taken from the queue.
+- MD records `approval_requested` and `approval`.
+
+Flight command ID rule (IMP-AGT-051): do not reuse a `FlightCommand` ID that has reached an end state. Reusing it continues states after the end state, which breaks the external command state rule (DEC-097) and standards check C5. MAs that issue commands directly use `CommandIds`.
 
 [patrol.py](../../../examples/plugins/src/swarm_plugin_examples/patrol.py) only calls `self.pilot.step()` and decides for itself only what to do when there is no task.
 
@@ -245,7 +258,7 @@ The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](.
 |---|---|---|---|
 | `hold` | [hold.py](../../../algorithms/src/swarm_algorithms/hold.py) | Holds the heading, speed and altitude of the first navigation state. Does not handle tasks | `orbit_radius_m` (0 means straight) |
 | `waypoint` | [waypoint.py](../../../algorithms/src/swarm_algorithms/waypoint.py) | Executes tasks with `TaskPilot` | `acceptance_m`, `hold_radius_m`, `speed_mps` |
-| `formation` | [formation.py](../../../algorithms/src/swarm_algorithms/formation.py) | Leader-follower formation. The leader acts like `waypoint`, followers track their slots with HSA | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` and others |
+| `formation` | [formation.py](../../../algorithms/src/swarm_algorithms/formation.py) | Leader-follower formation. The leader acts like `waypoint`, followers track their slots with HSA. When the leader is set or changes, the new leader broadcasts `LeaderUpdate` (`term` = the number of leader changes that vehicle has seen). Followers issue no command when leader information is missing or older than `leader_timeout_s` | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` and others |
 | `flocking` | [flocking.py](../../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds separation, alignment and cohesion batch MA. Rejects Route | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
 
 `flocking_basic` is a variant for example scenarios. The full list is in [algorithms/TRACE.md](../../../algorithms/TRACE.md).

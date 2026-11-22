@@ -1,6 +1,6 @@
 # 8. WP1 Sim Core (`core/`)
 
-> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `cfa687f`.
+> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `a4167c5`.
 
 ## Responsibilities
 
@@ -56,6 +56,7 @@ ctest --preset msvc-debug -R "^core\.|swarm_core"
 - Scripted motion is ground-referenced and does not add wind.
 - Lockstep participants are fixed statically by the scenario and `--participant`. New participants are not accepted after start (DEC-037).
 - `SetParams` takes effect at the frame boundary when Core receives the command. Tests that need reproducibility put the values in the scenario.
+- If the epoch `run.epoch_utc_us` is empty, Core fills in the wall-clock UTC at load and Reset and carries it in `Scenario.run` on `sim/ctrl/scenario`. It does not change during the run, and the log shows `epoch_utc_us=<value> (scenario|wall clock)`. It is not used in simulation output (IMP-CORE-031, DEC-098).
 
 Traceability: [core/TRACE.md](../../../../core/TRACE.md).
 

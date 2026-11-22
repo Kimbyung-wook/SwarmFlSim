@@ -1,6 +1,6 @@
 # 7. Creating datalink conditions
 
-> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `cfa687f`.
+> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `a4167c5`.
 
 All vehicle-to-vehicle and ground-to-vehicle messages pass through the Datalink. Adjust latency, loss, bandwidth and jamming with the scenario and fault injection, and view the results in the Traffic Monitor.
 
@@ -89,6 +89,7 @@ The Datalink sends a `GcsHeartbeat` at 1 Hz from each GCS to the vehicles it con
 - Set the policy per task with `lost_link_policy`. Without it, the MA parameter `lost_link_policy` applies ([chapter 3](03_scenario.md#37-mission-plan-mission_plan)).
 - A new task command received while orbiting ends the orbit even before recovery, and the vehicle follows it.
 - While the link is fully cut, the GCS cannot tell whether a vehicle is in the lost state (O-34).
+- When the link comes back after a cut longer than `lost_link_timeout_s`, the vehicle sends its status reports (vehicle status, in-progress flight command status, store loadout, payload status) and flight capability once more. This keeps the GCS from missing changes made during the cut. Normal report volume is unchanged (DEC-089).
 - Setting the policy from the UI or the Gateway has not been checked. Set it in the scenario.
 
 ## 7.5 Checking the results

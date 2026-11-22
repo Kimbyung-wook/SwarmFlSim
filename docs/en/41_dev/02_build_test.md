@@ -1,6 +1,6 @@
 # 2. Build and test
 
-> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `cfa687f`.
+> Source: [docs/41_dev/02_build_test.md](../../41_dev/02_build_test.md) at commit `a4167c5`.
 
 Each area is built and tested separately, so if you only change Python, start at 2.3. Run the commands from the repository root. Exceptions are written in front of the command.
 
