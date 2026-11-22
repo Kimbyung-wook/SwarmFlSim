@@ -1,7 +1,7 @@
 [project]
 name = "swarm-algorithms"
 version = "0.1.0"
-description = "Default MA plugins: hold, waypoint, formation, flocking (WP3)"
+description = "Default MA plugins: hold, waypoint, formation, flocking; test/demo MA: approval_demo (WP3)"
 requires-python = ">=3.12"
 dependencies = [
     "swarm-api",
@@ -17,6 +17,8 @@ formation = "swarm_algorithms.formation:Formation"
 flocking = "swarm_algorithms.flocking:Flocking"
 # 예제 시나리오(scenario/examples)가 쓰는 이름
 flocking_basic = "swarm_algorithms.flocking:Flocking"
+# 승인 흐름 시험·데모 전용 (DEC-103). 기본 MA가 아니다
+approval_demo = "swarm_algorithms.approval_demo:ApprovalDemo"
 
 [tool.uv.sources]
 swarm-api = { workspace = true }
