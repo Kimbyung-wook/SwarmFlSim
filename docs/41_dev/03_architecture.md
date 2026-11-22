@@ -62,7 +62,8 @@ flowchart LR
 - 항법과 제어는 기체별 키가 아니라 일괄 키로 오간다(DEC-081). Core는 프레임마다 전 기체 항법을 `onboard_batch/NavigationBatch` 1건으로 내고, Agent는 맡은 기체의 제어 출력을 `onboard_batch/ControlBatch/<participant>` 1건으로 모아 `FrameDone` 전에 낸다. 기체별 `onboard/<id>/NavigationReport`·`ControlOutput` 키는 없어졌다. 런타임이 배치에서 자기 기체 행만 꺼내 `ctx.ports.vi.nav()`와 FA `step`에 넘기므로 플러그인 코드는 바뀌지 않는다. 버스를 직접 구독하던 도구는 일괄 키로 바꾼다.
 - 두 Agent가 같은 기체의 제어를 보내면 참여자 이름이 뒤인 쪽이 쓰인다(IMP-CORE-030).
 - Datalink는 GCS마다 통제 기체(`controlling_gcs`)로 `GcsHeartbeat`를 보낸다(기본 1 Hz, `--heartbeat-hz`). 일반 링크 판정을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 닿고, `swarm/<gcs>/tx`를 거치지 않으므로 송신 개수 장벽 대상이 아니다(DEC-078).
-- Gateway는 `swarm/<gcs>/rx/**`만 구독하고 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`만 발행한다.
+- Agent 런타임은 맡은 기체마다 `swarm/<id>/rx/**`와 `onboard/<id>/<메시지>`를 따로 구독한다. 엔티티 자리에 와일드카드(`swarm/*/rx/**`, `onboard/*/...`)를 쓰지 않는다. 실제 기체가 자기 앞 수신만 받는 형상을 시뮬레이션에서도 지키기 위해서다(DEC-100, 계약 0.21.0). 계약 §3.2 `swarm/<dst>/rx/<iface>/<msg>` 행의 구독자 칸에 이 단위가 적혀 있다(O-50 정정).
+- Gateway는 `swarm/<gcs>/rx/**`와 `sim/ctrl/scenario`(읽기만, DEC-096)를 구독하고 `swarm/<gcs>/tx/c2/<msg>`와 `swarm/<gcs>/tx/mp/<msg>`만 발행한다.
 - 브라우저는 Zenoh에 직접 붙지 않고 브리지로만 붙는다(DEC-027).
 
 Agent 런타임이 플러그인과 무관하게 GCS로 자동 보고하는 것:

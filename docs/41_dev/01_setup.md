@@ -23,12 +23,14 @@ flowchart TD
 | Visual Studio Build Tools + vcpkg | Windows MSVC로 C++ 빌드 | 계약 §7.2 "MSVC + vcpkg" |
 | MSYS2 UCRT64 또는 Linux 패키지 | MSVC 대신 다른 C++ 툴체인 | 계약 §7.2 |
 | zenoh-c, zenoh-cpp 1.10.2 | C++ 프로세스를 실제 버스에 붙일 때 | 계약 §7.2 "Zenoh" |
-| MCAP 헤더 | Logger. vcpkg는 자동, MSYS2·Linux는 직접 받는다 | 계약 §7.2 "MCAP" |
+| MCAP 헤더 | Logger. vcpkg는 자동, MSYS2·Linux는 vcpkg 포트와 같은 2.2.0 태그(`releases/cpp/v2.2.0`)로 직접 받는다 | 계약 §7.2 "MCAP" |
 | git 서브모듈 | Gateway | [2장](02_build_test.md#26-gateway) |
 
 > `linux-debug`·`linux-release`는 WSL Ubuntu 24.04, GCC 13에서 컴파일 오류 0, ctest 75/75를 확인했다(2026-11-21, IMP-DYN-010 병합 뒤). 이 확인에서 Zenoh는 홈 아래 `~/opt/zenoh`에 풀어 `CMAKE_PREFIX_PATH`로 넘겼고, MCAP 헤더는 mcap 저장소를 `releases/cpp/v2.2.0` 태그로 고정해 받았다. 배포판 protobuf(3.21)와 vcpkg protobuf는 버전이 달라도 logger 골든 시험이 메시지 내용 해시를 쓰므로 같은 값이 나온다(IMP-LOG-013).
 >
-> 확인 안 됨: `mingw-*` 프리셋은 이 매뉴얼을 쓰면서 실행해 보지 않았다. 아래 명령은 Windows `msvc-debug`로 확인했다.
+> `mingw-debug`·`mingw-release`는 MSYS2 UCRT64, GCC 16.2에서 ctest 75/75를 확인했다(2026-11-22, IMP-LOG-014 병합 뒤). mcap 헤더를 직접 넘기는 경로에서 Windows일 때 생기던 링크 오류는 IMP-LOG-014에서 고쳤다.
+>
+> 아래 명령은 Windows `msvc-debug`로 확인했다.
 
 ## 1.2 프리셋 고르기
 
