@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.21.0
+- 계약 버전: 0.22.0
+  - 0.22.0: 링크 복구 뒤 상태 재보고와 복구 유지 시간(DEC-101), Datalink 링크별 순서 보장(DEC-102), 플러그인 API `swarm_api.geo`·`swarm_api.racetrack`(DEC-104)
   - 0.21.0: Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`·`onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독 금지 (DEC-100)
   - 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(모의 시각 0의 UTC). Core가 비어 있으면 적재 때 채워 `sim/ctrl/scenario`로 알린다 (DEC-098)
   - 0.19.0: `link/state` 발행을 주기 안의 여러 프레임에 나눈다 (DEC-084)
@@ -149,15 +150,18 @@ flowchart LR
   - `NavigationReport`는 모의 시간 기준 주기로 보낸다. 기본 1 Hz이고 Agent 런타임 CLI `--vi-report-hz`로 바꾼다(0이면 끈다).
   - `SystemStatus`(Core가 `onboard/<id>/SystemStatus`로 바뀔 때와 1 Hz로 발행, DEC-073)·`FlightCommandStatus`는 값이 바뀔 때 보내고, `FlightCapability`는 시작할 때 한 번 보낸다. 변화 보고의 최대 빈도는 `--activity-max-hz`를 따른다(DEC-056).
   - Datalink를 거치므로 GCS 링크 상태가 반영된다. UI·Gateway는 `swarm/<gcs>/rx/vi/<Msg>`만 읽는다.
+  - 링크 복구 재보고 (DEC-101): GCS 링크 상실 판정 뒤 복구로 판정하면 현재 `FlightCommandStatus`와 진행 중인 작업의 `TaskStatus`를 한 번 다시 보낸다.
 - GCS Heartbeat와 링크 상실 행동 (DEC-078)
   - Datalink가 GCS마다 자기가 통제하는 기체(`controlling_gcs`, 비면 ID순 첫 GCS)로 `GcsHeartbeat`를 모의 시간 기준 주기로 발생시킨다. 기본 1 Hz이고 CLI `--heartbeat-hz`로 바꾼다(0이면 끈다).
   - Heartbeat는 일반 tx와 같은 링크 판정(생존·고장·재밍·거리·가시선·손실·지연)을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 전달되고 `link/outcome`을 남긴다. `swarm/<gcs>/tx/**`에는 발행하지 않으므로 lockstep 송신 개수 장벽(DEC-044)의 대상이 아니다.
   - MA는 C2 포트로 받은 Heartbeat로만 링크 상실을 판단한다 (DEC-013). 첫 Heartbeat를 받은 뒤부터 감시하고, 마지막 수신 후 MA 변수 `lost_link_timeout_s`(기본 5 s, 모의 시간)가 지나면 상실로 판단한다.
   - 정책은 `TaskCommand.lost_link_policy`로 작업마다 정하고, `UNSPECIFIED`면 MA 변수 `lost_link_policy`(기본 `hold_until_command`)를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다.
+  - 기본 MA의 복구는 Heartbeat 재수신 뒤 MA 변수 `lost_link_recover_hold_s`(기본 5 s, 모의 시간) 동안 다시 상실로 판정되지 않아야 확정한다. 확정 전에는 상실 행동을 유지한다 (DEC-101).
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
   - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
 - 데이터링크 판정
+  - 순서: 같은 (송신, 수신, 인터페이스) 링크 안에서는 송신 순서대로 전달한다. rx 시각은 같은 링크 직전 rx 시각보다 앞서지 않는다. lockstep·realtime 모두 적용한다 (DEC-102).
   - 재밍: 수신 엔티티가 재밍 영역(`JamZoneEvent.area`) 안이면 그 메시지는 JAMMED로 손실된다. 송신자 위치는 보지 않는다(DEC-055). `link/state`는 양쪽 중 하나라도 영역 안이면 jammed다 (DEC-028, DEC-030).
   - 브로드캐스트(`dst` 비움): 같은 편 무전기 엔티티 전원이 수신 대상이다. 닿지 않는 수신자마다 사유를 담은 `LinkOutcome`을 낸다 (DEC-032).
   - 링크 프로파일: `EntitySpec.link_profile`이 내장 프로파일 또는 시나리오 `link_profiles`의 이름을 참조한다. 시나리오 항목은 `base`(비우면 같은 이름의 내장, 없으면 `default`)를 복사한 뒤 값이 있는 필드만 덮어쓴다 (DEC-029).
@@ -263,6 +267,7 @@ flowchart TB
   - 기체별: `on_init(ctx)`, `on_step(ctx)`, `on_shutdown(ctx)`
   - 군집 일괄: `on_step_batch(ctxs, nav)`. `nav`는 NumPy 배열 묶음이다. 기체마다 `ctxs[i].ports`로만 송수신한다 (DEC-008).
   - 난수는 `ctx.rng`만 쓴다 (lockstep 결정론).
+  - 공개 도구: 좌표 변환 `swarm_api.geo`, 경로 추종 `swarm_api.racetrack`. 플러그인은 `swarm_agent` 내부 모듈을 import하지 않는다 (DEC-104).
 - FA: `on_init` → `FlightCapability`, `on_command(FlightCommand)` → 수락/거부, `step(nav, dt)` → `ControlOutput`
 - 등록
   - Python: entry point 그룹 `swarm.ma`, `swarm.fa`

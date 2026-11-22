@@ -175,6 +175,10 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-098 | 모의 시각 0의 UTC(기준 시각)를 시나리오에 둔다. `RunSpec.epoch_utc_us`(시나리오 JSON `run.epoch_utc`, ISO 8601)이고, 비어 있으면 Core가 적재 때 벽시계 UTC로 채워 `sim/ctrl/scenario`로 알린다. 모든 참여자는 UTC = 기준 시각 + `sim_time_us`로 쓴다. 명시 재정의가 시나리오 값보다, 시나리오 값이 첫 메시지 기준보다 앞선다. 계약 0.20.0 | OPN-070, QA D-36, DEC-005, DEC-096, 사용자 답변 "시나리오에 필드 추가" | Confirmed |
 | DEC-099 | A-GRA MA L1의 DDS 요구(MA-L1-009~012·025)에 맞춘 미들웨어 변경은 보류한다. DEC-002(Zenoh만 사용)를 유지한다. 공식 L1 준수 문서·자동 시험 도구와 DDS 토픽·QoS 규칙을 입수하면 다시 연다. 그때는 `open_bus`에 DDS 백엔드를 추가해 MA L1 포트만 DDS로 여는 안(OPN-071 B)부터 검토한다 | OPN-071, DEC-002, DEC-026, docs/44 §4, 사용자 답변 "보류" | Confirmed |
 | DEC-100 | Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`와 `onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독(IMP-AGT-043)은 쓰지 않는다. 실제 기체는 물리적으로 분리된 수신 형상을 갖고 멀티캐스트·메시 네트워크에서 자기 앞 수신만 받으므로 시뮬레이션도 기체별 수신 형상을 유지한다. 성능은 DEC-086(2) 방식으로 다시 판정하고, 미달이면 의미를 바꾸지 않는 비용 축소부터 한 뒤 사용자에게 묻는다 | OPN-072, QA O-49, DEC-044, DEC-086, 사용자 답변 "기체별 구독 필요" | Confirmed |
+| DEC-101 | (1) Agent 런타임은 GCS 링크 상실 판정 뒤 Heartbeat를 다시 받아 복구로 판정하면 현재 `FlightCommandStatus`와 진행 중인 작업의 `TaskStatus`를 GCS에 한 번 다시 보낸다. DEC-071 변화 보고의 예외다. (2) 기본 MA의 복구 판정은 Heartbeat 재수신 뒤 MA 변수 `lost_link_recover_hold_s`(기본 5 s, 모의 시간, 시나리오에서 재정의) 동안 다시 상실로 판정되지 않아야 확정한다. 확정 전에는 상실 행동을 유지한다 | OPN-073, QA O-34·O-36, DEC-071, DEC-078, 사용자 답변 "둘 다 고침" | Confirmed |
+| DEC-102 | Datalink는 같은 (송신, 수신, 인터페이스) 링크 안에서 송신 순서대로 전달한다. 지연 표본이 앞 메시지보다 짧아도 rx 시각은 같은 링크 직전 rx 시각보다 앞서지 않는다(rx_time = max(표본 rx_time, 직전 rx_time)). lockstep·realtime 모두 적용한다 | OPN-074, QA O-46, DEC-040, DEC-054, 사용자 답변 "링크별 순서 보장" | Confirmed |
+| DEC-103 | 승인 흐름 시험용 최소 MA를 `algorithms`에 둔다(WP3). 작업이 승인을 요구하면 `ApprovalRequest`를 보내고 승인 `ApprovalResponse`를 받은 뒤에만 발사 명령을 낸다. 거부·시간 초과면 내지 않고 작업을 끝 상태로 보고한다. 시험·데모 전용이며 기본 MA로 지정하지 않는다 | OPN-075, QA O-2, DEC-075, DEC-088, 사용자 답변 "시험용 MA 추가" | Confirmed |
+| DEC-104 | 좌표 변환(`geo`)과 경로 추종 도구(`racetrack`)를 플러그인 API `swarm_api.geo`·`swarm_api.racetrack`으로 공개한다. 내장 MA와 Agent 런타임은 이 모듈을 쓰고, 플러그인은 `swarm_agent` 내부 모듈을 import하지 않는다. 버스·truth·Core 접근은 들어가지 않는다 | OPN-076, QA O-48, DEC-013, 사용자 답변 "플러그인 API에 포함" | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -252,6 +256,10 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-070 | 모의 시각 0의 UTC(기준 시각) 정의(WP9 OPN-GW-002, QA D-36). 계약에 모의 시각과 UTC의 대응이 없어 Gateway는 `--sim-epoch` 또는 첫 메시지 기준으로 정한다. 선택: (A) `Scenario`에 기준 시각 필드를 두고 모든 참여자가 쓴다(계약 변경) (B) Gateway 옵션으로 두고 계약은 바꾸지 않는다. 제안: A | Resolved by DEC-098 |
 | OPN-071 | A-GRA MA L1의 DDS 요구(MA-L1-009~012·025, docs/44 §4)와 DEC-002(Zenoh만 사용)의 충돌. 선택: (A) 공용 버스를 DDS로 교체 (B) `open_bus`에 DDS 백엔드를 추가해 MA L1 포트만 DDS로 연다 (C) Zenoh를 유지하고 L1 포트를 DDS로 내보내는 브리지를 둔다 (D) 보류. 공식 L1 준수 문서·자동 시험 도구와 DDS 토픽·QoS 규칙(배포 제한 문서)을 입수한 뒤 정한다. 제안: D. 입수 전에는 어느 안으로도 L1 준수 판정을 받을 수 없다. 착수 시 B | Resolved by DEC-099 |
 | OPN-072 | Agent 수신 구독 범위(QA O-49)와 DEC-086 성능 조치(IMP-AGT-043)의 충돌. 계약 §3.2는 Agent가 자기 기체 `swarm/<dst>/rx/**`를 구독한다고 적는데, 맡을 수 있는 기체를 모두 맡은 Agent는 `swarm/*/rx/**` 하나로 열고 맡지 않은 기체·GCS 수신은 해석 전에 버린다(구독 600개면 put마다 수십 µs). 선택: (A) 항상 기체별로 구독(IMP-AGT-043 되돌림, DEC-086 재측정 필요) (B) 와일드카드를 유지하고 계약 §3.2에 이 동작을 적는다 | Resolved by DEC-100 |
+| OPN-073 | 링크 복구 뒤 상태 재보고와 복구 판정 유지 시간(QA O-34·O-36). GCS 링크 단절 중 상실 상태가 GCS에 가지 않고 복구 뒤에도 다시 보내지 않는다. RESUME 기체가 재밍 구역 경계에서 선회와 재개를 반복한다 | Resolved by DEC-101 |
+| OPN-074 | realtime에서 같은 링크의 메시지가 지연 표본 차이로 뒤바뀌어 도착(QA O-46) | Resolved by DEC-102 |
+| OPN-075 | 승인 흐름을 시험할 MA 부재(QA O-2). 기본 MA 중 발사 명령을 내는 것이 없다 | Resolved by DEC-103 |
+| OPN-076 | 내장 MA가 플러그인 API 밖의 `swarm_agent.geo`·`swarm_agent.racetrack`을 import(QA O-48) | Resolved by DEC-104 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
