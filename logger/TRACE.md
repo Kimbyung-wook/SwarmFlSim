@@ -27,6 +27,7 @@ flowchart LR
 | IMP-LOG-011 | 메시지 색인을 쓰지 않는다(`RecorderOptions::message_index`=false). 채널이 수만 개일 때 writer의 청크별 색인이 RSS를 부하에 비례해 키웠다(QA-006 원인). 색인이 없으므로 log_time을 단조 증가로 고정하고, 읽을 때 색인이 없는 파일은 파일 순서로 읽는다 | `src/mcap_log.cpp` | REQ-LOG-001, DEC-011 |
 | IMP-LOG-012 | 구독 콜백·기록 경로 비용 절감(DEC-086). 콜백은 (키, 인코딩) 문자열 복사를 없애고 정수 id만 달며(큐 락 안의 해시 조회), 쓰기 스레드가 잠들어 있고 큐가 빈 때만 깨운다. 쓰기 스레드는 첫 항목에 바로 깨지 않고 2 ms 또는 256건까지 모아 한 번에 쓰고, 배치당 락을 한 번만 쥐며, 채널·sequence를 id 인덱스 배열로 찾는다. 기록 범위와 파일 내용은 그대로(TC-LOG-011) | `src/mcap_log.cpp` | REQ-LOG-001, DEC-086 |
 | IMP-LOG-013 | TC-LOG-011 골든 비교를 파일 바이트에서 메시지 내용 해시로 바꾼다. 스키마 레코드의 FileDescriptorSet 직렬화가 protobuf 버전마다 달라 linux(protobuf 3.21)에서 깨졌다. 해시 대상은 채널 id·토픽·메시지 인코딩·스키마 이름·log_time·publish_time·sequence·페이로드(스키마 바이트 제외). 골든 값은 IMP-LOG-012 이전 구현(9930206^)으로 다시 만들었다. 제품 코드는 그대로 | `tests/test_logger.cpp` | REQ-LOG-001, DEC-086 |
+| IMP-LOG-014 | MCAP_INCLUDE_DIR 대체 경로의 INTERFACE 타깃 `swarm_mcap`에 WIN32일 때 `MCAP_PUBLIC=`를 정의한다. 정적 링크인데 mcap `visibility.hpp`가 `_WIN32`에서 dllimport로 두어 mingw에서 `__imp_` 링크 오류가 났다. msvc는 vcpkg 포트를 써서 이 경로를 타지 않는다 | `CMakeLists.txt` | REQ-LOG-001 |
 
 ## 시험
 
@@ -46,6 +47,7 @@ flowchart LR
 | TC-LOG-010 | 시계가 거꾸로 가도 파일이 log_time 순이고 재생 순서가 맞다(색인 유/무) | `tests/test_logger.cpp` | IMP-LOG-011 | Pass |
 | TC-LOG-011 | 같은 입력(채널 여러 종류·빈 페이로드·시계 역행)으로 만든 MCAP 파일의 메시지 내용이 IMP-LOG-012 이전 구현의 것과 같다(메시지 FNV-1a 해시 일치) | `tests/test_logger.cpp` | IMP-LOG-012 | Pass |
 | TC-LOG-012 | TC-LOG-011의 골든이 protobuf 버전에 상관없이 같다(스키마 레코드를 해시에서 뺀다). msvc(vcpkg protobuf)와 linux(protobuf 3.21)에서 같은 값 | `tests/test_logger.cpp` | IMP-LOG-013 | Pass(msvc, linux) |
+| TC-LOG-013 | mcap 대체 경로(MCAP_INCLUDE_DIR)로 mingw-debug에서 swarm_logger_tests가 링크되고 통과한다. msvc·linux 빌드는 그대로 통과 | `tests/test_logger.cpp` | IMP-LOG-014 | Pass |
 
 시험 결과(2026-11-01, msvc-debug): swarm_api_tests, swarm_logger_tests 통과 (100% tests passed out of 2)
 시험 결과(2026-11-03, msvc-debug): swarm_logger_tests 통과 (TC-LOG-008~010 추가). QA-006: 큐 대기가 아니라 MCAP 메시지 색인이 원인이어서 IMP-LOG-011로 고쳤다.
