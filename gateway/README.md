@@ -82,18 +82,22 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 
 ### 기동 직후 준비 전 구간 (O-13)
 
-- Gateway는 LA-CAL에 접속(INIT)한 뒤 공개 XSD를 적재하고(수 초), 그다음에 외부 명령 구독(`SUB MA_TaskCommand swarm.c2`)을 건다.
-- 접속부터 구독 완료까지는 외부 명령을 받는 쪽이 없다. 이 구간에 외부가 PUB한 `MA_TaskCommand`는 서버가 `+OK`로 답하지만 아무에게도 전달되지 않고 사라진다. 다시 보내 주지 않는다.
-- 단계마다 INFO 로그를 남긴다. 외부 C2는 `ready` 줄이 나온 뒤 명령을 보내야 한다.
+- Gateway는 LA-CAL에 접속(INIT)하자마자 외부 명령 구독(`SUB MA_TaskCommand swarm.c2` 등 4종)을 건다. 구독 목록은 XSD 없이 descriptor와 변환기로 정한다 (IMP-GW-034).
+- 그 뒤 공개 XSD를 적재한다(약 4.3 s). 그동안 받은 외부 메시지는 받은 순서대로 쌓는다(최대 256건, 넘으면 오래된 것부터 버리고 경고). 준비가 끝나면 1.5 s(`settle_s`) 동안 버스에서 시나리오와 수신 보고를 받아 알려진 기체(D-35)를 모은 뒤 쌓인 것을 순서대로 처리한다. 그사이 온 메시지도 같은 줄 뒤에 붙어 순서가 지켜진다.
+- 쌓였던 명령은 받은 때부터 최대 약 6 s 늦게 tx로 나간다. 로그 `pre-ready <메시지> held N s -> <결과>`로 보인다.
+- **잃는 구간:** SUB가 걸리기 전, 곧 Gateway 프로세스가 없거나 기동·접속 중인 동안(재기동 측정 약 1.1 s)이다. OWP 1.0에는 보관(durable) 메시지가 없어 이 구간의 PUB는 CAL Server가 `+OK`로 답하고 아무에게도 전달하지 않는다. Gateway가 받을 수 없으므로 **외부 C2(LA-CAL 쪽)의 재송신 책임**이다. 외부는 명령마다 `MA_TaskStatus`(또는 거부 통지)를 기다리고, 오지 않으면 같은 `TaskID`로 다시 보낸다.
+- 단계마다 INFO 로그를 남긴다.
 
 | 로그 | 뜻 |
 |---|---|
-| `gateway: LA-CAL connected ... at +N s; not ready yet` | 접속만 됐다. 아직 외부 명령을 받지 않는다 |
+| `gateway: LA-CAL connected ... at +N s` | 접속됐다 |
+| `gateway: LA-CAL SUB MA_TaskCommand@swarm.c2 done at +N s` | 외부 명령 구독 완료. 이때부터 외부 PUB를 잃지 않는다 |
+| `gateway: receiving external commands from +N s; held until ready` | 받은 명령은 준비될 때까지 쌓는다 |
 | `gateway: XSD loaded, mapping built at +N s` | 검증 준비 완료 |
-| `gateway: LA-CAL SUB MA_TaskCommand@swarm.c2 done at +N s` | 외부 명령 구독 완료 |
-| `gateway: ready at +N s: ...` | 버스 구독(`swarm/<gcs>/rx/**`)까지 끝났다. 양방향 준비 완료 |
+| `gateway: ready at +N s: ...; K external messages held, processed after 1.5 s settle` | 버스 구독까지 끝났다. 쌓인 K건은 1.5 s 뒤 처리한다 |
 
-- 외부 쪽에서는 `MA_TaskStatus`가 오지 않는 것으로만 유실을 알 수 있다. 동작 변경 제안은 TRACE.md "제안"에 적었다.
+- 재기동 측정(`uv run python tools/measure_o13.py`, 0.5 s 간격 PUB, 5회): 고치기 전 회당 10~11건(약 5.3 s) 손실, 고친 뒤 2~3건(앞 Gateway 종료 뒤 약 1.1 s 안)이고 SUB 뒤 손실 0. TRACE.md 메모에 표가 있다.
+- Core는 `sim/ctrl/scenario`를 첫 틱 전에만 다시 발행하므로, 실행 중 재기동한 Gateway는 수신 보고로 알려진 기체를 정한다. `settle_s`는 그 보고를 기다리는 시간이다.
 
 ### 늦게 붙은 외부 시스템 (DEC-089)
 
@@ -202,7 +206,8 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/ids.py` | 문자열 ID ⇄ UUID |
 | `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms, mp)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
 | `src/swarm_gateway/gateway.py` | 1단계·2단계 처리, 카운터, 거부 기록 |
-| `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결) |
+| `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결), 준비 전 외부 메시지 보관 (O-13) |
+| `tools/measure_o13.py` | 재기동 준비 전 손실 측정 (QA O-13, 계획 §35.5) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |

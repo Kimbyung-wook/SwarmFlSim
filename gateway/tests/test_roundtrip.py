@@ -118,7 +118,7 @@ async def test_send_failure_is_counted_and_gateway_continues(cal_server, bus, co
 
 
 async def test_ready_is_logged_after_subscription(cal_server, bus, codec, caplog):
-    """TC-GW-015 (O-13): 접속·XSD 적재·SUB 완료·ready 시점을 로그로 남긴다. ready는 SUB 뒤다"""
+    """TC-GW-015 (O-13): 접속·SUB 완료·XSD 적재·ready 시점을 로그로 남긴다. SUB는 XSD 적재 앞이다 (IMP-GW-034)"""
     import logging
 
     caplog.set_level(logging.INFO, logger="swarm_gateway")
@@ -126,10 +126,10 @@ async def test_ready_is_logged_after_subscription(cal_server, bus, codec, caplog
     try:
         msgs = [r.getMessage() for r in caplog.records if r.name == "swarm_gateway"]
         order = [next(i for i, m in enumerate(msgs) if key in m)
-                 for key in ("LA-CAL connected", "not ready yet", "XSD loaded", "SUB MA_TaskCommand@swarm.c2",
-                             "ready at +")]
-        assert order[0] == order[1] and order[1] < order[2] < order[3] < order[4]
-        assert running.ready_after_s >= 0.0  # codec을 미리 적재한 시험이라 짧다
+                 for key in ("LA-CAL connected", "SUB MA_TaskCommand@swarm.c2", "receiving external commands",
+                             "XSD loaded", "ready at +")]
+        assert order == sorted(order) and len(set(order)) == 5
+        assert 0.0 <= running.subscribed_after_s <= running.ready_after_s  # codec을 미리 적재한 시험이라 짧다
     finally:
         await running.stop()
 

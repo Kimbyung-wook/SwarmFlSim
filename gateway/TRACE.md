@@ -1,7 +1,8 @@
 # gateway 추적표 (모듈 코드 GW)
 
 - 근거: DEC-068(단계적 양방향 Gateway, Datalink 경유), DEC-072(`uci_also`, 여러 UCI 대응), DEC-075(외부 승인 응답), DEC-076(임무 계획 수신), DEC-077(`publisher`), DEC-088(A-GRA 송신 4종), DEC-089(변화 보고 복구), DEC-090(XSD 상태 표현), DEC-097(외부 명령 상태 Command-2 상태 기계), DEC-098(모의 시각 기준 시각), DEC-096(`sim/ctrl/scenario` 구독자), QA 29차 D-35·D-36·D-39(`docs/45_standards_report.md` §2, 기준 `docs/44_standards_conformance.md`), DEC-069(agra_lacal 서브모듈 `third_party/agra_lacal` @ 45274ce), PRP-STD-002, DEC-013, DEC-014, DEC-026, REQ-STD-001
-- 계약 버전: 0.20.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 0d984a1 병합). 0.20.0은 `RunSpec.epoch_utc_us`(DEC-098)와 §3.2 `sim/ctrl/scenario` 구독자에 Gateway(DEC-096)를 더했다. `gateway/uv.lock`의 swarm-api 버전을 갱신했다. 0.16.0~0.19.0의 바뀐 점(`GcsHeartbeat`·`lost_link_policy` EXT, `NavigationBatch`·`ControlBatch` SIM, `ordered` 구독, `link/state` 분산)은 Gateway 동작에 영향이 없다. 새 EXT·SIM은 descriptor 매핑으로 내보내지 않는다
+- 계약 버전: 0.20.0 (`swarm_api.CONTRACT_VERSION`, wp0-contracts 0d984a1 병합, 9차에 92cdb9c 병합(Gateway 영향 없음)). 0.20.0은 `RunSpec.epoch_utc_us`(DEC-098)와 §3.2 `sim/ctrl/scenario` 구독자에 Gateway(DEC-096)를 더했다. `gateway/uv.lock`의 swarm-api 버전을 갱신했다. 0.16.0~0.19.0의 바뀐 점(`GcsHeartbeat`·`lost_link_policy` EXT, `NavigationBatch`·`ControlBatch` SIM, `ordered` 구독, `link/state` 분산)은 Gateway 동작에 영향이 없다. 새 EXT·SIM은 descriptor 매핑으로 내보내지 않는다
+- 9차(2026-11-22): QA O-13(재기동 준비 전 외부 PUB 손실) 측정과 (A) 준비 전 수신분 보관 구현
 - 8차(2026-11-20): DEC-098(UCI 시각 기준 = 시나리오 `run.epoch_utc_us`), OPN-GW-001·002 해소
 - 7차(2026-11-19): DEC-097(외부 명령 상태: 끝 상태 뒤 보고하지 않음, QA D-37·O-47의 Gateway 쪽)
 - 6차(2026-11-18): QA 29차 D-35(알려지지 않은 기체 명령 거부·외부 통지), D-36(UCI 시각 = 모의 시각), D-39(`external_c2` `declared.sub`)
@@ -48,6 +49,7 @@
 | IMP-GW-031 | CAL Server 설정 `external_c2` `declared.sub`를 Gateway가 외부로 내는 흐름 15개 전부(= `swarm_gateway` `declared.pub`, README 교환 표 발행 행)로 고쳤다. 전에는 `MA_TaskStatus`, `MA_NavigationReport` 둘뿐이었다 | `config/lacal_server.yaml` | QA D-39 | TC-GW-038 통과 |
 | IMP-GW-032 | 외부 명령 상태 상태 기계: 내보낼 OMS JSON의 `MessageData`에 `CommandID`·`CommandProcessingState`가 있는 메시지(메시지 이름 하드코딩 없음, 지금은 `MA_FlightCommandStatus`)를 (UCI 메시지, 보고 기체, CommandID)별로 본다. 끝 상태(ACCEPTED·REJECTED·CANCELED)를 낸 뒤의 보고와 RECEIVED 반복은 내지 않는다(`skipped_command_state`, 결과 `skipped_command_state`). 첫 보고는 무엇이든 낸다(첫 CANCELED 포함). 기억은 최근 65536개 ID. `FlightCommandStatus`를 변화 보고 보관(IMP-GW-024)에서 뺐다. 재기동하면 기억이 비고, 처음 보는 ID의 보고를 첫 보고로 낸다(README) | `src/swarm_gateway/command_state.py`, `gateway.py`, `retain.py` | DEC-097 | TC-GW-039~041 통과 |
 | IMP-GW-033 | UCI 시각 기준 시각의 출처와 우선순위(계약 0.20.0 §1): `--sim-epoch`(명시 재정의) > `sim/ctrl/scenario`의 `Scenario.run.epoch_utc_us`(0이 아닐 때) > 시나리오 전 첫 메시지 벽시계 기준(경고 로그). 첫 메시지 기준으로 정한 뒤 시나리오 값이 오면 시나리오 값으로 바꾸고 차이를 경고 로그와 `epoch_changed`에 남긴다. 새 시나리오의 다른 값이면 다시 정하고, 같은 값 재발행·0은 그대로 둔다. `--sim-epoch`가 있으면 시나리오 값은 로그만 남긴다. 시나리오는 한 번 해석해 알려진 기체(IMP-GW-029)와 시각에 함께 쓴다 | `src/swarm_gateway/converters/base.py`(`SimClock.on_scenario_epoch`), `gateway.py`, `entities.py`, `__main__.py` | DEC-098, QA D-36 | TC-GW-042, TC-GW-043 통과 |
+| IMP-GW-034 | 준비 전 외부 명령 보관(QA O-13, 안 A): LA-CAL 접속 직후 외부 명령 4종을 SUB한다. 구독 목록은 XSD 없이 descriptor·변환기로 정한다(`inbound_entries`). XSD 적재·매핑 생성은 스레드에서 하고(`asyncio.to_thread`) 그동안 받은 메시지는 `PreReadyInbox`에 받은 순서대로 둔다(최대 256, 넘으면 오래된 것 버림·`pre_ready_dropped`). 준비 뒤 `settle_s`(기본 1.5 s) 동안 시나리오·수신 보고로 알려진 기체를 모은 다음 순서대로 처리한다(`pre_ready_flushed`, 건별 로그). 처리 전에 온 것도 같은 줄에 붙여 순서를 지킨다. `Running.subscribed_after_s`. 남는 손실(SUB 전·Gateway 부재)은 외부 C2 재송신 책임으로 문서화(README) | `src/swarm_gateway/runner.py`, `gateway.py`, `tools/measure_o13.py` | QA O-13, P-GW-001 | TC-GW-015, TC-GW-044~046 통과, 측정(메모) |
 | IMP-GW-013 | CAL Server 설정(서비스 `swarm_gateway`, `external_c2`, 토픽 `swarm.*`)과 기동 래퍼(서브모듈 수정 없음) | `config/lacal_server.yaml`, `src/swarm_gateway/lacal_server.py` | DEC-069 | TC-GW-010 통과, 수동 기동 확인 |
 
 ## 시험 (TC)
@@ -95,10 +97,13 @@
 | TC-GW-041 | `MA_FlightCommandStatus`는 늦게 붙은 구독자 전달 대상이 아님 | `tests/test_command_state.py`, `tests/test_late_join.py` | IMP-GW-032, IMP-GW-024 | 통과 |
 | TC-GW-042 | 우선순위: 시나리오 기준 시각을 씀(`epoch_set`), `--sim-epoch`가 시나리오 값보다 우선, 시나리오 값 0이면 첫 메시지 벽시계 기준과 경고 로그 | `tests/test_epoch.py` | IMP-GW-033 | 통과 |
 | TC-GW-043 | 첫 메시지 기준 뒤 시나리오 값이 오면 바꾸고 경고(`epoch_changed`), 그 뒤 (Timestamp − 모의 시각) 일정. 같은 값 재발행은 그대로, 새 시나리오 다른 값은 다시 정함, 0은 그대로. `SimClock` 단위 규칙, proto 필드 번호 | `tests/test_epoch.py` | IMP-GW-033 | 통과 |
+| TC-GW-044 | `PreReadyInbox`: 준비 전 버스 발행 없음, 받은 순서 유지, 상한 넘으면 오래된 것부터 버림, 처리 뒤 바로 처리. 기다리는 동안 온 수신 보고로 알려진 기체가 되어 발행, 보고·시나리오가 없으면 D-35대로 거부 | `tests/test_pre_ready.py` | IMP-GW-034 | 통과 |
+| TC-GW-045 | 실제 CAL Server: SUB 뒤 XSD 적재(1 s로 흉내) 동안 외부가 PUB한 명령 4건이 준비·settle 뒤 순서대로 tx로 나감, SUB 완료 < 1 s ≤ 준비, 준비 뒤 명령은 바로 | `tests/test_pre_ready.py` | IMP-GW-034 | 통과 |
+| TC-GW-046 | XSD 없이 정한 준비 전 SUB 목록 = XSD를 적재한 Gateway의 수신 목록(4종) | `tests/test_pre_ready.py` | IMP-GW-034 | 통과 |
 | TC-GW-034 | `lacal_server.yaml`의 `swarm_gateway` `declared.pub`·`sub`이 Gateway의 실제 PUB·SUB와 같음(`MA_PositionReport` 포함), `external_c2` pub = Gateway 수신 | `tests/test_reports_088.py` | IMP-GW-028 | 통과 |
-| TC-GW-015 | 실제 CAL Server 접속에서 로그 순서: connected/not ready → XSD → SUB → ready | `tests/test_roundtrip.py` | IMP-GW-017 | 통과 |
+| TC-GW-015 | 실제 CAL Server 접속에서 로그 순서: connected → SUB → receiving → XSD → ready (9차부터 SUB가 XSD 앞) | `tests/test_roundtrip.py` | IMP-GW-017 | 통과 |
 
-시험 결과: `cd gateway && uv run pytest` → 137 passed (2026-11-20, Windows 11, Python 3.12, 계약 0.20.0, Zenoh 미설치 환경). 7차는 131 passed (2026-11-19, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 6차는 117 passed (2026-11-18, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 5차는 106 passed (2026-11-16, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 4차는 85 passed(`--extra zenoh` 환경 84 passed, 1 skipped). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
+시험 결과: `cd gateway && uv run pytest` → 142 passed (2026-11-22, Windows 11, Python 3.12, 계약 0.20.0, Zenoh 미설치 환경). 8차는 137 passed (2026-11-20, Windows 11, Python 3.12, 계약 0.20.0, Zenoh 미설치 환경). 7차는 131 passed (2026-11-19, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 6차는 117 passed (2026-11-18, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 5차는 106 passed (2026-11-16, Windows 11, Python 3.12, 계약 0.19.0, Zenoh 미설치 환경). 4차는 85 passed(`--extra zenoh` 환경 84 passed, 1 skipped). 3차는 51 passed. 2차는 43 passed (2026-11-08), 1차는 35 passed (2026-11-07).
 
 ## 매핑 표 (descriptor에서 생성, `MappingTable.markdown()`)
 
@@ -171,7 +176,7 @@
 
 | ID | 내용 | 근거 |
 |---|---|---|
-| P-GW-001 | 준비 전 구간 줄이기(O-13). (1) XSD 적재·매핑 생성을 LA-CAL 접속 **앞**으로 옮긴다. 지금은 INIT 뒤 XSD 적재(대부분의 시간)가 끝나야 SUB가 걸리므로, 순서만 바꿔도 "접속돼 보이지만 받지 못하는" 구간이 SUB 왕복 시간으로 준다. (2) 근본적으로는 외부 C2가 준비를 알 수 있어야 한다: 예를 들어 ready 시점에 Gateway가 `SystemStatus`(SystemID = Gateway 서비스, Communications ACTIVE)를 한 번 발행하거나, 외부 C2가 명령 뒤 `MA_TaskStatus`가 일정 시간 안에 오지 않으면 다시 보내는 규칙을 둔다. (2)는 계약(등록부) 결정이 필요하다 | QA 15차 O-13 |
+| ~~P-GW-001~~ | 9차 IMP-GW-034로 (1)을 넘어 SUB를 XSD 적재 앞으로 옮기고 준비 전 수신분을 보관했다. (2)의 외부 재송신 규칙은 README에 외부 C2 책임으로 적었다. 원문: 준비 전 구간 줄이기(O-13). (1) XSD 적재·매핑 생성을 LA-CAL 접속 **앞**으로 옮긴다. 지금은 INIT 뒤 XSD 적재(대부분의 시간)가 끝나야 SUB가 걸리므로, 순서만 바꿔도 "접속돼 보이지만 받지 못하는" 구간이 SUB 왕복 시간으로 준다. (2) 근본적으로는 외부 C2가 준비를 알 수 있어야 한다: 예를 들어 ready 시점에 Gateway가 `SystemStatus`(SystemID = Gateway 서비스, Communications ACTIVE)를 한 번 발행하거나, 외부 C2가 명령 뒤 `MA_TaskStatus`가 일정 시간 안에 오지 않으면 다시 보내는 규칙을 둔다. (2)는 계약(등록부) 결정이 필요하다 | QA 15차 O-13 |
 
 ## 메모
 
@@ -187,3 +192,27 @@
 - 시각은 메시지 모의 시각의 UTC다(IMP-GW-030, `SimClock`). 기준 시각은 시나리오 값(IMP-GW-033)이다. 메시지를 하나도 받기 전 시각(예: 첫 보고 전 거부 통지)만 벽시계다. `MA_ApprovalRequest.RespondBy`는 그 보고 시각 + 승인 창이다.
 - D-35 거부 통지 `MA_TaskStatus`는 Gateway가 만든 상태 보고다. `ExecutingSystemOrPackage`는 명령이 가리킨 기체, 머리 `SystemID`는 Gateway 서비스다. 시각은 마지막으로 본 모의 시각이다.
 - 외부 C2 수신은 LA-CAL 쪽 검증(서버)과 Gateway 쪽 검증(코덱)을 모두 거친다.
+
+- QA O-13 측정(9차, `uv run python tools/measure_o13.py`, 2026-11-22, 이 PC): CAL Server 별도 프로세스, 외부 C2가 0.5 s 간격으로 `MA_TaskCommand` PUB, Gateway를 매 회 새 프로세스로 재기동(5회). 시간은 앞 Gateway 종료 기준 s, `lost`는 그 회에 tx로 나가지 않은 PUB 수.
+  - 고치기 전(8차 코드: 접속 → XSD 적재 → SUB):
+
+| run | down_to_spawn_s | spawn_to_connected_s | connected_to_sub_s | sub_to_ready_s | exit_to_ready_s | lost | lost_after_connected | lost_after_sub | loss_span_s | first_received_after_exit_s | rejected |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.196 | 0.897 | 4.28 | 0.001 | 5.374 | 11 | 8 | 0 | 5.004 | 5.487 | 0 |
+| 2 | 0.197 | 0.828 | 4.294 | 0.002 | 5.32 | 10 | 8 | 0 | 4.515 | 5.403 | 0 |
+| 3 | 0.188 | 0.821 | 4.294 | 0.002 | 5.304 | 10 | 8 | 0 | 4.503 | 5.377 | 0 |
+| 4 | 0.218 | 0.821 | 4.281 | 0.001 | 5.322 | 10 | 8 | 0 | 4.517 | 5.367 | 0 |
+| 5 | 0.186 | 0.869 | 4.477 | 0.001 | 5.533 | 11 | 9 | 0 | 5.011 | 5.824 | 0 |
+
+  - 고친 뒤(IMP-GW-034: 접속 → SUB → XSD 적재, 준비 전 보관):
+
+| run | down_to_spawn_s | spawn_to_connected_s | connected_to_sub_s | sub_to_ready_s | exit_to_ready_s | lost | lost_after_connected | lost_after_sub | loss_span_s | first_received_after_exit_s | rejected |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.201 | 0.863 | 0.017 | 4.367 | 5.448 | 2 | 0 | 0 | 0.514 | 1.322 | 0 |
+| 2 | 0.202 | 0.823 | 0.018 | 4.364 | 5.407 | 2 | 0 | 0 | 0.484 | 1.173 | 0 |
+| 3 | 0.193 | 0.874 | 0.018 | 4.339 | 5.424 | 3 | 0 | 0 | 1.002 | 1.552 | 0 |
+| 4 | 0.199 | 0.831 | 0.017 | 4.318 | 5.365 | 2 | 0 | 0 | 0.501 | 1.41 | 0 |
+| 5 | 0.191 | 0.818 | 0.016 | 4.305 | 5.331 | 2 | 0 | 0 | 0.499 | 1.346 | 0 |
+
+  - 해석: 고치기 전 손실 10~11건(약 4.5~5.0 s 폭) 중 8~9건은 접속 뒤 XSD 적재(약 4.3 s) 동안이었다. 고친 뒤에는 접속 뒤 손실 0이고, 남은 2~3건은 앞 Gateway 종료 → 새 프로세스 기동·접속(약 1.1 s) 동안이다. 이 구간은 받는 구독이 없어 Gateway가 고칠 수 없다(OWP 보관 메시지 없음).
+  - 안 선택: (A). 손실의 대부분(약 80%)이 Gateway가 접속은 했으나 구독하지 않은 구간이라 Gateway가 없앨 수 있었다. (B)만으로는 외부가 매 재기동마다 약 5 s를 잃고 재송신해야 한다. 남은 약 1 s는 (B) 외부 재송신 책임으로 README에 적었다.
