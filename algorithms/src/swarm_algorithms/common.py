@@ -14,8 +14,8 @@ from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, common_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, ParamDef, ParamLayer
-from swarm_agent.geo import G_MPS2, ned_offset, wrap_pi
-from swarm_agent.racetrack import path_error
+from swarm_api.geo import G_MPS2, ned_offset, wrap_pi
+from swarm_api.racetrack import path_error
 
 S = common_pb2
 PILOT_TASKS = ("move_to", "hold", "return_to_base", "search_area", "route")

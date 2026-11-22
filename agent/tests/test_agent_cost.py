@@ -9,7 +9,7 @@ import numpy as np
 from swarm.v1 import link_pb2, ms_pb2, vi_pb2
 from swarm_agent import fa as fa_mod
 from swarm_agent.fa import DefaultFlightAutonomy
-from swarm_agent.geo import course_rad, ned_offset, ned_offset_s, offset_geo, wrap_pi, wrap_pi_s
+from swarm_api.geo import course_rad, ned_offset, ned_offset_s, offset_geo, wrap_pi, wrap_pi_s
 from swarm_agent.ports import FrameBuffer
 from swarm_agent.profiling import ENV, input_class
 from swarm_agent.reporting import ChangeReporter, activity_terminal

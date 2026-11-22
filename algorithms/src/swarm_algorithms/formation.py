@@ -24,7 +24,7 @@ from collections.abc import Sequence
 
 from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
-from swarm_agent.geo import ned_offset, offset_geo
+from swarm_api.geo import ned_offset, offset_geo
 
 from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, CommandIds, PlanWatcher, TaskPilot, TrackSharer,
                      assigned_task, every, peer_status)

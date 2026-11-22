@@ -1,7 +1,7 @@
 """TC-AGT-132~138: A-GRA 송신 4종(DEC-088), 링크 복구 재보고(DEC-089), 시작 계획 미지원 작업 보고(O-45) (IMP-AGT-046~050)"""
 
 from swarm.v1 import c2_pb2, common_pb2, entity_pb2, mp_pb2, ms_pb2, p2p_pb2, vi_pb2
-from swarm_agent.geo import offset_geo
+from swarm_api.geo import offset_geo
 from swarm_agent.testing import Harness, make_scenario, send_c2
 from swarm_api import keys
 from swarm_api.bus import protobuf_encoding

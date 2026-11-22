@@ -24,8 +24,8 @@ import numpy as np
 
 from swarm.v1 import common_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, BatchMissionAutonomy, NavBatch, ParamDef, ParamLayer
-from swarm_agent.geo import ned_offset
-from swarm_agent.racetrack import path_error, vector_field_course
+from swarm_api.geo import ned_offset
+from swarm_api.racetrack import path_error, vector_field_course
 
 from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, Goal, LostLinkGuard, TaskTracker, TrackSharer,
                      every, peer_status)

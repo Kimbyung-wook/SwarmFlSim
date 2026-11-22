@@ -16,10 +16,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from swarm.v1 import common_pb2, fa_pb2, vi_pb2
-from swarm_api import FlightAutonomy, ParamDef, ParamLayer
-
-from . import racetrack
-from .geo import G_MPS2, ned_offset_s, wrap_pi_s
+from swarm_api import FlightAutonomy, ParamDef, ParamLayer, racetrack
+from swarm_api.geo import G_MPS2, ned_offset_s, wrap_pi_s
 
 _A, _C, _G = ParamLayer.AIRFRAME, ParamLayer.CONTROL, ParamLayer.GUIDANCE
 

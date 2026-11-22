@@ -6,7 +6,7 @@ import pytest
 
 from swarm.v1 import common_pb2, vi_pb2
 from swarm_agent.fa import DefaultFlightAutonomy
-from swarm_agent.geo import G_MPS2, ned_offset, offset_geo, wrap_pi
+from swarm_api.geo import G_MPS2, ned_offset, offset_geo, wrap_pi
 
 S = common_pb2
 LAT0, LON0 = 37.5, 128.0
