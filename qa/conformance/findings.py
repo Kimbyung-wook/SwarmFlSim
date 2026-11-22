@@ -72,7 +72,10 @@ FINDINGS = [
      "detail": "sim/ctrl/cmd(set_params, DEC-035)와 sim/clock/done/*(DEC-040·044)는 §3.3 본문이 Agent 구독을 정하지만 §3.2 표의 "
                "구독자 칸에는 Agent가 없다. swarm/<e>/rx/**는 §3.3(DEC-044) 표기이고 §3.2 표는 swarm/<dst>/rx/<iface>/<msg>다"
                "(Agent는 rx/**로 구독한다). 도구는 세 키를 근거와 함께 보충 허용 키로 둔다(judges.SUPPLEMENT_SUB). "
-               "기준 문서(docs/44)와 계약 문서는 고치지 않았다."},
+               "기준 문서(docs/44)와 계약 문서는 고치지 않았다.",
+     "resolution": "계약 42c7e06(0.20.0 유지): §3.2 swarm/<dst>/rx/<iface>/<msg> 구독자 칸에 '수신 엔티티의 Agent 런타임"
+                   "(자기 기체 swarm/<dst>/rx/**로 구독)'을 적었다. sim/clock/done/*·sim/ctrl/cmd는 30차에 이미 §3.2 구독자 칸에 있다. "
+                   "34차에 parse_contract_keys가 구독자 칸의 구독 키 표현식도 읽게 해 SUPPLEMENT_SUB를 비웠다"},
     {"id": "O-45", "item": "C6", "wp": "WP3", "level": "낮음 (28차)",
      "match": [],
      "title": "기본 MA에 무장 경로가 없어 StrikeActivity는 시험 전용 주입으로만 나온다 (기존 O-45)",

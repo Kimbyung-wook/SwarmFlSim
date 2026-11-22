@@ -252,7 +252,8 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     L.append(f"판정: **{r4['verdict']}**. Agent 프로세스를 `qa/conformance/agent_probe.py`로 감싸 실제 진입점이 연 구독 키 표현식·발행 키·"
              "L1 포트 메시지를 기록했다(MCAP에는 발행자 정보가 없어 프로세스별 키는 래퍼에서 얻고, 발행 키는 MCAP 채널과 대조한다).")
     L.append("")
-    L.append("허용 키(계약 docs/10_contracts.md §3.2의 Agent 행 + 보충 2개):")
+    L.append("허용 키(계약 docs/10_contracts.md §3.2의 Agent 행과 그 구독자 칸에 적힌 구독 키"
+             + (f" + 보충 {len(J.SUPPLEMENT_SUB)}개" if J.SUPPLEMENT_SUB else ", 보충 없음") + "):")
     L.append("")
     L += table(["방향", "키 패턴", "근거"], [["발행", a["pattern"], a["src"]] for a in r4["allowed"]["pub"]]
                + [["구독", a["pattern"], a["src"]] for a in r4["allowed"]["sub"]])

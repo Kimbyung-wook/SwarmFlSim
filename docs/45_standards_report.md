@@ -1,8 +1,8 @@
-커밋 `cc8ddcc` · 계약 0.20.0 · agra_lacal `45274ce` · 실행 2026-11-20
+커밋 `0d70268` · 계약 0.20.0 · agra_lacal `45274ce` · 실행 2026-11-22
 
 # 표준 적합성 점검 보고 (REQ-STD-001, DEC-092)
 
-이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-20`에 있다.
+이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-22`에 있다.
 자체 점검이다(기준 §4). 공식 A-GRA 적합성 도구와 Distribution D 문서는 쓰지 않았다.
 
 ## 1. 요약
@@ -53,6 +53,7 @@
 - **O-49** Agent 런타임은 맡은 기체 수신만 쓰지만 구독은 엔티티 자리를 '*'로 연다. gcs-01(Gateway가 맡음)의 수신 표본도 Agent 프로세스로 온다. MA 포트 기록에는 SIM 표시 메시지가 없어 경계 위반은 아니고 받는 양만 늘어난다.
   - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - **O-50** sim/ctrl/cmd(set_params, DEC-035)와 sim/clock/done/*(DEC-040·044)는 §3.3 본문이 Agent 구독을 정하지만 §3.2 표의 구독자 칸에는 Agent가 없다. swarm/<e>/rx/**는 §3.3(DEC-044) 표기이고 §3.2 표는 swarm/<dst>/rx/<iface>/<msg>다(Agent는 rx/**로 구독한다). 도구는 세 키를 근거와 함께 보충 허용 키로 둔다(judges.SUPPLEMENT_SUB). 기준 문서(docs/44)와 계약 문서는 고치지 않았다.
+  - 조치: 계약 42c7e06(0.20.0 유지): §3.2 swarm/<dst>/rx/<iface>/<msg> 구독자 칸에 '수신 엔티티의 Agent 런타임(자기 기체 swarm/<dst>/rx/**로 구독)'을 적었다. sim/clock/done/*·sim/ctrl/cmd는 30차에 이미 §3.2 구독자 칸에 있다. 34차에 parse_contract_keys가 구독자 칸의 구독 키 표현식도 읽게 해 SUPPLEMENT_SUB를 비웠다
 - **O-45** 계획 strike(task-003)는 기본 TaskTracker가 보고 없이 거른다. 이번 실행은 관측기가 모의 30 s에 onboard/uav-005/StrikeCommand를 직접 내 StrikeActivity 흐름을 만들었다(Agent 발행이 아니라 C4 대상 밖).
 
 미분류 실패는 없다(모든 실패가 위 발견 중 하나에 걸린다).
@@ -62,10 +63,10 @@
 | 구분 | 내용 |
 |---|---|
 | 구성 | Logger(MCAP) · Datalink(participant datalink-0) · Agent(`agent_probe.py`가 감싼 swarm_agent.cli, agent-0) · Core(lockstep 1배속, 50 Hz, 평지) · CAL Server(agra_lacal, `lacal_server.yaml`에서 포트·server_id만 바꿈) · Gateway(`qa/gw_wrap.py`) · 외부 클라이언트(`qa/gw_ext_client.py`, external_c2) |
-| 시나리오 | `qa/out/conformance/2026-11-20/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
+| 시나리오 | `qa/out/conformance/2026-11-22/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
 | 포트 | CAL 28765/28766, Zenoh 48900~48930 (기본 데모 8765/8766·7447과 겹치지 않음) |
-| 시간 | 모의 70.0 s, 벽시계 79 s (점검 전체 171 s) |
-| 프로세스 종료 | 띄운 PID만 정리: {'logger': 21880, 'datalink': 16260, 'agent': 17296, 'core': 22760, 'calsrv': 26736, 'gateway.1': 29140, 'ext': 20400}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
+| 시간 | 모의 70.0 s, 벽시계 76 s (점검 전체 159 s) |
+| 프로세스 종료 | 띄운 PID만 정리: {'logger': 21252, 'datalink': 3924, 'agent': 23504, 'core': 26596, 'calsrv': 19104, 'gateway.1': 16940, 'ext': 4500}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
 | 로그 이상 | 0줄 |
 
 입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 관측기가 본 뒤 재개했다.
@@ -235,9 +236,9 @@
 | Timestamp − 모의 시각 = 시나리오 epoch (s) | 0.5 | 0.000000 | 통과 |
 | Gateway epoch_changed | 0 | 0 | 통과 |
 
-Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795139595.984765 s, 최대 1795139595.984765 s.
+Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795329758.100470 s, 최대 1795329758.100470 s.
 
-시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795139595984765], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
+시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795329758100470], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
 
 | 식별자 종류 | 참조 수 | 내부 ID 수 | 같은 ID에 UUID 여럿 | 같은 UUID에 표지 여럿 | 표지 없음 |
 |---|---|---|---|---|---|
@@ -273,7 +274,7 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795139595.984765 s, �
 
 판정: **통과**. Agent 프로세스를 `qa/conformance/agent_probe.py`로 감싸 실제 진입점이 연 구독 키 표현식·발행 키·L1 포트 메시지를 기록했다(MCAP에는 발행자 정보가 없어 프로세스별 키는 래퍼에서 얻고, 발행 키는 MCAP 채널과 대조한다).
 
-허용 키(계약 docs/10_contracts.md §3.2의 Agent 행 + 보충 2개):
+허용 키(계약 docs/10_contracts.md §3.2의 Agent 행과 그 구독자 칸에 적힌 구독 키, 보충 없음):
 
 | 방향 | 키 패턴 | 근거 |
 |---|---|---|
@@ -286,12 +287,10 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795139595.984765 s, �
 | 구독 | sim/clock/done/* | §3.2 `sim/clock/done/<participant>` 구독: Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
 | 구독 | sim/ctrl/cmd | §3.2 `sim/ctrl/cmd` 구독: Core, Agent 런타임 (`set_params`, §3.3) |
 | 구독 | sim/ctrl/scenario | §3.2 `sim/ctrl/scenario` 구독: Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
-| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티의 Agent 런타임, UI(GCS), Gateway(GCS 쪽) |
+| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티의 Agent 런타임(자기 기체 `swarm/<dst>/rx/**`로 구독, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
+| 구독 | swarm/*/rx/** | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸의 구독 키 `swarm/*/rx/**` |
 | 구독 | onboard/*/* | §3.2 `onboard/<id>/<msg>` 구독: 해당 기체 런타임, Core |
 | 구독 | onboard_batch/NavigationBatch | §3.2 `onboard_batch/NavigationBatch` 구독: Agent 런타임, Logger |
-| 구독 | sim/clock/done/* | §3.3 lockstep 수신 결정성(DEC-040)·송신 개수 장벽(DEC-044): Agent는 Datalink의 FrameDone을 받는다 |
-| 구독 | sim/ctrl/cmd | §3.3 기체별 매개변수(DEC-035): Agent 런타임은 sim/ctrl/cmd를 구독해 set_params를 처리한다 |
-| 구독 | swarm/*/rx/** | §3.3 송신 개수 장벽(DEC-044): Agent는 자기 기체의 swarm/<e>/rx/** 개수를 확인한다 (§3.2 표의 키 형식은 swarm/<dst>/rx/<iface>/<msg>) |
 
 | Agent 구독 키 표현식 | 허용 |
 |---|---|
@@ -359,10 +358,10 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 
 | 기체 | 작업 | 승인 필요 | 요청 | 응답 | 응답 모의 s | 첫 EXECUTING 모의 s | 판정 |
 |---|---|---|---|---|---|---|---|
-| uav-001 | ap-yes | 예 | 예 | approved | 10.78 | 10.92 | 통과 |
-| uav-002 | ap-no | 예 | 예 | rejected | 10.8 | — | 통과 |
+| uav-001 | ap-yes | 예 | 예 | approved | 10.84 | 10.96 | 통과 |
+| uav-002 | ap-no | 예 | 예 | rejected | 10.84 | — | 통과 |
 | uav-003 | ap-to | 예 | 예 | 없음 | — | — | 통과 |
-| uav-004 | task-001 | 예 | 예 | approved | 0.12 | 0.26 | 통과 |
+| uav-004 | task-001 | 예 | 예 | approved | 0.14 | 0.28 | 통과 |
 | uav-009 | x-hold | 아니오 | 아니오 | 없음 | — | 10.12 | 통과 |
 | uav-010 | x-rtb | 아니오 | 아니오 | 없음 | — | 10.14 | 통과 |
 
@@ -527,7 +526,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 - 자체 점검이다. 같은 팀이 기준과 구현을 함께 만들었다. 외부 클라이언트를 Gateway 코드와 따로 두어 일부만 줄인다.
 - 공식 A-GRA 적합성 시험 도구와 Distribution D 인터페이스 볼륨의 상세 규칙은 쓰지 않는다.
 - A-GRA는 MA L1 준수 문서(요구 MA-L1-001~025, 최소 메시지 집합)와 자동 L1 준수 시험 도구가 있다고 안내한다. 이 저장소 자료에는 도구가 없다. 공식 판정이 필요하면 입수해야 한다.
-- A-GRA MA-L1-009~012·025는 DMS의 DDS 사용을 요구한다. DEC-002(Zenoh만 사용)와 충돌하므로 이 점검으로는 L1 전면 준수를 보일 수 없다.
+- A-GRA MA-L1-009~012·025는 DMS의 DDS 사용을 요구한다. DEC-002(Zenoh만 사용)와 충돌하므로 이 점검으로는 L1 전면 준수를 보일 수 없다. 미들웨어 변경은 보류한다(DEC-099).
 - AMS-GRA에는 시험 도구가 없다. 준수 평가는 요구별 통과·실패·해당없음 평가표와 가중 점수, Tier 0~3로 하는 자체 평가이고 최종 판단은 획득 기관이 한다. 이 저장소는 준수를 주장하지 않으므로 평가표 대신 적용성 표(46)를 둔다.
 - 외부 입력이 있으면 같은 시드에서도 기체 궤적이 실행마다 조금 달라진다(외부 입력 도착 틱 차이). 판정은 건수·전이·대조 오차로 하고 궤적 일치는 보지 않는다.
 

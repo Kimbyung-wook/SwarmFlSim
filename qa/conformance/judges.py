@@ -415,8 +415,12 @@ def parse_contract_keys(md: str) -> list[dict]:
             continue
         cells = [c.strip() for c in ln.strip().strip("|").split("|")]
         key = cells[0].strip("`")
+        # 구독자 칸에 적힌 구독 키 표현식(예: `swarm/<dst>/rx/**`, 34차 O-50). 표 키와 첫 마디가 같은 것만 읽는다
+        first = key.split("/", 1)[0]
+        sub_keys = [re.sub(r"<[^>]+>", "*", k) for k in re.findall(r"`([^`]+)`", cells[3])
+                    if "/" in k and k.split("/", 1)[0] == first]
         rows.append({"key": key, "pattern": re.sub(r"<[^>]+>", "*", key), "msg": cells[1], "pub": cells[2],
-                     "sub": cells[3]})
+                     "sub": cells[3], "sub_keys": sub_keys})
     return rows
 
 
@@ -431,16 +435,15 @@ def agent_allowed(rows: list[dict]) -> dict:
             pub.append({"pattern": r["pattern"], "src": f"§3.2 `{r['key']}` 발행: {r['pub']}"})
         if any(w in r["sub"] for w in AGENT_WORDS) or "해당 기체 런타임" in r["pub"]:
             sub.append({"pattern": r["pattern"], "src": f"§3.2 `{r['key']}` 구독: {r['sub']}"})
+            for k in r.get("sub_keys", []):
+                sub.append({"pattern": k, "src": f"§3.2 `{r['key']}` 구독자 칸의 구독 키 `{k}`"})
     return {"pub": pub, "sub": sub}
 
 
-# §3.2 표에 Agent가 구독자로 적혀 있지 않지만 §3.3 본문이 Agent 구독을 정한 키 (보고서에 근거와 함께 싣는다)
-SUPPLEMENT_SUB = [
-    {"pattern": "sim/clock/done/*", "src": "§3.3 lockstep 수신 결정성(DEC-040)·송신 개수 장벽(DEC-044): Agent는 Datalink의 FrameDone을 받는다"},
-    {"pattern": "sim/ctrl/cmd", "src": "§3.3 기체별 매개변수(DEC-035): Agent 런타임은 sim/ctrl/cmd를 구독해 set_params를 처리한다"},
-    {"pattern": "swarm/*/rx/**", "src": "§3.3 송신 개수 장벽(DEC-044): Agent는 자기 기체의 swarm/<e>/rx/** 개수를 확인한다 "
-                                        "(§3.2 표의 키 형식은 swarm/<dst>/rx/<iface>/<msg>)"},
-]
+# §3.2 표에 Agent가 구독자로 적혀 있지 않지만 §3.3 본문이 Agent 구독을 정한 키 (보고서에 근거와 함께 싣는다).
+# 30차까지 sim/clock/done/*·sim/ctrl/cmd·swarm/*/rx/** 세 항목이 있었다. 앞의 둘은 §3.2 구독자 칸에 Agent가 들어가며(30차),
+# rx/**는 계약 42c7e06이 구독자 칸에 `swarm/<dst>/rx/**`를 적고 parse_contract_keys가 그 키를 읽으면서(34차) 빠졌다(O-50 해소)
+SUPPLEMENT_SUB: list[dict] = []
 FORBIDDEN_PREFIX = ("truth",)
 ENTITY_SCOPED = (("swarm", 1), ("onboard", 1))   # (첫 마디, 엔티티 마디 위치)
 FORBIDDEN_IMPORTS = ("zenoh", "swarm_api.bus", "swarm_api.keys", "swarm.v1.truth_pb2", "swarm.v1.sim_pb2",

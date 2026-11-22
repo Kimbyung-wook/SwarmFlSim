@@ -4758,3 +4758,121 @@ epoch_changed가 0이 아닐 수 있는 경우는 다음과 같다.
 ### 42.7 결함·관찰 현황
 
 변화 없음. 결함 40건은 해소 31, 결정됨 9, 아직 열림 0이다. 관찰 50건은 해소 11, 결정됨 22, 아직 열림 17이다.
+
+## 43. 34차 점검: O-50 계약 수정과 WP2·WP7 병합 뒤 표준 적합성 재점검 (2026-11-22)
+
+wp0-contracts 최신(a26d731)을 병합했다(fast-forward). 들어온 것은 다음과 같다.
+
+- 42c7e06: 계약 §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸에 Agent 런타임의 `swarm/<dst>/rx/**` 구독을 적었다(O-50, 계약 0.20.0 유지).
+- a2aa607: DEC-099. A-GRA L1 DDS 요구에 맞춘 미들웨어 변경은 보류하고 DEC-002를 유지한다. docs/44 기준 커밋이 이 커밋이 됐다.
+- 8eed0e4: docs/44 C3 시각 기준(DEC-098)과 §5 점검 전 빌드 조건.
+- ebd5ccf(WP2 IMP-DYN-010), 7bd0fa7(WP7 IMP-LOG-013 골든 해시), e4c96ca(WP7 IMP-LOG-014 mingw 링크), a26d731(§7.2 mcap 2.2.0 태그).
+
+이번에 바뀐 코드는 dynamics와 logger(빌드·시험)뿐이다. Gateway·Agent·algorithms·UI는 바뀌지 않았다.
+
+실행 준비는 다음과 같다.
+
+- `uv run python scripts/gen_proto.py`로 생성 코드를 다시 만들었다(12개).
+- msvc-release를 다시 빌드했다. 오류 0, `SWARM_BUS_WITH_ZENOH=ON`이다. Core는 바뀐 소스가 없어 다시 링크되지 않았다(33차 빌드 그대로, IMP-CORE-031 포함).
+- O-50 도구 변경을 커밋했다(0d70268, §43.2). 작업 트리가 깨끗한 0d70268에서 다음 명령으로 실행했다. 시드는 20261117이고, 2회 반복했다. 걸린 시간은 159 s다.
+
+`uv run python qa/conformance/run.py --out qa/out/conformance/2026-11-22 --repeat 2`
+
+### 43.1 판정
+
+| 항목 | 33차 | 34차 | 핵심 수치(34차) |
+|---|---|---|---|
+| C1 | 통과 | 통과 | XSD 860(MA_ 179), 대응 UCI 23, 실패 0 |
+| C2 | 통과 | 통과 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 |
+| C3 | 통과 | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s, epoch 차 0.000000 s, epoch_changed 0 |
+| C4 | 통과 | 통과 | 구독 12·발행 125키, 허용 밖 0, 보충 허용 키 없음 |
+| C5 | 통과 | 통과 | 전이 위반 0건, 승인 필요 4건 중 위반 0 |
+| C6 | 통과 | 통과 | 선언 불일치 0, /tap 불일치 0 |
+| C7 | 정보 | 정보 | 버스 직접 열기 0, open_bus 6/6 |
+
+- 2회 반복에서 판정과 실패 문구(수치 제외)가 같았다.
+- 미분류 실패는 0이다.
+- 띄운 프로세스 7개(logger·datalink·agent·core·calsrv·gateway.1·ext)는 모두 끝났다. 끝난 뒤 PID로 확인했다. agent의 PID 23504는 다른 bash.exe가 다시 쓰고 있었다(번호 재사용, 점검 프로세스 아님).
+- C3 epoch는 run1 1795329758100470, run2 1795329831972724이다. 두 회 모두 Gateway 카운터는 epoch_set 1·epoch_changed 0이고, `no scenario epoch yet` 줄은 없다.
+- 발견은 O-48·O-49만 재현했다(C4 정보성). 신규는 없다.
+- 기록: history.jsonl 5번째 줄, docs/45·docs/47 다시 생성. docs/47 실행 이력 5번 행의 기준 커밋은 a2aa607, 도구 커밋은 0d70268이다.
+
+### 43.2 O-50: 계약 수정 확인과 SUPPLEMENT_SUB
+
+계약 §3.2 93행은 다음과 같다. 수정을 확인했다.
+
+`swarm/<dst>/rx/<iface>/<msg>` 구독: "수신 엔티티의 Agent 런타임(자기 기체 `swarm/<dst>/rx/**`로 구독, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽)"
+
+`SUPPLEMENT_SUB`의 `swarm/*/rx/**`를 다음과 같이 검토했다.
+
+- `agent_allowed`는 구독자 칸을 읽는다. "수신 엔티티의 Agent 런타임"이 `AGENT_WORDS`에 걸려 이 행은 Agent 구독 행이 된다.
+- 하지만 허용 패턴은 표의 키(`swarm/<dst>/rx/<iface>/<msg>`)에서만 만들었다. 그 패턴 `swarm/*/rx/*/*`는 Agent가 실제로 연 `swarm/*/rx/**`(`agent/src/swarm_agent/runtime.py:302`)를 덮지 않는다. `**`는 임의 길이라서 두 마디 패턴 안에 들지 않는다.
+- 그래서 계약만 고쳐서는 보충 항목을 뺄 수 없었다. 빼면 C4가 "Agent 구독 swarm/*/rx/**: 허용 키 밖"으로 실패한다.
+
+도구를 다음과 같이 바꿨다(0d70268).
+
+- `parse_contract_keys`가 구독자 칸의 백틱 키 표현식도 `sub_keys`로 읽는다.
+  - 표 키와 첫 마디가 같은 것만 읽는다.
+  - 그래서 `sim/ctrl/cmd` 칸의 `set_params`(키가 아님)처럼 다른 글은 읽지 않는다.
+- `agent_allowed`는 Agent 구독 행의 `sub_keys`를 허용 구독 키로 더한다. 근거 칸은 "§3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸의 구독 키 `swarm/*/rx/**`"이다.
+- `SUPPLEMENT_SUB`는 빈 목록이 됐다.
+  - 나머지 두 항목 `sim/clock/done/*`·`sim/ctrl/cmd`는 30차부터 §3.2 구독자 칸으로 덮였다(§38.4).
+  - 이번에 셋 다 없앴다. 보충 장치는 남겨 두었다. 계약과 본문이 다시 어긋나면 근거와 함께 쓴다.
+- docs/45 C4 허용 키 문구는 "§3.2의 Agent 행과 그 구독자 칸에 적힌 구독 키, 보충 없음"이다.
+
+다시 확인했다.
+
+- 33차 원자료(run1·run2)를 새 도구로 재판정했다(`--reuse --no-doc`, `qa/out/conformance/qa34_rejudge33_run1`·`_run2`). C4는 통과이고 허용 밖은 0이다.
+- 34차 실제 실행도 C4 통과다.
+
+O-50은 **해소**로 바꾼다(`findings.py`에 조치 기록).
+
+- O-50은 match 규칙이 없는 문서 관찰이다. 그래서 docs/47 발견 추적표에는 나오지 않는다. "기록된 실행에서 나온 적 없는 발견" 목록에 그대로 남는다(D-40과 같은 경우, §41.3).
+
+O-49와의 관계는 다음과 같다.
+
+- 계약은 이제 "자기 기체 `swarm/<dst>/rx/**`로 구독"이라고 적는다. Agent는 엔티티 자리를 `*`로 열어 구독한다. 그래서 gcs-01 수신도 받는다(O-49).
+- 도구는 `<dst>`를 `*`로 바꿔 판정하므로 통과다. 다만 계약 문구와 구독 범위 사이의 차이는 O-49로 계속 남는다.
+- O-49는 아직 열림, WP4, 매우 낮음 그대로다.
+
+### 43.3 docs/44 C3 기준과 33차 전달 사항(§42.5)
+
+| §42.5 전달 사항 | docs/44(8eed0e4 이후) | 맞음 |
+|---|---|---|
+| (a) Timestamp − 모의 시각 = `sim/ctrl/scenario` epoch_utc_us, 허용 0.5 s | C3 표 "시각 기준 (DEC-098)" 행: "UCI Timestamp − 모의 시각 = `sim/ctrl/scenario`의 `run.epoch_utc_us` (허용 오차 0.5 s)" | 맞음 |
+| (b) Gateway epoch_changed 0 | 같은 행: "Gateway `epoch_changed` 카운터 0" | 맞음 |
+| (b)는 (a)와 함께 써야 한다는 문구 | 같은 행에 두 확인을 함께 적었다. "epoch 관측 0건이거나 값이 0이면 실패"도 더했다. "(b)는 (a)와 함께 판정" 같은 명시 문구와 Gateway가 실행 중에 붙는 경우의 이유는 없다 | 부분 |
+| 점검 전 빌드 조건(msvc-release, gen_proto) | §5 첫 항목: "점검 전에 msvc-release Core를 빌드한다. 계약 proto가 바뀌었으면 `scripts/gen_proto.py`로 생성 코드를 다시 만든다." | 맞음 |
+
+도구도 docs/44 행과 같다.
+
+- `judges.judge_epoch`는 관측 0건과 값 0을 실패로 둔다.
+- (a)와 (b)를 모두 C3 실패 조건으로 본다.
+
+판정에는 차이가 없다. 남은 것은 문구 하나다. PM 전달 사항으로 적었다(§43.5).
+
+### 43.4 시험
+
+`uv run python -m pytest qa/conformance/tests -q`: 87개 통과.
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-187 | §3.2 구독자 칸의 구독 키(`swarm/<dst>/rx/**`)를 허용 구독 키로 읽는다. 첫 마디가 다른 키, 키가 아닌 글, Agent가 구독자가 아닌 행은 읽지 않는다. 칸에서 지우면 `swarm/*/rx/**`가 덮이지 않는다 | 통과 |
+| TC-QA-188 | 실제 계약 §3.2만으로 Agent 구독 키 표현식(`swarm/*/rx/**`, `sim/ctrl/cmd`, `sim/clock/done/*`, `sim/clock/tick`, `sim/ctrl/scenario`)이 모두 허용된다. `SUPPLEMENT_SUB`는 비어 있다 | 통과 |
+| TC-QA-189 | 실제 재점검 2회(§43.1) | 측정 |
+
+### 43.5 PM에게 넘기는 것 (QA는 고치지 않음)
+
+- docs/44 C3 "시각 기준 (DEC-098)" 행에는 "(b)는 (a)와 함께 판정한다"는 명시 문구가 없다. 판정과 도구에는 영향이 없다. 넣는다면 이유도 한 줄 적는다. Gateway가 실행 중에 붙으면 epoch_changed는 0이어도 첫 메시지 기준으로 틀릴 수 있다(§42.4).
+- O-49(WP4): 계약 §3.2는 이제 Agent가 "자기 기체" `swarm/<dst>/rx/**`를 구독한다고 적는다. Agent 런타임은 `swarm/*/rx/**`로 구독한다. 둘 중 하나를 고를 일이다. Agent가 맡은 기체별로 구독을 좁히거나, 계약 문구가 와일드카드 구독을 허용하게 한다. 지금 판정에는 영향이 없다.
+
+### 43.6 결함·관찰 현황 갱신
+
+| ID | 이전 | 이후 | 근거 |
+|---|---|---|---|
+| O-50 | 아직 열림 | 해소 | 계약 42c7e06, 도구 0d70268(SUPPLEMENT_SUB 비움), 34차 C4 통과 (§43.2) |
+
+열린 관찰 17건 중 나머지 16건은 바뀌지 않았다. 이번 병합에는 해당 WP(WP1·WP3·WP4·WP5·WP9)의 코드 변경이 없다.
+
+- **결함 40건**: 해소 31, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
+- **관찰 50건**: 해소 12, 결정됨 22, 아직 열림 16, 사용자 결정 필요 0.

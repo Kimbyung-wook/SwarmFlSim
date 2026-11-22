@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, 024, IMP-GW-001~023, 029~033, IMP-SCN-012, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028, 031 | TC-API-010, TC-GW-001~027, 035~043, TC-SCN-015~016, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, 046, TC-QA-158~161, TC-QA-164~172, TC-QA-173~186 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, 024, IMP-GW-001~023, 029~033, IMP-SCN-012, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028, 031 | TC-API-010, TC-GW-001~027, 035~043, TC-SCN-015~016, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, 046, TC-QA-158~161, TC-QA-164~172, TC-QA-173~189 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -302,6 +302,9 @@
 | TC-QA-184 | C3 시각 기준(DEC-098) (a): UCI Timestamp − 모의 시각 = sim/ctrl/scenario epoch_utc_us(허용 0.5 s), 관측 0건·값 0 실패, 33차 이전 원자료 건너뜀 | `qa/conformance/tests/test_epoch.py` | DEC-098, REQ-STD-001 |
 | TC-QA-185 | C3 시각 기준(DEC-098) (b): Gateway epoch_changed 0, 카운터 없음 실패, docs/45 표 행 | `qa/conformance/tests/test_epoch.py` | DEC-098, REQ-STD-001 |
 | TC-QA-186 | 계약 0.20.0 뒤 표준 적합성 재점검(lockstep 시드 20261117, 2회 반복) → docs/45·docs/47 | `qa/conformance/run.py` | DEC-092, DEC-095, DEC-098, REQ-STD-001 |
+| TC-QA-187 | C4 허용 구독 키: 계약 §3.2 구독자 칸의 구독 키 표현식(`swarm/<dst>/rx/**`)을 읽음, 첫 마디가 다른 키·키 아닌 글·Agent 아닌 행은 읽지 않음 | `qa/conformance/tests/test_o50.py` | DEC-044, REQ-STD-001 |
+| TC-QA-188 | C4: 실제 계약 §3.2만으로 Agent 구독 키 표현식이 모두 허용되고 보충 키(SUPPLEMENT_SUB) 없음 (O-50) | `qa/conformance/tests/test_o50.py` | DEC-044, REQ-STD-001 |
+| TC-QA-189 | O-50 계약 수정·WP2·WP7 병합 뒤 표준 적합성 재점검(lockstep 시드 20261117, 2회 반복) → docs/45·docs/47 | `qa/conformance/run.py` | DEC-092, DEC-095, DEC-098, REQ-STD-001 |
 
 ## 시험 결과
 
@@ -513,6 +516,9 @@
 | TC-QA-184 | 자동 | 2026-11-20 | 통과 (§42) |
 | TC-QA-185 | 자동 | 2026-11-20 | 통과 (§42) |
 | TC-QA-186 | 측정 | 2026-11-20 | C1~C6 통과, C7 정보. epoch 차 2.4e-7 s, epoch_changed 0, 2회 같음 (§42) |
+| TC-QA-187 | 자동 | 2026-11-22 | 통과 (§43) |
+| TC-QA-188 | 자동 | 2026-11-22 | 통과 (§43) |
+| TC-QA-189 | 측정 | 2026-11-22 | C1~C6 통과, C7 정보. 보충 허용 키 없이 C4 통과, epoch 차 0 s, epoch_changed 0, 2회 같음 (§43) |
 
 ## 프로세스 결정
 
