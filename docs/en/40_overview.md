@@ -1,9 +1,9 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `a4167c5`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `8ce186c`.
 
 - To run it right away, go to §6. What is implemented is in §2, and progress in §8.
-- Baseline: contract 0.20.0, roadmap P1, P2 and P6 complete (2026-11-22).
+- Baseline: contract 0.21.0, roadmap P1, P2 and P6 complete (2026-11-22).
 - The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts.
 
 ## 1. Purpose and scope

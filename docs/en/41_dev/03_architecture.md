@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `a4167c5`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `8ce186c`.
 
 See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 
@@ -64,7 +64,8 @@ Rules to follow:
 - Navigation and control travel on batch keys, not per-vehicle keys (DEC-081). Each frame, Core publishes the navigation of all vehicles as one `onboard_batch/NavigationBatch`, and each Agent collects the control outputs of its vehicles into one `onboard_batch/ControlBatch/<participant>` published before `FrameDone`. The per-vehicle `onboard/<id>/NavigationReport` and `ControlOutput` keys are gone. The runtime takes each vehicle's row from the batch and passes it to `ctx.ports.vi.nav()` and FA `step`, so plugin code does not change. Tools that subscribed to the bus directly must switch to the batch keys.
 - If two Agents send control for the same vehicle, the one with the later participant name wins (IMP-CORE-030).
 - The Datalink sends a `GcsHeartbeat` from each GCS to the vehicles it controls (`controlling_gcs`), 1 Hz by default (`--heartbeat-hz`). It goes through normal link evaluation to `swarm/<uav>/rx/c2/GcsHeartbeat`. It does not pass through `swarm/<gcs>/tx`, so the send-count barrier does not apply (DEC-078).
-- The Gateway subscribes only to `swarm/<gcs>/rx/**` and publishes only to `swarm/<gcs>/tx/c2/<msg>` and `swarm/<gcs>/tx/mp/<msg>`.
+- The Agent runtime subscribes to `swarm/<id>/rx/**` and `onboard/<id>/<message>` separately for each vehicle it hosts. It does not use a wildcard in the entity position (`swarm/*/rx/**`, `onboard/*/...`). This keeps the real-vehicle shape, where each vehicle receives only what is addressed to it (DEC-100, contract 0.21.0). The subscriber column of the `swarm/<dst>/rx/<iface>/<msg>` row in contract §3.2 states this unit (O-50 correction).
+- The Gateway subscribes to `swarm/<gcs>/rx/**` and `sim/ctrl/scenario` (read only, DEC-096) and publishes only to `swarm/<gcs>/tx/c2/<msg>` and `swarm/<gcs>/tx/mp/<msg>`.
 - Browsers do not attach to Zenoh directly, only through the bridge (DEC-027).
 
 What the Agent runtime automatically reports to the GCS regardless of the plugin:
