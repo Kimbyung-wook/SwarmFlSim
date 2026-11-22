@@ -88,15 +88,15 @@ def test_tc_agt_119_one_control_batch_per_tick_before_frame_done():
 def test_tc_agt_120_no_echo_subscription():
     """런타임 구독은 받을 메시지뿐이다. 자기 제어·명령과 예전 기체별 항법은 받지 않는다"""
     names = ("SystemStatus", "Detection", "SensorActivity", "JammerActivity", "StrikeActivity", "StoreLoadout")
-    # 일부만 맡으면 기체별 구독 (IMP-AGT-043)
+    # 일부만 맡으면 맡은 기체만 구독
     part = Harness(make_scenario(2, "hold"), entities={A})
     exprs = [s.keyexpr for s in part.rt._vehicle_subs]
     want = {keys.NAVIGATION_BATCH, keys.rx_all(A)} | {keys.onboard(A, n) for n in names}
     assert set(exprs) == want and len(exprs) == len(want)
-    # 모두 맡으면 기체 자리가 와일드카드인 구독
+    # 모두 맡아도 기체별 구독 (DEC-100, IMP-AGT-052)
     h = Harness(make_scenario(2, "hold"))
     wide = [s.keyexpr for s in h.rt._vehicle_subs]
-    want = {keys.NAVIGATION_BATCH, "swarm/*/rx/**"} | {f"onboard/*/{n}" for n in names}
+    want = {keys.NAVIGATION_BATCH} | {k for e in (A, B) for k in [keys.rx_all(e)] + [keys.onboard(e, n) for n in names]}
     assert set(wide) == want and len(wide) == len(want)
     for key in (keys.onboard(A, "ControlOutput"), keys.onboard(A, "NavigationReport"), keys.onboard(A, "SensorCommand"),
                 keys.onboard(A, "FlightCommand"), keys.control_batch("agent-0"), keys.tx(A, "c2", "FlightCommandStatus")):

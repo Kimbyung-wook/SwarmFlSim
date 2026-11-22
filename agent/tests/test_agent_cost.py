@@ -1,4 +1,4 @@
-"""TC-AGT-128~131: 틱 단계별 계측과 총비용 절감 (IMP-AGT-042~045, DEC-086)"""
+"""TC-AGT-128~131, 142: 틱 단계별 계측과 총비용 절감 (IMP-AGT-042~045, DEC-086), 기체별 구독 (IMP-AGT-052, DEC-100)"""
 
 import json
 import math
@@ -141,17 +141,41 @@ def test_tc_agt_129_fa_outputs_same_as_numpy_path(monkeypatch):
     assert fast == ref
 
 
-# ---- TC-AGT-130 와일드카드 구독 (IMP-AGT-043) ----
+# ---- TC-AGT-130·142 기체별 구독 (IMP-AGT-052, DEC-100. IMP-AGT-043 대체) ----
 
-def test_tc_agt_130_wide_subscriptions_only_when_hosting_all():
+def test_tc_agt_142_per_vehicle_subscriptions_only():
+    """모두 맡든 일부만 맡든 구독은 맡은 기체 키뿐이고 엔티티 자리 와일드카드가 없다"""
     sc = make_scenario(3, "hold")
-    assert Harness(sc).rt._wide_subs
-    assert Harness(sc, entities={A, B, C}).rt._wide_subs
-    assert not Harness(sc, entities={A, C}).rt._wide_subs
+    for hosted in (None, {A, B, C}, {A, C}):
+        rt = Harness(sc, entities=hosted).rt if hosted is not None else Harness(sc).rt
+        exprs = [s.keyexpr for s in rt._vehicle_subs]
+        mine = set(rt.vehicles)
+        assert not [e for e in exprs if e.split("/")[1] == "*"], exprs
+        assert {e.split("/")[1] for e in exprs if e.startswith(("swarm/", "onboard/"))} == mine
+        assert sum(e.startswith("swarm/") for e in exprs) == len(mine)
 
 
-def test_tc_agt_130_wide_ignores_other_entities():
-    """와일드카드로 받은 맡지 않은 기체·GCS 앞 입력은 해석 전에 버리고 송신 개수 장벽에도 세지 않는다"""
+def test_tc_agt_142_other_entities_not_delivered():
+    """맡지 않은 기체·GCS 앞 수신과 탑재 출력은 Agent 구독에 닿지 않는다 (버스가 아예 건네지 않는다)"""
+    h = Harness(make_scenario(3, "hold"), entities={A, B})
+    seen = []
+    handle = h.rt.handle
+    h.rt.handle = lambda s: (seen.append(s.key), handle(s))[1]
+    others = [keys.rx("gcs-01", "vi", "NavigationReport"), keys.rx("gcs-01", "c2", "TaskStatus"),
+              keys.rx(C, "c2", "GcsHeartbeat"), keys.onboard(C, "SystemStatus"), keys.onboard("gcs-01", "SystemStatus")]
+    env = link_pb2.LinkEnvelope(msg_type="swarm.v1.GcsHeartbeat")   # 시험 도구(GCS 수신 기록)도 해석할 수 있는 값
+    env.header.source = "gcs-01"
+    for k in others:
+        h.bus.put(k, env.SerializeToString(), "")
+    assert seen == []
+    mine = [keys.rx(A, "c2", "GcsHeartbeat"), keys.onboard(B, "SystemStatus")]
+    for k in mine:
+        h.bus.put(k, b"", "")
+    assert seen == mine
+
+
+def test_tc_agt_130_defensive_drop_kept():
+    """구독과 별개로, 맡지 않은 기체·GCS 앞 입력이 handle로 와도 해석·계수 없이 버린다"""
     h = Harness(make_scenario(2, "hold"))
     rt = h.rt
     st = vi_pb2.SystemStatus()
@@ -164,22 +188,6 @@ def test_tc_agt_130_wide_ignores_other_entities():
     rt.handle(Sample(keys.rx("uav-999", "c2", "GcsHeartbeat"), b"\xff", ""))
     assert rt._onboard_hold == {} and rt._rx_hold == {} and rt._rx_count == {}
     assert "uav-999" not in rt.vehicles
-
-
-def test_tc_agt_130_wide_and_narrow_runs_identical():
-    """같은 시나리오를 와일드카드(전부 맡음)와 기체별(entities 지정 + 맡지 않는 기체 없음 강제)로 돌려도 출력이 같다"""
-    def run(force_narrow):
-        h = Harness(make_scenario(3, "hold"), load=False)
-        if force_narrow:
-            h.rt._hosts_all_hostable = lambda sc: False
-        from swarm_agent.testing import load_command, put_sim_command
-        got = []
-        h.bus.subscribe("**", lambda s: got.append((s.key, s.payload)))
-        put_sim_command(h.bus, load_command(h.scenario))
-        assert h.rt._wide_subs is (not force_narrow)
-        h.core.step(150)
-        return _per_key(got)
-    assert run(False) == run(True)
 
 
 # ---- TC-AGT-131 보고·버퍼 빠른 경로 (IMP-AGT-045) ----
