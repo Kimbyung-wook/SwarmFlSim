@@ -94,6 +94,7 @@
 | IMP-UI-081 | 행동 도형 레이어: 기체당 슬롯 하나(대시선·라벨·표지 풀·경로·선회원). 대시선 시작점은 `CallbackProperty`로 매 프레임 기체 위치, 표지·경로는 값만 바꾸고 선회원은 중심·반경이 바뀔 때만 다시 만든다. o는 속 빈 점, x는 글자, 타격은 붉은색. 기체 ID·행동 글은 선택 기체만 | `src/cesium/activityLayer.ts` | REQ-UI-003 | TC-UI-070, TC-UI-073 |
 | IMP-UI-082 | 소스 입력 확장: `tx`·`scenario` 처리기, BusSource가 `sim/ctrl/scenario`와 `swarm/<gcs>/tx/**` 구독. 목 소스는 보낸 C2를 tx로 되돌리고 UAV마다 모의 1초에 NavigationReport를 낸다. 목 RTB 귀환점은 기체 시작 위치, 중심 없는 Hold·RTB 선회는 기체별 반경 엇갈림 없음, 기본 반경 300 m(MA와 같음). `?uavs=N`(1~200)으로 목 UAV 수 지정 | `src/data/source.ts`, `src/data/busSource.ts`, `src/data/mockSource.ts`, `src/data/mockScenario.ts`, `src/data/mockGuidance.ts`, `src/data/sourceConfig.ts` | REQ-UI-003 | TC-UI-072, TC-UI-073 |
 | IMP-UI-083 | 행동 표시 연결: App이 소스 입력을 `ActivityStore`에 넣고 MapView가 250 ms마다 바뀐 경우만 레이어를 동기화. 툴바 `행동: 전체/선택 기체/끔`(기본 전체). 보낸 임무 표시(활성 임무 도형)는 행동 표시로 대체해 중복 제거 | `src/App.tsx`, `src/components/MapView.tsx`, `src/components/Toolbar.tsx`, `src/model/activityMode.ts` | REQ-UI-003 | TC-UI-071, TC-UI-073 |
+| IMP-UI-084 | 로컬 지도 자료 탐지가 404를 내지 않는다(QA O-7): dev·preview 서버의 `/data/.probe?path=`가 늘 200 `{"exists": bool}`로 답하고 `dataExists`가 이를 먼저 묻는다. 엔드포인트가 없는 배포에서는 예전처럼 직접 GET(SPA 폴백 HTML은 없음). 탐지 결과(로컬 영상·DEM 사용 여부, 최대 레벨 13)는 그대로. `/data/**` 제공 미들웨어를 `vite.config.ts`에서 `src/server/offlineData.ts`로 옮김 | `src/data/dataProbe.ts`, `src/server/offlineData.ts`, `src/cesium/viewer.ts`, `vite.config.ts` | REQ-SIM-003 | TC-UI-074, TC-UI-075 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -159,6 +160,8 @@
 | TC-UI-071 | 표시 모드 필터(전체·선택·끔), 배속(RUNNING 아닐 때 0), 시뮬레이션 시각 되감기 시 위치·상태 초기화 (3건) | `ui/src/model/activity.test.ts` | IMP-UI-080, IMP-UI-083 | 통과 |
 | TC-UI-072 | 목 소스: UAV 24대가 모의 1초에 NavigationReport, C2 송신은 tx로 되돌림, RTB는 시작 위치로 돌아가 선회, 중심 없는 Hold 4대가 각자 그린 선회원(300 m) 위를 돈다 (3건) | `ui/src/data/mockSource.test.ts` | IMP-UI-080, IMP-UI-082 | 통과 |
 | TC-UI-073 | 브라우저 수동 확인(미리보기 5175, 목 소스): `?uavs=20` 20대 Hold → o·옅은 선회원·대시선, 기체가 그린 원 위를 돎. RTB 수락 뒤 귀환 표시. `?uavs=100` 100대 Hold에서 메인 스레드 지연 평균 4.8 ms(끔 4.6 ms)·최대 12.4 ms(끔 11.6 ms). 선택 해제 뒤에도 `행동: 전체`면 도형 유지, 글은 선택 기체만. 창이 가려진 상태라 FPS(rAF)는 측정 불가 | 수동 | IMP-UI-081~083 | 통과 |
+| TC-UI-074 | 탐지 엔드포인트: 파일 유무와 무관하게 200 JSON, 데이터 디렉터리 밖·빈 경로는 없음, 파일 제공 200/404 유지. 타일 없음·있음에서 `dataExists`는 각각 false·true이고 요청은 모두 200 탐지뿐. 엔드포인트 없는 정적 서버·SPA 폴백·네트워크 실패에서 직접 GET 결과와 같음. /data/ 밖 URL은 직접 GET, 경로 인코딩 1회 (4건) | `ui/src/data/dataProbe.test.ts` | IMP-UI-084 | 통과 |
+| TC-UI-075 | 브라우저 수동 확인: 빈 데이터 디렉터리(`SWARM_DATA_DIR`, 미리보기 5176)에서 탐지 요청 4건 모두 200, 콘솔 오류 0, 툴바 "지도 내장 · 지형 타원체". 로컬 타일 있음(5174)에서 콘솔 오류 0, 4xx 응답 0(확대·축소 포함), 툴바 "지도 로컬 · 지형 DEM" | 수동 | IMP-UI-084 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -173,4 +176,5 @@
 - LinkEnvelope.publisher(DEC-077, 기준 `wp0-contracts` c74b252, 계약 0.15.0): `npm test` 25파일 164건 통과, `npm run build` 통과. 브리지는 봉투를 그대로 전달하므로 변경 없음
 - 데모 결함 3건(우클릭 어긋남·깜빡임·선택 해제 잔상, 기준 `wp0-contracts` f5fea80): `npx vitest run` 27파일 173건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-068
 - 기체별 현재 행동 표시(기준 `wp0-contracts` 9dec1c9, 계약 변경 없음): `npx vitest run` 29파일 196건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-073
+- 타일 탐지 404 제거(QA O-7, 기준 `wp0-contracts` 92cdb9c): `npx vitest run` 30파일 200건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-075
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.
