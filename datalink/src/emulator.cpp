@@ -669,7 +669,13 @@ void Datalink::route_locked(const Pending& p, const std::string& dst, std::vecto
   if (reason == v1::DROP_REASON_NONE && ch.ge.lost(prof.ge, ch.rng)) reason = v1::DROP_REASON_BURST_LOSS;
   if (reason == v1::DROP_REASON_NONE && in_flight_.size() >= cfg_.max_in_flight) reason = v1::DROP_REASON_QUEUE_OVERFLOW;
   if (reason == v1::DROP_REASON_NONE) {
-    const std::uint64_t arrive = depart + sample_delay_us(prof, ch.rng);
+    // DEC-102: 같은 (송신, 수신, 인터페이스) 링크는 송신 순서대로 전달한다. 지연 표본이 앞 메시지보다 짧아도 도착은
+    // 직전 도착보다 앞서지 않는다. 같은 도착 시각이면 in_flight_ 순서(= 처리 순서)가 deliver_locked의 안정 정렬로
+    // 유지된다. 처리 순서는 (tx 시각, 송신, 키, seq)라 같은 키 안에서는 송신 순서와 같다. 처리량 상한 대기(depart)와
+    // 틱 상한 이월(다음 틱 처리)도 이 한 곳을 지난다. 브로드캐스트는 수신자별로 이 함수를 부르므로 수신자별 링크다
+    std::uint64_t& last = ch.last_arrive_us[static_cast<int>(p.env.iface())];
+    const std::uint64_t arrive = std::max(depart + sample_delay_us(prof, ch.rng), last);
+    last = arrive;
     in_flight_.push_back(InFlight{arrive, p.tx_time_us, p.src, dst, p.suffix, p.size,
                                   std::make_shared<const v1::LinkEnvelope>(p.env)});
     return;
@@ -701,7 +707,8 @@ void Datalink::deliver_locked(std::vector<Out>& out) {
       continue;
     }
     // DEC-054: lockstep에서 틱 k가 내는 rx는 rx_time >= T_k다. 지연 0, 틱 사이 도착, 처리량 상한 이월이 모두 이 한 곳을
-    // 지난다. realtime·free-run은 표본 도착 시각을 그대로 쓴다
+    // 지난다. realtime·free-run은 도착 시각을 그대로 쓴다. 링크별 도착이 단조(DEC-102)이고 T_k도 단조이므로 max를 해도
+    // 같은 링크의 rx_time은 송신 순서대로 단조다
     const std::uint64_t rx_us = lockstep_ ? std::max(f.arrive_us, now_us_) : f.arrive_us;
     v1::LinkEnvelope env = *f.env;
     env.set_rx_time_us(rx_us);

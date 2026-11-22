@@ -1,4 +1,4 @@
-// TC-LNK-001~032: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~035: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -1875,6 +1875,140 @@ void tc032() {
   }
 }
 
+// ---- TC-LNK-033~035: 링크별 송신 순서 (DEC-102) ----
+struct RxRec {
+  std::string key;
+  std::uint32_t seq;
+  std::uint64_t rx_us;
+  std::uint64_t tick_us;  // 이 rx를 낸 틱의 시각
+};
+
+struct OrderRun {
+  std::vector<RxRec> rx;
+  int clamped = 0;  // 직전 rx와 같은 시각으로 묶인 건(짧은 표본이 뒤에 온 경우)
+};
+
+// uav-001이 틱마다 dst별로 n건씩 보낸다. jitter가 커서 뒤 메시지의 지연 표본이 더 짧은 경우가 자주 생긴다
+OrderRun run_order(v1::RunMode mode, const std::vector<std::string>& dsts, int per_tick, std::size_t max_routes = 0,
+                   double bandwidth_bps = 0.0, bool c2_too = false, std::uint64_t seed = 5) {
+  DatalinkConfig cfg;
+  LinkProfile jit = clean_profile();
+  jit.latency_ms = 30.0;
+  jit.jitter_ms = 25.0;
+  jit.bandwidth_bps = bandwidth_bps;
+  jit.bucket_bytes = 400;
+  jit.queue_len = 1000;
+  cfg.profiles["jit"] = jit;
+  if (max_routes) cfg.max_routes_per_tick = max_routes;
+  Rig r({{"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 0.0, 1000.0, "jit"},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 500.0, 1000.0, "jit"},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 900.0, 1000.0, "jit"}},
+        cfg, nullptr, seed);
+  OrderRun o;
+  for (int k = 0; k < 200; ++k) {  // 100틱 송신 뒤 이월·전송 중인 것을 모두 낸다
+    if (k < 100)
+      for (int i = 0; i < per_tick; ++i) {
+        r.tx("uav-001", dsts, 32, keys::Iface::P2P, "PeerStatus", r.frame * r.dt_us);
+        if (c2_too) r.tx("uav-001", dsts, 32, keys::Iface::C2, "PeerStatus", r.frame * r.dt_us);
+      }
+    const std::uint64_t t = r.frame * r.dt_us;
+    const std::size_t before = r.rx.size();
+    r.tick(mode);
+    for (std::size_t i = before; i < r.rx.size(); ++i)
+      o.rx.push_back({r.rx[i].first, r.rx[i].second.header().seq(), r.rx[i].second.rx_time_us(), t});
+  }
+  return o;
+}
+
+// 키(= 수신, 인터페이스, 메시지)별로 발행 순서의 seq가 늘고(대역폭 폭주로 버린 건은 빠질 수 있다) rx_time이 줄지 않는지
+bool in_order(OrderRun& o, std::size_t& n) {
+  std::map<std::string, std::pair<std::uint32_t, std::uint64_t>> last;
+  n = 0;
+  for (const auto& x : o.rx) {
+    auto it = last.find(x.key);
+    if (it != last.end()) {
+      if (x.seq <= it->second.first || x.rx_us < it->second.second) return false;
+      o.clamped += x.rx_us == it->second.second;
+    }
+    last[x.key] = {x.seq, x.rx_us};
+    ++n;
+  }
+  return true;
+}
+
+bool rx_not_before_tick(const OrderRun& o) {
+  return std::all_of(o.rx.begin(), o.rx.end(), [](const RxRec& x) { return x.rx_us >= x.tick_us; });
+}
+
+void tc033() {
+  // realtime: rx_time = 도착 시각. 짧은 표본이 뒤에 와도 직전 rx보다 앞서지 않는다
+  {
+    OrderRun o = run_order(v1::RUN_MODE_REALTIME, {"uav-002"}, 3);
+    std::size_t n = 0;
+    check(in_order(o, n) && n == 300, "realtime: same link delivered in send order");
+    check(o.clamped > 10, "realtime: shorter later samples exercised (clamped to previous rx)");
+  }
+  // lockstep: 발행 순서와 rx_time이 송신 순서, DEC-054(rx_time >= T_k)
+  {
+    OrderRun o = run_order(v1::RUN_MODE_LOCKSTEP, {"uav-002"}, 3);
+    std::size_t n = 0;
+    check(in_order(o, n) && n == 300, "lockstep: same link delivered in send order");
+    check(rx_not_before_tick(o), "lockstep: rx_time >= T_k (DEC-054)");
+  }
+  // 같은 입력 2회는 같다 (DEC-005)
+  {
+    const OrderRun a = run_order(v1::RUN_MODE_LOCKSTEP, {"uav-002"}, 3), b = run_order(v1::RUN_MODE_LOCKSTEP, {"uav-002"}, 3);
+    bool same = a.rx.size() == b.rx.size();
+    for (std::size_t i = 0; same && i < a.rx.size(); ++i)
+      same = a.rx[i].key == b.rx[i].key && a.rx[i].seq == b.rx[i].seq && a.rx[i].rx_us == b.rx[i].rx_us;
+    check(same, "deterministic");
+  }
+}
+
+void tc034() {
+  // 서로 다른 링크는 서로 막지 않는다
+  // (1) 수신자가 다르면: uav-003 링크의 rx는 uav-002 링크 송신이 있어도 없어도 같다
+  {
+    const OrderRun only = run_order(v1::RUN_MODE_REALTIME, {"uav-003"}, 3);
+    const OrderRun both = run_order(v1::RUN_MODE_REALTIME, {"uav-002", "uav-003"}, 3);
+    std::vector<std::uint64_t> a, b;
+    for (const auto& x : only.rx) a.push_back(x.rx_us);
+    for (const auto& x : both.rx)
+      if (x.key.find("/uav-003/") != std::string::npos) b.push_back(x.rx_us);
+    check(a.size() == 300 && a == b, "other receiver's link does not shift rx times");
+  }
+  // (2) 같은 쌍이라도 인터페이스가 다르면 다른 링크: 각자 순서는 지키고, 서로 앞지를 수는 있다
+  {
+    OrderRun o = run_order(v1::RUN_MODE_REALTIME, {"uav-002"}, 2, 0, 0.0, true);
+    std::size_t n = 0;
+    check(in_order(o, n) && n == 400, "p2p and c2 each in order");
+    std::map<std::pair<bool, std::uint32_t>, std::uint64_t> rx;
+    for (const auto& x : o.rx) rx[{x.key.find("/c2/") != std::string::npos, x.seq}] = x.rx_us;
+    int c2_first = 0;
+    for (std::uint32_t q = 0; q < 200; ++q) c2_first += rx[{true, q}] < rx[{false, q}];
+    check(c2_first > 0, "c2 may overtake p2p (independent links)");
+  }
+  // (3) 브로드캐스트는 수신자별 링크다
+  {
+    OrderRun o = run_order(v1::RUN_MODE_REALTIME, {}, 3);
+    std::size_t n = 0;
+    check(in_order(o, n) && n == 600, "broadcast: each receiver in send order");
+  }
+}
+
+void tc035() {
+  // 이월된 송신에도 같은 규칙: 틱당 처리량 상한(다음 틱으로 넘김)과 대역폭 대기(depart 지연)
+  for (const v1::RunMode mode : {v1::RUN_MODE_LOCKSTEP, v1::RUN_MODE_REALTIME}) {
+    OrderRun capped = run_order(mode, {"uav-002", "uav-003"}, 3, 4);  // 틱당 6경로 중 4만
+    std::size_t n = 0;
+    check(in_order(capped, n) && n == 600, "route cap carry-over: in order");
+    OrderRun slow = run_order(mode, {"uav-002"}, 3, 0, 40000.0);
+    check(in_order(slow, n) && n > 100, "bandwidth wait: in order");
+    if (mode == v1::RUN_MODE_LOCKSTEP)
+      check(rx_not_before_tick(capped) && rx_not_before_tick(slow), "carry-over: rx_time >= T_k (DEC-054)");
+  }
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -1889,7 +2023,8 @@ const Case kCases[] = {
     {"TC-LNK-017", tc017}, {"TC-LNK-018", tc018}, {"TC-LNK-019", tc019}, {"TC-LNK-020", tc020}, {"TC-LNK-021", tc021}, {"TC-LNK-022", tc022},
     {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
     {"TC-LNK-027", tc027}, {"TC-LNK-028", tc028}, {"TC-LNK-029", tc029},
-    {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031}, {"TC-LNK-032", tc032},
+    {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031}, {"TC-LNK-032", tc032}, {"TC-LNK-033", tc033}, {"TC-LNK-034", tc034},
+    {"TC-LNK-035", tc035},
 };
 
 }  // namespace

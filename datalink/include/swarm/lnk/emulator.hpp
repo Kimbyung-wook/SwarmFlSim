@@ -98,6 +98,8 @@ class Datalink {
     TokenBucket bucket;
     std::uint64_t sent = 0;  // LinkState 구간 통계
     std::uint64_t lost = 0;
+    // DEC-102: 인터페이스별 직전 도착 시각. 같은 (송신, 수신, 인터페이스) 링크는 이보다 앞서 도착하지 않는다
+    std::map<int, std::uint64_t> last_arrive_us;
   };
 
   struct Pending {
