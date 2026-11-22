@@ -1,6 +1,6 @@
 # 8. WP1 Sim Core (`core/`)
 
-> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `a4167c5`.
+> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `8ce186c`.
 
 ## Responsibilities
 

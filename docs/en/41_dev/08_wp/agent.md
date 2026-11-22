@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `a4167c5`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `8ce186c`.
 
 ## Responsibilities
 
@@ -46,7 +46,7 @@ For the frame processing order, see the header comment of `runtime.py` and `_ste
 
 `truth/**` and `link/**` are not subscribed. All subscriptions are opened with `ordered=True` (DEC-083, [3.2](../03_architecture.md#32-opening-the-bus)).
 
-When the Agent hosts every AutonomySpec vehicle in the scenario, it groups the vehicle position with a wildcard and opens `onboard/*/<message>` and `swarm/*/rx/**`. With 100 vehicles this cuts subscriptions from 600 to 6 (IMP-AGT-043). Zenoh matches each put against every subscription in the session, so the subscription count sets the put cost. Input for vehicles it does not host and input addressed to a GCS are dropped before parsing. When several Agents split the vehicles, subscriptions stay per vehicle. Keys, messages and rates are unchanged.
+Vehicle-side subscriptions are opened separately for each hosted vehicle: `onboard/<id>/<message>` (one per inbound onboard message) and `swarm/<id>/rx/**`. No wildcard is used in the entity position (DEC-100, contract 0.21.0, IMP-AGT-052). One Agent hosting 100 vehicles has 700 subscriptions. The earlier grouping into `onboard/*/<message>` and `swarm/*/rx/**` when hosting every vehicle (IMP-AGT-043) was removed, so that each vehicle receives only what is addressed to it, as a real vehicle does. Zenoh matches each put against every subscription in the session, so the subscription count affects the put cost. The performance judgment after this change is being remeasured by QA.
 
 Additions to change reports (DEC-088, DEC-089):
 

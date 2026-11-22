@@ -1,7 +1,7 @@
 # 관점별 아키텍처 그림
 
 - 목적: 아키텍처를 여러 관점의 그림으로 보여 주고 설계 피드백을 받는다. 피드백 질문은 [§11](#11-사용자-피드백-질문)에 있다.
-- 기준: `wp0-contracts` 커밋 `eefde25`, 계약 0.20.0, 로드맵 P1·P2·P6 완료. 계획(제안서)과 구현이 다르면 구현을 그리고 차이를 "계획 대비"로 적는다.
+- 기준: `wp0-contracts` 커밋 `11a0668`, 계약 0.21.0, 로드맵 P1·P2·P6 완료. 계획(제안서)과 구현이 다르면 구현을 그리고 차이를 "계획 대비"로 적는다.
 - 표지: **[추정]**은 코드나 기록으로 확인하지 않은 해석이다. **[미구현]**은 계획에만 있는 것이다.
 - 그림마다 "보여 주는 것 / 근거 / 판단할 지점"을 붙였다. 판단할 지점은 §11 질문 번호(Q)와 이어진다.
 - 매뉴얼과 달리 이 문서는 설계 검토용이다. 사용법은 [개괄](40_overview.md), [개발자 매뉴얼](41_dev/README.md), [사용자 매뉴얼](42_user/README.md)에 있다.
@@ -128,7 +128,7 @@ flowchart LR
 | `onboard_batch/ControlBatch/<participant>` | Agent 런타임 | Core | 참여자당 프레임당 1건 |
 | `onboard/<id>/<msg>` | Core ⇄ 그 기체 런타임 | 그 기체 | 같은 기체 안 신호 |
 | `swarm/<src>/tx/<iface>/<msg>` | 기체 런타임, UI, Gateway(c2·mp) | Datalink만 | 기체 간·지상-기체 간 |
-| `swarm/<dst>/rx/...` | Datalink만 | 수신 기체·GCS | |
+| `swarm/<dst>/rx/...` | Datalink만 | 수신 기체·GCS | Agent 런타임은 맡은 기체마다 따로 구독, 엔티티 자리 와일드카드 금지(DEC-100) |
 | `link/outcome/<src>/<dst>`, `link/state/<a>/<b>` | Datalink | UI·Monitor·Logger | 기체는 구독하지 않음 |
 | `truth/state`, `truth/event/<kind>` | Core | UI·Monitor·Logger·Datalink | 기체는 구독하지 않음 |
 
@@ -503,7 +503,7 @@ flowchart LR
 
 | 항목 | 내용 |
 |---|---|
-| 보여 주는 것 | 처음 병목은 기체별 메시지가 Python Agent를 드나드는 비용이었고 일괄화(DEC-081)로 메시지 수를 줄였다. `link/state` 분산(DEC-084)은 1 Hz 몰림만 폈고 총비용은 그대로였다(25차 8.45배). 26차까지 줄인 0.76 ms의 큰 몫은 Zenoh put 비용이다. put 하나의 비용은 세션의 구독 수에 비례했고, Agent 1개가 전 기체를 맡을 때 구독을 기체별 600개에서 와일드카드 6개로 줄였다(IMP-AGT-043, put 약 48 → 19 µs). 나머지는 `link/state` 계산 축소(IMP-LNK-026), Logger 기록 경로(IMP-LOG-012), 기본 FA 스칼라 계산(IMP-AGT-044)이다. 키·메시지·주기와 출력 바이트는 바뀌지 않았다 |
+| 보여 주는 것 | 처음 병목은 기체별 메시지가 Python Agent를 드나드는 비용이었고 일괄화(DEC-081)로 메시지 수를 줄였다. `link/state` 분산(DEC-084)은 1 Hz 몰림만 폈고 총비용은 그대로였다(25차 8.45배). 26차까지 줄인 0.76 ms의 큰 몫은 Zenoh put 비용이다. put 하나의 비용은 세션의 구독 수에 비례했고, Agent 1개가 전 기체를 맡을 때 구독을 기체별 600개에서 와일드카드 6개로 줄였다(IMP-AGT-043, put 약 48 → 19 µs). 이 와일드카드 구독은 뒤에 DEC-100(계약 0.21.0)으로 없앴고 Agent는 다시 기체별로 구독한다(IMP-AGT-052). 그 뒤 성능 판정은 QA 재측정 중이다. 나머지는 `link/state` 계산 축소(IMP-LNK-026), Logger 기록 경로(IMP-LOG-012), 기본 FA 스칼라 계산(IMP-AGT-044)이다. 키·메시지·주기와 출력 바이트는 바뀌지 않았다 |
 | 근거 | [QA §29](21_qa_report.md#29-21차-측정-p1-성능-병목-2026-11-10)·[§31](21_qa_report.md#31-23차-측정-항법제어-일괄화-2026-11-10)·[§33](21_qa_report.md#33-25차-측정-p1-판정-agent-1개-logger-켬-linkstate-분산-2026-11-14)·[§34](21_qa_report.md#34-26차-측정-p1-판정-재측정-dec-086-개선-뒤-2026-11-15), DEC-079~087 |
 | 남은 병목 | 26차 계측(`--profile`, QA §34.5)에서 Agent 안 시간은 프레임당 약 1.02 ms(Logger 끔)이고 FA가 0.44 ms로 가장 크다. 1 Hz 위상 0 프레임에는 Agent 밖 약 4 ms가 남는다(O-44, 원인 미확인). E 코어 배치에서는 FA가 3.1배 느려져 한 번 실행이 10배 아래로 떨어질 수 있다(O-42). flocking은 `PeerStatus`·`link/outcome` 약 2,000건/프레임이 병목이다 |
 | 판단할 지점 | flocking 100대 실시간 이상이 필요한 시점(Q14). FA C++ 이전(DEC-082), 버스 `declare_publisher`, Datalink 와일드카드 구독은 필요해지면 새 OPN으로 연다(DEC-087). 성능 회귀는 DEC-086(2) 방식으로 판정한다 |
@@ -545,7 +545,7 @@ flowchart TB
 
 | 위치 | 내용 |
 |---|---|
-| [계약 §3.5](10_contracts.md) welcome 예시 | `"contract":"0.16.0"`. 현재 0.20.0 **[추정: 예시라 갱신하지 않은 것]** |
+| [계약 §3.5](10_contracts.md) welcome 예시 | `"contract":"0.16.0"`. 현재 0.21.0 **[추정: 예시라 갱신하지 않은 것]** |
 
 ## 11. 사용자 피드백 질문
 

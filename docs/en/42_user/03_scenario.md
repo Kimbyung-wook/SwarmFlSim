@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `a4167c5`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `8ce186c`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
