@@ -90,7 +90,7 @@ flowchart LR
 | `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
-| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임, UI(GCS), Gateway(GCS 쪽) |
+| `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임(자기 기체 `swarm/<dst>/rx/**`로 구독, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
 | `onboard/<id>/<msg>` | `SystemStatus`(DEC-073), `Detection`, `*Activity`, `*Command` | Core ⇄ 해당 기체 런타임 | 해당 기체 런타임, Core |
 | `onboard_batch/NavigationBatch` | `NavigationBatch` (DEC-081) | Core | Agent 런타임, Logger |
 | `onboard_batch/ControlBatch/<participant>` | `ControlBatch` (DEC-081) | Agent 런타임 | Core, Logger |

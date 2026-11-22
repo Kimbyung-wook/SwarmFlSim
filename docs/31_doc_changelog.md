@@ -131,3 +131,4 @@
 | 2026-11-21 | (이 커밋) | DEC-099, OPN-071 | PM: DEC-099 등록(A-GRA L1 DDS 요구에 맞춘 미들웨어 변경 보류, DEC-002 유지), OPN-071 해소, docs/44 §4 한계에 DEC-099 표시 | 없음 | 미처리 | |
 | 2026-11-21 | `d56b0a7` | IMP-LOG-013, TC-LOG-012, DEC-022 | WP7: logger 골든 시험이 파일 바이트 대신 메시지 내용을 해시해 protobuf 버전과 무관, msvc·linux 통과 | 없음 | 미처리 | |
 | 2026-11-21 | `74130c6` | IMP-DYN-010, TC-DYN-016, DEC-022 | WP2: GCC 기본 인자 `= {}` 오류를 위임 생성자로 수정. 병합 뒤 WSL Ubuntu 24.04 GCC 13 linux-debug·linux-release 모두 컴파일 오류 0, ctest 75/75 (msvc-debug 75/75, WP2 세션 확인) | 없음 | 미처리 | |
+| 2026-11-22 | (이 커밋) | DEC-044, QA O-50 | WP0: 계약 §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸에 Agent 런타임의 `swarm/<dst>/rx/**` 구독을 명시(문구 정정, 계약 버전 유지). O-50의 나머지 두 키는 3bc27f5에서 반영됨 | 개발자 매뉴얼 버스 키 표 | 미처리 | |
