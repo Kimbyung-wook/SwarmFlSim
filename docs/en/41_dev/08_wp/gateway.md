@@ -1,6 +1,6 @@
 # 8. WP9 A-GRA Gateway (`gateway/`)
 
-> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `cfa687f`.
+> Source: [docs/41_dev/08_wp/gateway.md](../../../41_dev/08_wp/gateway.md) at commit `a4167c5`.
 
 ## Responsibilities
 
@@ -17,6 +17,10 @@ A ground participant on the GCS side that converts between internal messages and
 | `src/swarm_gateway/lacal.py` | Submodule path, XSD validation, CAL Client |
 | `src/swarm_gateway/runner.py` | LA-CAL connection |
 | `src/swarm_gateway/ids.py` | String ID ⇄ UUID |
+| `src/swarm_gateway/retain.py` | Keeps the last value per change-report key (`RetainedReports`) and re-PUBs it to late external subscribers (`LateJoinReplayer`, DEC-089) |
+| `src/swarm_gateway/command_state.py` | Command-2 state machine for external command state (DEC-097) |
+| `src/swarm_gateway/entities.py` | Known vehicle list (scenario UAVs + vehicles this GCS received reports from, D-35) |
+| `src/swarm_gateway/converters/base.py` | `SimClock`: UCI time = epoch + simulation time (DEC-098) |
 | `src/swarm_gateway/lacal_server.py`, `config/lacal_server.yaml` | CAL Server startup |
 
 `third_party/agra_lacal` is a submodule and is not modified.
@@ -30,6 +34,8 @@ A ground participant on the GCS side that converts between internal messages and
 | `--participant <id>` | Publishing participant ID, carried in `LinkEnvelope.publisher`. Default `gateway-0`, entity ID format (DEC-077) |
 | `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL service and topics. The MP receive topic is fixed at `<prefix>.mp` |
 | `--stats-s <s>` | Counter log period, default 10 |
+| `--lacal-admin <url>` | CAL Server admin address, default port 8766 on the `--lacal` host. Detects new external subscriptions from graph events (`/graph/events`). `none` turns it off |
+| `--sim-epoch <UTC>` | Explicit override of the UCI epoch (ISO 8601, time zone required). Takes precedence over the scenario `run.epoch_utc_us` |
 | `--bus zenoh\|memory` | Default `zenoh`. Without Zenoh it reports how to install it and exits with code 1. `memory` is used only when given explicitly, and no simulator messages arrive |
 | Common bus options | [3.2](../03_architecture.md#32-opening-the-bus) |
 
@@ -37,7 +43,7 @@ A ground participant on the GCS side that converts between internal messages and
 
 | Direction | Keys |
 |---|---|
-| Subscribe | `swarm/<gcs>/rx/**` only |
+| Subscribe | `swarm/<gcs>/rx/**`, `sim/ctrl/scenario` (read only; known vehicle list and UCI epoch, DEC-096 and 098) |
 | Publish | `swarm/<gcs>/tx/c2/<msg>`, `swarm/<gcs>/tx/mp/<msg>` only |
 
 `truth/**`, `onboard/**` and `link/**` are not used.
@@ -68,7 +74,8 @@ Runs with InMemoryBus and an in-process CAL Server. The first time, do the insta
 
 - External `MA_TaskCommand` is accepted only for `hold`, `return_to_base` and cancel. Tasks that need a position are received through mission plan routes (DEC-076). The supported scope is in [gateway/README.md](../../../../gateway/README.md#임무-계획-수신-dec-076).
 - Commands sent externally before the `ready` log are lost (O-13).
-- `declared.pub` in `config/lacal_server.yaml` lacks `MA_PositionReport` (O-20).
+- After a restart the kept last values and the memory of finished command IDs are empty, so the same end state can go out at most once more per ID (DEC-097).
+- The declarations (`declared.pub` and `sub`) in `config/lacal_server.yaml` must match the Gateway's actual PUB and SUB. TC-GW-034 and TC-GW-038 tie them together (O-20 and D-39 resolved).
 
 Traceability: [gateway/TRACE.md](../../../../gateway/TRACE.md).
 

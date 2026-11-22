@@ -39,12 +39,17 @@
 
 | 방향 | 키 |
 |---|---|
-| 구독 | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
+| 구독 | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `StoreLoadout`, `swarm/<id>/rx/**` |
 | 발행 | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>`(틱당 1건, `FrameDone` 전), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
 `truth/**`와 `link/**`는 구독하지 않는다. 모든 구독은 `ordered=True`로 연다(DEC-083, [3.2](../03_architecture.md#32-버스-열기)).
 
 시나리오의 AutonomySpec 기체를 모두 맡으면 기체 자리를 와일드카드로 묶어 `onboard/*/<메시지>`와 `swarm/*/rx/**`로 연다. 기체 100대면 구독이 600개에서 6개로 준다(IMP-AGT-043). Zenoh는 put마다 세션의 구독 전체와 키를 맞춰 보므로 구독 수가 put 비용을 정한다. 맡지 않은 기체와 GCS 앞 입력은 해석 전에 버린다. 여러 Agent가 나눠 맡으면 기체별 구독 그대로다. 키·메시지·주기는 같다.
+
+변화 보고에 더한 것(DEC-088, DEC-089):
+
+- `StoreLoadout`: Payload가 보낸 `onboard/<id>/StoreLoadout`을 받은 뒤로는 그 값이 `ms.loadout()`의 기준이고, 런타임이 발사로 잔량을 따로 줄이지 않는다. 적재가 있는 기체만 시작할 때와 값이 바뀔 때 `tx/ms/StoreLoadout`으로 통제 GCS에 보낸다(IMP-AGT-048).
+- 링크 복구 재보고: `GcsHeartbeat`가 MA 변수 `lost_link_timeout_s`(기본 5 s)보다 오래 끊겼다 다시 오면 다음 GCS 보고 때 그 기체의 변화 보고 키 전체와 `FlightCapability`를 한 번 다시 보낸다. 종료 상태로 지운 키와 MA의 `TaskStatus`는 대상이 아니다(IMP-AGT-049).
 
 ## 시험
 

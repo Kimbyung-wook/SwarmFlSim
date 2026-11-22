@@ -54,6 +54,7 @@ ctest --preset msvc-debug -R "^core\.|swarm_core"
 - 스크립트 이동은 대지 기준이고 바람을 더하지 않는다.
 - lockstep 참여자는 시나리오와 `--participant`로 정적으로 정한다. 시작 뒤 새 참여자는 받지 않는다(DEC-037).
 - `SetParams`의 적용 시각은 Core가 명령을 받은 프레임 경계다. 재현이 필요한 시험은 시나리오에 값을 넣는다.
+- 기준 시각 `run.epoch_utc_us`가 비면 적재와 Reset 때 그 시점 벽시계 UTC로 채워 `sim/ctrl/scenario`의 `Scenario.run`에 싣는다. 실행 중에는 바뀌지 않고, 로그에 `epoch_utc_us=<값> (scenario|wall clock)`을 남긴다. 시뮬레이션 출력에는 쓰지 않는다(IMP-CORE-031, DEC-098).
 
 추적: [core/TRACE.md](../../../core/TRACE.md).
 

@@ -1,9 +1,9 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `cfa687f`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `a4167c5`.
 
 - To run it right away, go to §6. What is implemented is in §2, and progress in §8.
-- Baseline: contract 0.19.0, roadmap P1, P2 and P6 complete (2026-11-15).
+- Baseline: contract 0.20.0, roadmap P1, P2 and P6 complete (2026-11-22).
 - The [proposal](../00_proposal.md) (Korean) and the [registry](../02_registry.md) (Korean) hold the design rationale, and [10_contracts.md](../10_contracts.md) (Korean) is the authority for contracts.
 
 ## 1. Purpose and scope
@@ -38,8 +38,9 @@ Legend: Implemented = code and tests exist. Partial = only part exists. Not impl
 | UI | Role-based permissions | Not implemented (after P6, DEC-020). Only control and observer are distinguished today |
 | Traffic Monitor | Per-entity traffic statistics, loss reasons, sequence timeline, message decoding (live and replay) | Implemented |
 | Recording and replay | MCAP recording of all channels, replay at a chosen rate | Implemented |
-| A-GRA Gateway | Stage 1: publishes vehicle state received by the GCS (VI, C2, P2P, MS) to LA-CAL as UCI messages, with position also published as `MA_PositionReport` (DEC-072). Stage 2: receives external `MA_TaskCommand` (hold, return to base, cancel), approval responses `MA_ApprovalRequestStatus`, and mission plans `MA_RoutePlan` and `MA_MissionPlan` (DEC-075, DEC-076) | Implemented (P6 complete, DEC-074). Open: external tasks that are not routes (CR-GW-007), package and `ALL` targets (CR-GW-009) |
-| A-GRA | Full L1 compliance, PX4/ArduPilot SITL | Not implemented (P7, P8) |
+| A-GRA Gateway | Stage 1: publishes vehicle state received by the GCS (VI, C2, P2P, MS) to LA-CAL as UCI messages, with position also published as `MA_PositionReport` (DEC-072). It also exports approval requests `MA_ApprovalRequest`, leader changes `MA_LeaderUpdateRequest`, shared detections `MA_Entity` and store loadout `StoreLoadoutConfiguration` sent by vehicle MAs (DEC-088). External systems that join late get the last value of each change report again (DEC-089). Stage 2: receives external `MA_TaskCommand` (hold, return to base, cancel), approval responses `MA_ApprovalRequestStatus`, and mission plans `MA_RoutePlan` and `MA_MissionPlan` (DEC-075, DEC-076) | Implemented (P6 complete, DEC-074). Open: external tasks that are not routes (CR-GW-007), package and `ALL` targets (CR-GW-009) |
+| Standards check | Checks the application of UCI, A-GRA, OMS/LA-CAL and AMS-GRA with an in-house tool (C1 to C7) and keeps a history of every run | Implemented (DEC-092 to 095). It does not replace official conformance testing. AMS-GRA is a borrowing of concepts, not compliance (DEC-093) |
+| A-GRA | Full L1 compliance, PX4/ArduPilot SITL | Not implemented (P7, P8). A middleware change to meet the L1 DDS requirements is on hold. Only Zenoh is used (DEC-099, DEC-002) |
 
 ## 3. Components
 
@@ -157,7 +158,7 @@ uv run python scripts/run_p0_demo.py live --monitor
 
 ## 8. Progress status
 
-Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-15.
+Completion criteria are in [proposal §13](../00_proposal.md#13-로드맵). Status is as of 2026-11-22.
 
 | Phase | Completion criterion | Status | Evidence |
 |---|---|---|---|
@@ -205,3 +206,4 @@ Fixed English terms used throughout the English edition:
 | Exact rules for keys, messages, protocols and builds | [10_contracts.md](../10_contracts.md) |
 | Design rationale and decision history | [00_proposal.md](../00_proposal.md), [02_registry.md](../02_registry.md) |
 | Test results and known defects | [21_qa_report.md](../21_qa_report.md) |
+| Standards scope and check results | Criteria [44](../44_standards_conformance.md), report [45](../45_standards_report.md), AMS-GRA applicability [46](../46_amsgra_applicability.md), check history [47](../47_conformance_history.md) (Korean) |

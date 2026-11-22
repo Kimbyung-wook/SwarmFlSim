@@ -10,7 +10,7 @@
 flowchart LR
     S["시나리오"] --> V["schema_version · name<br/>description"]
     S --> M["map<br/>origin · extent"]
-    S --> R["run<br/>mode · frame_hz · seed<br/>rate · duration_s · participants"]
+    S --> R["run<br/>mode · frame_hz · seed · epoch_utc<br/>rate · duration_s · participants"]
     S --> L["link_profiles (선택)"]
     S --> E["entities[]"]
     S --> P["mission_plan (선택)<br/>plan_id · tasks · formations"]
@@ -137,6 +137,10 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `run.rate` | 목표 배속. 생략하면 1 | realtime은 1로 고정 |
 | `run.duration_s` | 실행 시간. 생략하면 제한 없음 | |
 | `run.participants` | lockstep 참여자 ID 목록 | [4.4](04_run.md#44-lockstep) |
+| `run.epoch_utc` | 모의 시각 0의 UTC(기준 시각). 생략하면 Core가 적재·Reset 때 그 시점의 벽시계 UTC로 채운다 | ISO 8601, 시간대 필수(예: `2026-01-01T00:00:00Z`, `+09:00`). 날짜만 쓰거나 시간대가 없으면 거부. `1970-01-01T00:00:00Z`도 거부 |
+
+- 모든 참여자는 UTC = 기준 시각 + 모의 시각으로 쓴다(DEC-098, 계약 0.20.0). Gateway가 외부로 내는 UCI 시각도 이 값을 따른다([9장](09_gateway.md#uci-시각)).
+- 생략하면 Core가 채운 값을 `sim/ctrl/scenario`로 알린다. 이 값은 실행마다 다르지만 truth·항법·이벤트 같은 시뮬레이션 결과에는 쓰이지 않는다. 외부 시각까지 실행마다 같아야 하면 값을 적는다.
 
 ## 3.5 엔티티
 
@@ -186,6 +190,16 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | default FA | `racetrack_guidance` | `dubins` | 레이스트랙 유도(`dubins`, `vector_field`) |
 | 내장 MA 전부 | `lost_link_timeout_s` | 5 | 마지막 GCS Heartbeat 뒤 링크 상실로 판단할 모의 시간(s) |
 | 내장 MA 전부 | `lost_link_policy` | `hold_until_command` | 작업에 정책이 없을 때의 링크 상실 행동 |
+| waypoint, formation(리더), flocking | `approval_tasks` | 빈 값 | 시작 전에 GCS 승인을 받을 작업 종류, 쉼표 구분(예: `move_to,hold`). 빈 값이면 승인 없이 바로 수행 |
+| waypoint, formation(리더), flocking | `approval_timeout_s` | 0 | 승인 응답을 기다리는 모의 시간(s). 넘으면 `REJECTED`. 0이면 무한 |
+| 내장 MA 전부 | `track_share_hz` | 0 | 자기 탐지를 피어와 GCS에 방송하는 주기(Hz). 0이면 끔 |
+
+승인과 탐지 공유는 기본으로 꺼져 있다(DEC-088).
+
+- `approval_tasks`에 든 작업을 받으면 기체는 바로 시작하지 않고 통제 GCS에 승인 요청(`ApprovalRequest`)을 보낸다. 기다리는 동안 지금 작업을 계속하고 그 작업의 `TaskStatus`를 보내지 않는다.
+- 승인되면 시작한다(`ACCEPTED`). 거부되면 `REJECTED`(`approval denied`), 시간 제한을 넘기면 `REJECTED`(`approval timeout`)다. 기다리는 동안 새 작업이나 새 계획이 오면 대기 작업은 `CANCELLED`가 된다.
+- 승인 응답은 외부 C2가 Gateway로 보낸다([9.5](09_gateway.md#95-외부-승인-응답)). GCS UI에서 승인하는 기능은 확인하지 않았다. 승인·탐지 공유를 켠 예는 [qa/scenarios/qa_agra28.json](../../qa/scenarios/qa_agra28.json)이다.
+- 그 밖에 기체가 스스로 보내는 보고가 있다. 편대 리더는 리더가 정해지거나 바뀌면 리더 변경(`LeaderUpdate`)을 방송한다. 탑재 장비가 있는 기체는 시작할 때와 잔량이 바뀔 때 적재 구성(`StoreLoadout`)을 보낸다.
 
 ## 3.7 임무 계획 (mission_plan)
 
@@ -198,6 +212,8 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `search_area` | 원 또는 다각형 영역 |
 | `route` | 항로점 목록. 항로점마다 `position`, `speed_mps`, `acceptance_radius_m`, 행위(`loiter`, `recon`) |
 | `return_to_base` | 시작 위치로 귀환 |
+
+지원하지 않거나 값이 잘못된 작업은 첫 틱에 `TaskStatus` `REJECTED`(예: `unsupported task strike`)로 한 번 보고된다. 실행 중 받은 계획이나 C2 명령과 같은 규칙이다(O-45).
 
 > 링크가 끊기는 구간을 지나야 하는 임무는 `lost_link_policy`를 지정한다. 지정하지 않으면 기본 정책 `hold_until_command`에 따라 끊긴 자리에서 선회하고, 링크가 돌아와도 새 명령이 올 때까지 임무를 잇지 않는다. QA 링크 시나리오 3건도 이 때문에 `continue`를 지정했다(D-32). 정책별 동작은 [7장](07_link.md#링크-상실-시-기체-행동).
 

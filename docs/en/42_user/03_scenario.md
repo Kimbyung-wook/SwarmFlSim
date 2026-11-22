@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `cfa687f`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `a4167c5`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
@@ -12,7 +12,7 @@ A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/s
 flowchart LR
     S["Scenario"] --> V["schema_version · name<br/>description"]
     S --> M["map<br/>origin · extent"]
-    S --> R["run<br/>mode · frame_hz · seed<br/>rate · duration_s · participants"]
+    S --> R["run<br/>mode · frame_hz · seed · epoch_utc<br/>rate · duration_s · participants"]
     S --> L["link_profiles (optional)"]
     S --> E["entities[]"]
     S --> P["mission_plan (optional)<br/>plan_id · tasks · formations"]
@@ -139,6 +139,10 @@ Examples in the repository:
 | `run.rate` | Target rate. 1 if omitted | Fixed at 1 for realtime |
 | `run.duration_s` | Run time. Unlimited if omitted | |
 | `run.participants` | List of lockstep participant IDs | [4.4](04_run.md#44-lockstep) |
+| `run.epoch_utc` | UTC of simulation time 0 (the epoch). If omitted, Core fills in the wall-clock UTC at load and Reset | ISO 8601 with a required time zone (for example `2026-01-01T00:00:00Z`, `+09:00`). A date alone or a missing time zone is rejected. `1970-01-01T00:00:00Z` is also rejected |
+
+- Every participant uses UTC = epoch + simulation time (DEC-098, contract 0.20.0). The UCI times the Gateway sends out follow this value too ([chapter 9](09_gateway.md#uci-time)).
+- If omitted, Core announces the value it filled in on `sim/ctrl/scenario`. The value differs between runs, but it is not used in simulation results such as truth, navigation and events. Write the value if external times must also match between runs.
 
 ## 3.5 Entities
 
@@ -188,6 +192,16 @@ Common parameters:
 | default FA | `racetrack_guidance` | `dubins` | Racetrack guidance (`dubins`, `vector_field`) |
 | all baseline MAs | `lost_link_timeout_s` | 5 | Simulation time (s) after the last GCS Heartbeat before the link counts as lost |
 | all baseline MAs | `lost_link_policy` | `hold_until_command` | Link-loss behavior when the task has no policy |
+| waypoint, formation (leader), flocking | `approval_tasks` | empty | Task kinds that need GCS approval before they start, comma-separated (for example `move_to,hold`). Empty means run at once without approval |
+| waypoint, formation (leader), flocking | `approval_timeout_s` | 0 | Simulation time (s) to wait for an approval response. `REJECTED` when exceeded. 0 means no limit |
+| all baseline MAs | `track_share_hz` | 0 | Rate (Hz) at which the vehicle broadcasts its own detections to peers and the GCS. 0 turns it off |
+
+Approval and detection sharing are off by default (DEC-088).
+
+- When a vehicle gets a task listed in `approval_tasks`, it does not start at once. It sends an approval request (`ApprovalRequest`) to the controlling GCS. While waiting it keeps its current task and sends no `TaskStatus` for the new one.
+- If approved it starts (`ACCEPTED`). If denied it is `REJECTED` (`approval denied`), and past the time limit `REJECTED` (`approval timeout`). A new task or a new plan during the wait ends the waiting task with `CANCELLED`.
+- The approval response is sent by an external C2 through the Gateway ([9.5](09_gateway.md#95-external-approval-responses)). Approving from the GCS UI was not verified. An example with approval and detection sharing on is [qa/scenarios/qa_agra28.json](../../../qa/scenarios/qa_agra28.json).
+- Vehicles also send some reports on their own. A formation leader broadcasts a leader change (`LeaderUpdate`) when the leader is set or changes. A vehicle with a payload sends its store loadout (`StoreLoadout`) at start and when the remaining count changes.
 
 ## 3.7 Mission plan (mission_plan)
 
@@ -200,6 +214,8 @@ Each task in `tasks` has a `task_id`, `assignees` and one task-kind key. It can 
 | `search_area` | Circular or polygonal area |
 | `route` | List of route points. For each point `position`, `speed_mps`, `acceptance_radius_m`, action (`loiter`, `recon`) |
 | `return_to_base` | Returns to the starting position |
+
+Unsupported or invalid tasks are reported once on the first tick as `TaskStatus` `REJECTED` (for example `unsupported task strike`). This is the same rule as for plans and C2 commands received during the run (O-45).
 
 > Set `lost_link_policy` for a mission that must pass through a stretch where the link drops. Without it, the default policy `hold_until_command` makes the vehicle orbit where the link dropped, and it does not resume the mission after recovery until a new command arrives. This is why three QA link scenarios set `continue` (D-32). Behavior per policy is in [chapter 7](07_link.md#vehicle-behavior-on-link-loss).
 

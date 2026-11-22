@@ -48,6 +48,8 @@
 | 시작하자마자 `Zenoh 백엔드를 쓸 수 없습니다`를 출력하고 끝난다 | `--extra zenoh` 없이 설치했다 | [9.1](09_gateway.md#91-준비) |
 | 외부 명령에 응답이 없다 | `ready` 전에 보냈다 | `ready` 뒤에 다시 보낸다 |
 | 브리지와 CAL Server가 함께 안 뜬다 | 둘 다 기본 8765 포트다 | `--bridge-port`로 바꾼다 |
+| 외부 명령이 버스로 나가지 않고 `MA_TaskStatus` `DROPPED`가 온다 | 가리킨 기체가 시나리오에 없고 이 GCS가 보고를 받은 적도 없다(D-35) | 기체 ID를 확인한다. Gateway 로그에 `unknown entity [...]`가 남는다([9장](09_gateway.md#모르는-기체를-가리키는-명령)) |
+| `UCI time base changed` 경고가 나온다 | 시나리오를 받기 전에 첫 메시지 기준으로 시각을 정했다가 시나리오 값으로 바꿨다 | 보통은 그대로 둔다. 기준을 고정하려면 시나리오에 `run.epoch_utc`를 적거나 `--sim-epoch`를 준다([UCI 시각](09_gateway.md#uci-시각)) |
 
 ## 10.6 lockstep
 

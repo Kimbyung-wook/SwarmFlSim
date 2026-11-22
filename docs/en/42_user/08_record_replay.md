@@ -1,6 +1,6 @@
 # 8. Recording and replay
 
-> Source: [docs/42_user/08_record_replay.md](../../42_user/08_record_replay.md) at commit `cfa687f`.
+> Source: [docs/42_user/08_record_replay.md](../../42_user/08_record_replay.md) at commit `a4167c5`.
 
 All bus messages are recorded to one MCAP file and published to the bus again at the original time intervals. During replay, UI and Monitor use the same screens as live.
 
@@ -44,7 +44,7 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<time>/p0_demo.mcap
 ```
 
 - UI: `http://localhost:5173/?source=bus&gcs=&bridge=ws://127.0.0.1:8765/bus`. Leave `gcs=` empty to block commands.
-- Monitor: `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus`
+- Monitor: `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus`
 - Core, Datalink and Agent are not started. It exits when finished. `--linger <seconds>` keeps the screens longer.
 
 To check only the contents:

@@ -1,6 +1,6 @@
 # 8. WP4 Datalink (`datalink/`)
 
-> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `cfa687f`.
+> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `a4167c5`.
 
 ## Responsibilities
 

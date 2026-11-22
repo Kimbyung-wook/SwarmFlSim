@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `cfa687f`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `a4167c5`.
 
 ## Responsibilities
 
@@ -41,12 +41,17 @@ For the frame processing order, see the header comment of `runtime.py` and `_ste
 
 | Direction | Keys |
 |---|---|
-| Subscribe | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `swarm/<id>/rx/**` |
+| Subscribe | `sim/clock/tick`, `sim/ctrl/cmd`, `sim/ctrl/scenario`, `onboard_batch/NavigationBatch`, `onboard/<id>/Detection`, `*Activity`, `SystemStatus`, `StoreLoadout`, `swarm/<id>/rx/**` |
 | Publish | `swarm/<id>/tx/**`, `onboard_batch/ControlBatch/<p>` (one per tick, before `FrameDone`), `onboard/<id>/*Command`, `sim/param/<id>/fa`, `sim/param/<id>/ma`, `sim/clock/done/<p>` |
 
 `truth/**` and `link/**` are not subscribed. All subscriptions are opened with `ordered=True` (DEC-083, [3.2](../03_architecture.md#32-opening-the-bus)).
 
 When the Agent hosts every AutonomySpec vehicle in the scenario, it groups the vehicle position with a wildcard and opens `onboard/*/<message>` and `swarm/*/rx/**`. With 100 vehicles this cuts subscriptions from 600 to 6 (IMP-AGT-043). Zenoh matches each put against every subscription in the session, so the subscription count sets the put cost. Input for vehicles it does not host and input addressed to a GCS are dropped before parsing. When several Agents split the vehicles, subscriptions stay per vehicle. Keys, messages and rates are unchanged.
+
+Additions to change reports (DEC-088, DEC-089):
+
+- `StoreLoadout`: once the `onboard/<id>/StoreLoadout` sent by Payload has arrived, that value is the basis of `ms.loadout()`, and the runtime no longer lowers the count on launch by itself. Only vehicles with stores send it to the controlling GCS on `tx/ms/StoreLoadout`, at start and when the value changes (IMP-AGT-048).
+- Re-report on link recovery: when `GcsHeartbeat` returns after a gap longer than the MA variable `lost_link_timeout_s` (default 5 s), the next GCS report resends every change-report key of that vehicle and `FlightCapability` once. Keys removed by an end state and the MA's `TaskStatus` are not included (IMP-AGT-049).
 
 ## Tests
 

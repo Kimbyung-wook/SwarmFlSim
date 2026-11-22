@@ -42,7 +42,7 @@ uv run python scripts/run_p0_demo.py replay out/p0_demo/live-<시각>/p0_demo.mc
 ```
 
 - UI: `http://localhost:5173/?source=bus&gcs=&bridge=ws://127.0.0.1:8765/bus`. `gcs=`를 비워 명령을 막는다.
-- Monitor: `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus`
+- Monitor: `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus`
 - Core·Datalink·Agent는 띄우지 않는다. 끝나면 종료한다. `--linger <초>`로 화면을 더 둘 수 있다.
 
 내용만 확인할 때:

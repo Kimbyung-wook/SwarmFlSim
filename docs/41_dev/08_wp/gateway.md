@@ -15,6 +15,10 @@ GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변�
 | `src/swarm_gateway/lacal.py` | 서브모듈 경로, XSD 검증, CAL Client |
 | `src/swarm_gateway/runner.py` | LA-CAL 접속 |
 | `src/swarm_gateway/ids.py` | 문자열 ID ⇄ UUID |
+| `src/swarm_gateway/retain.py` | 변화 보고 키별 마지막 값 보관(`RetainedReports`), 늦게 붙은 외부 구독에 다시 PUB(`LateJoinReplayer`, DEC-089) |
+| `src/swarm_gateway/command_state.py` | 외부 명령 상태의 Command-2 상태 기계(DEC-097) |
+| `src/swarm_gateway/entities.py` | 알려진 기체 목록(시나리오 UAV + 이 GCS가 받은 보고, D-35) |
+| `src/swarm_gateway/converters/base.py` | `SimClock`: UCI 시각 = 기준 시각 + 모의 시각(DEC-098) |
 | `src/swarm_gateway/lacal_server.py`, `config/lacal_server.yaml` | CAL Server 기동 |
 
 `third_party/agra_lacal`은 서브모듈이고 고치지 않는다.
@@ -28,6 +32,8 @@ GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변�
 | `--participant <id>` | 발행 참여자 ID. `LinkEnvelope.publisher`에 싣는다. 기본 `gateway-0`, 엔티티 ID 형식(DEC-077) |
 | `--service`, `--topic-prefix`, `--inbound-topic` | LA-CAL 서비스와 토픽. MP 수신 토픽은 `<prefix>.mp`로 고정 |
 | `--stats-s <s>` | 카운터 로그 주기, 기본 10 |
+| `--lacal-admin <url>` | CAL Server 관리 주소, 기본 `--lacal` 호스트의 8766. 그래프 이벤트(`/graph/events`)로 새 외부 구독을 알아낸다. `none`이면 끈다 |
+| `--sim-epoch <UTC>` | UCI 기준 시각 명시 재정의(ISO 8601, 시간대 필수). 시나리오 `run.epoch_utc_us`보다 앞선다 |
 | `--bus zenoh\|memory` | 기본 `zenoh`. Zenoh가 없으면 설치 방법을 알리고 종료 코드 1로 끝난다. `memory`는 명시했을 때만 쓰고 시뮬레이터 메시지가 오지 않는다 |
 | 공통 버스 옵션 | [3.2](../03_architecture.md#32-버스-열기) |
 
@@ -35,7 +41,7 @@ GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변�
 
 | 방향 | 키 |
 |---|---|
-| 구독 | `swarm/<gcs>/rx/**`만 |
+| 구독 | `swarm/<gcs>/rx/**`, `sim/ctrl/scenario`(읽기만. 알려진 기체 목록과 UCI 기준 시각, DEC-096·098) |
 | 발행 | `swarm/<gcs>/tx/c2/<msg>`, `swarm/<gcs>/tx/mp/<msg>`만 |
 
 `truth/**`, `onboard/**`, `link/**`는 쓰지 않는다.
@@ -66,7 +72,8 @@ InMemoryBus와 프로세스 안의 CAL Server로 돈다. 처음이면 [2.6](../0
 
 - 외부 `MA_TaskCommand`는 `hold`, `return_to_base`, 취소만 받는다. 위치가 필요한 작업은 임무 계획 경로로 받는다(DEC-076). 지원 범위는 [gateway/README.md](../../../gateway/README.md#임무-계획-수신-dec-076).
 - `ready` 로그 전에 외부가 보낸 명령은 사라진다(O-13).
-- `config/lacal_server.yaml`의 `declared.pub`에 `MA_PositionReport`가 없다(O-20).
+- 재기동하면 보관한 마지막 값과 끝난 명령 ID 기억이 비어, 같은 끝 상태가 ID당 최대 한 번 더 나갈 수 있다(DEC-097).
+- `config/lacal_server.yaml`의 선언(`declared.pub`·`sub`)은 Gateway의 실제 PUB·SUB와 같아야 한다. TC-GW-034, TC-GW-038이 묶는다(O-20, D-39 해소).
 
 추적: [gateway/TRACE.md](../../../gateway/TRACE.md).
 

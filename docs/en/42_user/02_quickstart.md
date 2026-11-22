@@ -1,6 +1,6 @@
 # 2. Quick start
 
-> Source: [docs/42_user/02_quickstart.md](../../42_user/02_quickstart.md) at commit `cfa687f`.
+> Source: [docs/42_user/02_quickstart.md](../../42_user/02_quickstart.md) at commit `a4167c5`.
 
 The demo runner starts all processes at once. It runs an example scenario with 20 vehicles and one GCS in realtime. The configuration diagram is in [20_p0_demo.md §1](../../20_p0_demo.md#1-구성) (Korean).
 
@@ -15,7 +15,7 @@ The addresses appear at the end of the output.
 | Screen | Address |
 |---|---|
 | GCS UI | `http://localhost:5173/?source=bus&gcs=gcs-01&bridge=ws://127.0.0.1:8765/bus` |
-| Traffic Monitor | `http://localhost:5174/?source=bridge&url=ws://127.0.0.1:8765/bus` |
+| Traffic Monitor | `http://localhost:5174/?source=bridge&bridge=ws://127.0.0.1:8765/bus` |
 
 ## 2.2 Moving vehicles
 

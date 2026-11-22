@@ -26,7 +26,9 @@ flowchart TD
 | MCAP 헤더 | Logger. vcpkg는 자동, MSYS2·Linux는 직접 받는다 | 계약 §7.2 "MCAP" |
 | git 서브모듈 | Gateway | [2장](02_build_test.md#26-gateway) |
 
-> 확인 안 됨: `mingw-*`, `linux-*` 프리셋은 있지만 이 매뉴얼을 쓰면서 실행해 보지 않았다. 아래 명령은 Windows `msvc-debug`로 확인했다.
+> `linux-debug`·`linux-release`는 WSL Ubuntu 24.04, GCC 13에서 컴파일 오류 0, ctest 75/75를 확인했다(2026-11-21, IMP-DYN-010 병합 뒤). 이 확인에서 Zenoh는 홈 아래 `~/opt/zenoh`에 풀어 `CMAKE_PREFIX_PATH`로 넘겼고, MCAP 헤더는 mcap 저장소를 `releases/cpp/v2.2.0` 태그로 고정해 받았다. 배포판 protobuf(3.21)와 vcpkg protobuf는 버전이 달라도 logger 골든 시험이 메시지 내용 해시를 쓰므로 같은 값이 나온다(IMP-LOG-013).
+>
+> 확인 안 됨: `mingw-*` 프리셋은 이 매뉴얼을 쓰면서 실행해 보지 않았다. 아래 명령은 Windows `msvc-debug`로 확인했다.
 
 ## 1.2 프리셋 고르기
 

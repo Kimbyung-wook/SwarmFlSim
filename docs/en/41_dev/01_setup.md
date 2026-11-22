@@ -1,6 +1,6 @@
 # 1. Development environment
 
-> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `cfa687f`.
+> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `a4167c5`.
 
 Install commands are in [10_contracts.md §7](../../10_contracts.md#7-빌드-환경과-시험-dec-022) (Korean).
 
@@ -28,7 +28,9 @@ flowchart TD
 | MCAP headers | Logger. Automatic with vcpkg, fetched by hand on MSYS2 and Linux | Contract §7.2 "MCAP" |
 | git submodule | Gateway | [Chapter 2](02_build_test.md#26-gateway) |
 
-> Not verified: the `mingw-*` and `linux-*` presets exist but were not run while writing this manual. The commands below were confirmed on Windows `msvc-debug`.
+> `linux-debug` and `linux-release` were confirmed on WSL Ubuntu 24.04 with GCC 13: zero compile errors and ctest 75/75 (2026-11-21, after merging IMP-DYN-010). In that check Zenoh was unpacked under the home directory at `~/opt/zenoh` and passed with `CMAKE_PREFIX_PATH`, and the MCAP headers were taken from the mcap repository pinned to the `releases/cpp/v2.2.0` tag. The distribution protobuf (3.21) and the vcpkg protobuf differ in version, but the logger golden test hashes message content, so it gives the same value (IMP-LOG-013).
+>
+> Not verified: the `mingw-*` presets were not run while writing this manual. The commands below were confirmed on Windows `msvc-debug`.
 
 ## 1.2 Choosing a preset
 
