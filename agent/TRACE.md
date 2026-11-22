@@ -63,11 +63,12 @@ flowchart LR
 | IMP-AGT-040 | 항법·제어 일괄 경로(DEC-081, 계약 0.17.0): `onboard_batch/NavigationBatch` 하나를 구독해 호스팅 기체에 나누고, 배치에 있는 기체만 `nav_fresh`로 둔다(다른 참여자의 기체는 건너뜀). threaded 틱 해제 조건은 그 프레임 배치 수신이다. 배치에서 빠진 기체는 기다리지 않는다. 틱당 1건 `ControlBatch`를 `onboard_batch/ControlBatch/<participant>`로 FrameDone 전에 발행한다(기체 ID 순, `controls[i].header.source`는 기체 ID로 고정, Python FA도 같은 경로, 항법이 없는 틱은 빈 배치, 호스팅 기체가 없는 참여자는 내지 않음). `onboard/<id>/*` 구독을 받을 메시지 5종의 키로 줄여 자기 제어·명령이 되돌아오지 않는다. `FakeCore`·`bench_fa`도 같은 경로로 옮겼다. 배치는 MA에 노출하지 않으며 `ports.vi.nav()`는 그대로 자기 항법을 돌려준다 | `src/swarm_agent/runtime.py`, `src/swarm_agent/testing.py`, `bench/bench_fa.py` | DEC-081, DEC-080, DEC-005, DEC-013, DEC-039, DEC-045, REQ-PRF-002 | TC-AGT-118~125 Pass |
 | IMP-AGT-041 | 런타임 구독의 순서 보장(D-33, DEC-083): 런타임이 여는 구독(틱, sim/ctrl, NavigationBatch, onboard, rx, FrameDone)을 `_subscribe` 하나로 열고, threaded면 `ordered=True`로 열어 Zenoh 수신 스레드에서 Core가 낸 순서대로 큐에 넣는다. 콜백은 큐에 넣기만 한다. Zenoh 기본 콜백은 구독마다 스레드가 달라, 일괄화 뒤 onboard 입력이 NavigationBatch·틱보다 늦게 큐에 들어가 처리할 틱을 놓쳤다(`late_onboard`). threaded가 아니면 콜백이 처리·발행까지 하므로 ordered로 열지 않는다. `bench_fa`의 가짜 버스도 `ordered`를 받는다 | `src/swarm_agent/runtime.py`, `bench/bench_fa.py` | D-33, DEC-083, DEC-005, DEC-039, DEC-081 | TC-AGT-126~127 Pass |
 | IMP-AGT-042 | 틱 단계별 계측(DEC-086, 기본 꺼짐): `--profile <파일>` 또는 `SWARM_AGENT_PROFILE`로 켠다. 틱 처리 단계(params, release_rx·onboard, begin_frame, report_activity, ma, fa, publish_controls, send_done)와 틱 사이 입력 처리(키 종류별, 틱 처리 시간 제외)를 벽시계로 재 프레임 위상(frame % 50)별로 더하고 phase0·phase4·other 요약과 함께 JSON으로 덮어쓴다(500틱마다·닫을 때). 출력 내용은 바꾸지 않는다 | `src/swarm_agent/profiling.py`, `src/swarm_agent/runtime.py`, `src/swarm_agent/cli.py` | DEC-086, REQ-PRF-002 | TC-AGT-128 Pass |
-| IMP-AGT-043 | 기체 자리 와일드카드 구독(DEC-086): AutonomySpec이 있는 기체를 모두 맡으면 `onboard/*/<msg>`(ONBOARD_INBOUND 5개, IMP-AGT-048부터 6개)와 `swarm/*/rx/**`로 연다(기체 100대면 구독 600 → 6). Zenoh는 문자열 키 put마다 세션 구독 전체와 경로를 맞춰 보므로 put 하나가 약 48 µs에서 약 19 µs로 준다(실측). 맡지 않은 기체·GCS 앞 입력은 해석 전에 버리고 송신 개수 장벽에 세지 않는다. 여러 Agent가 나눠 맡으면 기체별 구독 그대로. 키·메시지·주기는 같다 | `src/swarm_agent/runtime.py` | DEC-086, DEC-083, DEC-081, DEC-044 | TC-AGT-120, TC-AGT-126, TC-AGT-130 Pass |
+| IMP-AGT-043 | **Superseded by IMP-AGT-052 (DEC-100)**. 기체 자리 와일드카드 구독(DEC-086): AutonomySpec이 있는 기체를 모두 맡으면 `onboard/*/<msg>`(ONBOARD_INBOUND 5개, IMP-AGT-048부터 6개)와 `swarm/*/rx/**`로 연다(기체 100대면 구독 600 → 6). Zenoh는 문자열 키 put마다 세션 구독 전체와 경로를 맞춰 보므로 put 하나가 약 48 µs에서 약 19 µs로 준다(실측). 맡지 않은 기체·GCS 앞 입력은 해석 전에 버리고 송신 개수 장벽에 세지 않는다. 여러 Agent가 나눠 맡으면 기체별 구독 그대로. 키·메시지·주기는 같다 | `src/swarm_agent/runtime.py` | DEC-086, DEC-083, DEC-081, DEC-044 | Superseded (IMP-AGT-052) |
 | IMP-AGT-044 | 기본 FA의 스칼라 좌표 계산(DEC-086): 매 프레임 기체마다 부르는 `ned_offset`·`wrap_pi`·`course_rad`를 `math` 스칼라 함수(`geo.ned_offset_s`·`wrap_pi_s`, `math.atan2`)로. 연산 순서가 같아 결과가 비트 단위로 같다. step 한 번 6.6 → 3.1 µs | `src/swarm_agent/geo.py`, `src/swarm_agent/fa.py` | DEC-086, DEC-082 | TC-AGT-129 Pass |
 | IMP-AGT-045 | 보통 프레임 Python 오버헤드 축소(DEC-086): `ChangeReporter.due`는 바뀐 키도 지울 키도 없으면 바로 빈 목록(종료 상태로 지운 키만 따로 둬 송신 시각 정리), `FrameBuffer.flip`은 받은 것이 없으면 복사 생략, `message_class`는 이름별로 기억 | `src/swarm_agent/reporting.py`, `src/swarm_agent/ports.py`, `src/swarm_agent/messages.py` | DEC-086, DEC-051, DEC-056, DEC-063 | TC-AGT-131 Pass |
 | IMP-AGT-048 | 적재 구성 보고(DEC-088): `onboard/<id>/StoreLoadout`(Payload, 처음 프레임과 잔량이 바뀐 프레임)을 받는다(ONBOARD_INBOUND 6종, 처리 틱 = frame + 2). 받은 뒤로는 그 값이 `ms.loadout()`의 기준이고 런타임이 발사로 잔량을 줄이지 않는다(같은 프레임 StrikeActivity와 이중 감소 방지). 받기 전에는 예전처럼 발사로 줄인다. 키 하나(`StoreLoadout`)의 변화 보고로 시작할 때(적재가 있는 기체만)와 값이 바뀔 때 `tx/ms/StoreLoadout`으로 통제 GCS에 보낸다(키별 최소 간격 지킴, 주기 전체 보고 없음, 보낼 때 기체 헤더) | `src/swarm_agent/runtime.py`, `src/swarm_agent/ports.py`, `src/swarm_agent/vehicle.py`, `src/swarm_agent/reporting.py` | DEC-088, DEC-071, DEC-056, D-30 | TC-AGT-136 Pass |
 | IMP-AGT-049 | 링크 복구 재보고(DEC-089): rx c2의 `GcsHeartbeat`를 전달할 때 직전 Heartbeat 뒤 MA 변수 `lost_link_timeout_s`(없으면 5 s, DEC-078)를 넘겼으면 복구로 본다(MA `LinkMonitor`와 같은 규칙, 처리 틱의 모의 시각). 다음 GCS 보고 때 그 기체의 변화 보고 키 전체(임무장비 상태, SystemStatus·진행 중 FlightCommandStatus, StoreLoadout)와 FlightCapability를 한 번 다시 보낸다. 평소 보고량은 그대로다. 종료 상태로 지운 키와 MA의 TaskStatus는 대상이 아니다 | `src/swarm_agent/runtime.py`, `src/swarm_agent/reporting.py`, `src/swarm_agent/vehicle.py` | DEC-089, DEC-078, DEC-071 | TC-AGT-137 Pass |
+| IMP-AGT-052 | 기체별 구독(DEC-100, 계약 0.21.0, QA O-49): 맡은 기체마다 `onboard/<id>/<msg>`(ONBOARD_INBOUND 6개)와 `swarm/<id>/rx/**`를 따로 연다(기체 100대면 700개). 모두 맡든 나눠 맡든 같다. 엔티티 자리 와일드카드 구독(IMP-AGT-043)과 `_hosts_all_hostable`을 없앴다. 맡지 않은 기체·GCS 앞 입력은 버스가 건네지 않는다. 구독과 별개로 `_on_onboard`·`_on_rx`의 맡지 않은 엔티티 버림(해석·계수 없음)은 방어로 남긴다. 키·메시지·주기는 같다 | `src/swarm_agent/runtime.py` | DEC-100, DEC-044, DEC-086, DEC-083 | TC-AGT-120, TC-AGT-126, TC-AGT-130, TC-AGT-142 Pass |
 
 ## TC
 
@@ -145,17 +146,17 @@ flowchart LR
 | TC-AGT-094 | Heartbeat가 rx 시각 규칙대로 C2 포트에 보이고 MP로 가지 않음 | `tests/test_agent_heartbeat.py` | IMP-AGT-037 | Pass |
 | TC-AGT-118 | 배치에 있는 기체만 FA 실행, 빠진 기체는 틱을 막지 않고 MA 항법은 마지막 값 유지 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-119 | 틱당 ControlBatch 1건이 FrameDone보다 먼저, 헤더·ID 순서, 항법이 없어도 빈 배치, Reset 후 일련번호 0 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
-| TC-AGT-120 | 구독은 받을 메시지뿐(일부만 맡으면 기체별, 모두 맡으면 와일드카드), 자기 제어·명령과 예전 기체별 항법을 받지 않음 | `tests/test_agent_batch.py` | IMP-AGT-040, IMP-AGT-043 | Pass |
+| TC-AGT-120 | 구독은 받을 메시지뿐(일부만 맡으면 맡은 기체만, 모두 맡아도 기체별, DEC-100), 자기 제어·명령과 예전 기체별 항법을 받지 않음 | `tests/test_agent_batch.py` | IMP-AGT-040, IMP-AGT-052 | Pass |
 | TC-AGT-121 | 다중 Agent 참여자는 자기 기체만 처리하고 자기 키로 발행 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-122 | threaded 틱 해제는 배치 수신 기준, 일부 기체 누락은 대기 없음, Reset 뒤 이전 실행 배치로 풀리지 않음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-123 | MA는 배치에 접근할 수 없고 `ports.vi.nav()`는 자기 항법만 돌려줌(DEC-013) | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-124 | Python FA도 같은 경로, `header.source`는 기체 ID로 고정, 출력 없음·예외는 그 기체만 빠짐 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
 | TC-AGT-125 | 배치 안 보고 순서와 무관하게 ControlBatch 바이트가 같음 | `tests/test_agent_batch.py` | IMP-AGT-040 | Pass |
-| TC-AGT-126 | threaded 런타임은 모든 구독(와일드카드 포함)을 ordered로 열고 콜백은 큐에 넣기만 함, threaded가 아니면 ordered 아님 | `tests/test_agent_ordered.py` | IMP-AGT-041, IMP-AGT-043 | Pass |
+| TC-AGT-126 | threaded 런타임은 모든 구독(기체별 7개 × 기체 수 포함)을 ordered로 열고 콜백은 큐에 넣기만 함, threaded가 아니면 ordered 아님 | `tests/test_agent_ordered.py` | IMP-AGT-041, IMP-AGT-052 | Pass |
 | TC-AGT-127 | 실제 Zenoh 두 세션: Core 순서(임무장비 출력 → NavigationBatch → SystemStatus → 틱)가 키가 달라도 큐에 그대로 들어옴 | `tests/test_agent_ordered.py` | IMP-AGT-041 | Pass |
 | TC-AGT-128 | 계측은 기본 꺼짐, 켜면 위상별(phase0·phase4·other) 단계·입력 몫과 1 Hz 보고 송신 수를 JSON으로 남기고 버스 출력은 바이트 단위로 같음 | `tests/test_agent_cost.py` | IMP-AGT-042 | Pass |
 | TC-AGT-129 | 스칼라 좌표 함수가 NumPy 함수와 비트 단위로 같고, 경유점·선회·레이스트랙 폐루프 FA 출력이 NumPy 경로와 바이트 단위로 같음 | `tests/test_agent_cost.py` | IMP-AGT-044 | Pass |
-| TC-AGT-130 | 모두 맡을 때만 와일드카드, 맡지 않은 기체·GCS 앞 입력은 해석·계수 없이 버림, 와일드카드와 기체별 구독의 출력이 같음 | `tests/test_agent_cost.py` | IMP-AGT-043 | Pass |
+| TC-AGT-130 | (IMP-AGT-052부터 방어 경로만) 맡지 않은 기체·GCS 앞 입력이 handle로 와도 해석·계수 없이 버림. 와일드카드 여부·출력 비교 시험은 와일드카드 경로와 함께 없앴다 | `tests/test_agent_cost.py` | IMP-AGT-052 | Pass |
 | TC-AGT-131 | `ChangeReporter.due` 빠른 경로가 이전 구현과 무작위 순서에서 같은 출력·상태, `FrameBuffer.flip` 의미 동일 | `tests/test_agent_cost.py` | IMP-AGT-045 | Pass |
 | TC-AGT-132 | 승인 왕복: 요청 내용·ID, 응답 전 미시작·무상태, 모르는 응답 무시, 승인 → ACCEPTED·EXECUTING, 거부 → REJECTED(approval denied)·지금 작업 유지, 끝난 요청 재응답 무시 | `tests/test_agent_agra.py` | IMP-AGT-046 | Pass |
 | TC-AGT-133 | 승인 규칙: 기본은 요청 없음, 목록 밖 작업은 바로, 대기 작업은 지금 작업을 밀어내지 않음, 시간 제한 REJECTED, 대기 중 취소 CANCELLED, 새 명령이 대기 작업을 CANCELLED(preempted), 계획 작업(일괄 flocking)도 승인 뒤 시작, require_approval의 StrikeTask는 그대로 REJECTED | `tests/test_agent_agra.py` | IMP-AGT-046 | Pass |
@@ -164,8 +165,9 @@ flowchart LR
 | TC-AGT-136 | StoreLoadout: 적재 기체만 시작 보고, Payload 첫 구성이 같으면 재송신 없음, Payload 감소 + 같은 프레임 발사에서 잔량 한 번만 감소·보고, Payload 없으면 발사 감소 보고 | `tests/test_agent_agra.py` | IMP-AGT-048 | Pass |
 | TC-AGT-137 | 링크 복구: 평소·시간 제한 안 공백은 재송신 없음, 상실 뒤 복구 시 SystemStatus·StoreLoadout·FlightCapability 한 번씩, `lost_link_timeout_s` 반영. 모두 켠 lockstep 실행 2회의 GCS 수신이 바이트 단위로 같음 | `tests/test_agent_agra.py` | IMP-AGT-046~049 | Pass |
 | TC-AGT-138 | 시작 계획(O-45): waypoint·flocking 모두 미지원 strike는 REJECTED(`unsupported task strike`)를 첫 보고로 한 번, 종류 없는 작업도 REJECTED, 지원 작업은 ACCEPTED, require_approval이어도 ApprovalRequest 없음, 배정 안 된 기체는 보고 안 함. lockstep 2회 GCS 수신 바이트 동일 | `tests/test_agent_agra.py` | IMP-AGT-050 | Pass |
+| TC-AGT-142 | 기체별 구독(DEC-100): 모두 맡음·전부 지정·일부 지정 모두 구독 키의 엔티티 자리에 `*`가 없고 맡은 기체와 정확히 같음(rx 구독 = 기체 수). 맡지 않은 기체·GCS 수신(rx)과 탑재 출력(onboard)은 런타임 handle에 한 건도 닿지 않고 맡은 기체 키는 닿음 | `tests/test_agent_cost.py` | IMP-AGT-052 | Pass |
 
-시험 결과(2026-11-18): agent 118, algorithms 105 passed
+시험 결과(2026-11-22): agent 118, algorithms 105 passed. IMP-AGT-052 성능(DEC-086(2), 7,500프레임, Agent 1개, 2묶음 각 3쌍 = 6회 중앙): Logger 켬 11.20배(1.786 ms, 변경 전 12.23배 1.636 ms, 쌍별 차 중앙 −0.161 ms), Logger 끔 12.55배(1.594 ms, 변경 전 12.72배, 쌍별 차 중앙 −0.016 ms). P1 조건(Logger 켬 ≥10배) 충족
 
 ## FA 성능 측정 (IMP-AGT-010)
 

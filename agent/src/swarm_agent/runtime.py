@@ -8,7 +8,8 @@
 
 구독하는 키: sim/clock/tick, sim/ctrl/cmd·sim/ctrl/scenario(런타임만, MA에 노출하지 않음, DEC-037),
 onboard_batch/NavigationBatch(런타임만, MA에 노출하지 않음, DEC-013), 기체마다 ONBOARD_INBOUND의 onboard/<id>/<msg>,
-swarm/<id>/rx/**. truth/**와 link/**는 구독하지 않는다 (PRP-SIM-003).
+swarm/<id>/rx/**. 맡은 기체마다 따로 열고 엔티티 자리 와일드카드는 쓰지 않는다 (DEC-100, IMP-AGT-052).
+truth/**와 link/**는 구독하지 않는다 (PRP-SIM-003).
 threaded면 모든 구독을 ordered로 열어 Core가 낸 순서대로 큐에 넣는다 (DEC-083, D-33).
 """
 
@@ -147,7 +148,6 @@ class AgentRuntime:
         self._subs = [self._subscribe(keys.CLOCK_TICK), self._subscribe(keys.SIM_CTRL_CMD),
                       self._subscribe(keys.SIM_CTRL_SCENARIO)]
         self._vehicle_subs: list = []
-        self._wide_subs = False                     # 기체 자리를 와일드카드로 구독했는가 (IMP-AGT-043)
         self.scenario: sim_pb2.Scenario | None = None
         self.vehicles: dict[str, Vehicle] = {}
         self._order: list[Vehicle] = []
@@ -292,19 +292,12 @@ class AgentRuntime:
                 self._gcs[v.entity_id] = gcs
         if self._order:
             self._vehicle_subs.append(self._subscribe(keys.NAVIGATION_BATCH))
-        self._wide_subs = self._hosts_all_hostable(scenario)
-        if self._wide_subs:
-            # 맡을 수 있는 기체를 모두 맡으면 기체 자리를 와일드카드로 연다. Zenoh는 문자열 키 put마다 세션의 구독 전체와
-            # 경로를 맞춰 보므로 구독 600개(기체 100대 × 6)면 put 하나가 수십 µs 든다. 키·메시지는 같다 (IMP-AGT-043, DEC-086).
-            # 맡지 않은 기체·GCS 앞으로 온 것은 _on_onboard·_on_rx가 해석 전에 버린다
+        # 맡은 기체마다 따로 구독한다. 엔티티 자리 와일드카드는 쓰지 않는다: 실제 기체처럼 자기 앞 수신만 받는다
+        # (IMP-AGT-052, DEC-100. IMP-AGT-043의 와일드카드 구독을 대신함)
+        for v in self._order:
             for name in sorted(ONBOARD_INBOUND):
-                self._vehicle_subs.append(self._subscribe(f"onboard/*/{name}"))
-            self._vehicle_subs.append(self._subscribe("swarm/*/rx/**"))
-        else:
-            for v in self._order:
-                for name in sorted(ONBOARD_INBOUND):
-                    self._vehicle_subs.append(self._subscribe(keys.onboard(v.entity_id, name)))
-                self._vehicle_subs.append(self._subscribe(keys.rx_all(v.entity_id)))
+                self._vehicle_subs.append(self._subscribe(keys.onboard(v.entity_id, name)))
+            self._vehicle_subs.append(self._subscribe(keys.rx_all(v.entity_id)))
         self._lockstep = scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP
         if self._lockstep:
             self._dl_names = tuple(p for p in scenario.run.participants if p.startswith(DATALINK_PREFIX))
@@ -314,13 +307,6 @@ class AgentRuntime:
         self._publish_params()
         if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다
             self._send_done(0)
-
-    def _hosts_all_hostable(self, scenario: sim_pb2.Scenario) -> bool:
-        """AutonomySpec이 있는 기체를 모두 이 런타임이 맡는가. 여러 Agent가 나눠 맡으면 거짓이다 (IMP-AGT-043)"""
-        if not self._order:
-            return False
-        hostable = {e.id for e in scenario.entities if e.autonomy.ma_plugin or e.autonomy.fa_plugin}
-        return hostable <= self.vehicles.keys()
 
     def _hosts(self, spec: entity_pb2.EntitySpec) -> bool:
         if self.config.entities is not None:
