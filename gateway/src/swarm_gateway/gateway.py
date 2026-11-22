@@ -41,6 +41,12 @@ DEFAULT_PARTICIPANT = "gateway-0"
 # 외부 메시지를 받아 내부로 보낼 수 있는 L1 (DEC-068, DEC-076). 발행 키의 범위이기도 하다
 INBOUND_L1 = (options_pb2.L1_INTERFACE_C2, options_pb2.L1_INTERFACE_MP)
 
+
+def inbound_entries(table: MappingTable, converters: dict[str, Converter]) -> list[MappingEntry]:
+    """외부 C2·MP로 받을 수 있는 STD 메시지. XSD 없이 descriptor와 변환기로 정한다(준비 전 SUB, IMP-GW-034)"""
+    return [e for e in table.exportable()
+            if e.l1 in INBOUND_L1 and e.full_name in converters and converters[e.full_name].supports_import()]
+
 Sink = Callable[[str, dict], "Awaitable[None] | None"]
 
 
@@ -132,9 +138,7 @@ class Gateway:
 
     def import_entries(self) -> list[MappingEntry]:
         """외부 C2·MP로 받을 수 있는 STD 메시지 (2단계)"""
-        return [e for e in self.table.exportable()
-                if e.l1 in INBOUND_L1 and e.full_name in self.converters
-                and self.converters[e.full_name].supports_import()]
+        return inbound_entries(self.table, self.converters)
 
     def import_names(self) -> list[str]:
         return sorted({e.uci_name for e in self.import_entries()})
