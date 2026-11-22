@@ -7,7 +7,7 @@ from swarm_algorithms.common import CommandIds
 S = common_pb2
 A, B, C = "uav-001", "uav-002", "uav-003"
 END = {S.COMMAND_STATE_COMPLETED, S.COMMAND_STATE_CANCELLED, S.COMMAND_STATE_FAILED, S.COMMAND_STATE_REJECTED}
-FAST = {"lost_link_timeout_s": 1.0, "lost_link_policy": "resume_on_recovery"}
+FAST = {"lost_link_timeout_s": 1.0, "lost_link_recover_hold_s": 0.0, "lost_link_policy": "resume_on_recovery"}
 
 
 def record(h):

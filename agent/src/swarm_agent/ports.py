@@ -15,7 +15,7 @@ from google.protobuf.message import Message
 
 from swarm.v1 import c2_pb2, mp_pb2, ms_pb2, vi_pb2
 
-from .reporting import LOADOUT_KEY, vi_key
+from .reporting import COMMAND_TERMINAL, LOADOUT_KEY, vi_key
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -67,6 +67,13 @@ class C2PortImpl:
             self._v.warn("c2 send dropped: no controlling_gcs")
             return
         self._v.send_link("c2", msg, [gcs])
+        if isinstance(msg, c2_pb2.TaskStatus):        # 링크 복구 재보고용 (DEC-101)
+            if msg.state in COMMAND_TERMINAL:
+                self._v.task_reports.pop(msg.task_id, None)
+            else:
+                copy = c2_pb2.TaskStatus()
+                copy.CopyFrom(msg)
+                self._v.task_reports[msg.task_id] = copy
 
 
 class VIPortImpl:
@@ -100,6 +107,7 @@ class VIPortImpl:
         self._v.stamp(st)
         self._status.append(st)
         self._v.vi_reports.note(vi_key("FlightCommandStatus", st), st)  # GCS 변화 보고 (DEC-071)
+        self._v.last_command_status = st                                 # 링크 복구 재보고 (DEC-101)
 
 
 class MSPortImpl:

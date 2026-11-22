@@ -23,7 +23,7 @@ ACC, EXE, DONE, CAN = (S.COMMAND_STATE_ACCEPTED, S.COMMAND_STATE_EXECUTING, S.CO
                        S.COMMAND_STATE_CANCELLED)
 UNTIL, RESUME, CONT = (c2_pb2.LOST_LINK_POLICY_HOLD_UNTIL_COMMAND, c2_pb2.LOST_LINK_POLICY_RESUME_ON_RECOVERY,
                        c2_pb2.LOST_LINK_POLICY_CONTINUE)
-FAST = {"lost_link_timeout_s": 1.0}
+FAST = {"lost_link_timeout_s": 1.0, "lost_link_recover_hold_s": 0.0}   # 복구 유지 시간(DEC-101)은 TC-AGT-145에서 본다
 
 
 def set_pos(p, n, e, alt=0.0):
@@ -223,7 +223,7 @@ def test_tc_agt_101_continue_ignores_loss_and_recovery():
     assert md(a, "lost_link_policy") == ["continue"]
     assert md(b, "link_state") == []
     assert (a.core.bodies[A].lat, a.core.bodies[A].lon) == (b.core.bodies[A].lat, b.core.bodies[A].lon)
-    assert a.task_states("far") == b.task_states("far") and fa(a)._kind == "waypoint"
+    assert a.task_states("far") == b.task_states("far") + [EXE] and fa(a)._kind == "waypoint"   # 복구 재보고 한 번 (DEC-101)
 
 
 def test_tc_agt_102_policy_task_overrides_param():
