@@ -133,3 +133,5 @@
 | 2026-11-21 | `74130c6` | IMP-DYN-010, TC-DYN-016, DEC-022 | WP2: GCC 기본 인자 `= {}` 오류를 위임 생성자로 수정. 병합 뒤 WSL Ubuntu 24.04 GCC 13 linux-debug·linux-release 모두 컴파일 오류 0, ctest 75/75 (msvc-debug 75/75, WP2 세션 확인) | 없음 | 완료 | 국문 반영 `a4167c5`; 영문 반영 `0b44418` |
 | 2026-11-22 | `42c7e06` | DEC-044, QA O-50 | WP0: 계약 §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸에 Agent 런타임의 `swarm/<dst>/rx/**` 구독을 명시(문구 정정, 계약 버전 유지). O-50의 나머지 두 키는 3bc27f5에서 반영됨 | 개발자 매뉴얼 버스 키 표 | 미처리 | |
 | 2026-11-22 | (이 커밋) | DEC-088~099 | 병합: 매뉴얼 미처리 30행 반영(국문 `a4167c5`, 영문 `0b44418`, 반영 26·확인만 4) | 없음 | 해당 없음 | |
+| 2026-11-22 | `09e3a29` | IMP-LOG-014, TC-LOG-013, DEC-022 | WP7: mcap 대체 경로에 WIN32일 때 `MCAP_PUBLIC=` 정의(mingw 링크 오류). 병합 뒤 MSYS2 UCRT64 GCC 16.2 mingw-debug·mingw-release ctest 75/75 | 없음 | 미처리 | |
+| 2026-11-22 | (이 커밋) | DEC-022 | WP0: 계약 §7.2 MSYS2·Ubuntu mcap 헤더를 vcpkg와 같은 2.2.0 태그로 고정 | 개발자 매뉴얼 환경 설치 | 미처리 | |

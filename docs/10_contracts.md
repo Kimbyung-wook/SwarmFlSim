@@ -339,10 +339,10 @@ sudo apt install build-essential cmake ninja-build libprotobuf-dev protobuf-comp
 MCAP (WP7 `logger/`):
 
 - MSVC + vcpkg: `vcpkg.json`의 `mcap` 포트로 자동 설치된다.
-- MSYS2·Ubuntu: 패키지가 없다. mcap 저장소의 C++ 헤더를 받아 `-DMCAP_INCLUDE_DIR=<mcap>/cpp/mcap/include`로 넘긴다. 지정하지 않으면 경고를 내고 `logger/`를 건너뛴다.
+- MSYS2·Ubuntu: 패키지가 없다. mcap 저장소의 C++ 헤더를 vcpkg 포트와 같은 2.2.0 태그로 받아 `-DMCAP_INCLUDE_DIR=<mcap>/cpp/mcap/include`로 넘긴다. 지정하지 않으면 경고를 내고 `logger/`를 건너뛴다.
 
 ```bash
-git clone --depth 1 https://github.com/foxglove/mcap <mcap>
+git clone --depth 1 --branch releases/cpp/v2.2.0 https://github.com/foxglove/mcap <mcap>
 ```
 
 Zenoh (zenoh-c + zenoh-cpp 1.10.2):
