@@ -171,7 +171,7 @@ flowchart LR
 | TC-AGT-143 | geo·racetrack 공개(DEC-104): `swarm_api.geo` 스칼라·배열 결과 일치·왕복, 상수 값, `swarm_api.racetrack` 경로 오차·직선 위 침로(dubins·vector_field), `swarm_agent.geo`/`racetrack`가 같은 모듈 객체, agent·algorithms 소스가 호환 별칭을 가져오지 않음 | `api/python/tests/test_geo_racetrack.py` | IMP-AGT-053 | Pass |
 | TC-AGT-144 | 링크 복구 재보고(DEC-101(1)): GCS_LINK_CUT 모사(Heartbeat 중단 + 기체 → GCS 버림) 중 상실 선회 명령 상태는 GCS에 가지 않고, 복구 판정 틱에 현재 FlightCommandStatus(`-lost-link-` EXECUTING)와 진행 중 작업 TaskStatus가 정확히 한 번 더, 그 뒤 10 s 늘지 않음. 단절 중 종료된 현재 명령(COMPLETED)도 한 번 더, 끝난 작업의 TaskStatus는 다시 안 보냄. 두 번 실행의 GCS 수신이 바이트 단위로 같음 | `algorithms/tests/test_alg_link_recovery.py` | IMP-AGT-054 | Pass |
 
-시험 결과(2026-11-22): agent 118, algorithms 105 passed. IMP-AGT-052 성능(DEC-086(2), 7,500프레임, Agent 1개, 2묶음 각 3쌍 = 6회 중앙): Logger 켬 11.20배(1.786 ms, 변경 전 12.23배 1.636 ms, 쌍별 차 중앙 −0.161 ms), Logger 끔 12.55배(1.594 ms, 변경 전 12.72배, 쌍별 차 중앙 −0.016 ms). P1 조건(Logger 켬 ≥10배) 충족
+시험 결과(2026-11-22, 계약 0.22.0 반영 후): agent 118, algorithms 119, api/python 34(TC-AGT-143 포함), examples/plugins 7 passed. 이전 결과(DEC-100 때): agent 118, algorithms 105 passed. IMP-AGT-052 성능(DEC-086(2), 7,500프레임, Agent 1개, 2묶음 각 3쌍 = 6회 중앙): Logger 켬 11.20배(1.786 ms, 변경 전 12.23배 1.636 ms, 쌍별 차 중앙 −0.161 ms), Logger 끔 12.55배(1.594 ms, 변경 전 12.72배, 쌍별 차 중앙 −0.016 ms). P1 조건(Logger 켬 ≥10배) 충족
 
 ## FA 성능 측정 (IMP-AGT-010)
 

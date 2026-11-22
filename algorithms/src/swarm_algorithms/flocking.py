@@ -6,6 +6,8 @@
 - 목표 속도 = v_goal + w_align·(v̄ − v) + w_coh·r̄ + w_sep·Σ 분리, 수평만. 고도는 목표(없으면 첫 고도) 유지.
   v_goal: 목표점(MoveTo, SearchArea 중심, RTB)이 있으면 그쪽 방향 × cruise, 없으면 현재 침로 × cruise.
   목표점에 goal_radius_m 안으로 들어오면 작업을 COMPLETED로 보고하고 그 점을 계속 목표로 둔다.
+  작업 상태는 다른 기본 MA와 같다: ACCEPTED → (그 작업으로 낸 비행 명령을 FA가 EXECUTING으로 보고한 다음 틱) EXECUTING →
+  COMPLETED (O-28, IMP-AGT-057).
   Hold (DEC-033): 중심(없으면 작업 시작 위치) 둘레 반경(없으면 hold_radius_m) 원의 접선 벡터장
   v_goal = normalize(t − clip((d − R)/R, ±1)·u) × cruise, u = 중심→자기 단위벡터, t = 방향(CW 기본) 접선.
   duration_s가 있으면 원 위(|d − R| < max(0.25R, 50 m))에 처음 든 뒤 그 시간이 지나면 COMPLETED.
@@ -66,6 +68,9 @@ class _Agent:
         self.link = LostLinkGuard(ctx, self.tracker)
         self.tracks = TrackSharer(ctx)
         self.suspended: tuple[Goal | None, float | None, float] = (None, None, 0.0)  # 상실로 중단한 (목표, hold_since, 시각)
+        # EXECUTING 보고 (O-28): 지난 틱 비행 명령을 낼 때의 작업, EXECUTING을 보낸 작업
+        self.cmd_task: object | None = None
+        self.exec_task: object | None = None
 
 
 class Flocking(BatchMissionAutonomy):
@@ -94,10 +99,11 @@ class Flocking(BatchMissionAutonomy):
             for m in c.ports.p2p.inbox():
                 if isinstance(m, p2p_pb2.PeerStatus) and (not a.group or m.group_id == a.group):
                     a.table[m.header.source] = m
-            c.ports.vi.command_status()
+            statuses = c.ports.vi.command_status()
             own = c.ports.vi.nav()
             a.tracker.update(own)
             action = a.link.update(msgs, own is not None)
+            self._report_executing(c, a, statuses)
             if action == "hold":
                 p = own.kinematics.position
                 a.suspended = (a.goal, a.hold_since, c.sim_time_s)
@@ -187,12 +193,25 @@ class Flocking(BatchMissionAutonomy):
             g = a.goal
             cmd.hsa.altitude_m = g.alt if g is not None and g.alt > 0 else a.alt0
             c.ports.vi.command(cmd)
+            a.cmd_task = a.tracker.current if not a.link.held else None   # 상실 선회는 작업 수행이 아니다
             if every(c, a.p["peer_hz"]):
                 task = a.tracker.current
                 ps = peer_status(c.ports.vi.nav(), a.group, task.task_id if task is not None else "")
                 c.ports.p2p.send(ps)
             if every(c, 1.0):
                 c.ports.md.record("neighbors", float(cnt[i, 0]))
+
+    @staticmethod
+    def _report_executing(c: AgentContext, a: _Agent, statuses) -> None:
+        """다른 기본 MA(TaskPilot)와 같은 시점 (O-28): 작업을 맡은 뒤 그 작업으로 낸 비행 명령을 FA가 EXECUTING으로
+        보고하면(명령 다음 틱) 작업마다 한 번 EXECUTING을 보낸다. 링크 상실 선회 중에 낸 명령은 세지 않는다"""
+        task = a.tracker.current
+        if task is None or a.cmd_task is not task or a.exec_task is task or a.link.held:
+            return
+        cid = f"{c.entity_id}-flock"
+        if any(st.command_id == cid and st.state == S.COMMAND_STATE_EXECUTING for st in statuses):
+            a.exec_task = task
+            a.tracker.status(task, S.COMMAND_STATE_EXECUTING)
 
     @staticmethod
     def _hold_dir(c: AgentContext, a: _Agent, g: Goal, lat: float, lon: float) -> tuple[float, float]:
