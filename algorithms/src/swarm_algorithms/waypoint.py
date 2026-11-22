@@ -7,7 +7,7 @@ MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPi
   항로 자체의 작업 상태는 보내지 않고, 끝나면 대기 작업을 잇는다 (D-29).
 링크 상실 행동은 common.LostLinkGuard를 따른다 (DEC-078).
 승인(approval_tasks, DEC-088)은 common.TaskTracker, 탐지 공유(track_share_hz)는 common.TrackSharer를 따른다.
-params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_policy,
+params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_recover_hold_s(5), lost_link_policy,
 approval_tasks(""), approval_timeout_s(0), track_share_hz(0)
 """
 

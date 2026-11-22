@@ -3,7 +3,7 @@
 import pytest
 
 from swarm.v1 import c2_pb2, common_pb2, link_pb2, mp_pb2, options_pb2
-from swarm_agent.geo import ned_offset, offset_geo
+from swarm_api.geo import ned_offset, offset_geo
 from swarm_agent.testing import Harness, make_scenario
 from swarm_api import keys
 from swarm_api.bus import protobuf_encoding

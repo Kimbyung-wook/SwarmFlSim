@@ -17,7 +17,7 @@ from swarm.v1 import sim_pb2, vi_pb2
 from swarm_api import Sample, keys
 from swarm_agent import AgentRuntime, RuntimeConfig
 from swarm_agent.fa import DefaultFlightAutonomy
-from swarm_agent.geo import offset_geo
+from swarm_api.geo import offset_geo
 from swarm_agent.testing import make_scenario
 
 

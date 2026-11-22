@@ -124,7 +124,7 @@ def test_tc_agt_019_flocking_cohesion_separation_alignment():
     assert dmin > 40.0, dmin
     assert dmax < dmax0, (dmax0, dmax)
     # 목표 쪽으로 움직였다
-    from swarm_agent.geo import ned_offset
+    from swarm_api.geo import ned_offset
     b = h.core.bodies["uav-010"]
     n, e = ned_offset(b.lat, b.lon, 37.58, 128.12)
     assert math.hypot(float(n), float(e)) < 13000.0

@@ -16,7 +16,7 @@ from google.protobuf import struct_pb2
 from swarm.v1 import c2_pb2, entity_pb2, fa_pb2, link_pb2, mp_pb2, sim_pb2, truth_pb2, vi_pb2
 from swarm_api import InMemoryBus, Sample, keys, protobuf_encoding
 
-from .geo import ned_offset, offset_geo
+from swarm_api.geo import ned_offset, offset_geo
 from .messages import decode
 from .plugins import PluginRegistry
 from .runtime import AgentRuntime, RuntimeConfig

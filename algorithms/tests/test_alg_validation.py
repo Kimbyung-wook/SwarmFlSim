@@ -5,7 +5,7 @@ import math
 import pytest
 
 from swarm.v1 import c2_pb2, common_pb2
-from swarm_agent.geo import offset_geo
+from swarm_api.geo import offset_geo
 from swarm_algorithms.common import ROUTE_MAX_POINTS
 from swarm_agent.testing import Harness, make_scenario, send_c2
 

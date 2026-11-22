@@ -446,7 +446,9 @@ class AgentRuntime:
         - VI 상태(DEC-071): `FlightCapability`는 첫 틱에 한 번, `NavigationReport`는 vi_report_hz 주기(0이면 끔),
           `SystemStatus`·`FlightCommandStatus`는 바뀔 때 `tx/vi/<Msg>`. 전체 주기 보고는 없다
         - 적재 구성(DEC-088): `StoreLoadout`은 시작할 때(적재가 있으면)와 바뀔 때 `tx/ms/StoreLoadout`
-        - GCS 링크가 끊겼다 복구되면(DEC-089) 그 기체의 변화 보고 키 전체와 FlightCapability를 한 번 다시 보낸다
+        - GCS 링크가 끊겼다 복구되면(DEC-089) 그 기체의 변화 보고 키 전체와 FlightCapability를 한 번 다시 보낸다.
+          현재(마지막) FlightCommandStatus는 이미 보내 지운 종료 상태여도, 진행 중인 작업의 마지막 TaskStatus(`tx/c2`)도
+          한 번 다시 보낸다 (DEC-101, DEC-071의 예외)
         - 변화 보고는 키별 최소 간격(activity_max_hz)을 지키고 미룬 변화는 최신 값으로 보낸다 (DEC-056).
           종료 상태(무장 IMPACT·MISSED·REJECTED, 비행 명령 REJECTED·COMPLETED·FAILED·CANCELLED)를 보낸 키는 지운다 (DEC-063)
         """
@@ -459,12 +461,19 @@ class AgentRuntime:
             gcs = self._gcs.get(v.entity_id)
             if not gcs:
                 continue
-            if v.resync:                                 # GCS 링크 복구: 보고 상태 전체를 한 번 (DEC-089)
+            resend_tasks = None
+            if v.resync:                                 # GCS 링크 복구: 보고 상태 전체를 한 번 (DEC-089, DEC-101)
                 v.resync = False
+                cur = v.last_command_status
+                if cur is not None:                      # 종료 상태로 지운 현재 명령도 한 번 더 (DEC-101)
+                    k = vi_key("FlightCommandStatus", cur)
+                    if k not in v.vi_reports.state:
+                        v.vi_reports.note(k, cur)
                 v.activity_reports.resend_all()
                 v.vi_reports.resend_all()
                 v.ms_reports.resend_all()
                 v.capability_reported = False
+                resend_tasks = [v.task_reports[t] for t in sorted(v.task_reports)]
             for msg in v.activity_reports.due(sim_time_us, min_gap_us, period):
                 self.send_link(v, "ms", msg, [gcs])
             if not v.capability_reported:
@@ -483,6 +492,11 @@ class AgentRuntime:
                 for msg in v.ms_reports.due(sim_time_us, min_gap_us):
                     v.stamp(msg)
                     self.send_link(v, "ms", msg, [gcs])
+            if resend_tasks:                             # 진행 중 작업의 TaskStatus (DEC-101). MA C2 포트와 같은 경로
+                for st in resend_tasks:
+                    msg = c2_pb2.TaskStatus()
+                    msg.CopyFrom(st)
+                    v.send_link("c2", msg, [gcs])
 
     def _on_rx(self, key: str, payload: bytes) -> None:
         parts = key.split("/")

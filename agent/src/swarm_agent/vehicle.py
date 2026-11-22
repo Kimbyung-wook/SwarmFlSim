@@ -46,6 +46,9 @@ class Vehicle:
         self.ms_reports = ChangeReporter()          # StoreLoadout: 시작할 때와 바뀔 때 (DEC-088)
         self.hb_last_us: int | None = None          # 마지막 GcsHeartbeat 수신 모의 시각 (DEC-089)
         self.resync = False                         # 링크 복구: 다음 보고 때 보고 상태 전체를 다시 보낸다
+        # 링크 복구 재보고 (DEC-101): 마지막 FlightCommandStatus와 진행 중(종료 상태 전) 작업별 마지막 TaskStatus
+        self.last_command_status: vi_pb2.FlightCommandStatus | None = None
+        self.task_reports: dict[str, Message] = {}
         self.nav_report_period: int | None = None
         self.capability_reported = False
         self.ports = PortsImpl(self, plan, criteria)
