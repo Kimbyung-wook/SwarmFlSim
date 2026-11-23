@@ -47,14 +47,15 @@ def test_tc_agt_029_defaults_and_published_specs():
     assert ma.owner == sim_pb2.PARAM_OWNER_MA and ma.plugin == "waypoint"
     assert vals(fa)["k_heading"] == 0.8 and vals(fa)["racetrack_guidance"] == "dubins"
     assert vals(ma) == {"acceptance_m": 80.0, "hold_radius_m": 300.0, "speed_mps": 0.0,
-                        "lost_link_timeout_s": 5.0, "lost_link_recover_hold_s": 5.0, "lost_link_policy": "hold_until_command",
+                        "lost_link_timeout_s": 5.0, "lost_link_recover_hold_s": 5.0, "lost_link_recover_gap_s": 2.0, "lost_link_policy": "hold_until_command",
                         "approval_tasks": "", "approval_timeout_s": 0.0, "track_share_hz": 0.0}  # DEC-088
     spec = {s.name: s for s in fa.specs}
     assert spec["max_bank_deg"].layer == int(ParamLayer.AIRFRAME) and spec["k_heading"].layer == int(ParamLayer.CONTROL)
     assert spec["racetrack_guidance"].layer == int(ParamLayer.GUIDANCE)
     assert not spec["max_bank_deg"].runtime and spec["k_heading"].runtime
     assert spec["k_heading"].min == 0.0 and spec["k_heading"].max == 10.0 and spec["k_heading"].default_value.number_value == 0.8
-    assert {s.name for s in ma.specs} == {"acceptance_m", "hold_radius_m", "speed_mps", "lost_link_timeout_s", "lost_link_recover_hold_s", "lost_link_policy",
+    assert {s.name for s in ma.specs} == {"acceptance_m", "hold_radius_m", "speed_mps", "lost_link_timeout_s", "lost_link_recover_hold_s",
+                                        "lost_link_recover_gap_s", "lost_link_policy",
                                         "approval_tasks", "approval_timeout_s", "track_share_hz"}
     assert not fa.rejected and not ma.rejected
     # 기체마다 FA·MA 각각 게시한다

@@ -2,7 +2,7 @@
 
 params
 - orbit_radius_m: 0보다 크면 그 자리에서 선회한다. 기본 0 = 침로·속도·고도 유지(HSA)
-- lost_link_timeout_s(5), lost_link_recover_hold_s(5, DEC-101), lost_link_policy: 링크 상실 행동 (DEC-078). 작업을 수행하지 않으므로 MA 변수만 쓴다.
+- lost_link_timeout_s(5), lost_link_recover_hold_s(5, DEC-101), lost_link_recover_gap_s(2, DEC-105), lost_link_policy: 링크 상실 행동 (DEC-078). 작업을 수행하지 않으므로 MA 변수만 쓴다.
   선회 중 자기에게 온 작업 명령을 받거나 재개하면 원래 비행 명령을 다시 낸다
 - track_share_hz(0): 탐지 공유 (common.TrackSharer, DEC-088)
 """
