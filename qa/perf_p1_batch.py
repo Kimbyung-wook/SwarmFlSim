@@ -70,20 +70,44 @@ def log(out: Path, msg: str) -> None:
         f.write(line + "\n")
 
 
-def quiet(out: Path, need_s: float = 30.0, max_s: float = 1800.0) -> bool:
+def top_load(own: set[int], interval: float = 2.0, n: int = 4) -> tuple[float, list[str]]:
+    """시스템 CPU %와, 이 측정 밖에서 CPU를 쓰는 상위 프로세스(논리 코어 1개 = 100%)"""
+    ps = []
+    for p in psutil.process_iter():
+        if p.pid in own or p.pid == 0:
+            continue
+        try:
+            p.cpu_percent(None)
+            ps.append(p)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    sysp = psutil.cpu_percent(interval=interval)
+    rows = []
+    for p in ps:
+        try:
+            rows.append((p.cpu_percent(None), p.name(), p.pid))
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    rows.sort(reverse=True)
+    return sysp, [f"{nm}({pid}) {c:.0f}%" for c, nm, pid in rows[:n] if c >= 5]
+
+
+def quiet(out: Path, need_s: float = 30.0, max_s: float = 3600.0, max_sys: float = 5.0) -> bool:
+    """다른 시뮬레이터 프로세스가 없고 시스템 CPU가 max_sys % 이하인 상태가 need_s 이어지면 시작한다.
+    시스템 CPU 조건은 35차 묶음 b 재실행(색인·백신 부하로 무효) 뒤 더했다"""
     own = _own_tree(os.getpid())
     t0 = time.monotonic()
     clear_since = time.monotonic()
     while time.monotonic() - t0 < max_s:
         f = foreign(own)
-        if f:
+        sysp, top = top_load(own)
+        if f or sysp > max_sys:
             clear_since = time.monotonic()
             with (out / "foreign.txt").open("a", encoding="utf-8") as fh:
-                fh.write(f"{datetime.now():%H:%M:%S} wait " + " | ".join(f) + "\n")
+                fh.write(f"{datetime.now():%H:%M:%S} wait sys {sysp:.1f}% {' '.join(top)} " + " | ".join(f) + "\n")
         elif time.monotonic() - clear_since >= need_s:
-            log(out, f"quiet {need_s:.0f}s")
+            log(out, f"quiet {need_s:.0f}s (sys {sysp:.1f}%)")
             return True
-        time.sleep(1.0)
     log(out, "quiet 시간 초과")
     return False
 
@@ -91,7 +115,7 @@ def quiet(out: Path, need_s: float = 30.0, max_s: float = 1800.0) -> bool:
 def run(a: argparse.Namespace) -> int:
     out = ROOT / a.out
     out.mkdir(parents=True, exist_ok=True)
-    if not quiet(out):
+    if not quiet(out, max_sys=a.max_sys):
         return 2
     cmd = [sys.executable, str(ROOT / "qa" / "perf_p1.py"), "--out", f"{a.out}/{a.label}", "--only", ",".join(CFGS),
            "--repeat", str(a.repeat), "--meas", "7500", "--base-port", str(a.base_port)]
@@ -101,11 +125,19 @@ def run(a: argparse.Namespace) -> int:
         stop = threading.Event()
         hits: list[str] = []
 
+        loadf = (out / f"{a.label}_load.txt").open("w", encoding="utf-8")
+
         def watch() -> None:
+            k = 0
             while not stop.is_set():
                 own = _own_tree(p.pid)
                 for x in foreign(own):
                     hits.append(f"{datetime.now():%H:%M:%S} {a.label} {x}")
+                if k % 5 == 0:                    # 측정 밖 CPU 부하 (프로세스별, 5 s마다)
+                    _, top = top_load(own, interval=0.5)
+                    loadf.write(f"{datetime.now():%H:%M:%S} {' '.join(top)}\n")
+                    loadf.flush()
+                k += 1
                 stop.wait(1.0)
 
         th = threading.Thread(target=watch, daemon=True)
@@ -113,6 +145,7 @@ def run(a: argparse.Namespace) -> int:
         rc = p.wait()
         stop.set()
         th.join()
+        loadf.close()
     with (out / "foreign.txt").open("a", encoding="utf-8") as fh:
         fh.write("".join(h + "\n" for h in hits))
     log(out, f"end {a.label} rc={rc} 겹침 {len(hits)}건")
@@ -194,7 +227,8 @@ def main() -> int:
     r.add_argument("--out", default="qa/out/perf_g")
     r.add_argument("--label", required=True)
     r.add_argument("--repeat", type=int, default=6)
-    r.add_argument("--base-port", type=int, default=49000)
+    r.add_argument("--base-port", type=int, default=44000)   # 49152~ 임시 포트 범위를 피한다
+    r.add_argument("--max-sys", type=float, default=5.0, help="시작 조건: 시스템 CPU %% 이하가 30 s")
     sm = sub.add_parser("summary")
     sm.add_argument("--out", default="qa/out/perf_g")
     sm.add_argument("--labels", default="", help="쉼표로 구분한 묶음 폴더. 비우면 모두")
