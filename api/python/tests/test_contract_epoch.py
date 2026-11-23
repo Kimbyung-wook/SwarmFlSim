@@ -4,7 +4,7 @@ from swarm.v1 import sim_pb2
 
 
 def test_contract_version():
-    assert swarm_api.CONTRACT_VERSION == "0.22.0"
+    assert swarm_api.CONTRACT_VERSION == "0.23.0"
 
 
 def test_epoch_field_roundtrip_and_default():

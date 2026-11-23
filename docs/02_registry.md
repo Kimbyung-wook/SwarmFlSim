@@ -179,6 +179,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | DEC-102 | Datalink는 같은 (송신, 수신, 인터페이스) 링크 안에서 송신 순서대로 전달한다. 지연 표본이 앞 메시지보다 짧아도 rx 시각은 같은 링크 직전 rx 시각보다 앞서지 않는다(rx_time = max(표본 rx_time, 직전 rx_time)). lockstep·realtime 모두 적용한다 | OPN-074, QA O-46, DEC-040, DEC-054, 사용자 답변 "링크별 순서 보장" | Confirmed |
 | DEC-103 | 승인 흐름 시험용 최소 MA를 `algorithms`에 둔다(WP3). 작업이 승인을 요구하면 `ApprovalRequest`를 보내고 승인 `ApprovalResponse`를 받은 뒤에만 발사 명령을 낸다. 거부·시간 초과면 내지 않고 작업을 끝 상태로 보고한다. 시험·데모 전용이며 기본 MA로 지정하지 않는다 | OPN-075, QA O-2, DEC-075, DEC-088, 사용자 답변 "시험용 MA 추가" | Confirmed |
 | DEC-104 | 좌표 변환(`geo`)과 경로 추종 도구(`racetrack`)를 플러그인 API `swarm_api.geo`·`swarm_api.racetrack`으로 공개한다. 내장 MA와 Agent 런타임은 이 모듈을 쓰고, 플러그인은 `swarm_agent` 내부 모듈을 import하지 않는다. 버스·truth·Core 접근은 들어가지 않는다 | OPN-076, QA O-48, DEC-013, 사용자 답변 "플러그인 API에 포함" | Confirmed |
+| DEC-105 | DEC-101(2)의 복구 확정 조건을 보강한다. 기본 MA는 Heartbeat 재수신 뒤 `lost_link_recover_hold_s`(기본 5 s) 동안 Heartbeat 간격이 MA 변수 `lost_link_recover_gap_s`(기본 2 s, 모의 시간) 이하로 이어져야 복구로 확정한다. 간격이 넘으면 대기를 버리고 상실 행동을 유지한다. DEC-101(1) 런타임 재보고는 Heartbeat 재수신 직후 나가며 MA 확정과 시점이 다를 수 있다 | OPN-078, QA O-51, DEC-101, DEC-078 | Confirmed |
 
 ## 4. 미결정사항 (OPN)
 
@@ -261,6 +262,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-075 | 승인 흐름을 시험할 MA 부재(QA O-2). 기본 MA 중 발사 명령을 내는 것이 없다 | Resolved by DEC-103 |
 | OPN-076 | 내장 MA가 플러그인 API 밖의 `swarm_agent.geo`·`swarm_agent.racetrack`을 import(QA O-48) | Resolved by DEC-104 |
 | OPN-077 | DEC-100 뒤 P1 여유 축소(QA 35차: 규칙상 10.21배·여유 2%, 조용한 상태 11.15배, DEC-087 대비 +0.18 ms). 원인은 `swarm/<id>/rx/**` 기체별 구독 100개가 발행 쪽 경로 계산에 붙는 비용(맞는 put 4.4 → 30.8 µs)과 Logger `**`와 겹칠 때 모든 put에 붙는 비용. DEC-086(1)에 따라 의미를 바꾸지 않는 수단부터: (A) Agent가 기체별로 받는 L1 메시지의 정확한 키로 구독 (B) 발행 쪽 `declare_publisher`로 경로 계산을 미리 함(버스 API, WP0) | Open |
+| OPN-078 | DEC-101 복구 유지 시간이 잠깐 들린 Heartbeat를 거르지 못함(QA O-51). 유지 시간(5 s)과 상실 판정 시간(5 s)이 같아 유지 중 다시 상실 판정이 날 수 없다 | Resolved by DEC-105 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 

@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.22.0
+- 계약 버전: 0.23.0
+  - 0.23.0: 기본 MA 복구 확정에 Heartbeat 간격 조건 `lost_link_recover_gap_s` 추가 (DEC-105)
   - 0.22.0: 링크 복구 뒤 상태 재보고와 복구 유지 시간(DEC-101), Datalink 링크별 순서 보장(DEC-102), 플러그인 API `swarm_api.geo`·`swarm_api.racetrack`(DEC-104)
   - 0.21.0: Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`·`onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독 금지 (DEC-100)
   - 0.20.0: 모의 시각 기준 `RunSpec.epoch_utc_us`(모의 시각 0의 UTC). Core가 비어 있으면 적재 때 채워 `sim/ctrl/scenario`로 알린다 (DEC-098)
@@ -156,7 +157,7 @@ flowchart LR
   - Heartbeat는 일반 tx와 같은 링크 판정(생존·고장·재밍·거리·가시선·손실·지연)을 거쳐 `swarm/<uav>/rx/c2/GcsHeartbeat`로 전달되고 `link/outcome`을 남긴다. `swarm/<gcs>/tx/**`에는 발행하지 않으므로 lockstep 송신 개수 장벽(DEC-044)의 대상이 아니다.
   - MA는 C2 포트로 받은 Heartbeat로만 링크 상실을 판단한다 (DEC-013). 첫 Heartbeat를 받은 뒤부터 감시하고, 마지막 수신 후 MA 변수 `lost_link_timeout_s`(기본 5 s, 모의 시간)가 지나면 상실로 판단한다.
   - 정책은 `TaskCommand.lost_link_policy`로 작업마다 정하고, `UNSPECIFIED`면 MA 변수 `lost_link_policy`(기본 `hold_until_command`)를 따른다. 사용자 MA 플러그인은 자기 행동을 정의할 수 있다.
-  - 기본 MA의 복구는 Heartbeat 재수신 뒤 MA 변수 `lost_link_recover_hold_s`(기본 5 s, 모의 시간) 동안 다시 상실로 판정되지 않아야 확정한다. 확정 전에는 상실 행동을 유지한다 (DEC-101).
+  - 기본 MA의 복구는 Heartbeat 재수신 뒤 MA 변수 `lost_link_recover_hold_s`(기본 5 s, 모의 시간) 동안 Heartbeat 간격이 MA 변수 `lost_link_recover_gap_s`(기본 2 s) 이하로 이어져야 확정한다. 확정 전에는 상실 행동을 유지한다 (DEC-101, DEC-105). 런타임 재보고(DEC-101)는 Heartbeat 재수신 직후 나가므로 MA 확정보다 먼저일 수 있다.
 - 재밍 구역 (DEC-049, DEC-052)
   - 엔티티당 재머는 1개다. 2개 이상 탑재한 시나리오는 적재를 거부한다. `JamZoneEvent.owner`는 엔티티 ID다.
   - Core는 활성 구역을 바뀔 때와 1 s(모의 시간)마다 `truth/event/jam_zone`에 다시 발행한다. 수신 측은 owner 기준으로 멱등 처리한다(같은 owner면 덮어씀, 비활성이면 제거).
