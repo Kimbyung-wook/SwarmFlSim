@@ -31,6 +31,8 @@ LOST_LINK_PARAMS = (
              "마지막 GcsHeartbeat 수신 후 링크 상실로 판단할 모의 시간"),
     ParamDef("lost_link_recover_hold_s", 5.0, ParamLayer.DECISION, "s", 0.0, 86400.0,
              "상실 뒤 Heartbeat를 다시 받고 이 모의 시간 동안 다시 상실되지 않아야 복구로 확정 (DEC-101). 0 = 받은 틱에 바로"),
+    ParamDef("lost_link_recover_gap_s", 2.0, ParamLayer.DECISION, "s", 0.01, 86400.0,
+             "복구 대기 중 Heartbeat 간격 상한. 넘으면 대기를 버리고 상실 행동 유지 (DEC-105)"),
     ParamDef("lost_link_policy", "hold_until_command", ParamLayer.DECISION,
              description="작업에 정책이 없을 때의 링크 상실 행동", choices=tuple(LOST_LINK_POLICIES)),
 )
@@ -138,8 +140,9 @@ class LinkMonitor:
     """C2 포트로 받은 GcsHeartbeat로만 GCS 링크 상실을 판단한다 (DEC-078, DEC-013, DEC-101).
 
     첫 Heartbeat 뒤부터 감시한다. 마지막 수신 후 lost_link_timeout_s를 넘으면 상실이다. 상실 중 다시 받으면 복구 대기에 들어가고,
-    그 뒤 lost_link_recover_hold_s 동안 다시 상실로 판정되지 않으면 복구로 확정한다(DEC-101). 대기 중 다시 상실되면 대기를 버리고
-    상실 상태를 이어 간다("lost"를 다시 내지 않는다). 확정 전까지 lost는 참이다. 시각은 틱의 모의 시간이고 메시지 순서와 무관하므로
+    그 뒤 lost_link_recover_hold_s 동안 Heartbeat 간격이 lost_link_recover_gap_s 이하로 이어지면 복구로 확정한다(DEC-101, DEC-105).
+    대기 중 간격이 그보다 길어지면(다시 상실된 경우 포함) 대기를 버리고 상실 상태를 이어 간다("lost"를 다시 내지 않는다).
+    다음 Heartbeat에서 대기를 새로 시작한다. 확정 전까지 lost는 참이다. 시각은 틱의 모의 시간이고 메시지 순서와 무관하므로
     lockstep에서 결정적이다. 행동을 직접 정하는 사용자 MA는 이 부품만 써도 된다.
     """
 
@@ -161,10 +164,10 @@ class LinkMonitor:
         timed_out = now_us - self.last_us > round(float(self.ctx.params.get("lost_link_timeout_s", 5.0)) * 1e6)
         if self.lost:
             hold_us = round(float(self.ctx.params.get("lost_link_recover_hold_s", 5.0)) * 1e6)
-            if timed_out:
-                if self.recover_from_us is not None:
-                    self.recover_from_us = None
-                    self.ctx.ports.md.record("link_state", "recover_aborted")
+            gap_us = round(float(self.ctx.params.get("lost_link_recover_gap_s", 2.0)) * 1e6)
+            if self.recover_from_us is not None and (timed_out or now_us - self.last_us > gap_us):
+                self.recover_from_us = None                      # 간격 초과 (DEC-105). 확정 판정보다 먼저 본다
+                self.ctx.ports.md.record("link_state", "recover_aborted")
             elif heard and self.recover_from_us is None:
                 self.recover_from_us = now_us
                 if hold_us > 0:
