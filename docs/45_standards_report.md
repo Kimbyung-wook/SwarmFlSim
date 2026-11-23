@@ -1,8 +1,8 @@
-커밋 `0d70268` · 계약 0.20.0 · agra_lacal `45274ce` · 실행 2026-11-22
+커밋 `c86563d` (작업 트리에 커밋 전 변경 있음) · 계약 0.22.0 · agra_lacal `45274ce` · 실행 2026-11-23
 
 # 표준 적합성 점검 보고 (REQ-STD-001, DEC-092)
 
-이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-22`에 있다.
+이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-23`에 있다.
 자체 점검이다(기준 §4). 공식 A-GRA 적합성 도구와 Distribution D 문서는 쓰지 않았다.
 
 ## 1. 요약
@@ -12,7 +12,7 @@
 | C1 | 적용 범위 표 | 통과 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | — |
 | C2 | 형식 검증 (UCI) | 통과 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
 | C3 | 값 의미 검증 (UCI) | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | — |
-| C4 | A-GRA 기체 계층 경계 | 통과 | 구독 12·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | O-48, O-49, O-50 |
+| C4 | A-GRA 기체 계층 경계 | 통과 | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | O-50 |
 | C5 | 상호작용 상태 흐름 | 통과 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | — |
 | C6 | OMS / LA-CAL 왕복 | 통과 | 선언 불일치 0, /tap 불일치 0 | O-45 |
 | C7 | AMS-GRA 개념 차용 추적과 적용성 | 정보 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 | — |
@@ -30,8 +30,8 @@
 | D-39 | C6 | external_c2의 declared.sub가 실제 구독과 다르다 | WP9 | 낮음 | 이번 실행에 없음 |
 | D-40 | C5 | Gateway가 끝 상태 ACCEPTED를 보낸 CommandID에 상태를 더 보낸다(DEC-097) | WP9(Gateway) | 낮음 | 이번 실행에 없음 |
 | O-47 | C5 | 편대 리더 명령의 첫 상태 보고가 CANCELLED(superseded)다 | WP4(FA) | 매우 낮음 | 이번 실행에 없음 |
-| O-48 | C4 | 내장 MA가 플러그인 API 밖의 Agent 런타임 모듈(swarm_agent.geo, swarm_agent.racetrack)을 import한다 | WP3·WP4 | 매우 낮음 | 재현 |
-| O-49 | C4 | Agent가 swarm/*/rx/** 와일드카드 구독으로 gcs-01 수신 키까지 받는다 | WP4 | 매우 낮음 | 재현 |
+| O-48 | C4 | 내장 MA가 플러그인 API 밖의 Agent 런타임 모듈(swarm_agent.geo, swarm_agent.racetrack)을 import한다 | WP3·WP4 | 매우 낮음 | 이번 실행에 없음 |
+| O-49 | C4 | Agent가 swarm/*/rx/** 와일드카드 구독으로 gcs-01 수신 키까지 받는다 | WP4 | 매우 낮음 | 이번 실행에 없음 |
 | O-50 | C4 | 계약 §3.2 키 표와 §3.3 본문의 Agent 구독 키가 다르다 (3개) | WP0(계약 문서) | 문서 | 해당 없음(문서·기존) |
 | O-45 | C6 | 기본 MA에 무장 경로가 없어 StrikeActivity는 시험 전용 주입으로만 나온다 (기존 O-45) | WP3 | 낮음 (28차) | 해당 없음(문서·기존) |
 
@@ -46,12 +46,7 @@
 - **O-47** 리더의 <기체>-fmn-lead가 접수된 같은 틱에 task-1 명령으로 바뀌어, 변화 보고(DEC-056)가 ACCEPTED 없이 CANCELLED만 보낸다. 받은 쪽은 접수된 적 없는 명령의 취소를 본다. 도구 전이 표(첫 보고 ACCEPTED·EXECUTING·REJECTED·FAILED)는 그대로 두었다. 첫 보고 CANCELLED를 허용할지는 기준 문서에서 정할 일이다.
   - 조치: DEC-097: 내부 FlightCommandStatus는 첫 보고 CANCELLED(접수 전 대체)를 허용하고, 외부 MA_*CommandStatus는 첫 보고 CANCELED를 허용한다(UCI Command-2 상태 기계). 32차 도구부터 이 판정 문구가 나오지 않는다
 - **O-48** 버스·truth·Core 모듈은 아니어서 DEC-013 경계 위반은 아니다(정보). 계약 §5 플러그인 API에 기하 도우미가 없어 런타임 모듈을 직접 쓴다. 외부 플러그인이 같은 도우미를 쓰려면 API로 올리거나 algorithms 안에 두어야 한다.
-  - 판정 문구: algorithms/src/swarm_algorithms/common.py:17 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-  - 판정 문구: algorithms/src/swarm_algorithms/common.py:18 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-  - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-  - 판정 문구: algorithms/src/swarm_algorithms/flocking.py:28 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 - **O-49** Agent 런타임은 맡은 기체 수신만 쓰지만 구독은 엔티티 자리를 '*'로 연다. gcs-01(Gateway가 맡음)의 수신 표본도 Agent 프로세스로 온다. MA 포트 기록에는 SIM 표시 메시지가 없어 경계 위반은 아니고 받는 양만 늘어난다.
-  - 판정 문구: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
 - **O-50** sim/ctrl/cmd(set_params, DEC-035)와 sim/clock/done/*(DEC-040·044)는 §3.3 본문이 Agent 구독을 정하지만 §3.2 표의 구독자 칸에는 Agent가 없다. swarm/<e>/rx/**는 §3.3(DEC-044) 표기이고 §3.2 표는 swarm/<dst>/rx/<iface>/<msg>다(Agent는 rx/**로 구독한다). 도구는 세 키를 근거와 함께 보충 허용 키로 둔다(judges.SUPPLEMENT_SUB). 기준 문서(docs/44)와 계약 문서는 고치지 않았다.
   - 조치: 계약 42c7e06(0.20.0 유지): §3.2 swarm/<dst>/rx/<iface>/<msg> 구독자 칸에 '수신 엔티티의 Agent 런타임(자기 기체 swarm/<dst>/rx/**로 구독)'을 적었다. sim/clock/done/*·sim/ctrl/cmd는 30차에 이미 §3.2 구독자 칸에 있다. 34차에 parse_contract_keys가 구독자 칸의 구독 키 표현식도 읽게 해 SUPPLEMENT_SUB를 비웠다
 - **O-45** 계획 strike(task-003)는 기본 TaskTracker가 보고 없이 거른다. 이번 실행은 관측기가 모의 30 s에 onboard/uav-005/StrikeCommand를 직접 내 StrikeActivity 흐름을 만들었다(Agent 발행이 아니라 C4 대상 밖).
@@ -63,10 +58,10 @@
 | 구분 | 내용 |
 |---|---|
 | 구성 | Logger(MCAP) · Datalink(participant datalink-0) · Agent(`agent_probe.py`가 감싼 swarm_agent.cli, agent-0) · Core(lockstep 1배속, 50 Hz, 평지) · CAL Server(agra_lacal, `lacal_server.yaml`에서 포트·server_id만 바꿈) · Gateway(`qa/gw_wrap.py`) · 외부 클라이언트(`qa/gw_ext_client.py`, external_c2) |
-| 시나리오 | `qa/out/conformance/2026-11-22/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
+| 시나리오 | `qa/out/conformance/2026-11-23/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
 | 포트 | CAL 28765/28766, Zenoh 48900~48930 (기본 데모 8765/8766·7447과 겹치지 않음) |
-| 시간 | 모의 70.0 s, 벽시계 76 s (점검 전체 159 s) |
-| 프로세스 종료 | 띄운 PID만 정리: {'logger': 21252, 'datalink': 3924, 'agent': 23504, 'core': 26596, 'calsrv': 19104, 'gateway.1': 16940, 'ext': 4500}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
+| 시간 | 모의 70.0 s, 벽시계 82 s (점검 전체 189 s) |
+| 프로세스 종료 | 띄운 PID만 정리: {'logger': 3760, 'datalink': 6460, 'agent': 19120, 'core': 23852, 'calsrv': 13860, 'gateway.1': 14488, 'ext': 10380}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
 | 로그 이상 | 0줄 |
 
 입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 관측기가 본 뒤 재개했다.
@@ -236,9 +231,9 @@
 | Timestamp − 모의 시각 = 시나리오 epoch (s) | 0.5 | 0.000000 | 통과 |
 | Gateway epoch_changed | 0 | 0 | 통과 |
 
-Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795329758.100470 s, 최대 1795329758.100470 s.
+Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795398654.558113 s, 최대 1795398654.558113 s.
 
-시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795329758100470], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
+시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795398654558113], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
 
 | 식별자 종류 | 참조 수 | 내부 ID 수 | 같은 ID에 UUID 여럿 | 같은 UUID에 표지 여럿 | 표지 없음 |
 |---|---|---|---|---|---|
@@ -287,29 +282,120 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795329758.100470 s, �
 | 구독 | sim/clock/done/* | §3.2 `sim/clock/done/<participant>` 구독: Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
 | 구독 | sim/ctrl/cmd | §3.2 `sim/ctrl/cmd` 구독: Core, Agent 런타임 (`set_params`, §3.3) |
 | 구독 | sim/ctrl/scenario | §3.2 `sim/ctrl/scenario` 구독: Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
-| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티의 Agent 런타임(자기 기체 `swarm/<dst>/rx/**`로 구독, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
+| 구독 | swarm/*/rx/*/* | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독: 수신 엔티티의 Agent 런타임(맡은 기체마다 `swarm/<dst>/rx/**`로 따로 구독, 엔티티 자리 와일드카드 금지 DEC-100, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
 | 구독 | swarm/*/rx/** | §3.2 `swarm/<dst>/rx/<iface>/<msg>` 구독자 칸의 구독 키 `swarm/*/rx/**` |
 | 구독 | onboard/*/* | §3.2 `onboard/<id>/<msg>` 구독: 해당 기체 런타임, Core |
 | 구독 | onboard_batch/NavigationBatch | §3.2 `onboard_batch/NavigationBatch` 구독: Agent 런타임, Logger |
 
 | Agent 구독 키 표현식 | 허용 |
 |---|---|
-| onboard/*/Detection | 예 |
-| onboard/*/JammerActivity | 예 |
-| onboard/*/SensorActivity | 예 |
-| onboard/*/StoreLoadout | 예 |
-| onboard/*/StrikeActivity | 예 |
-| onboard/*/SystemStatus | 예 |
+| onboard/uav-001/Detection | 예 |
+| onboard/uav-001/JammerActivity | 예 |
+| onboard/uav-001/SensorActivity | 예 |
+| onboard/uav-001/StoreLoadout | 예 |
+| onboard/uav-001/StrikeActivity | 예 |
+| onboard/uav-001/SystemStatus | 예 |
+| onboard/uav-002/Detection | 예 |
+| onboard/uav-002/JammerActivity | 예 |
+| onboard/uav-002/SensorActivity | 예 |
+| onboard/uav-002/StoreLoadout | 예 |
+| onboard/uav-002/StrikeActivity | 예 |
+| onboard/uav-002/SystemStatus | 예 |
+| onboard/uav-003/Detection | 예 |
+| onboard/uav-003/JammerActivity | 예 |
+| onboard/uav-003/SensorActivity | 예 |
+| onboard/uav-003/StoreLoadout | 예 |
+| onboard/uav-003/StrikeActivity | 예 |
+| onboard/uav-003/SystemStatus | 예 |
+| onboard/uav-004/Detection | 예 |
+| onboard/uav-004/JammerActivity | 예 |
+| onboard/uav-004/SensorActivity | 예 |
+| onboard/uav-004/StoreLoadout | 예 |
+| onboard/uav-004/StrikeActivity | 예 |
+| onboard/uav-004/SystemStatus | 예 |
+| onboard/uav-005/Detection | 예 |
+| onboard/uav-005/JammerActivity | 예 |
+| onboard/uav-005/SensorActivity | 예 |
+| onboard/uav-005/StoreLoadout | 예 |
+| onboard/uav-005/StrikeActivity | 예 |
+| onboard/uav-005/SystemStatus | 예 |
+| onboard/uav-006/Detection | 예 |
+| onboard/uav-006/JammerActivity | 예 |
+| onboard/uav-006/SensorActivity | 예 |
+| onboard/uav-006/StoreLoadout | 예 |
+| onboard/uav-006/StrikeActivity | 예 |
+| onboard/uav-006/SystemStatus | 예 |
+| onboard/uav-007/Detection | 예 |
+| onboard/uav-007/JammerActivity | 예 |
+| onboard/uav-007/SensorActivity | 예 |
+| onboard/uav-007/StoreLoadout | 예 |
+| onboard/uav-007/StrikeActivity | 예 |
+| onboard/uav-007/SystemStatus | 예 |
+| onboard/uav-008/Detection | 예 |
+| onboard/uav-008/JammerActivity | 예 |
+| onboard/uav-008/SensorActivity | 예 |
+| onboard/uav-008/StoreLoadout | 예 |
+| onboard/uav-008/StrikeActivity | 예 |
+| onboard/uav-008/SystemStatus | 예 |
+| onboard/uav-009/Detection | 예 |
+| onboard/uav-009/JammerActivity | 예 |
+| onboard/uav-009/SensorActivity | 예 |
+| onboard/uav-009/StoreLoadout | 예 |
+| onboard/uav-009/StrikeActivity | 예 |
+| onboard/uav-009/SystemStatus | 예 |
+| onboard/uav-010/Detection | 예 |
+| onboard/uav-010/JammerActivity | 예 |
+| onboard/uav-010/SensorActivity | 예 |
+| onboard/uav-010/StoreLoadout | 예 |
+| onboard/uav-010/StrikeActivity | 예 |
+| onboard/uav-010/SystemStatus | 예 |
+| onboard/uav-011/Detection | 예 |
+| onboard/uav-011/JammerActivity | 예 |
+| onboard/uav-011/SensorActivity | 예 |
+| onboard/uav-011/StoreLoadout | 예 |
+| onboard/uav-011/StrikeActivity | 예 |
+| onboard/uav-011/SystemStatus | 예 |
+| onboard/uav-012/Detection | 예 |
+| onboard/uav-012/JammerActivity | 예 |
+| onboard/uav-012/SensorActivity | 예 |
+| onboard/uav-012/StoreLoadout | 예 |
+| onboard/uav-012/StrikeActivity | 예 |
+| onboard/uav-012/SystemStatus | 예 |
+| onboard/uav-013/Detection | 예 |
+| onboard/uav-013/JammerActivity | 예 |
+| onboard/uav-013/SensorActivity | 예 |
+| onboard/uav-013/StoreLoadout | 예 |
+| onboard/uav-013/StrikeActivity | 예 |
+| onboard/uav-013/SystemStatus | 예 |
+| onboard/uav-014/Detection | 예 |
+| onboard/uav-014/JammerActivity | 예 |
+| onboard/uav-014/SensorActivity | 예 |
+| onboard/uav-014/StoreLoadout | 예 |
+| onboard/uav-014/StrikeActivity | 예 |
+| onboard/uav-014/SystemStatus | 예 |
 | onboard_batch/NavigationBatch | 예 |
 | sim/clock/done/datalink-0 | 예 |
 | sim/clock/tick | 예 |
 | sim/ctrl/cmd | 예 |
 | sim/ctrl/scenario | 예 |
-| swarm/*/rx/** | 예 |
+| swarm/uav-001/rx/** | 예 |
+| swarm/uav-002/rx/** | 예 |
+| swarm/uav-003/rx/** | 예 |
+| swarm/uav-004/rx/** | 예 |
+| swarm/uav-005/rx/** | 예 |
+| swarm/uav-006/rx/** | 예 |
+| swarm/uav-007/rx/** | 예 |
+| swarm/uav-008/rx/** | 예 |
+| swarm/uav-009/rx/** | 예 |
+| swarm/uav-010/rx/** | 예 |
+| swarm/uav-011/rx/** | 예 |
+| swarm/uav-012/rx/** | 예 |
+| swarm/uav-013/rx/** | 예 |
+| swarm/uav-014/rx/** | 예 |
 
 Agent 발행 키 125개(접두·종류별 {'onboard_batch/agent-0': 1, 'sim/done': 1, 'sim/uav-001': 2, 'sim/uav-002': 2, 'sim/uav-003': 2, 'sim/uav-004': 2, 'sim/uav-005': 2, 'sim/uav-006': 2, 'sim/uav-007': 2, 'sim/uav-008': 2, 'sim/uav-009': 2, 'sim/uav-010': 2, 'sim/uav-011': 2, 'sim/uav-012': 2, 'sim/uav-013': 2, 'sim/uav-014': 2, 'swarm/tx': 95}), 허용 밖 0개. MCAP 채널 479개, Agent 발행 키 중 MCAP에 없는 것 0개. truth 채널 ['truth/state']는 Core 발행이고 Agent 구독·수신 기록에는 없다.
 
-MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 10, '런타임 내부': 5}. 금지 목록: zenoh, swarm_api.bus, swarm_api.keys, swarm.v1.truth_pb2, swarm.v1.sim_pb2, swarm.v1.link_pb2, swarm.v1.fa_pb2, swarm_core, swarm_bus, swarm_bridge, swarm_gateway, swarm_datalink, swarm_logger, swarm_agent.runtime, swarm_agent.cli, swarm_agent.vehicle, swarm_agent.ports.
+MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 17}. 금지 목록: zenoh, swarm_api.bus, swarm_api.keys, swarm.v1.truth_pb2, swarm.v1.sim_pb2, swarm.v1.link_pb2, swarm.v1.fa_pb2, swarm_core, swarm_bus, swarm_bridge, swarm_gateway, swarm_datalink, swarm_logger, swarm_agent.runtime, swarm_agent.cli, swarm_agent.vehicle, swarm_agent.ports.
 
 | L1 포트 | 방향 | 메시지 | 건수 | L1 | 구분 | 허용 |
 |---|---|---|---|---|---|---|
@@ -333,12 +419,6 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 | VI | MA<- | swarm.v1.FlightCommandStatus | 17529 | VI | STD | 예 |
 | VI | MA<- | swarm.v1.NavigationReport | 53565 | VI | STD | 예 |
 
-- 정보: 엔티티 와일드카드 구독으로 맡지 않은 엔티티 키를 받음: swarm/gcs-01/rx… 7286건
-- 정보: algorithms/src/swarm_algorithms/common.py:17 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-- 정보: algorithms/src/swarm_algorithms/common.py:18 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-- 정보: algorithms/src/swarm_algorithms/flocking.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-- 정보: algorithms/src/swarm_algorithms/flocking.py:28 swarm_agent.racetrack: 플러그인 API(§5) 밖의 Agent 런타임 모듈
-- 정보: algorithms/src/swarm_algorithms/formation.py:27 swarm_agent.geo: 플러그인 API(§5) 밖의 Agent 런타임 모듈
 
 ## 8. C5 상호작용 상태 흐름
 
@@ -358,10 +438,10 @@ MA 소스(algorithms/src/swarm_algorithms) import 31건: {'일반': 16, 'API': 1
 
 | 기체 | 작업 | 승인 필요 | 요청 | 응답 | 응답 모의 s | 첫 EXECUTING 모의 s | 판정 |
 |---|---|---|---|---|---|---|---|
-| uav-001 | ap-yes | 예 | 예 | approved | 10.84 | 10.96 | 통과 |
-| uav-002 | ap-no | 예 | 예 | rejected | 10.84 | — | 통과 |
+| uav-001 | ap-yes | 예 | 예 | approved | 11.04 | 11.18 | 통과 |
+| uav-002 | ap-no | 예 | 예 | rejected | 10.44 | — | 통과 |
 | uav-003 | ap-to | 예 | 예 | 없음 | — | — | 통과 |
-| uav-004 | task-001 | 예 | 예 | approved | 0.14 | 0.28 | 통과 |
+| uav-004 | task-001 | 예 | 예 | approved | 0.12 | 0.26 | 통과 |
 | uav-009 | x-hold | 아니오 | 아니오 | 없음 | — | 10.12 | 통과 |
 | uav-010 | x-rtb | 아니오 | 아니오 | 없음 | — | 10.14 | 통과 |
 
