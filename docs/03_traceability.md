@@ -53,7 +53,7 @@
 | REQ-SIM-002 | PRP-SIM-002 | DEC-005, DEC-039, DEC-054, DEC-102 | WP1, WP3, WP4 | IMP-CORE-002, 007, IMP-SCN-006, IMP-LNK-022, IMP-AGT-036, IMP-LNK-027 | TC-CORE-001~006, 009~010, 012, TC-SCN-008, TC-LNK-023, TC-AGT-088~093, TC-QA-106~108, 113, 162, TC-LNK-033~035 | 검증완료 |
 | REQ-SIM-003 | PRP-UI-001 | DEC-004, DEC-016, DEC-053, DEC-057, DEC-059, DEC-060, DEC-061 | WP5, WP2 | IMP-CORE-009, 023, 026~027, IMP-DYN-005, 009, IMP-SCN-002, 005, IMP-UI-002, 013, 069~073 | TC-CORE-014, 036~037, 040~042, TC-DYN-008, 010, 015, TC-SCN-001~003, TC-UI-009, 057~060 | 구현중 |
 | REQ-LOG-001 | PRP-LOG-001 | DEC-011, DEC-031 | WP7 | IMP-LOG-001~005, 008, IMP-LOG-009, IMP-LOG-010~012, IMP-INT-001 | TC-LOG-001~011, TC-INT-004 | 검증완료 |
-| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-103, DEC-104 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, 024, IMP-GW-001~023, 029~033, IMP-SCN-012, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028, 031, IMP-AGT-053, 056~057, IMP-GW-034 | TC-API-010, TC-GW-001~027, 035~043, TC-SCN-015~016, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, 046, TC-QA-158~161, TC-QA-164~172, TC-QA-173~189, TC-AGT-143, 146~147, TC-GW-044~046 | 구현중 |
+| REQ-STD-001 | PRP-STD-001, PRP-STD-002, PRP-GNC-001 | DEC-013, DEC-014, DEC-068, DEC-069, DEC-071, DEC-072, DEC-073, DEC-075, DEC-076, DEC-077, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-103, DEC-104 | WP0, WP9, WP3, WP1, WP5 | IMP-API-002, 005, 024, IMP-GW-001~023, 029~033, IMP-SCN-012, IMP-UI-076, IMP-AGT-032~035, 051, IMP-CORE-028, 031, IMP-AGT-053, 056~057, IMP-GW-034 | TC-API-010, TC-GW-001~027, 035~043, TC-SCN-015~016, TC-UI-064, TC-QA-069~074, 078~113, TC-AGT-063~087, 139~141, TC-CORE-043, 046, TC-QA-158~161, TC-QA-164~172, TC-QA-173~189, 193, 197, TC-AGT-143, 146~147, TC-GW-044~046 | 구현중 |
 
 ## 구현·시험 항목
 
@@ -308,6 +308,13 @@
 | TC-QA-190 | P1 판정(DEC-100 뒤): Agent 1개 Logger 켬 긴 창 기본 스케줄링, 서로 다른 시간대 2묶음 각 6회 중앙값 | `qa/perf_p1_batch.py`, `qa/perf_p1.py` | DEC-082, DEC-084, DEC-086, DEC-100 |
 | TC-QA-191 | 교차 확인(DEC-100 뒤): 같은 실행 Logger 끔 짝 값, P 고정, Logger 비용 | `qa/perf_p1_batch.py` | DEC-086, DEC-100 |
 | TC-QA-192 | 상대 세션의 구독 수·모양에 따른 put 비용, 프로세스별 CPU | `qa/perf_subcount.py` | DEC-100 |
+| TC-QA-193 | 표준 적합성 C1~C7, 계약 0.22.0(DEC-101~104) 뒤, 시드 20261117 2회 반복 | `qa/conformance/run.py` | DEC-092, DEC-100, DEC-104, REQ-STD-001 |
+| TC-QA-194 | lockstep 같은 빌드 결정론(DEC-102 뒤): 5구성 각 3회 + 2배속 1회 | `qa/p2_lostlink.py --case det` | DEC-040, DEC-054, DEC-102 |
+| TC-QA-195 | GCS_LINK_CUT 복구 재보고와 RESUME 재개 지연, flocking EXECUTING | `qa/p2_lostlink.py --case cut` | DEC-078, DEC-085, DEC-101 |
+| TC-QA-196 | 재밍 경계 선회·재개 반복(복구 유지 시간) | `qa/p2_lostlink.py --case jam` | DEC-085, DEC-101 |
+| TC-QA-197 | approval_demo 승인·거부·시간 초과, Gateway 외부 경로 | `qa/gw_approval36.py` | DEC-088, DEC-103, REQ-STD-001 |
+| TC-QA-198 | 시작 계획 미지원 작업 보고, 같은 틱 TaskStatus 순서(실제 스택 2회) | `qa/gw_agra.py` | DEC-088, DEC-102 |
+| TC-QA-199 | Gateway 재기동 외부 PUB 손실 5회 | `gateway/tools/measure_o13.py` | DEC-089 |
 
 ## 시험 결과
 
@@ -525,6 +532,13 @@
 | TC-QA-190 | 통과(여유 2%) | 2026-11-23 | DEC-100 뒤 12회 중앙값 10.21배(1.96 ms), 낱회 6/12 10배 미만(E 코어 4). 조용한 10회 11.15배(1.79 ms), DEC-087 대비 +0.18 ms (§44) |
 | TC-QA-191 | 측정 | 2026-11-23 | Logger 끔 11.70배(조용한 12.45배), P 고정 10.64배, Logger 비용 0.17~0.21 ms (§44) |
 | TC-QA-192 | 측정 | 2026-11-22 | rx 구독과 맞는 put 4.4→30.8 µs(기체별 705개), `**`와 함께 맞지 않는 put 4.3→8.8 µs. Datalink CPU +9~14%p, Core 그대로 (§44.4) |
+| TC-QA-193 | 통과 | 2026-11-23 | C1~C6 통과, C7 정보. C4 구독 103·발행 125키 허용 밖 0, O-48·O-49 없음 (§45.2) |
+| TC-QA-194 | 통과 | 2026-11-23 | 5구성 모두 로그·헤더·FCS·궤적 동일, 2배속도 동일 (§45.3) |
+| TC-QA-195 | 통과 | 2026-11-23 | 상실 10대 복구 직후 재보고 1회, RESUME 재개 80.08~80.10 → 85.08~85.10 s(+5.00 s), flocking EXECUTING (§45.4) |
+| TC-QA-196 | 일부 감소 | 2026-11-23 | 상실 반복 uav-002 3→2회, uav-007 3→3회, 재개 +5.00 s. O-51 (§45.4) |
+| TC-QA-197 | 통과 | 2026-11-23 | 승인 → 발사 → COMPLETED 5.98 s, 거부 REJECTED 발사 0, 응답 없음 15.04 s REJECTED 발사 0 (§45.5) |
+| TC-QA-198 | 통과 | 2026-11-23 | uav-005 REJECTED(unsupported task strike) 2/2, uav-001 TaskStatus 순서 2/2 (§45.5) |
+| TC-QA-199 | 통과 | 2026-11-23 | 회당 손실 2건(0.5 s, 접속 전), 접속 뒤·SUB 뒤 0 (§45.6) |
 
 ## 프로세스 결정
 
