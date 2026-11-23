@@ -305,6 +305,9 @@
 | TC-QA-187 | C4 허용 구독 키: 계약 §3.2 구독자 칸의 구독 키 표현식(`swarm/<dst>/rx/**`)을 읽음, 첫 마디가 다른 키·키 아닌 글·Agent 아닌 행은 읽지 않음 | `qa/conformance/tests/test_o50.py` | DEC-044, REQ-STD-001 |
 | TC-QA-188 | C4: 실제 계약 §3.2만으로 Agent 구독 키 표현식이 모두 허용되고 보충 키(SUPPLEMENT_SUB) 없음 (O-50) | `qa/conformance/tests/test_o50.py` | DEC-044, REQ-STD-001 |
 | TC-QA-189 | O-50 계약 수정·WP2·WP7 병합 뒤 표준 적합성 재점검(lockstep 시드 20261117, 2회 반복) → docs/45·docs/47 | `qa/conformance/run.py` | DEC-092, DEC-095, DEC-098, REQ-STD-001 |
+| TC-QA-190 | P1 판정(DEC-100 뒤): Agent 1개 Logger 켬 긴 창 기본 스케줄링, 서로 다른 시간대 2묶음 각 6회 중앙값 | `qa/perf_p1_batch.py`, `qa/perf_p1.py` | DEC-082, DEC-084, DEC-086, DEC-100 |
+| TC-QA-191 | 교차 확인(DEC-100 뒤): 같은 실행 Logger 끔 짝 값, P 고정, Logger 비용 | `qa/perf_p1_batch.py` | DEC-086, DEC-100 |
+| TC-QA-192 | 상대 세션의 구독 수·모양에 따른 put 비용, 프로세스별 CPU | `qa/perf_subcount.py` | DEC-100 |
 
 ## 시험 결과
 
@@ -519,6 +522,9 @@
 | TC-QA-187 | 자동 | 2026-11-22 | 통과 (§43) |
 | TC-QA-188 | 자동 | 2026-11-22 | 통과 (§43) |
 | TC-QA-189 | 측정 | 2026-11-22 | C1~C6 통과, C7 정보. 보충 허용 키 없이 C4 통과, epoch 차 0 s, epoch_changed 0, 2회 같음 (§43) |
+| TC-QA-190 | 통과(여유 2%) | 2026-11-23 | DEC-100 뒤 12회 중앙값 10.21배(1.96 ms), 낱회 6/12 10배 미만(E 코어 4). 조용한 10회 11.15배(1.79 ms), DEC-087 대비 +0.18 ms (§44) |
+| TC-QA-191 | 측정 | 2026-11-23 | Logger 끔 11.70배(조용한 12.45배), P 고정 10.64배, Logger 비용 0.17~0.21 ms (§44) |
+| TC-QA-192 | 측정 | 2026-11-22 | rx 구독과 맞는 put 4.4→30.8 µs(기체별 705개), `**`와 함께 맞지 않는 put 4.3→8.8 µs. Datalink CPU +9~14%p, Core 그대로 (§44.4) |
 
 ## 프로세스 결정
 
