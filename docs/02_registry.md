@@ -263,6 +263,12 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-076 | 내장 MA가 플러그인 API 밖의 `swarm_agent.geo`·`swarm_agent.racetrack`을 import(QA O-48) | Resolved by DEC-104 |
 | OPN-077 | DEC-100 뒤 P1 여유 축소(QA 35차: 규칙상 10.21배·여유 2%, 조용한 상태 11.15배, DEC-087 대비 +0.18 ms). 원인은 `swarm/<id>/rx/**` 기체별 구독 100개가 발행 쪽 경로 계산에 붙는 비용(맞는 put 4.4 → 30.8 µs)과 Logger `**`와 겹칠 때 모든 put에 붙는 비용. DEC-086(1)에 따라 의미를 바꾸지 않는 수단부터: (A) Agent가 기체별로 받는 L1 메시지의 정확한 키로 구독 (B) 발행 쪽 `declare_publisher`로 경로 계산을 미리 함(버스 API, WP0). QA 37차(§46): (A)는 P-core 고정 6회씩 번갈아 Logger 켬 +0.176 ms, 끔 +0.173 ms 느려 채택하지 않는다. 같은 측정에서 1 Hz 프레임 `report_activity`가 1.43 → 5.3~5.9 ms(O-52)로 늘어 DEC-087 대비 증가분 대부분을 설명하므로 O-52 원인부터 본다. (B)는 그 뒤 판단 | Open |
 | OPN-078 | DEC-101 복구 유지 시간이 잠깐 들린 Heartbeat를 거르지 못함(QA O-51). 유지 시간(5 s)과 상실 판정 시간(5 s)이 같아 유지 중 다시 상실 판정이 날 수 없다 | Resolved by DEC-105 |
+| OPN-079 | 기본 MA가 MS 포트 임무를 수행하지 않음: C2 `TrackTask`·`JamTask`는 기본 MA 넷 모두 REJECTED이고, `StrikeTask`는 시험용 `approval_demo`만 수행한다. MS 명령 `SensorCommand`(PO_Command)·`JammerCommand`(EA_Command)를 내는 MA가 없다. 제안: 계약 변경 없이 센서 지향·추적·재밍·타격을 수행하는 MA 추가(WP3). 교전 기준(DEC-019, DEC-067)과 승인(DEC-088)은 기존 부품을 쓴다 | Open |
+| OPN-080 | P2P 리더 선출 없음: formation 리더는 지정 또는 members 사전순 첫 기체로 정해지고, 리더를 잃으면 다시 정하지 않는다. A-GRA 후보 `MA_RaftVoteRequest`·`MA_RaftAppendEntriesRequest`에 대응하는 proto가 없다. 제안: STD 메시지 추가(계약 변경, WP0)와 리더 상실 시 재선출(WP3). `LeaderUpdate`(DEC-088) term과의 관계를 정한다 | Open |
+| OPN-081 | SearchArea 수행이 영역 중심(다각형은 외접 원) 선회 1바퀴다. 영역을 덮는 탐색 패턴과 여러 기체의 영역 분할이 없다. 제안: 탐색 패턴(예: lawnmower, 센서 폭 기준)과 분할 배정을 기본 MA 부품으로 추가. 센서 탐지 판정(DEC-018)과 맞춘다 | Open |
+| OPN-082 | 받은 탐지 공유를 쓰는 MA가 없음: `TrackShare`(MA_Entity, DEC-088)는 보내기만 하고 받는 기체가 공동 상황도(COP)를 만들거나 작업을 바꾸지 않는다. 제안: 수신 트랙 융합 부품과 트랙 기반 작업 재배정 예제. MA는 L1 포트로 받은 것만 쓴다(DEC-013) | Open |
+| OPN-083 | 팀(패키지) 구성의 STD 대응 미정: 내부 `GroupAssignment`는 EXT이고 A-GRA 후보 `MA_PackageManagementCommand`·`MA_PackageManagementCommandStatus`와 대응을 정하지 않았다. 쓰는 기본 MA도 없다. 제안: 공개 XSD 기준으로 대응(`uci_name`) 확인 뒤 상태 보고를 추가하고 formation·flocking의 group이 이를 따르게 한다 | Open |
+| OPN-084 | 매핑 표 후보 중 proto가 없는 나머지: DMS `MA_TxDataPayloadCommand`·`MA_RxDataPayload`, 무장 교전 범위 `MA_WEZ`, 타격 동의 `StrikeConsentRequest`(현재 ApprovalRequest로 대신), 운용자 권한 `MA_OperatorRole`·`MA_Authorization`, `MA_FlightCapabilityStatus`, `SubsystemStatus`. 제안: 필요한 시나리오가 생길 때 항목별로 추가. WEZ는 OPN-079 타격 MA와 함께, RBAC는 Gateway(WP9) 범위로 본다 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
