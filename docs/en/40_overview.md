@@ -1,6 +1,6 @@
 # Project overview
 
-> Source: [docs/40_overview.md](../40_overview.md) at commit `f767bb5`.
+> Source: [docs/40_overview.md](../40_overview.md) at commit `0a331b0`.
 
 - To run it right away, go to §6. What is implemented is in §2, and progress in §8.
 - Baseline: contract 0.24.0, roadmap P1, P2 and P6 complete (2026-11-24).

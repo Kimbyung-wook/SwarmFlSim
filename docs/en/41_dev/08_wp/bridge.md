@@ -1,6 +1,6 @@
 # 8. WP5 WebSocket bridge (`bridge/`)
 
-> Source: [docs/41_dev/08_wp/bridge.md](../../../41_dev/08_wp/bridge.md) at commit `f767bb5`.
+> Source: [docs/41_dev/08_wp/bridge.md](../../../41_dev/08_wp/bridge.md) at commit `0a331b0`.
 
 ## Responsibilities
 

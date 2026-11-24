@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f767bb5`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `0a331b0`.
 
 See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 

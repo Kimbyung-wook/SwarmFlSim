@@ -1,6 +1,6 @@
 # 8. WP3 Baseline algorithms (`algorithms/`)
 
-> Source: [docs/41_dev/08_wp/algorithms.md](../../../41_dev/08_wp/algorithms.md) at commit `f767bb5`.
+> Source: [docs/41_dev/08_wp/algorithms.md](../../../41_dev/08_wp/algorithms.md) at commit `0a331b0`.
 
 ## Responsibilities
 

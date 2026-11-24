@@ -1,6 +1,6 @@
 # 9. A-GRA Gateway
 
-> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `f767bb5`.
+> Source: [docs/42_user/09_gateway.md](../../42_user/09_gateway.md) at commit `0a331b0`.
 
 Exchanges the simulator's GCS-side messages with external A-GRA systems. The Gateway communicates with external C2 through the CAL Server (DEC-068, DEC-069).
 
@@ -202,8 +202,11 @@ A second transport that attaches directly to the A-GRA test harness bus (ActiveM
 - Give `--transport stomp`, `--stomp <host:port>`, our platform UUID `--system-uuid` and the C2 UUID `--envelope-dest`. A 5.0a harness uses `--schema-version 005.0a.ASK`; then `MA_NavigationReport` and `MA_Entity`, which 5.0a lacks, are not exported.
 - Harness topics are not retained, so start the Gateway before the harness.
 - The harness start and stop signals are answered with the same `RequestID` (start `COMPLETED`, stop `CANCELED`).
-- Harness code, XSDs and images are not put in the repository, because the distribution terms have not been confirmed (OPN-094, open). Harness tests can be run only on a PC where the harness is installed separately.
-- The real-harness query test (23 MA/C2 `common_query_data` cases) gave 0/23 with the harness default seed and 23/23 with another seed. The requests built from the default seed's random values turn into cancel (`CANCEL`) requests ([gateway/TRACE.md](../../../gateway/TRACE.md), Korean).
+- Harness code, XSDs, container images and raw run logs are not put in the repository and are not redistributed (DEC-114). The harness is installed locally on each PC, and harness tests can be run only on a PC that has it. QA automated tests also run the harness stage only when a local installation exists, and record it as "skipped" otherwise.
+- When recording harness results, give the release number, seed, test set and configuration (transport, `--schema-version`, envelope on or off) together.
+- The harness checks only format against 5.0a (order, timing, XSD, required fields). Passing it does not show 6.0a conformance or vehicle behavior, and it does not replace the QA verdict.
+- The real-harness query test (23 MA/C2 `common_query_data` cases) gave 0/23 with the harness default seed 42 and 23/23 with seed 1. The requests that seed 42 builds from random values turn into cancel (`CANCEL`) requests ([gateway/TRACE.md](../../../gateway/TRACE.md), Korean).
+- Usage rules, test scope and limits are in [A-GRA test harness usage rules](../../48_agra_test_harness.md) (Korean).
 
 ## 9.7 Counters and rejection
 
