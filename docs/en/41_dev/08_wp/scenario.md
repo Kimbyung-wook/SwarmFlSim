@@ -1,6 +1,6 @@
 # 8. WP7 Scenarios (`scenario/`)
 
-> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `8ce186c`.
+> Source: [docs/41_dev/08_wp/scenario.md](../../../41_dev/08_wp/scenario.md) at commit `f767bb5`.
 
 ## Responsibilities
 

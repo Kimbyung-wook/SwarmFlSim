@@ -1,6 +1,6 @@
 # 4. Writing an MA plugin
 
-> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `8ce186c`.
+> Source: [docs/41_dev/04_ma_plugin.md](../../41_dev/04_ma_plugin.md) at commit `f767bb5`.
 
 An MA (Mission Autonomy) is a Python class that makes the mission decisions for one vehicle or a swarm. It takes tasks and turns them into flight commands and equipment commands.
 
@@ -218,11 +218,21 @@ stateDiagram-v2
 
 The rules above are implemented in [algorithms/src/swarm_algorithms/common.py](../../../algorithms/src/swarm_algorithms/common.py).
 
+Coordinate conversion and path-following tools are public in the plugin API (DEC-104, contract 0.22.0). Plugins do not import `swarm_agent` internal modules.
+
+| Module | Contents |
+|---|---|
+| `swarm_api.geo` | Flat-earth coordinate conversion. `ned_offset` (north and east offset in m from a reference point), `offset_geo` (inverse), `wrap_pi`, `course_rad`. Accepts scalars and NumPy arrays |
+| `swarm_api.racetrack` | Racetrack geometry and guidance. `locate`, `path_error`, `dubins_course`, `vector_field_course` |
+
+`swarm_agent.geo` and `swarm_agent.racetrack` remain as compatibility aliases pointing to the same modules.
+
 | Part | What it does |
 |---|---|
 | `TaskTracker(ctx, supported)` | Runs `MissionPlan` in sequence, preempts, cancels and rejects C2 tasks, sends `TaskStatus`. `handle(msg)`, `update(nav)`, `status(...)`, `finish(...)` |
 | `TaskPilot(ctx, acceptance_m, hold_radius_m, speed_mps, supported)` | `TaskTracker` plus flight execution. One `step()` call handles MoveTo, Hold, RTB, SearchArea, Route |
 | `every(ctx, hz)` | Periodic check with a different phase per vehicle |
+| `PayloadTasker` | Carries out Track, Jam and Strike and points sensors (DEC-106). Turned on with `TaskPilot(payload_tasks=True)`. MA variables `track_standoff_m`, `track_acquire_timeout_s`, `track_lost_s`, `strike_range_m` |
 | `peer_status(nav, group_id, task_id)` | Builds a `PeerStatus` |
 | `TrackSharer` | If `track_share_hz` > 0, gathers `ms.detections()` into the latest per target and broadcasts one `TrackShare` per target each period. At 0 it does not touch `detections()` |
 | `CommandIds` | Issues flight command IDs. One flow for the same purpose keeps one ID; after the flow ends (`end()`) a new ID (`base`, `base-2`, `base-3` …) |
@@ -257,9 +267,10 @@ Flight command ID rule (IMP-AGT-051): do not reuse a `FlightCommand` ID that has
 | Name | File | Behavior | Parameters |
 |---|---|---|---|
 | `hold` | [hold.py](../../../algorithms/src/swarm_algorithms/hold.py) | Holds the heading, speed and altitude of the first navigation state. Does not handle tasks | `orbit_radius_m` (0 means straight) |
-| `waypoint` | [waypoint.py](../../../algorithms/src/swarm_algorithms/waypoint.py) | Executes tasks with `TaskPilot` | `acceptance_m`, `hold_radius_m`, `speed_mps` |
+| `waypoint` | [waypoint.py](../../../algorithms/src/swarm_algorithms/waypoint.py) | Executes tasks with `TaskPilot`. Also carries out Track, Jam and Strike with `PayloadTasker` | `acceptance_m`, `hold_radius_m`, `speed_mps`, `track_*`, `strike_range_m` |
 | `formation` | [formation.py](../../../algorithms/src/swarm_algorithms/formation.py) | Leader-follower formation. The leader acts like `waypoint`, followers track their slots with HSA. When the leader is set or changes, the new leader broadcasts `LeaderUpdate` (`term` = the number of leader changes that vehicle has seen). Followers issue no command when leader information is missing or older than `leader_timeout_s` | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` and others |
-| `flocking` | [flocking.py](../../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds separation, alignment and cohesion batch MA. Rejects Route | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
+| `approval_demo` | [approval_demo.py](../../../algorithms/src/swarm_algorithms/approval_demo.py) | For approval-flow tests and demos only, not a baseline MA (DEC-103). Carries out only `strike`; when approval is needed it sends the guided object only after an approving `ApprovalResponse`. On denial or timeout it sends nothing and reports `REJECTED` | `approval_tasks`, `approval_timeout_s` |
+| `flocking` | [flocking.py](../../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds separation, alignment and cohesion batch MA. Rejects Route and payload tasks. `EXECUTING` on the tick after acceptance (IMP-AGT-057) | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
 
 `flocking_basic` is a variant for example scenarios. The full list is in [algorithms/TRACE.md](../../../algorithms/TRACE.md).
 
@@ -267,13 +278,15 @@ All baseline MAs act on link loss (DEC-078). The shared parts are `LinkMonitor` 
 
 | Item | Content |
 |---|---|
-| Parameters | `lost_link_timeout_s` (default 5 s), `lost_link_policy` (`hold_until_command` by default, `resume_on_recovery`, `continue`). Baseline MAs add `LOST_LINK_PARAMS` to `PARAMS` |
+| Parameters | `lost_link_timeout_s` (default 5 s), `lost_link_policy` (`hold_until_command` by default, `resume_on_recovery`, `continue`), `lost_link_recover_hold_s` (default 5 s), `lost_link_recover_gap_s` (default 2 s). Baseline MAs add `LOST_LINK_PARAMS` to `PARAMS` |
+| Recovery confirmation | When `LinkMonitor` receives a Heartbeat again during link loss, it starts waiting for recovery. It reports "recovered" only if Heartbeats continue with gaps of at most `lost_link_recover_gap_s` for `lost_link_recover_hold_s`. If a gap is exceeded it drops the wait (MD `recover_aborted`) and stays in link loss. The link-loss behavior continues until confirmation (DEC-101(2), DEC-105) |
 | Policy choice | `TaskCommand.lost_link_policy` of the current task at the moment of loss, otherwise the MA parameter |
 | Orbit | Centered on the current position. The radius is the larger of `hold_radius_m` and 1.3 × the minimum turn radius |
 | New task command while orbiting | Ends the orbit even before recovery and follows the command. Commands outside tasks, such as `FormationCommand`, are signaled with `release()` |
 | Recovery (`resume_on_recovery`) | Resumes the interrupted task. With no task, sends the flight command from before the loss again (IMP-AGT-039) |
 | Records | MD `link_state`, `lost_link_policy`, `lost_link_action` |
 
+- Separately from the MA, the runtime resends the current `FlightCommandStatus` and the `TaskStatus` of tasks in progress to the GCS once, right after the Heartbeat returns (DEC-101(1)). This can go out before the MA confirms recovery. The MA does not need to do this re-report itself.
 - The `hold` MA has no tasks, so it uses only the MA parameter. `formation` followers also use the MA parameter because `FormationCommand` has no policy field.
 
 `formation` slots are offsets in the leader's FRD frame. `s` is `spacing_m`, `k` is the follower index (from 0).

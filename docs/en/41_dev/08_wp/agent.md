@@ -1,6 +1,6 @@
 # 8. WP3 Agent runtime (`agent/`)
 
-> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `8ce186c`.
+> Source: [docs/41_dev/08_wp/agent.md](../../../41_dev/08_wp/agent.md) at commit `f767bb5`.
 
 ## Responsibilities
 
@@ -14,7 +14,7 @@ One process hosts many vehicles and runs an MA and FA for each. Handles the port
 | `src/swarm_agent/runtime.py` | `AgentRuntime`, frame processing order |
 | `src/swarm_agent/vehicle.py` | State of one vehicle |
 | `src/swarm_agent/ports.py` | Implementation of the 6 ports |
-| `src/swarm_agent/fa.py`, `racetrack.py` | Default FA |
+| `src/swarm_agent/fa.py` | Default FA. Racetrack geometry is `swarm_api.racetrack` (DEC-104). `racetrack.py` and `geo.py` are compatibility aliases |
 | `src/swarm_agent/plugins.py` | Entry point loading |
 | `src/swarm_agent/params.py` | Per-vehicle parameters |
 | `src/swarm_agent/reporting.py` | GCS status reporting (DEC-056, DEC-071) |
@@ -51,7 +51,7 @@ Vehicle-side subscriptions are opened separately for each hosted vehicle: `onboa
 Additions to change reports (DEC-088, DEC-089):
 
 - `StoreLoadout`: once the `onboard/<id>/StoreLoadout` sent by Payload has arrived, that value is the basis of `ms.loadout()`, and the runtime no longer lowers the count on launch by itself. Only vehicles with stores send it to the controlling GCS on `tx/ms/StoreLoadout`, at start and when the value changes (IMP-AGT-048).
-- Re-report on link recovery: when `GcsHeartbeat` returns after a gap longer than the MA variable `lost_link_timeout_s` (default 5 s), the next GCS report resends every change-report key of that vehicle and `FlightCapability` once. Keys removed by an end state and the MA's `TaskStatus` are not included (IMP-AGT-049).
+- Re-report on link recovery: when `GcsHeartbeat` returns after a gap longer than the MA variable `lost_link_timeout_s` (default 5 s), the next GCS report resends every change-report key of that vehicle and `FlightCapability` once. Keys removed by an end state are not included (IMP-AGT-049). In addition, the vehicle's last `FlightCommandStatus` (even an end state already sent and removed) and the last `TaskStatus` of each in-progress task the MA sent on the C2 port are resent once in task_id order (DEC-101(1), IMP-AGT-054). Tasks whose end state was sent are removed from the list.
 
 ## Tests
 

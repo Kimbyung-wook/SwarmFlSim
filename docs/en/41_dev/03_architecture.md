@@ -1,6 +1,6 @@
 # 3. Architecture and execution model
 
-> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `8ce186c`.
+> Source: [docs/41_dev/03_architecture.md](../../41_dev/03_architecture.md) at commit `f767bb5`.
 
 See [overview §3](../40_overview.md#3-components) first for the overall structure. [Contract §3](../../10_contracts.md#3-zenoh-키-체계-prp-net-003) (Korean) is the authority for the exact rules.
 
@@ -31,6 +31,9 @@ Processes do not construct a bus implementation directly. They open it with `ope
 - If another bus exists on the same PC, use `--no-multicast` and explicit `--connect` so they do not mix.
 - In Python `Bus.subscribe(keyexpr, callback, *, ordered=False)`, `ordered=True` calls the callback directly on the receive thread, so messages from one publisher arrive in publish order even across different subscriptions. By default each subscription calls back on its own thread, and the order between subscriptions can change. The C++ bus and `InMemoryBus` are always in order. Use it only in runtimes and tools that rely on lockstep order, and keep the callback short because it blocks the receive thread. The Agent runtime opens all its subscriptions as ordered (DEC-083).
 - Do not publish a key with a different QoS. `sim/clock/**` and `swarm/**` use congestion control BLOCK, the rest DROP (DEC-043).
+- Queries (DEC-109, contract 0.24.0): `serve(keyexpr, handler)` sets up a responder (closing the returned object stops it), and `get(keyexpr, timeout)` returns the list of answers that arrived in time. With no responder the list is empty. Both C++ `swarm::Bus` and Python `Bus` have them, and the memory and Zenoh backends support them. Core answers on `sim/ctrl/scenario` while a scenario is loaded.
+- A participant that joins late opens the `sim/ctrl/scenario` subscription first, then queries with `get`. The same scenario can arrive twice through subscription and query, so handle it idempotently. The Gateway always queries.
+- Performance note: Zenoh matches each session `put` against the subscriptions of its own session. This cost is large in the Agent, which has many subscriptions (per-vehicle subscriptions, DEC-100), so Python `ZenohBus.put` declares a publisher once per key and reuses it (DEC-108, IMP-API-025, tx put about 40 → 9 µs). QoS and the send order between keys are unchanged. Keys beyond the declared-publisher limit (16,384) are sent with session `put`.
 
 ## 3.3 Key areas and access rules
 

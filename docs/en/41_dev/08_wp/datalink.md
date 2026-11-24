@@ -1,10 +1,13 @@
 # 8. WP4 Datalink (`datalink/`)
 
-> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `8ce186c`.
+> Source: [docs/41_dev/08_wp/datalink.md](../../../41_dev/08_wp/datalink.md) at commit `f767bb5`.
 
 ## Responsibilities
 
 Applies the link model to vehicle-to-vehicle and ground-to-vehicle messages and delivers them. Publishes a delivery or loss reason for each message. Usage is in [chapter 7](../../42_user/07_link.md) of the user manual.
+
+- Per-link order (DEC-102, IMP-LNK-027): within one (sender, receiver, interface) link, messages are delivered in send order. Arrival time = max(departure + latency sample, previous arrival on the same link). This also holds for broadcasts (per receiver), bandwidth waits and carry-over past the per-tick throughput limit. Different links do not block each other. It applies in both lockstep and realtime, and DEC-054 (rx time ≥ tick time) is unchanged.
+- Own-jamming exemption (DEC-107, IMP-LNK-028): among the jamming zones covering the receiving entity, a zone whose `JamZoneEvent.owner` is that entity itself is not a loss reason. Zones owned by other entities are JAMMED regardless of side (DEC-028). Reception checks and `link/state` jammed use the same function.
 
 ## Structure
 

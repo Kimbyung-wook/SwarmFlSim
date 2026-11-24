@@ -1,6 +1,6 @@
 # 8. WP1 Sim Core (`core/`)
 
-> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `8ce186c`.
+> Source: [docs/41_dev/08_wp/core.md](../../../41_dev/08_wp/core.md) at commit `f767bb5`.
 
 ## Responsibilities
 
@@ -39,6 +39,7 @@ Start reading at the public functions of `sim_core.hpp` and the frame processing
 | Direction | Keys |
 |---|---|
 | Subscribe | `sim/ctrl/cmd`, `sim/clock/done/<p>`, `onboard_batch/ControlBatch/*`, `onboard/<id>/*Command` |
+| Query response | `sim/ctrl/scenario` (one copy of the current scenario while one is loaded; no answer before loading. DEC-109) |
 | Publish | `sim/clock/tick`, `sim/ctrl/status`, `sim/ctrl/scenario`, `sim/param/<id>/dynamics`, `truth/state`, `truth/event/<kind>`, `onboard_batch/NavigationBatch` (one per frame, in vehicle ID order), `onboard/<id>/SystemStatus`, `Detection`, `*Activity` |
 
 ## Tests

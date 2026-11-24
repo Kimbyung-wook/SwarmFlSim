@@ -1,6 +1,6 @@
 # 7. Creating datalink conditions
 
-> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `8ce186c`.
+> Source: [docs/42_user/07_link.md](../../42_user/07_link.md) at commit `f767bb5`.
 
 All vehicle-to-vehicle and ground-to-vehicle messages pass through the Datalink. Adjust latency, loss, bandwidth and jamming with the scenario and fault injection, and view the results in the Traffic Monitor.
 
@@ -47,7 +47,8 @@ flowchart LR
 ```
 
 - It is receiver-based. A message sent from a vehicle inside the zone to outside the zone is delivered (DEC-028, DEC-055).
-- `link/state` shows jammed if either side is inside a zone.
+- A vehicle that carries the jammer is not jammed by its own zone when it receives. Other vehicles and GCSs inside the same zone are JAMMED regardless of side. Inside another vehicle's zone, the jammer's vehicle is JAMMED too (DEC-107).
+- `link/state` shows jammed if either side is inside a zone. The own-zone exemption above applies here too.
 - Frequency bands are not modeled.
 - Zones are shown on the UI map as side-colored columns.
 
@@ -88,7 +89,9 @@ The Datalink sends a `GcsHeartbeat` at 1 Hz from each GCS to the vehicles it con
 
 - Set the policy per task with `lost_link_policy`. Without it, the MA parameter `lost_link_policy` applies ([chapter 3](03_scenario.md#37-mission-plan-mission_plan)).
 - A new task command received while orbiting ends the orbit even before recovery, and the vehicle follows it.
-- While the link is fully cut, the GCS cannot tell whether a vehicle is in the lost state (O-34).
+- Recovery is not confirmed at once. After the Heartbeat returns it must keep arriving with gaps of at most `lost_link_recover_gap_s` (default 2 s) for `lost_link_recover_hold_s` (default 5 s) before recovery is accepted. Until then the link-loss behavior (orbit) continues (DEC-101, DEC-105). So with `resume_on_recovery` the task resumes about 5 s after the link returns (QA round 36 measured +5.00 s). If the Heartbeat is heard only now and then, as at a jamming edge, recovery can take longer even while the link is up.
+- While the link is fully cut, the GCS cannot tell whether a vehicle is in the lost state (O-34). When the Heartbeat returns, the vehicle resends its current flight command status and the `TaskStatus` of tasks in progress to the GCS once (DEC-101). This re-report goes out right after the Heartbeat returns, so it can arrive before the MA confirms recovery.
+- Each vehicle judges link loss from its own GCS Heartbeat and does not tell its peers. `flocking` peers are pulled briefly toward an orbiting vehicle by cohesion, then return to their own goal once outside the neighbor radius; a flock without a goal stays together. Formation followers follow the leader even when their own link is up, so when the leader orbits on link loss the whole formation orbits (O-37, by design).
 - When the link comes back after a cut longer than `lost_link_timeout_s`, the vehicle sends its status reports (vehicle status, in-progress flight command status, store loadout, payload status) and flight capability once more. This keeps the GCS from missing changes made during the cut. Normal report volume is unchanged (DEC-089).
 - Setting the policy from the UI or the Gateway has not been checked. Set it in the scenario.
 

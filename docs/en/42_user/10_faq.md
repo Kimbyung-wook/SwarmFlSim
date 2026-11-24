@@ -1,6 +1,6 @@
 # 10. Troubleshooting
 
-> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `8ce186c`.
+> Source: [docs/42_user/10_faq.md](../../42_user/10_faq.md) at commit `f767bb5`.
 
 Look up by symptom. For build and code-level issues see [developer manual chapter 11](../41_dev/11_troubleshooting.md).
 
@@ -51,6 +51,7 @@ If you used the runner, process logs are in `out/p0_demo/<mode>-<time>/<process>
 | No response to external commands | Sent before `ready` | Send again after `ready` |
 | The bridge and CAL Server do not start together | Both default to port 8765 | Change with `--bridge-port` |
 | An external command does not reach the bus and `MA_TaskStatus` `DROPPED` comes back | The named vehicle is not in the scenario and this GCS has never received a report from it (D-35) | Check the vehicle ID. The Gateway log shows `unknown entity [...]` ([chapter 9](09_gateway.md#commands-that-name-unknown-vehicles)) |
+| The Gateway prints the `--extra zenoh` install hint and exits | `uv sync` was run again in `gateway` without the extra, which removed zenoh | Sync again with `cd gateway && uv sync --extra zenoh` ([9.1](09_gateway.md#91-preparation)) |
 | A `UCI time base changed` warning appears | The epoch was set from the first message before the scenario arrived and then switched to the scenario value | Usually leave it. To fix the epoch, write `run.epoch_utc` in the scenario or pass `--sim-epoch` ([UCI time](09_gateway.md#uci-time)) |
 
 ## 10.6 lockstep

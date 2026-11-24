@@ -1,6 +1,6 @@
 # 1. Development environment
 
-> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `8ce186c`.
+> Source: [docs/41_dev/01_setup.md](../../41_dev/01_setup.md) at commit `f767bb5`.
 
 Install commands are in [10_contracts.md §7](../../10_contracts.md#7-빌드-환경과-시험-dec-022) (Korean).
 
