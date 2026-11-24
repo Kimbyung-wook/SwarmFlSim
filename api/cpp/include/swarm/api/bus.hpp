@@ -2,6 +2,7 @@
 // Zenoh 백엔드는 WP1이 구현한다. InMemoryBus는 각 WP의 단독 시험용이다.
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -30,11 +31,28 @@ class Subscription {
   virtual ~Subscription() = default;  // 소멸 시 구독 해제
 };
 
+// IMP-API-026 (DEC-109): 조회 응답 함수. 요청 키 표현을 받아 답할 샘플들을 돌려준다(없으면 빈 목록).
+// 샘플 키는 요청 키 표현과 맞아야 한다. 응답 함수는 버스 내부 스레드에서 호출될 수 있다.
+using QueryHandler = std::function<std::vector<Sample>(std::string_view keyexpr)>;
+
 class Bus {
  public:
   virtual ~Bus() = default;
   virtual void put(std::string_view key, std::span<const std::uint8_t> payload, std::string_view encoding) = 0;
   virtual std::unique_ptr<Subscription> subscribe(std::string_view keyexpr, SampleCallback cb) = 0;
+  // IMP-API-026 (DEC-109): keyexpr에 대한 조회에 답한다. 반환 객체를 소멸하면 응답을 멈춘다.
+  // 조회를 지원하지 않는 구현은 std::logic_error를 던진다.
+  virtual std::unique_ptr<Subscription> serve(std::string_view keyexpr, QueryHandler handler) {
+    (void)keyexpr;
+    (void)handler;
+    throw std::logic_error("bus does not support queries");
+  }
+  // IMP-API-026 (DEC-109): keyexpr을 조회해 timeout 안에 온 응답을 돌려준다. 응답자가 없으면 빈 목록.
+  virtual std::vector<Sample> get(std::string_view keyexpr, std::chrono::milliseconds timeout) {
+    (void)keyexpr;
+    (void)timeout;
+    throw std::logic_error("bus does not support queries");
+  }
 };
 
 inline std::string protobuf_encoding(std::string_view full_name) {
@@ -64,10 +82,38 @@ class InMemoryBus final : public Bus {
     return std::make_unique<Handle>(*this, id);
   }
 
+  std::unique_ptr<Subscription> serve(std::string_view keyexpr, QueryHandler handler) override {
+    std::lock_guard lock(mu_);
+    const auto id = next_id_++;
+    servers_.emplace(id, Server{std::string(keyexpr), std::move(handler)});
+    return std::make_unique<Handle>(*this, id);
+  }
+
+  // 동기식: 키 표현이 겹치는 응답자를 바로 호출한다. timeout은 쓰지 않는다
+  std::vector<Sample> get(std::string_view keyexpr, std::chrono::milliseconds) override {
+    std::vector<QueryHandler> targets;
+    {
+      std::lock_guard lock(mu_);
+      for (const auto& [id, srv] : servers_)
+        // 근사: 한쪽이 다른 쪽을 포함하면 겹친다고 본다
+        if (keys::keyexpr_matches(srv.keyexpr, keyexpr) || keys::keyexpr_matches(keyexpr, srv.keyexpr))
+          targets.push_back(srv.handler);
+    }
+    std::vector<Sample> out;
+    for (const auto& h : targets)
+      for (auto& s : h(keyexpr))
+        if (keys::keyexpr_matches(keyexpr, s.key)) out.push_back(std::move(s));
+    return out;
+  }
+
  private:
   struct Entry {
     std::string keyexpr;
     SampleCallback cb;
+  };
+  struct Server {
+    std::string keyexpr;
+    QueryHandler handler;
   };
 
   class Handle final : public Subscription {
@@ -76,6 +122,7 @@ class InMemoryBus final : public Bus {
     ~Handle() override {
       std::lock_guard lock(bus_.mu_);
       bus_.subs_.erase(id_);
+      bus_.servers_.erase(id_);
     }
 
    private:
@@ -85,6 +132,7 @@ class InMemoryBus final : public Bus {
 
   std::mutex mu_;
   std::map<std::uint64_t, Entry> subs_;
+  std::map<std::uint64_t, Server> servers_;
   std::uint64_t next_id_ = 0;
 };
 

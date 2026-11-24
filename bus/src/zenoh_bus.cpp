@@ -2,6 +2,7 @@
 #include "swarm/bus/zenoh_bus.hpp"
 
 #include <optional>
+#include <variant>
 #include <stdexcept>
 #include <utility>
 
@@ -49,6 +50,20 @@ class ZenohSubscription final : public Subscription {
   std::optional<zenoh::Subscriber<void>> sub_;
 };
 
+class ZenohQueryable final : public Subscription {
+ public:
+  explicit ZenohQueryable(zenoh::Queryable<void>&& q) : q_(std::move(q)) {}
+  ~ZenohQueryable() override {
+    if (q_) {
+      zenoh::ZResult err = 0;
+      std::move(*q_).undeclare(&err);
+    }
+  }
+
+ private:
+  std::optional<zenoh::Queryable<void>> q_;
+};
+
 }  // namespace
 
 struct ZenohBus::Impl {
@@ -82,6 +97,40 @@ std::unique_ptr<Subscription> ZenohBus::subscribe(std::string_view keyexpr, Samp
   };
   auto sub = impl_->session.declare_subscriber(zenoh::KeyExpr(keyexpr), std::move(on_sample), zenoh::closures::none);
   return std::make_unique<ZenohSubscription>(std::move(sub));
+}
+
+// IMP-API-026 (DEC-109): 조회 응답. 응답 샘플마다 reply 한 건
+std::unique_ptr<Subscription> ZenohBus::serve(std::string_view keyexpr, QueryHandler handler) {
+  auto on_query = [handler = std::move(handler)](zenoh::Query& q) {
+    const auto samples = handler(q.get_keyexpr().as_string_view());
+    for (const auto& s : samples) {
+      auto ro = zenoh::Query::ReplyOptions::create_default();
+      if (!s.encoding.empty()) ro.encoding = zenoh::Encoding(s.encoding);
+      zenoh::ZResult err = 0;
+      q.reply(zenoh::KeyExpr(s.key), zenoh::Bytes(std::vector<std::uint8_t>(s.payload)), std::move(ro), &err);
+    }
+  };
+  auto q = impl_->session.declare_queryable(zenoh::KeyExpr(keyexpr), std::move(on_query), zenoh::closures::none);
+  return std::make_unique<ZenohQueryable>(std::move(q));
+}
+
+// IMP-API-026 (DEC-109): timeout 안에 온 정상 응답만 모은다. 같은 키의 응답은 Zenoh 기본 통합 규칙을 따른다
+std::vector<Sample> ZenohBus::get(std::string_view keyexpr, std::chrono::milliseconds timeout) {
+  zenoh::Session::GetOptions opts;
+  opts.timeout_ms = timeout.count() > 0 ? static_cast<std::uint64_t>(timeout.count()) : 1;
+  auto replies = impl_->session.get(zenoh::KeyExpr(keyexpr), "", zenoh::channels::FifoChannel(64), std::move(opts));
+  std::vector<Sample> out;
+  for (auto r = replies.recv(); std::holds_alternative<zenoh::Reply>(r); r = replies.recv()) {
+    const auto& reply = std::get<zenoh::Reply>(r);
+    if (!reply.is_ok()) continue;
+    const auto& z = reply.get_ok();
+    Sample s;
+    s.key = std::string(z.get_keyexpr().as_string_view());
+    s.payload = z.get_payload().as_vector();
+    s.encoding = z.get_encoding().as_string();
+    out.push_back(std::move(s));
+  }
+  return out;
 }
 
 }  // namespace swarm::bus

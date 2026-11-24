@@ -161,3 +161,5 @@
 | 2026-11-24 | `7e245df` | IMP-AGT-060, DEC-106 | 병합: WP3 기본 MA MS 임무 수행 `PayloadTasker`(waypoint·formation 리더의 센서 지향, Track, Jam, Strike), 새 MA 변수 `track_standoff_m`·`track_acquire_timeout_s`·`track_lost_s`·`strike_range_m`, 예제 `ms_tasks_demo_7.json`, TC-AGT-150~157 | 사용자 매뉴얼 기본 MA 작업 종류·MA 변수 | 미처리 | |
 | 2026-11-24 | (이 커밋) | OPN-089, DEC-107 | WP0: 자기 재밍 등록·결정(재머 소유 기체의 수신만 면제, 다른 수신은 DEC-028대로). 계약 변경 없음 | 사용자 매뉴얼 재밍 판정 설명 | 미처리 | |
 | 2026-11-24 | `98c095d` | IMP-LNK-028, DEC-107 | 병합: WP4 재밍 판정에서 재머 소유 기체 수신 면제(수신 판정·link/state 공통), TC-LNK-036 | 사용자 매뉴얼 재밍 판정 설명 | 미처리 | |
+| 2026-11-24 | `7a4874a` | OPN-077, O-52, O-53 | 병합: QA 38차(docs/21 §47), IMP-API-025 P1 비교·O-52 해소·O-30 재개·O-53 신규, TC-QA-207~212 | 없음 | 해당 없음 | |
+| 2026-11-24 | (이 커밋) | DEC-108, OPN-077, OPN-090, DEC-109, IMP-API-026 | WP0: OPN-077을 발행자 캐시로 해소(DEC-108). 늦게 붙은 참여자의 시나리오 조회(DEC-109, 계약 0.24.0): 버스 조회 API `serve`·`get`(C++·Python), `docs/10` 시나리오 배포 절·키 표 | 사용자 매뉴얼 버스 API·시나리오 배포 | 미처리 | |

@@ -2,7 +2,8 @@
 
 - WP 세션들은 이 문서와 `proto/`, `api/`, `bus/`만으로 서로 연결한다 (DEC-015).
 - 이 계약을 바꿀 때는 WP0을 거친다. 바꾸면 `CONTRACT_VERSION`(`api/python/src/swarm_api/__init__.py`)을 올린다.
-- 계약 버전: 0.23.0
+- 계약 버전: 0.24.0
+  - 0.24.0: 버스 조회 API `serve`·`get`, Core가 `sim/ctrl/scenario` 조회에 응답, Gateway 시작 시 조회 (DEC-109)
   - 0.23.0: 기본 MA 복구 확정에 Heartbeat 간격 조건 `lost_link_recover_gap_s` 추가 (DEC-105)
   - 0.22.0: 링크 복구 뒤 상태 재보고와 복구 유지 시간(DEC-101), Datalink 링크별 순서 보장(DEC-102), 플러그인 API `swarm_api.geo`·`swarm_api.racetrack`(DEC-104)
   - 0.21.0: Agent 런타임은 맡은 기체마다 `swarm/<eid>/rx/**`·`onboard/<eid>/<msg>`를 따로 구독한다. 엔티티 자리 와일드카드 구독 금지 (DEC-100)
@@ -90,7 +91,7 @@ flowchart LR
 | `sim/clock/done/<participant>` | `FrameDone` | 참여자 | Core (lockstep 장벽), Datalink·Agent 런타임 (서로의 장벽, DEC-040·044) |
 | `sim/ctrl/cmd` | `SimCommand` | UI | Core, Agent 런타임 (`set_params`, §3.3) |
 | `sim/ctrl/status` | `SimStatus` | Core, MCAP 재생기(`replay`=true) | UI, Monitor |
-| `sim/ctrl/scenario` | `Scenario` | Core | Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자 포함) |
+| `sim/ctrl/scenario` | `Scenario` | Core (발행·조회 응답, DEC-109) | Datalink, Agent 런타임, Logger, UI, Gateway(알려진 기체 목록, 읽기만, DEC-096) (늦게 붙는 참여자는 조회) |
 | `sim/param/<entity>/<owner>` | `EntityParams` (`owner`: `dynamics`, `fa`, `ma`) | Core(`dynamics`), Agent 런타임(`fa`, `ma`) | UI, Monitor, Logger |
 | `swarm/<src>/tx/<iface>/<msg>` | `LinkEnvelope` | 송신 엔티티 런타임, UI(GCS), Gateway(GCS 쪽, `c2`·`mp`만) | Datalink만 |
 | `swarm/<dst>/rx/<iface>/<msg>` | `LinkEnvelope` | Datalink | 수신 엔티티의 Agent 런타임(맡은 기체마다 `swarm/<dst>/rx/**`로 따로 구독, 엔티티 자리 와일드카드 금지 DEC-100, DEC-044 개수 확인 단위), UI(GCS), Gateway(GCS 쪽) |
@@ -117,6 +118,7 @@ flowchart LR
 - MCAP 채널은 키와 1:1로 대응한다 (PRP-LOG-001).
 - 시나리오 배포와 lockstep 시작 (DEC-037)
   - Core는 시나리오를 적재한 직후(`LoadScenario` 또는 `--scenario`)와 적재 상태와 lockstep 준비 대기 중(첫 틱 전)에 1초(벽시계)마다 `sim/ctrl/scenario`에 `Scenario` 전체를 발행한다. CLI의 실행 모드·배속 재정의(`--mode`, `--rate`)는 발행하는 `Scenario.run`에 반영한다. 그래서 준비 대기 중에 늦게 켠 참여자도 시나리오와 실행 모드를 받는다. 다른 참여자는 `LoadScenario`를 받지 못했어도 이 키에서 시나리오를 얻는다.
+  - 조회(DEC-109): Core는 시나리오를 적재한 동안 `sim/ctrl/scenario` 응답자를 두고 지금 적재된 `Scenario`(위 발행본과 같은 내용) 한 건으로 답한다. 적재 전이면 답하지 않는다. 첫 틱 뒤에 붙는 참여자(실시간·가속 모드의 Gateway 등)는 시작 때 `sim/ctrl/scenario` 구독을 연 다음 `get`으로 조회한다. 구독과 조회로 같은 시나리오를 두 번 받을 수 있으므로 수신 측은 멱등 처리한다. Gateway는 반드시 조회한다.
   - lockstep 참여자는 시나리오를 적재해 준비되면 `sim/clock/done/<participant>`에 `FrameDone{frame=0}`을 보낸다. Core는 `RunSpec.participants` 전원의 준비 신호를 받은 뒤에 첫 틱을 낸다. 이후 늦게 붙는 참여자는 시작 후에는 허용하지 않는다. 실행 중 이탈한 참여자의 재합류도 지원하지 않는다(Reset+Start로 복구, DEC-038).
   - lockstep 수신 결정성(DEC-040): Datalink는 틱 f의 rx를 모두 발행한 뒤 `FrameDone{f}`를 보낸다. Agent는 틱 f+1 처리 전에 Datalink의 `FrameDone{f}`를 받아야 하며(Datalink가 `participants`에 있을 때), 틱 f에서는 `rx_time_us <= sim_time_us(틱 f-1)`인 rx만 (rx_time_us, source, seq) 순으로 소비한다(틱 0은 소비 없음, DEC-045). 기체 간 메시지는 모델 지연에 더해 최소 1틱 늦게 소비된다. realtime과 free-run에는 적용하지 않는다.
   - rx 불변식(DEC-054): lockstep에서 Datalink가 틱 k에서 내는 rx는 `rx_time_us >= sim_time_us(틱 k)`이다. 표본 지연이 0이거나 처리량 상한으로 이월된 송신도 도착 시각을 이 값 아래로 두지 않는다. 그래서 Agent가 틱 f에서 소비하는 rx(`rx_time_us <= T(f-1)`)는 모두 Datalink 틱 f-1 이하에서 나와 `FrameDone{f-1}` 장벽 안에 든다.

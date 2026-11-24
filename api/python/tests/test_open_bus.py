@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from swarm_api import BusConfig, InMemoryBus, default_backend, keys, open_bus, protobuf_encoding, zenoh_available
+from swarm_api import BusConfig, InMemoryBus, Sample, default_backend, keys, open_bus, protobuf_encoding, zenoh_available
 from swarm_api.keys import Iface
 
 
@@ -142,3 +142,38 @@ def test_zenoh_declared_publishers_keep_order_and_encoding():
     assert a._publishers == {}
     assert [int.from_bytes(s.payload, "big") for s in got] == list(range(n))
     assert all(s.key == keys_[i % 5] and s.encoding == enc for i, s in enumerate(got))
+
+
+def test_memory_serve_get():
+    """TC-API-012: memory 조회. 와일드카드 조회, 응답자 없음, 해제 뒤 빈 목록 (DEC-109)"""
+    bus = InMemoryBus()
+    enc = protobuf_encoding("swarm.v1.Scenario")
+    srv = bus.serve(keys.SIM_CTRL_SCENARIO, lambda _k: [Sample(keys.SIM_CTRL_SCENARIO, b"scn", enc)])
+    assert bus.get(keys.SIM_CTRL_SCENARIO) == [Sample(keys.SIM_CTRL_SCENARIO, b"scn", enc)]
+    assert len(bus.get("sim/ctrl/**")) == 1
+    assert bus.get("truth/state") == []
+    srv.close()
+    assert bus.get(keys.SIM_CTRL_SCENARIO) == []
+
+
+@pytest.mark.skipif(not zenoh_available(), reason="eclipse-zenoh not installed")
+def test_zenoh_serve_get():
+    """TC-API-012: Zenoh 조회. 다른 세션·같은 세션 응답, 인코딩 보존, 해제 뒤 빈 목록 (DEC-109)"""
+    a = open_bus(BusConfig(backend="zenoh", zenoh_mode="peer", listen=["tcp/127.0.0.1:17470"],
+                           multicast_scouting=False))
+    b = open_bus(BusConfig(backend="zenoh", zenoh_mode="peer", connect=["tcp/127.0.0.1:17470"],
+                           multicast_scouting=False))
+    try:
+        enc = protobuf_encoding("swarm.v1.Scenario")
+        srv = a.serve(keys.SIM_CTRL_SCENARIO, lambda _k: [Sample(keys.SIM_CTRL_SCENARIO, b"scn", enc)])
+        got: list[Sample] = []
+        end = time.monotonic() + 5
+        while not got and time.monotonic() < end:
+            got = b.get(keys.SIM_CTRL_SCENARIO, timeout_s=0.5)
+        assert got == [Sample(keys.SIM_CTRL_SCENARIO, b"scn", enc)]
+        assert a.get(keys.SIM_CTRL_SCENARIO, timeout_s=0.5) == [Sample(keys.SIM_CTRL_SCENARIO, b"scn", enc)]
+        srv.close()
+        assert b.get(keys.SIM_CTRL_SCENARIO, timeout_s=0.3) == []
+    finally:
+        b.close()
+        a.close()

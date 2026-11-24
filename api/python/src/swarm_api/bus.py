@@ -31,7 +31,17 @@ class Bus(Protocol):
     # 콜백이 수신을 막으므로 큐에 넣기만 하는 짧은 콜백에만 쓴다
     def subscribe(self, keyexpr: str, callback: Callable[[Sample], None], *, ordered: bool = False) -> Subscription: ...
 
+    # IMP-API-026 (DEC-109): keyexpr 조회에 답한다. handler는 요청 키 표현을 받아 답할 샘플 목록을 돌려준다.
+    # 반환 객체의 close()로 응답을 멈춘다
+    def serve(self, keyexpr: str, handler: Callable[[str], Sequence[Sample]]) -> Subscription: ...
+
+    # IMP-API-026 (DEC-109): keyexpr을 조회해 timeout_s 안에 온 응답 샘플을 돌려준다. 응답자가 없으면 빈 목록
+    def get(self, keyexpr: str, timeout_s: float = 1.0) -> list[Sample]: ...
+
     def close(self) -> None: ...
+
+
+QueryHandler = Callable[[str], Sequence[Sample]]
 
 
 def protobuf_encoding(full_name: str) -> str:
@@ -48,11 +58,22 @@ class _InMemorySubscription:
         self._bus._subs.discard(self)
 
 
+class _InMemoryServer:
+    def __init__(self, bus: "InMemoryBus", keyexpr: str, handler: QueryHandler):
+        self._bus = bus
+        self.keyexpr = keyexpr
+        self.handler = handler
+
+    def close(self) -> None:
+        self._bus._servers.discard(self)
+
+
 class InMemoryBus:
     """동기식 단일 프로세스 버스. put 안에서 일치하는 구독 콜백을 바로 호출한다."""
 
     def __init__(self) -> None:
         self._subs: set[_InMemorySubscription] = set()
+        self._servers: set[_InMemoryServer] = set()
 
     def put(self, key: str, payload: bytes, encoding: str) -> None:
         if "*" in key:
@@ -68,8 +89,22 @@ class InMemoryBus:
         self._subs.add(sub)
         return sub
 
+    def serve(self, keyexpr: str, handler: QueryHandler) -> Subscription:
+        srv = _InMemoryServer(self, keyexpr, handler)
+        self._servers.add(srv)
+        return srv
+
+    def get(self, keyexpr: str, timeout_s: float = 1.0) -> list[Sample]:
+        # 동기식: 키 표현이 겹치는(한쪽이 다른 쪽을 포함하는) 응답자를 바로 부른다. timeout_s는 쓰지 않는다
+        out: list[Sample] = []
+        for srv in list(self._servers):
+            if keyexpr_matches(srv.keyexpr, keyexpr) or keyexpr_matches(keyexpr, srv.keyexpr):
+                out.extend(s for s in srv.handler(keyexpr) if keyexpr_matches(keyexpr, s.key))
+        return out
+
     def close(self) -> None:
         self._subs.clear()
+        self._servers.clear()
 
 
 class _ZenohSubscription:
@@ -160,6 +195,21 @@ class ZenohBus:
         # indirect는 zenoh-python에서 unstable 표시다. 버전을 올릴 때 TC-API-008로 확인한다
         handler = self._zenoh.handlers.Callback(on_sample, indirect=False) if ordered else on_sample
         return _ZenohSubscription(self._session.declare_subscriber(keyexpr, handler))
+
+    def serve(self, keyexpr: str, handler: QueryHandler) -> Subscription:
+        def on_query(q: Any) -> None:
+            for s in handler(str(q.key_expr)):
+                q.reply(s.key, s.payload, encoding=s.encoding or None)
+
+        return _ZenohSubscription(self._session.declare_queryable(keyexpr, on_query))
+
+    def get(self, keyexpr: str, timeout_s: float = 1.0) -> list[Sample]:
+        out: list[Sample] = []
+        for reply in self._session.get(keyexpr, timeout=max(timeout_s, 0.001)):
+            ok = reply.ok
+            if ok is not None:
+                out.append(Sample(str(ok.key_expr), ok.payload.to_bytes(), str(ok.encoding)))
+        return out
 
     def close(self) -> None:
         with self._pub_lock:

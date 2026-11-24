@@ -29,6 +29,8 @@ class ZenohBus final : public Bus {
 
   void put(std::string_view key, std::span<const std::uint8_t> payload, std::string_view encoding) override;
   std::unique_ptr<Subscription> subscribe(std::string_view keyexpr, SampleCallback cb) override;
+  std::unique_ptr<Subscription> serve(std::string_view keyexpr, QueryHandler handler) override;
+  std::vector<Sample> get(std::string_view keyexpr, std::chrono::milliseconds timeout) override;
 
  private:
   struct Impl;
