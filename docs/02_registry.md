@@ -289,6 +289,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-093 | 기체 내부 인터페이스(MA-VI, MA-MS)의 하네스 시험: 이 묶음은 하네스가 FA·MS 역할을 해서 붙는 자리가 Gateway가 아니라 기체 안 Agent 포트다. 지금 구조(DEC-094: 기체 내부 메시지는 Gateway 범위 밖, `onboard/**`로만 오감)로는 시험할 수 없다. 선택: (A) 시험 전용 Agent 어댑터가 한 기체의 VI·MS 포트를 STOMP로 내보낸다 (B) 시험하지 않고 C1 표시를 그대로 둔다. 제안: B. 근거: 우리 FA·MS는 시뮬레이터 모델이라 하네스가 대신할 이유가 적고, A는 MA 경계(DEC-013)를 시험용으로 여는 일이다. 필요해지면 A를 다시 본다 | Resolved by DEC-113 |
 | OPN-094 | 하네스 배포 조건: 릴리스 1.2.2.a에는 Distribution 표기·라이선스·저작권 표기가 없고 코드는 제3자(shieldai 패키지) 산출물로 보인다. 지금은 하네스 코드·XSD·이미지를 저장소에 넣지 않고 경로·버전·우리 분석 수치만 적는다. 결정 필요: 제공처에 배포 조건을 확인할지, 확인 전까지 QA 자동 시험에 하네스를 넣을지(넣는다면 로컬 설치를 전제) | Resolved by DEC-114 |
 | OPN-095 | 늦게 붙은 Gateway의 현재 작업 상태·승인 요청(QA O-54): 작업 상태 보고와 `ApprovalRequest`는 바뀔 때만 나오므로, 실행 중 합류한 Gateway는 합류 전에 시작한 작업의 현재 상태를 외부에 주지 못하고 합류 전 승인 요청에 외부가 답할 수 없다. DEC-109는 시나리오만 조회한다. 선택: (A) Gateway가 합류 때 기체별 최근 작업 상태·미결 승인 요청을 조회한다(Agent 또는 Core queryable, 계약 추가) (B) Agent가 작업 상태·미결 승인 요청을 주기적으로 재발행한다 (C) 지원하지 않고 Gateway를 Core보다 먼저 띄우는 운용 규칙으로 둔다. 제안: C, 필요해지면 A. 근거: 지금 운용과 적합성 시험은 Gateway를 먼저 띄우고, 실행 중 합류는 시험 구성에서만 나온다. A는 MA 포트에 조회 계약을 더하는 일이다 | Open |
+| OPN-096 | 발사 뒤 유도 객체 상태의 외부 보고: 6.0a `MunitionInFlight`·`MA_MunitionActive`는 `TimeToImpact`가 필수인데 `StrikeActivity` proto에 도달 예상 시각이 없고 Gateway는 유도 객체 위치를 보지 않는다(DEC-013). 선택: (A) MA가 추정한 도달 예상 시각과 유도 객체 HSA를 `StrikeActivity`에 더한다(계약 변경), (B) 보고하지 않는다. WP9 무장 보고 보강에서 확인 | Open |
 
 ## 5. A-GRA 메시지 매핑 (골격)
 
