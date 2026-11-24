@@ -5680,3 +5680,158 @@ PM 결정(38차 병합 7a4874a 뒤)에 따라 C3에 시각 기준 조건을 더�
 | TC | 내용 | 결과 |
 |---|---|---|
 | TC-QA-213 | C3 (c) 시각 기준 = 시나리오, 반복 실행 C3 합산, O-53 분류, 이력 정정 줄. 도구 시험과 38차 원자료 7회 재판정 | 통과 |
+
+## 49. 39차 점검: Gateway 시나리오 조회·외부 교환 봉투·조회 응답 뒤 적합성·회귀·P1 (2026-11-24)
+
+대상: wp0-contracts 001aa78(WP1 4d8d6d3 Core 시나리오 조회 응답, WP9 bba9368 Gateway 시작 때 시나리오 조회 DEC-109, 외부 교환 봉투 DEC-111(CLI 기본 켬), 하네스 STOMP 경로 DEC-110, QueryDataRequest 응답 DEC-112). 점검 중 PM 요청으로 86a3199(IMP-GW-039, QueryDataRequest 6.0a 응답 정리)를 병합하고(5f9fe86) Gateway 단위 시험과 봉투 켬 적합성 1회를 다시 돌렸다. 38차 후속이 §48을 썼으므로 이 절은 §49다.
+
+### 49.1 판정표
+
+| 항목 | TC | 결과 | 근거 |
+|---|---|---|---|
+| 봉투 판정 도구(C2 봉투·내부 둘 다, C6 봉투 이름 기준) | TC-QA-214 | 통과 | 도구 시험 100건, 외부 클라이언트 봉투를 Gateway `envelope.py`로 양방향 대조 (§49.2) |
+| 적합성 C1~C6, 봉투 켬, 같은 커밋 반복 | TC-QA-215 | **통과** | 5회(도구 fdcc245)+3회(e012aab)+병합 뒤 1회, 모두 C1~C6 통과, C3 시각 기준 = 시나리오 9/9 (§49.3) |
+| 적합성 C1~C6, Gateway 늦게 붙음 | TC-QA-216 | **통과** | 3회, Gateway가 조회로 시나리오를 받음 3/3, 시각 기준 = 시나리오. 새 관찰 O-54 (§49.4) |
+| 적합성 C1~C6, `--envelope off` + `lacal_server_raw.yaml` | TC-QA-217 | **통과** | 1회 (§49.5) |
+| QueryDataRequest 응답 | TC-QA-218 | 통과 | 모든 실행에서 PROCESSING → COMPLETED(작업 상태 13건) (§49.3) |
+| 결정성 5종 × 3회, DEC-044 장벽 로그 | TC-QA-219 | **통과** | 5종 모두 3회 같음, 장벽 경고·대기 0줄 (§49.6) |
+| P1 판정 구성 6회 | TC-QA-220 | 측정. 10배 이상 유지 | 10.57배(1.892 ms), 짝 Logger 끔 11.39배. r4·r5는 배경 부하 (§49.7) |
+
+- **O-53 해소.** DEC-109 뒤 봉투 켬·끔·늦게 붙음 합쳐 17회 실행(도구 오류로 다시 돌린 첫 late·raw 묶음 4회 포함) 모두 Gateway 시각 기준이 시나리오였다(`epoch_set` 1, `epoch_changed` 없음, `no scenario epoch yet` 줄 없음). 늦게 붙은 6회는 모두 조회로 받았다.
+
+### 49.2 도구 변경 (TC-QA-214)
+
+| 곳 | 내용 |
+|---|---|
+| `qa/gw_ext_client.py` | `--envelope on`(기본, Gateway 기본과 같음)/`off`. 봉투 켬이면 `MA_TxDataPayloadCommand`를 `swarm.vi`·`c2`·`p2p`·`ms`에서 구독한다. 봉투를 XSD로 재검증하고, `EncodedPayload`(hexBinary)를 풀어 내부 메시지를 따로 재검증한다. `MessageType` 일치, ASCII, 봉투 머리 = 내부 머리(정보)도 본다. 보내는 것은 모두 `MA_RxDataPayload`로 싼다. 봉투 처리는 README 설명대로 따로 만들었다(Gateway 코드를 쓰지 않음). 봉투 끔이면 `QueryDataRequestStatus@swarm.c2`도 구독한다 |
+| `qa/conformance/harness_run.py` | `envelope`(켬이면 `lacal_server.yaml`, 끔이면 `lacal_server_raw.yaml`), `late_gw`(Core가 4 s 돈 뒤 일시정지 상태에서 Gateway 기동), 22 s에 `QueryDataRequest`(MA_TASK_STATUS) 1건, 봉투 부정 입력 4종 |
+| `qa/conformance/judges.py` | `judge_envelope`. 봉투 켬일 때 받은 봉투의 재검증·MessageType·ASCII와 봉투 없이 받은 메시지, 외부가 싼 봉투의 재검증을 C2 실패 조건으로 본다. C6는 부정 입력이 일부러 낸 선언 밖 흐름을 `선언 밖(부정 입력)`으로 따로 둔다 |
+| `qa/conformance/analyze.py` | C6 `/tap`·외부 수신을 봉투 이름으로 센다. `QueryDataRequest`는 버스 대신 받은 응답 수로 본다. C3 식별자 집계에서 조회 결과 안 메시지 머리를 뺀다. late_gw면 Gateway 합류 전 GCS 수신을 짝짓기에서 빼고, 합류 전에 시작한 작업 순서는 합류 시점 상태를 앞에 붙여 전이만 본다(C5 `joined_mid`, 정보) |
+| `qa/conformance/run.py`, `report.py` | `--envelope`, `--late-gw`. 실행 조건 표에 외부 교환 방식과 Gateway 시나리오 수신 경로(`scenario_*` 카운터), C2 봉투 줄. 이력 줄에 notes |
+
+봉투 부정 입력 4종의 처리(봉투 켬 실행 모두 같음):
+
+| 부정 입력 | 처리 | 버스로 나감 |
+|---|---|---|
+| neg-env-notaddr (SpecificDestinationID에 Gateway UUID 없음) | Gateway 무시(`envelope_not_addressed`) | 아니오 |
+| neg-env-mtype (봉투 MessageType이 내부와 다름) | Gateway 거부(`MessageType … does not match inner`) | 아니오 |
+| neg-env-none (봉투 없이 MA_TaskCommand) | CAL Server는 받는다(declared를 강제하지 않음). Gateway가 구독하지 않아 배달되지 않음(/graph) | 아니오 |
+| neg-env-ascii (내부 XML에 ASCII 아닌 바이트) | Gateway 거부(`EncodedPayload is not ASCII`) | 아니오 |
+
+- 기존 부정 입력 10종 가운데 XSD 위반 3종은 봉투 켬에서 CAL Server가 아니라 Gateway가 거부한다(`inner message invalid`). 봉투는 맞고 안쪽이 틀리기 때문이다.
+- 첫 공식 실행 두 묶음은 도구 오류로 실패했다(docs/47 실행 9·10, 정정 줄을 달았다). late는 합류 전 GCS 수신을 짝지어 C3·C5가 어긋났고, raw는 조회 응답을 구독하지 않아 C6가 실패했다. e012aab에서 고치고 다시 돌렸다(실행 12·13). 실행 11·14가 봉투 켬 반복이고 docs/45는 실행 14의 보고다. 제품 결함이 아니다.
+- 점검 중 `gateway/.venv`에 eclipse-zenoh가 빠져 Gateway가 뜨지 않았다(병합 뒤 `uv sync`가 extra 없이 돈 것으로 보인다). `uv sync --extra zenoh`로 다시 깔았다.
+
+### 49.3 봉투 켬 반복 (TC-QA-215, TC-QA-218)
+
+| 실행 | 도구 | 회 | C1~C6 | 받은 봉투 / 재검증 실패 | Gateway 시나리오 수신 | C3 기준 |
+|---|---|---|---|---|---|---|
+| 2026-11-24-env | fdcc245 | 5 | 모두 통과, 판정·실패 문구 5회 같음 | 9,313 / 0 | 구독 5/5 | scenario 5/5 |
+| 2026-11-24-env2 | e012aab | 3 | 모두 통과, 3회 같음 | 9,313 / 0 | 구독 3/3 | scenario 3/3 |
+| qa39/post_merge (5f9fe86, 문서 안 씀) | e012aab | 1 | 모두 통과 | 9,313 / 0 | 구독 | scenario |
+
+- C6 선언은 새 `gateway/config/lacal_server.yaml` 그대로 `swarm_gateway` pub `MA_TxDataPayloadCommand@{vi,c2,p2p,ms}`·sub `MA_RxDataPayload@{c2,mp}`, `external_c2`는 그 반대로 모두 일치했다. `/tap` 건수 = 외부 수신 건수.
+- MessageType 불일치·ASCII 아님·봉투 없이 받음은 모두 0이다. 봉투 머리는 내부 머리와 모두 같았다.
+- Gateway를 Core보다 먼저 띄우는 기본 구성에서는 조회 5회가 모두 빈 응답(`scenario_query_none` 1)이고 Core가 시작한 뒤 구독으로 받는다. 첫 보고 전에 받으므로 시각 기준은 시나리오다.
+- `QueryDataRequest`는 모든 실행에서 `QueryDataRequestStatus` PROCESSING, COMPLETED(결과 13건) 순서로 답이 왔다. XSD 재검증 통과.
+
+### 49.4 Gateway 늦게 붙음 (TC-QA-216)
+
+`--late-gw`: Core가 200프레임(4 s) 돈 뒤 일시정지하고 Gateway를 띄운다. Gateway는 시작 때 `sim/ctrl/scenario` 발행을 놓치므로 조회로 받아야 한다.
+
+| 실행 | 회 | C1~C6 | Gateway 시나리오 수신 | C3 기준 |
+|---|---|---|---|---|
+| 2026-11-24-late2 | 3 | 모두 통과, 판정·실패 문구 3회 같음 | 조회 1회째에 받음 3/3(`scenario_by_query` 1, 구독 0) | scenario 3/3 |
+
+- 위치 1,904~1,914쌍 최대 차 0 rad, Timestamp 변동 0.00 s다.
+- **새 관찰 O-54 (WP9, 낮음): 늦게 붙은 Gateway는 합류 전에 시작한 작업·승인의 현재 상태를 외부에 주지 못한다.**
+  - 작업 상태 보고는 바뀔 때만 나온다. 합류 전에 EXECUTING이 된 task-001은 외부가 다음 변화(CANCELED)부터 본다. 실행마다 4대(uav-001·009·010·011)이고, 처음부터 붙은 실행의 7대보다 적다. 나머지 기체의 task-001 상태는 외부에 오지 않는다.
+  - 합류 전에 나온 `ApprovalRequest`(uav-004/task-001)는 외부가 받지 못해 답하지 못했다. 처음부터 붙은 실행은 APPROVED로 답했다.
+  - C5는 합류 시점 상태를 앞에 붙여 전이만 보므로 통과다. 내부와 외부 순서는 같았다(Gateway는 받은 것을 그대로 넘겼다).
+  - DEC-109는 시나리오만 조회한다. 작업 상태·승인 요청의 현재 값을 합류 때 얻는 수단(조회 또는 재발행)이 있어야 하는지는 PM이 정한다.
+
+### 49.5 봉투 끔 (TC-QA-217)
+
+`--envelope off`: Gateway `--envelope off`, 외부 `--envelope off`, CAL 설정 `lacal_server_raw.yaml`(예전 15흐름 + QueryDataRequest·QueryDataRequestStatus).
+
+| 실행 | C1~C6 | 받음 | 부정 입력 |
+|---|---|---|---|
+| 2026-11-24-raw2 | 모두 통과 | 9,313건, 재검증 실패 0 | 10종, 버스로 나감 0 |
+
+- C6 선언 21흐름이 모두 교환됐다. C2 봉투 줄은 "끔"이다. 예전 기대값과 새 기대값 모두 통과한다.
+
+### 49.6 결정성과 DEC-044 장벽 (TC-QA-219)
+
+`uv run --with psutil python qa/p2_lostlink.py --case det --out qa/out/qa39/det --runs 3`.
+
+| 사례 | 비교 프레임 | 1↔2, 1↔3 | 죽은 프로세스 |
+|---|---|---|---|
+| noloss_cut_jam | 28,007 | 같음 | 없음 |
+| loss_cut | 28,007 | 같음 | 없음 |
+| heavy | 28,007 | 같음 | 없음 |
+| s3_link | 42,014 | 같음 | 없음 |
+| p5_near | 33,011 | 같음 | 없음 |
+
+- LinkOutcome·머리·FCS·궤적 모두 같다. 결정성과 적합성 원자료 전체에서 `arrived after tick`·`waiting for frame done`·`waiting for ready`는 0줄이다.
+- s3_link의 `acceptance_m` 거부 경고 4줄은 이전과 같다(§47.5).
+
+### 49.7 P1 판정 구성 (TC-QA-220)
+
+PM에게 미리 알리고 다른 세션이 쉬는 동안 돌렸다(15:41~15:45). `qa/perf_p1_batch.py run --label q1 --repeat 6 --base-port 44000 --only d3_w_log,d3_w`, 긴 창 7,500프레임이다. 유휴 게이트(시스템 CPU 10% 이하 30 s)는 15:35부터 기다려 15:41에 지났다(2.3%).
+
+| 회차 | d3_w_log (Logger 켬, 판정) | d3_w (Logger 끔, 짝) | Logger 비용 | 시스템 CPU(켬) |
+|---|---|---|---|---|
+| r0 | 11.24배 (1.779 ms) | 11.86배 (1.687 ms) | 0.092 ms | 10.8% |
+| r1 | 11.24배 (1.780 ms) | 12.26배 (1.632 ms) | 0.148 ms | 12.2% |
+| r2 | 10.64배 (1.879 ms) | 11.23배 (1.781 ms) | 0.098 ms | 14.0% |
+| r3 | 10.50배 (1.904 ms) | 11.55배 (1.732 ms) | 0.172 ms | 11.2% |
+| r4 | 9.16배 (2.184 ms) | 10.36배 (1.930 ms) | 0.254 ms | 20.9% |
+| r5 | 9.54배 (2.097 ms) | 10.32배 (1.938 ms) | 0.159 ms | 18.8% |
+| 중앙값 | **10.57배 (1.892 ms)**, E 코어 0회, 10배 아래 2회 | 11.39배 (1.757 ms) | 0.154 ms | |
+
+- 배경 부하(`qa/out/qa39/p1/q1_load.txt`): 측정 전 Docker Desktop(com.docker.backend)·Steam은 떠 있었지만 유휴였다. 15:43:58부터 끝까지 `tailscaled.exe`가 68~141%를 썼고 `svchost`·`WmiPrvSE`·`MsMpEng`가 함께 올랐다. r4·r5가 이 구간이다. 같은 회차 Logger 끔도 10.3배대로 함께 떨어졌으므로 Logger 경로가 아니라 바깥 부하다.
+- 부하 전 r0~r3 중앙값은 10.94배(1.828 ms)로 38차 10.95배(1.826 ms)와 같다. 이번 변경(Core 시나리오 조회 응답)은 판정 구성에서 차이를 보이지 않는다. DEC-087 12.43배(1.609 ms) 대비 +0.28 ms이고, 10배까지 여유는 0.11 ms(5%)다.
+- DEC-086(2)의 두 번째 시간대 묶음은 PM 요청 범위(6회)라 돌리지 않았다.
+
+### 49.8 시험
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-214 | 봉투 판정 도구: C2 봉투·내부 재검증, C6 봉투 이름 기준, 부정 입력 흐름, 외부 클라이언트 봉투 ↔ Gateway `envelope.py` 대조 | 통과 (도구 시험 100건, 새 6건) |
+| TC-QA-215 | 적합성 C1~C6 봉투 켬 5+3+1회, C3 시각 기준 = 시나리오, O-53 | **통과**. O-53 해소 |
+| TC-QA-216 | 적합성 C1~C6 Gateway 늦게 붙음 3회(시나리오 조회 경로) | **통과**. O-54 신규 |
+| TC-QA-217 | 적합성 C1~C6 `--envelope off` + `lacal_server_raw.yaml` 1회 | **통과** |
+| TC-QA-218 | QueryDataRequest → QueryDataRequestStatus PROCESSING·COMPLETED, 모든 구성 | 통과 |
+| TC-QA-219 | 결정성 5종 × 3회와 DEC-044 장벽 로그 | **통과** |
+| TC-QA-220 | P1 판정 구성 6회와 같은 회차 Logger 끔 짝 | 측정. 10.57배(1.892 ms), 부하 전 4회 10.94배 |
+
+- Gateway 단위 시험(86a3199 병합 뒤): 195 통과, 1 건너뜀.
+
+### 49.9 PM에게 넘기는 것 (QA는 고치지 않음)
+
+- **O-53 해소(WP1·WP9, DEC-109)**: 17회 모두 시각 기준이 시나리오였다. 늦게 붙은 Gateway는 6회 모두 조회 1회째에 받았다.
+- **O-54(WP9)**: 늦게 붙은 Gateway가 합류 전 작업 상태·승인 요청을 외부에 주지 못한다(§49.4). 필요한 수단인지 PM이 정한다.
+- **CAL Server가 declared를 강제하지 않음(정보)**: 봉투 켬에서도 외부가 봉투 없이 낸 `MA_TaskCommand`를 CAL Server가 받는다. Gateway가 구독하지 않아 배달되지 않으므로 거부는 Gateway 구독 형상에 기대고 있다. 기존 관찰(외부 선언 밖 구독을 막지 않음)과 같은 성질이다.
+- **gateway/.venv의 zenoh extra**: 병합 뒤 `uv sync`를 extra 없이 돌리면 Gateway가 시작하지 못한다. 하네스 README나 스크립트에 `--extra zenoh`를 적어 두는 것을 제안한다.
+- **P1 여유**: 판정 구성 여유가 0.11~0.17 ms로 좁다. 배경 부하 한 번에 10배 아래로 떨어진다(r4·r5). O-43·O-44 Agent 밖 몫은 그대로다.
+- **msvc-debug 빌드가 낡음**: §46.10과 같다.
+
+### 49.10 확인하지 못한 항목
+
+| 항목 | 이유 |
+|---|---|
+| 하네스 STOMP 경로(DEC-110)로 적합성 점검 | 적합성 도구는 LA-CAL 경로만 쓴다. STOMP는 WP9 하네스 실험으로 확인됐다 |
+| Core가 돌고 있는 중(일시정지 아님)에 Gateway 합류 | 늦게 붙음은 일시정지 프레임에서 붙였다(입력 프레임을 정확히 맞추려고) |
+| P1 두 번째 시간대 묶음 | 요청 범위 밖 |
+
+### 49.11 결함·관찰 현황 갱신
+
+| ID | 이전 | 이후 | 근거 |
+|---|---|---|---|
+| O-53 | 아직 열림 | 해소 | DEC-109, TC-QA-215·216 (§49.3·49.4) |
+| O-54 | (신규) | 아직 열림 | WP9, 낮음 (§49.4) |
+
+- 새 결함은 없다.
+- 아직 열린 관찰은 5건이다. O-30, O-31, O-43, O-44, O-54이다.
+- **결함 40건**: 해소 31, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
+- **관찰 54건**: 해소 25, 결정됨 24, 아직 열림 5, 사용자 결정 필요 0.
