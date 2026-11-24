@@ -257,9 +257,12 @@ def compare_position(bus: dict, uci: dict) -> dict:
     return out
 
 
+GW_FIRST_LOG = "no scenario epoch yet"   # Gateway SimClock이 첫 메시지 기준을 쓸 때 남기는 경고 (converters/base.py)
+
+
 def judge_epoch(epoch: dict | None, ts_offsets: list[float]) -> dict:
     """DEC-098 (a) UCI Timestamp − 모의 시각 = sim/ctrl/scenario의 epoch_utc_us (허용 오차 TOL ts_spread_s),
-    (b) Gateway epoch_changed 카운터 0. 관측한 epoch가 둘 이상이면 마지막 값과 비교하고 정보로 적는다"""
+    (b) Gateway epoch_changed 카운터 0, (c) Gateway 시각 기준 = 시나리오(첫 메시지 기준을 쓰지 않음, epoch_set 1 이상). 관측한 epoch가 둘 이상이면 마지막 값과 비교하고 정보로 적는다"""
     out: dict = {"checked": epoch is not None, "fail": [], "info": []}
     if epoch is None:
         out["info"].append("시각 기준(DEC-098) 확인 안 함: 원자료에 sim/ctrl/scenario epoch 기록이 없다(33차 이전)")
@@ -289,6 +292,17 @@ def judge_epoch(epoch: dict | None, ts_offsets: list[float]) -> dict:
         out["fail"].append("Gateway 카운터 기록 없음: epoch_changed를 확인하지 못함")
     elif gw.get("epoch_changed", 0):
         out["fail"].append(f"Gateway epoch_changed {gw['epoch_changed']}: 실행 중 UCI 시각 기준이 바뀌었다(DEC-098)")
+    # (c) 시각 기준 = 시나리오 (38차 O-53, DEC-109): 첫 메시지 기준을 한 번이라도 썼거나 시나리오로 정한 적이 없으면 실패.
+    # (a)는 첫 메시지 시각이 epoch와 0.5 s 안이면 통과하고 (b)는 기준이 바뀌지 않으면 통과하므로 따로 본다
+    if gw is not None:
+        first = [x for x in out["log"] if GW_FIRST_LOG in x]
+        out["base"] = "first_message" if first else ("scenario" if gw.get("epoch_set", 0) else "없음")
+        if first:
+            out["fail"].append("Gateway 시각 기준이 시나리오 값이 아님: 시나리오를 받기 전 첫 메시지 기준을 썼다"
+                               f"(로그 '{GW_FIRST_LOG}', DEC-098·DEC-109)")
+        elif not gw.get("epoch_set", 0):
+            out["fail"].append("Gateway 시각 기준이 시나리오 값이 아님: 시나리오로 기준을 정한 적이 없다"
+                               "(epoch_set 0, DEC-098·DEC-109)")
     return out
 
 

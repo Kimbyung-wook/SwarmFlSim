@@ -269,3 +269,17 @@ def test_gone_cause_criteria_vs_product():
     assert H.gone_cause(H.UNKNOWN, "DEC-097") == H.UNKNOWN
     rows = {r[0]: r for r in H.finding_rows(_entries(), between=lambda a, b: ch, resolutions={"D-1": "DEC-097"})}
     assert rows["D-1"][6] == "기준 변경(DEC-097 `k1`)"
+
+
+def test_correction_line_reclassifies_without_new_row(tmp_path):
+    """38차: 정정 줄은 행으로 세지 않고 같은 결과 폴더의 앞선 실행 발견을 바꾼다 (덧붙이기만, DEC-095)"""
+    import json as _j
+    import history as H2
+    p = tmp_path / "h.jsonl"
+    rows = [{"schema": 1, "mode": "run", "out": "qa/out/a", "findings": ["D-36"]},
+            {"schema": 1, "mode": "run", "out": "qa/out/b", "findings": []},
+            H2.correction("qa/out/a", "원인은 O-53", ["O-53"])]
+    p.write_text("".join(_j.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    es = H2.load(p)
+    assert len(es) == 2 and es[0]["findings"] == ["O-53"] and es[0]["findings_tool"] == ["D-36"]
+    assert es[0]["notes"] == ["원인은 O-53"] and "notes" not in es[1]

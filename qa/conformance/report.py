@@ -32,17 +32,20 @@ def fmt(x: float) -> str:
 
 
 def _epoch_rows(ep: dict, tol: dict) -> list[list]:
-    """C3 대조 표의 DEC-098 행 (a) epoch 일치 (b) Gateway epoch_changed"""
+    """C3 대조 표의 DEC-098 행 (a) epoch 일치 (b) Gateway epoch_changed (c) Gateway 시각 기준 = 시나리오"""
     if not ep.get("checked"):
         return [["Timestamp − 모의 시각 = 시나리오 epoch (s)", tol["ts_spread_s"], "—", "확인 안 함"],
-                ["Gateway epoch_changed", 0, "—", "확인 안 함"]]
+                ["Gateway epoch_changed", 0, "—", "확인 안 함"],
+                ["Gateway 시각 기준", "scenario", "—", "확인 안 함"]]
     d = ep.get("dev_s")
     bad_a = any("epoch_utc_us" in t or "sim/ctrl/scenario" in t for t in ep["fail"])
     gw = ep.get("gw")
     return [["Timestamp − 모의 시각 = 시나리오 epoch (s)", tol["ts_spread_s"], f"{d['abs_max']:.6f}" if d else "—",
              "실패" if bad_a or not d else "통과"],
             ["Gateway epoch_changed", 0, gw.get("epoch_changed", 0) if gw else "—",
-             "통과" if gw is not None and not gw.get("epoch_changed", 0) else "실패"]]
+             "통과" if gw is not None and not gw.get("epoch_changed", 0) else "실패"],
+            ["Gateway 시각 기준", "scenario", ep.get("base", "—"),
+             "통과" if ep.get("base") == "scenario" else "실패"]]
 
 
 def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915

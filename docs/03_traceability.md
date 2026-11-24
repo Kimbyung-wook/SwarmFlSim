@@ -330,6 +330,7 @@
 | TC-QA-210 | 표준 적합성 C1~C6, 4회 실행(새 버스 3·옛 버스 1)과 시작 시각 기준 | `qa/conformance/run.py --repeat 2` | DEC-098 |
 | TC-QA-211 | 결정성 5종 × 3회와 DEC-044 송신 개수 장벽 로그 | `qa/p2_lostlink.py --case det --runs 3` | DEC-040, DEC-044 |
 | TC-QA-212 | O-30 전체 구성(Logger·Bridge·CAL Server·Gateway·외부 클라이언트) 시작 첫 송신, realtime 34회 + lockstep 5회 | `qa/run_release.py qa/o30_start.py --full` | DEC-040, DEC-044 |
+| TC-QA-213 | C3 시각 기준 = 시나리오 조건, 반복 실행 C3 합산, O-53 분류, 이력 정정 줄 (도구 시험과 38차 원자료 재판정) | `qa/conformance/tests`, `qa/conformance/run.py --reuse` | DEC-095, DEC-098, DEC-109 |
 
 ## 시험 결과
 
@@ -567,6 +568,7 @@
 | TC-QA-210 | 통과 | 2026-11-24 | 첫 실행 C3 실패(시각 기준 바뀜 0.515 s), 다시 돌린 3회 C1~C6 통과. O-53 신규 (§47.4) |
 | TC-QA-211 | 통과 | 2026-11-24 | 5종 모두 3회 같음, 누락 0. 장벽 경고·대기 0줄 (§47.5) |
 | TC-QA-212 | 재현 | 2026-11-24 | realtime 34회 중 1회 전 기체 첫 송신 프레임 7, 나머지와 lockstep 5회는 0 (§47.6) |
+| TC-QA-213 | 통과 | 2026-11-24 | 도구 시험 94건 통과. 재판정 7회 중 첫 메시지 기준 3회 실패(그중 1회는 이전 판정 통과), 시나리오 기준 4회 통과 (§48.2) |
 
 ## 프로세스 결정
 

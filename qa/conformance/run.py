@@ -140,6 +140,11 @@ def main() -> int:  # noqa: PLR0915
             summ = "판정 또는 실패 문구(수치 제외)가 다른 항목이 있다(표 참고)"
         repeat = {"runs": len(all_res), "rows": rows, "summary": summ}
         res["C7"]["determinism"]["text"] += f". 이 도구의 같은 커밋 {len(all_res)}회 실행: {repeat['summary']}"
+    # C3는 반복 실행 가운데 하나라도 실패하면 실패로 센다(38차, docs/44 C3 시각 기준). 다른 항목은 run1 판정 그대로다
+    for i, (ri, _) in enumerate(all_res[1:], 2):
+        if ri["C3"]["verdict"] == "실패":
+            res["C3"]["fail"] += [f"run{i}: {t}" for t in ri["C3"]["fail"]]
+            res["C3"]["verdict"] = "실패"
     r: A.Run = extra["run"]
     m = r.marks
     fnd, loose = F.attach(res)

@@ -74,13 +74,34 @@ def append(entry: dict, path: Path = HISTORY) -> None:
 
 
 def load(path: Path = HISTORY) -> list[dict]:
+    """이력 줄 목록. mode "correction" 줄은 행으로 세지 않고, 결과 폴더(out)가 같은 앞선 실행의 발견을 바꾸고 메모를 단다
+    (38차: 파일은 덧붙이기만 하므로 분류 정정도 새 줄로 남긴다, DEC-095)"""
     if not path.exists():
         return []
-    out = []
+    out: list[dict] = []
     for ln in path.read_text(encoding="utf-8").splitlines():
-        if ln.strip():
-            out.append(json.loads(ln))
+        if not ln.strip():
+            continue
+        e = json.loads(ln)
+        if e.get("mode") == "correction":
+            for t in reversed(out):
+                if t.get("out") == e.get("out"):
+                    if "findings" in e:
+                        t["findings_tool"] = t.get("findings")
+                        t["findings"] = e["findings"]
+                    t.setdefault("notes", []).append(e.get("note", ""))
+                    break
+            continue
+        out.append(e)
     return out
+
+
+def correction(out: str, note: str, findings: list[str] | None = None) -> dict:
+    """앞선 실행(결과 폴더 out)의 발견 분류 정정 한 줄"""
+    e: dict = {"schema": 1, "mode": "correction", "out": out, "note": note}
+    if findings is not None:
+        e["findings"] = sorted(findings)
+    return e
 
 
 def backfill(out_dir: Path) -> dict:
@@ -239,7 +260,12 @@ def build_md(entries: list[dict], changes: list[dict], known: list[str] | None =
     for n, e in notes:
         L.append(f"- 실행 {n}은 결과 폴더의 `result.json`에서 소급 기록했다. "
                  + (f"git에서 얻은 값: {', '.join(e['derived'])}." if e.get("derived") else ""))
-    if notes:
+    corr = [(n, e) for n, e in enumerate(entries, 1) if e.get("notes")]
+    for n, e in corr:
+        tool = e.get("findings_tool")
+        L += [f"- 실행 {n}: {t}" + (f" (도구 자동 분류: {', '.join(tool) or '없음'})" if isinstance(tool, list) else "")
+              for t in e["notes"]]
+    if notes or corr:
         L.append("")
     L.append("핵심 수치:")
     L.append("")

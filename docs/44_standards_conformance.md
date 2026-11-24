@@ -66,13 +66,13 @@ XSD는 형식만 본다. 단위·기준·좌표계가 맞는지는 변환 전후
 | 위치 | Gateway 입력(버스의 `NavigationReport`, 도·m) ↔ UCI(`MA_PositionReport`·`MA_NavigationReport`, rad·m). 도→rad 변환 뒤 차이가 수치 오차 이내, 고도 기준 MSL |
 | 속도·자세 | NED 속도 일치, NED→FRD 자세 변환 뒤 오일러각 일치 |
 | 시각 | UCI Timestamp가 메시지 모의 시각과 맞음 |
-| 시각 기준 (DEC-098) | UCI Timestamp − 모의 시각 = `sim/ctrl/scenario`의 `run.epoch_utc_us` (허용 오차 0.5 s). Gateway `epoch_changed` 카운터 0. epoch 관측 0건이거나 값이 0이면 실패. 카운터 확인은 epoch 일치 확인과 함께 판정한다(Gateway가 실행 중에 붙으면 카운터가 0이어도 첫 메시지 기준으로 틀릴 수 있다) |
+| 시각 기준 (DEC-098) | UCI Timestamp − 모의 시각 = `sim/ctrl/scenario`의 `run.epoch_utc_us` (허용 오차 0.5 s). Gateway `epoch_changed` 카운터 0. epoch 관측 0건이거나 값이 0이면 실패. 카운터 확인은 epoch 일치 확인과 함께 판정한다(Gateway가 실행 중에 붙으면 카운터가 0이어도 첫 메시지 기준으로 틀릴 수 있다). **Gateway 시각 기준 = 시나리오 (DEC-109, WP0 확인 사항)**: 실행마다 Gateway가 처음부터 시나리오 값으로 기준을 정해야 한다. 시나리오를 받기 전 첫 메시지 기준을 썼거나(Gateway 로그 `no scenario epoch yet`) 시나리오로 정한 적이 없으면(`epoch_set` 0) 앞의 두 확인을 통과해도 실패다 |
 | 식별자 | 같은 기체·작업은 실행 내내 같은 UUID, DescriptiveLabel = 내부 ID |
 | 상태값 | 내부 상태 → XSD enum 대응이 DEC-090 표와 같음 |
 | 수신 | 외부 `MA_RoutePlan`의 rad 좌표 → 내부 도 좌표, 항로점 순서(`NextPathSegment`)가 그대로 |
 
 - 실제 위치(truth)와는 항법 잡음(PRP-SIM-003) 범위 안에 있는지만 본다. 변환 정확도 판정은 변환 전후 대조로 한다.
-- 실패 조건: 허용 오차를 넘는 대조 1건 이상.
+- 실패 조건: 허용 오차를 넘는 대조 1건 이상. 시각 기준 행은 같은 커밋을 여러 번 돌리면(`--repeat`) 한 번이라도 실패하면 C3 실패로 센다(38차, WP0 확인 사항).
 
 ### C4. A-GRA 기체 계층 경계
 
