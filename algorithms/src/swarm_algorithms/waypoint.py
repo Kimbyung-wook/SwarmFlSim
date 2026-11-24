@@ -1,5 +1,5 @@
-"""MA "waypoint" (IMP-AGT-013, IMP-AGT-016~017, REQ-BHV-002, DEC-033): MissionPlan·TaskCommand의
-MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPilot).
+"""MA "waypoint" (IMP-AGT-013, IMP-AGT-016~017, IMP-AGT-060, REQ-BHV-002, DEC-033, DEC-106): MissionPlan·TaskCommand의
+MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPilot). Track/Jam/Strike와 센서 지향은 common.PayloadTasker를 따른다.
 
 - MissionPlan 작업(이 기체가 맡은 것)을 순서대로, C2 TaskCommand는 받는 즉시 수행한다.
 - RoutePlan은 같은 ID의 계획 작업(Gateway가 route_id를 task_id로 쓴다)이 있으면 그 작업이 수행하므로 따로 비행하지 않는다.
@@ -8,13 +8,15 @@ MoveTo/Hold/RTB/SearchArea/Route를 수행한다 (구간 규칙은 common.TaskPi
 링크 상실 행동은 common.LostLinkGuard를 따른다 (DEC-078).
 승인(approval_tasks, DEC-088)은 common.TaskTracker, 탐지 공유(track_share_hz)는 common.TrackSharer를 따른다.
 params: acceptance_m(80), hold_radius_m(300), speed_mps(작업에 속도가 없을 때, 기본 현재 속도), lost_link_timeout_s(5), lost_link_recover_hold_s(5), lost_link_recover_gap_s(2), lost_link_policy,
-approval_tasks(""), approval_timeout_s(0), track_share_hz(0)
+approval_tasks(""), approval_timeout_s(0), track_share_hz(0), track_standoff_m(1500), track_acquire_timeout_s(60), track_lost_s(30),
+strike_range_m(3000)
 """
 
 from swarm.v1 import c2_pb2, mp_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 
-from .common import APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, TaskPilot, TrackSharer, invalid_reason
+from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, PAYLOAD_TASK_PARAMS, TRACK_SHARE_PARAMS, TaskPilot, TrackSharer,
+                     invalid_reason)
 
 
 def route_task(ctx: AgentContext, rp: mp_pb2.RoutePlan) -> c2_pb2.TaskCommand:
@@ -37,12 +39,13 @@ class WaypointFollower(MissionAutonomy):
         *LOST_LINK_PARAMS,
         *APPROVAL_PARAMS,
         *TRACK_SHARE_PARAMS,
+        *PAYLOAD_TASK_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
         p = ctx.params
         self.pilot = TaskPilot(ctx, float(p.get("acceptance_m", 80.0)), float(p.get("hold_radius_m", 300.0)),
-                               float(p.get("speed_mps", 0.0)) or None)
+                               float(p.get("speed_mps", 0.0)) or None, payload_tasks=True)
         self.routes_seen: set[str] = set()
         self.tracks = TrackSharer(ctx)
 
@@ -54,7 +57,7 @@ class WaypointFollower(MissionAutonomy):
 
     def on_step(self, ctx: AgentContext) -> None:
         self.pilot.step()
-        self.tracks.step()
+        self.tracks.step(self.pilot.tasker.detections)
         for rp in ctx.ports.mp.route_plans():
             if rp.route_id in self.routes_seen or not rp.waypoints:
                 continue

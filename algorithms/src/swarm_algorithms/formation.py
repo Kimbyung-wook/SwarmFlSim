@@ -1,11 +1,11 @@
-"""MA "formation" (IMP-AGT-014, IMP-AGT-016~017, PRP-BHV-003, REQ-BHV-003): leader-follower 편대.
+"""MA "formation" (IMP-AGT-014, IMP-AGT-016~017, IMP-AGT-060, PRP-BHV-003, REQ-BHV-003): leader-follower 편대.
 
 - 편대 정의: C2 FormationCommand(받는 즉시 교체) 또는 MissionPlan.formations 중 이 기체가 속한 것
   (params.group이 있으면 그 group_id). 리더는 leader, 비어 있으면 members 중 사전순 첫 기체.
 - 모든 편대원이 PeerStatus를 편대원에게 P2P로 보낸다(peer_hz). 추종기는 데이터링크로 받은
   리더의 PeerStatus만 쓴다 (PRP-SIM-003). 리더 위치는 받은 시각부터 속도로 외삽한다.
-- 리더: 작업(MoveTo/Hold/RTB/SearchArea/Route, DEC-033)을 waypoint MA와 같이 수행한다.
-  속도는 작업에 없으면 leader_speed_mps.
+- 리더: 작업(MoveTo/Hold/RTB/SearchArea/Route, DEC-033)과 MS 임무(Track/Jam/Strike, 센서 지향, DEC-106 common.PayloadTasker)를
+  waypoint MA와 같이 수행한다. 속도는 작업에 없으면 leader_speed_mps. 추종기는 작업을 수행하지 않고 리더를 따른다.
 - 추종기: 슬롯 = 리더 위치 + R(리더 침로)·오프셋(FRD). 목표 속도 = 리더 속도 + k_p·(슬롯 − 자기),
   보정은 corr_max_mps로 제한한다. HSA로 매 프레임 갱신한다.
   리더 상태가 leader_timeout_s보다 오래되면 현재 침로를 유지한다.
@@ -26,8 +26,8 @@ from swarm.v1 import c2_pb2, mp_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, MissionAutonomy, ParamDef, ParamLayer
 from swarm_api.geo import ned_offset, offset_geo
 
-from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, TRACK_SHARE_PARAMS, CommandIds, PlanWatcher, TaskPilot, TrackSharer,
-                     assigned_task, every, peer_status)
+from .common import (APPROVAL_PARAMS, LOST_LINK_PARAMS, PAYLOAD_TASK_PARAMS, TRACK_SHARE_PARAMS, CommandIds, PlanWatcher,
+                     TaskPilot, TrackSharer, assigned_task, every, peer_status)
 
 F = c2_pb2
 
@@ -80,6 +80,7 @@ class Formation(MissionAutonomy):
         *LOST_LINK_PARAMS,
         *APPROVAL_PARAMS,
         *TRACK_SHARE_PARAMS,
+        *PAYLOAD_TASK_PARAMS,
     )
 
     def on_init(self, ctx: AgentContext) -> None:
@@ -91,7 +92,7 @@ class Formation(MissionAutonomy):
         self.corr_max = float(p.get("corr_max_mps", 12.0))
         self.timeout_s = float(p.get("leader_timeout_s", 3.0))
         self.pilot = TaskPilot(ctx, float(p.get("acceptance_m", 80.0)), float(p.get("hold_radius_m", 400.0)),
-                               self.leader_speed)
+                               self.leader_speed, payload_tasks=True)
         self.cmd: c2_pb2.FormationCommand | None = None
         self.leader = ""
         self.offsets: dict[str, tuple[float, float, float]] = {}
@@ -153,11 +154,11 @@ class Formation(MissionAutonomy):
                     self.cmd = None  # 이 편대에서 빠졌다
             else:
                 other.append(m)
-        for m in ctx.ports.p2p.inbox():
+        p2p = ctx.ports.p2p.inbox()
+        for m in p2p:
             if isinstance(m, p2p_pb2.PeerStatus):
                 self.peers[m.header.source] = m
         nav = ctx.ports.vi.nav()
-        self.tracks.step()
         if self._announce and self.cmd is not None:
             self._announce = False
             ctx.ports.p2p.send(p2p_pb2.LeaderUpdate(group_id=self.cmd.group_id, leader=self.leader, term=self.term))
@@ -169,8 +170,12 @@ class Formation(MissionAutonomy):
                 self.ids.end()            # 뒤이은 작업 명령이 이 명령을 대신한다
                 cmd.hsa.speed_mps = self.leader_speed
                 ctx.ports.vi.command(cmd)
-            self.pilot.step(other)
+            self.pilot.step(other, p2p)
+            self.tracks.step(self.pilot.tasker.detections)
         else:
+            self.tracks.step()
+            if self.pilot.tasker.active:
+                self.pilot.tasker.release_payloads()   # 리더에서 추종기로 바뀌었다
             ctx.ports.vi.command_status()
             link = self.pilot.link
             if any(assigned_task(ctx, m) for m in other):
