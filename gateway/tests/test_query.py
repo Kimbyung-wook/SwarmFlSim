@@ -1,4 +1,4 @@
-"""TC-GW-062~065: QueryDataRequest 응답 (DEC-112, IMP-GW-038)"""
+"""TC-GW-062~069: QueryDataRequest 응답 (DEC-112, IMP-GW-038·039)"""
 import pytest
 from lxml import etree
 
@@ -22,8 +22,8 @@ def _gw(bus, codec, **cfg):
     return gw, sent
 
 
-def _query(gw, *types, state="NEW", **data):
-    md = {"RequestID": {"UUID": RID}, "RequestState": state, **data,
+def _query(gw, *types, state="NEW", rid=RID, **data):
+    md = {"RequestID": {"UUID": rid}, "RequestState": state, **data,
           "QueryMessage": {"MessageType": list(types)} if types else {}}
     return gw.envelope(QUERY, md)
 
@@ -83,8 +83,8 @@ def test_empty_type_list_means_all_and_no_values_yet(bus, codec):
         assert {r["$type"] for r in _results(st[-1])} >= {"SystemStatusMT", "MA_TaskStatusMT"}
         _, st = _ask(gw, sent, QueryResultLimit=1)
         assert len(_results(st[-1])) == 1
-        _, st = _ask(gw, sent, "SYSTEM_STATUS", SystemID={"UUID": C2})   # 다른 시스템: 결과 없음
-        assert st[-1]["RequestProcessingState"] == "COMPLETED" and "Result" not in st[-1]
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", SystemID={"UUID": C2})   # SystemID는 요청한 시스템: 거르지 않는다
+        assert st[-1]["RequestProcessingState"] == "COMPLETED" and len(_results(st[-1])) == 1
         _, st = _ask(gw, sent, "SYSTEM_STATUS", SystemID={"UUID": PLATFORM}, MostRecentMessagesOnly="")
         assert len(_results(st[-1])) == 1
     finally:
@@ -96,22 +96,22 @@ def test_empty_type_list_means_all_and_no_values_yet(bus, codec):
     (("WEATHER",), {}, "CAPABILITY_UNAVAILABLE", "WEATHER"),
     (("MA_TASK_COMMAND",), {}, "CAPABILITY_UNAVAILABLE", "MA_TASK_COMMAND"),   # 받는 명령은 조회 대상 아님
     (("SYSTEM_STATUS",), {"QueryIdentifiersOnly": ""}, "INVALID_INPUT_PARAMETER", "QueryIdentifiersOnly"),
-    (("SYSTEM_STATUS",), {"ResultsInNative": [{"MessageType": "SYSTEM_STATUS", "ReceiverAddress": "x"}]},
-     "INVALID_INPUT_PARAMETER", "ResultsInNative"),
+    (("SYSTEM_STATUS",), {"ResultsInNative": [{"MessageType": "WEATHER", "ReceiverAddress": "x"}]},
+     "CAPABILITY_UNAVAILABLE", "WEATHER"),
 ])
 def test_unanswerable_queries_are_rejected_with_reason(bus, codec, types, data, reason, text):
     gw, sent = _gw(bus, codec)
     try:
         out, st = _ask(gw, sent, *types, **data)
-        assert [s["RequestProcessingState"] for s in st] == ["PROCESSING", "REJECTED"]
-        r = st[1]["RequestProcessingStateReason"]
+        assert [s["RequestProcessingState"] for s in st] == ["REJECTED"]   # 처리하지 않으므로 하나만 (TC-GW-066)
+        r = st[0]["RequestProcessingStateReason"]
         assert r["Reason"] == reason and text in r["Description"]
         assert out.reason == "REJECTED" and gw.counters["query.REJECTED"] == 1
     finally:
         gw.close()
 
 
-def test_condition_paging_cancel_and_invalid(bus, codec):
+def test_condition_and_invalid(bus, codec):
     gw, sent = _gw(bus, codec)
     try:
         q = _query(gw, "SYSTEM_STATUS")
@@ -119,19 +119,77 @@ def test_condition_paging_cancel_and_invalid(bus, codec):
         gw.to_xml(q)                                                 # XSD에 맞는 조건식
         sent.clear()
         gw.handle_external(QUERY, q)
-        r = _statuses(sent)[-1]["RequestProcessingStateReason"]
+        st = _statuses(sent)
+        assert [s["RequestProcessingState"] for s in st] == ["REJECTED"]
+        r = st[0]["RequestProcessingStateReason"]
         assert r["Reason"] == "INVALID_INPUT_PARAMETER" and r["Description"].endswith("Query condition")
-        S.deliver(bus, S.system_status())
-        S.deliver(bus, S._h(S.system_status(), "uav-002"))
-        _, st = _ask(gw, sent, "SYSTEM_STATUS", ResultsPerPage=1)
-        assert st[-1]["RequestProcessingState"] == "REJECTED" and "paging" in st[-1]["RequestProcessingStateReason"]["Description"]
-        _, st = _ask(gw, sent, "SYSTEM_STATUS", ResultsPerPage=5)
-        assert len(_results(st[-1])) == 2
-        _, st = _ask(gw, sent, "SYSTEM_STATUS", state="CANCEL")
-        assert [s["RequestProcessingState"] for s in st] == ["CANCELED"]
         bad = _query(gw, "SYSTEM_STATUS")
         del bad[QUERY]["MessageData"]["RequestID"]
         assert gw.handle_external(QUERY, bad).status == "rejected" and gw.counters["query_invalid"] == 1
+    finally:
+        gw.close()
+
+
+# ---------------------------------------------------------------- TC-GW-067 쪽 나눔
+def test_results_per_page_splits_into_completed_pages(bus, codec):
+    gw, sent = _gw(bus, codec)
+    try:
+        for uav in ("uav-001", "uav-002", "uav-003"):
+            S.deliver(bus, S._h(S.system_status(), uav))
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", ResultsPerPage=2)
+        assert [s["RequestProcessingState"] for s in st] == ["PROCESSING", "COMPLETED", "COMPLETED"]
+        assert [s["QueryPagination"] for s in st[1:]] == [{"CurrentPage": 1, "TotalPages": 2},
+                                                          {"CurrentPage": 2, "TotalPages": 2}]
+        assert [len(_results(s)) for s in st[1:]] == [2, 1]
+        for _, o in sent:
+            gw.to_xml(o)                                             # 쪽마다 XSD 통과
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", ResultsPerPage=5)    # 한 쪽에 들어가면 나누지 않는다
+        assert len(_results(st[-1])) == 3 and "QueryPagination" not in st[-1]
+        assert gw.counters["query.COMPLETED"] == 3
+    finally:
+        gw.close()
+
+
+# ---------------------------------------------------------------- TC-GW-068 원형 배달
+def test_results_in_native_resends_messages_on_their_topic(bus, codec):
+    gw, sent = _gw(bus, codec)
+    try:
+        S.deliver(bus, S.system_status())
+        S.deliver(bus, S.task_status())
+        first = [(t, o) for t, o in sent if "SystemStatus" in o]
+        assert len(first) == 1
+        sent.clear()
+        gw.handle_external(QUERY, _query(gw, "SYSTEM_STATUS", "MA_TASK_STATUS",
+                                         ResultsInNative=[{"MessageType": "SYSTEM_STATUS", "ReceiverAddress": "c2"}]))
+        assert [next(iter(o)) for _, o in sent] == [QUERY_STATUS, "SystemStatus", QUERY_STATUS]
+        assert [(t, o) for t, o in sent if "SystemStatus" in o] == first   # 같은 토픽, 같은 메시지
+        done = _statuses(sent)[-1]
+        assert done["RequestProcessingState"] == "COMPLETED"
+        assert [r["$type"] for r in _results(done)] == ["MA_TaskStatusMT"]   # 원형으로 간 것은 Result에서 뺀다
+        assert gw.counters["query_native"] == 1
+    finally:
+        gw.close()
+
+
+# ---------------------------------------------------------------- TC-GW-069 CANCEL
+def test_cancel_of_unknown_and_finished_requests(bus, codec):
+    gw, sent = _gw(bus, codec)
+    try:
+        other = "7d1c3e5a-0000-4000-8000-00000000ffff"
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", state="CANCEL", rid=other)   # 받은 적 없는 요청
+        assert [s["RequestProcessingState"] for s in st] == ["REJECTED"]
+        assert st[0]["RequestProcessingStateReason"]["Reason"] == "UNKNOWN_ID"
+        assert st[0]["RequestID"] == {"UUID": other}
+        _ask(gw, sent, "SYSTEM_STATUS")                                       # 끝난 요청: 끝 상태를 다시 알린다
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", state="CANCEL")
+        assert [s["RequestProcessingState"] for s in st] == ["COMPLETED"] and "Result" not in st[0]
+        _ask(gw, sent, "WEATHER", rid=other)                                  # 거부한 요청의 CANCEL
+        _, st = _ask(gw, sent, state="CANCEL", rid=other)
+        assert [s["RequestProcessingState"] for s in st] == ["REJECTED"] and "RequestProcessingStateReason" not in st[0]
+        _, st = _ask(gw, sent, "SYSTEM_STATUS", state="UPDATE")               # UPDATE는 NEW처럼 다시 답한다
+        assert [s["RequestProcessingState"] for s in st] == ["PROCESSING", "COMPLETED"]
+        for _, o in sent:
+            gw.to_xml(o)
     finally:
         gw.close()
 

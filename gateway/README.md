@@ -206,14 +206,18 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | 수신 | (버스로 넘기지 않음, Gateway가 답함) | `QueryDataRequest` | `swarm.c2` |
 | 발행 | (조회 응답, 위 최신 값으로) | `QueryDataRequestStatus` | `swarm.c2` |
 
-조회(DEC-112): 외부 `QueryDataRequest`에 Gateway가 이미 내보낸 메시지의 기체별 최신 값으로 답한다(MA·런타임에 묻지 않는다).
-`QueryDataRequestStatus` PROCESSING을 먼저 내고, 이어서 COMPLETED(`Result.Message`에 최신 값) 또는 REJECTED(사유)를 낸다.
-CANCEL은 CANCELED 하나다. 최신 값은 (UCI 이름, 보고 기체, 키)마다 마지막 것 하나이고, 키는 변화 보고 보관 규칙과 같다(TaskStatus는 작업마다).
-- 답하는 조회: `QueryMessage.MessageType`이 모두 위 발행 메시지(비우면 전부). `QueryResultLimit`은 결과 수 상한(기본 최대 256).
-  `MessageData.SystemID`가 우리 시스템 UUID가 아니면 결과 없이 COMPLETED. `MostRecentMessagesOnly`는 그대로 만족한다.
-- 거부: 내보내지 않는 메시지 종류(CAPABILITY_UNAVAILABLE), 조건식 `Query`·`QueryIdentifiersOnly`·`ResultsInNative`·결과 수보다 작은
-  `ResultsPerPage`(INVALID_INPUT_PARAMETER). 사유 설명은 `RequestProcessingStateReason.Description`에 싣는다.
-- 카운터: `query_rx`, `query.PROCESSING`·`query.COMPLETED`·`query.REJECTED`·`query.CANCELED`, `query_invalid`.
+조회(DEC-112, IMP-GW-039): 외부 `QueryDataRequest`에 Gateway가 이미 내보낸 메시지의 기체별 최신 값으로 답한다(MA·런타임에 묻지 않는다).
+상태 값은 6.0a XSD 주석의 뜻을 따른다. 최신 값은 (UCI 이름, 보고 기체, 키)마다 마지막 것 하나이고, 키는 변화 보고 보관 규칙과 같다(TaskStatus는 작업마다).
+- NEW·UPDATE: `QueryDataRequestStatus` PROCESSING을 먼저 내고 COMPLETED(`Result.Message`에 최신 값, 없으면 Result 없음)를 낸다.
+  `QueryMessage.MessageType`이 비면 전부. `QueryResultLimit`은 결과 수 상한(기본 최대 256). `MostRecentMessagesOnly`는 그대로 만족한다.
+  `MessageData.SystemID`는 요청한 시스템이라 거르지 않는다.
+- `ResultsPerPage`가 결과 수보다 작으면 COMPLETED를 쪽마다 하나씩 내고 `QueryPagination`(CurrentPage, TotalPages)을 싣는다.
+- `ResultsInNative`에 든 종류는 그 메시지 자체를 평소 토픽에 다시 내고(`query_native`) Result에서 뺀다. `ReceiverAddress`는 평소 토픽으로 갈음한다.
+- 거부: REJECTED 하나만 낸다(처리하지 않으므로 PROCESSING 없음). 내보내지 않는 메시지 종류(CAPABILITY_UNAVAILABLE),
+  조건식 `Query`·`QueryIdentifiersOnly`(INVALID_INPUT_PARAMETER). 사유 설명은 `RequestProcessingStateReason.Description`에 싣는다.
+- CANCEL: 조회는 받자마자 끝나 취소할 처리가 없다. 받은 적 없는 RequestID는 REJECTED(UNKNOWN_ID) 하나,
+  이미 끝난 RequestID는 그 끝 상태를 결과 없이 다시 하나 낸다(최근 1024개 기억).
+- 카운터: `query_rx`, `query.PROCESSING`·`query.COMPLETED`·`query.REJECTED`·`query.FAILED`, `query_native`, `query_invalid`.
 
 ### ID 변환
 
