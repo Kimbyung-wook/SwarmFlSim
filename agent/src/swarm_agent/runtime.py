@@ -166,6 +166,7 @@ class AgentRuntime:
         prof_path = self.config.profile or os.environ.get(PROFILE_ENV, "")
         self._prof: TickProfile | None = TickProfile(prof_path) if prof_path else None
         self._prof_tick_s = 0.0                     # handle() 안에서 틱 처리에 쓴 시간 (입력 처리 시간에서 뺀다)
+        self.harness = None                         # 시험 하네스 어댑터 (harness_bridge.HarnessBridge, DEC-113). 기본 꺼짐
 
     # ---- 버스 입력 ----
 
@@ -304,6 +305,8 @@ class AgentRuntime:
         for name in self._dl_names:
             self._vehicle_subs.append(self._subscribe(keys.clock_done(name)))
         log.info("loaded '%s': hosting %d vehicles", scenario.name, len(self._order))
+        if self.harness is not None:
+            self.harness.bind(self)
         self._publish_params()
         if scenario.run.mode == sim_pb2.RUN_MODE_LOCKSTEP:  # 준비 신호: Core는 참여자 전원의 frame 0 뒤에 첫 틱을 낸다
             self._send_done(0)
@@ -663,6 +666,8 @@ class AgentRuntime:
                 tb = pc()
                 prof.add("release_onboard", tb - ta)
                 ta = tb
+        if self.harness is not None:                # 하네스에서 받은 VI·MS 입력과 시험 작업 (DEC-113)
+            self.harness.drain()
         for v in self._order:
             v.begin_frame(tick.frame, tick.sim_time_us, dt)
         if prof is not None:

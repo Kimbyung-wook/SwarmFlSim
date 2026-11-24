@@ -51,6 +51,7 @@ class Vehicle:
         self.task_reports: dict[str, Message] = {}
         self.nav_report_period: int | None = None
         self.capability_reported = False
+        self.bridge = None                          # 하네스 어댑터가 VI·MS를 대신 주고받는 기체면 그 브리지 (DEC-113)
         self.ports = PortsImpl(self, plan, criteria)
         self.ctx = AgentContext(entity_id=spec.id, frame=0, sim_time_s=0.0, dt_s=0.0,
                                 ports=self.ports, params=ma_set.values, rng=rng)
@@ -77,6 +78,8 @@ class Vehicle:
 
     def send_onboard(self, msg: Message) -> None:
         self.stamp(msg)
+        if self.bridge is not None and self.bridge.ms_command(self, msg):
+            return
         self._rt.publish_onboard(self, msg)
 
     def warn(self, text: str) -> None:

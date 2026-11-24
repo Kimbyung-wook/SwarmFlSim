@@ -96,6 +96,9 @@ class VIPortImpl:
             self._n += 1
             cmd.command_id = f"{self._v.entity_id}-fc-{self._n}"
         self._v.stamp(cmd)
+        if self._v.bridge is not None:              # 하네스가 FA 역할 (DEC-113). 상태는 하네스에서 온다
+            self._v.bridge.flight_command(self._v, cmd)
+            return
         self.push_status(self._v.fa.on_command(cmd))
 
     def command_status(self) -> Sequence[vi_pb2.FlightCommandStatus]:
