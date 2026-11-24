@@ -1,8 +1,8 @@
-커밋 `c86563d` (작업 트리에 커밋 전 변경 있음) · 계약 0.22.0 · agra_lacal `45274ce` · 실행 2026-11-23
+커밋 `4b70012` (작업 트리에 커밋 전 변경 있음) · 계약 0.23.0 · agra_lacal `45274ce` · 실행 2026-11-24
 
 # 표준 적합성 점검 보고 (REQ-STD-001, DEC-092)
 
-이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-23`에 있다.
+이 문서는 `qa/conformance/run.py`가 만든다(손으로 고치지 않는다). 판정 기준은 [44_standards_conformance.md](44_standards_conformance.md) C1~C7이다. 원자료는 `qa/out/conformance/2026-11-24b`에 있다.
 자체 점검이다(기준 §4). 공식 A-GRA 적합성 도구와 Distribution D 문서는 쓰지 않았다.
 
 ## 1. 요약
@@ -10,7 +10,7 @@
 | 항목 | 내용 | 판정 | 핵심 수치 | 발견 |
 |---|---|---|---|---|
 | C1 | 적용 범위 표 | 통과 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | — |
-| C2 | 형식 검증 (UCI) | 통과 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
+| C2 | 형식 검증 (UCI) | 통과 | 수신 9312건·실패 0, 부정 입력 10종 중 버스로 나감 0 | — |
 | C3 | 값 의미 검증 (UCI) | 통과 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | — |
 | C4 | A-GRA 기체 계층 경계 | 통과 | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | O-50 |
 | C5 | 상호작용 상태 흐름 | 통과 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | — |
@@ -58,10 +58,10 @@
 | 구분 | 내용 |
 |---|---|
 | 구성 | Logger(MCAP) · Datalink(participant datalink-0) · Agent(`agent_probe.py`가 감싼 swarm_agent.cli, agent-0) · Core(lockstep 1배속, 50 Hz, 평지) · CAL Server(agra_lacal, `lacal_server.yaml`에서 포트·server_id만 바꿈) · Gateway(`qa/gw_wrap.py`) · 외부 클라이언트(`qa/gw_ext_client.py`, external_c2) |
-| 시나리오 | `qa/out/conformance/2026-11-23/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
+| 시나리오 | `qa/out/conformance/2026-11-24b/run1/scenario.json` 시드 20261117. gcs-01, 기체 14대(waypoint 8, 정지 사수 1, formation 3, flocking_basic 3), 표적 1. 손실 없는 링크 |
 | 포트 | CAL 28765/28766, Zenoh 48900~48930 (기본 데모 8765/8766·7447과 겹치지 않음) |
-| 시간 | 모의 70.0 s, 벽시계 82 s (점검 전체 189 s) |
-| 프로세스 종료 | 띄운 PID만 정리: {'logger': 3760, 'datalink': 6460, 'agent': 19120, 'core': 23852, 'calsrv': 13860, 'gateway.1': 14488, 'ext': 10380}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
+| 시간 | 모의 70.0 s, 벽시계 91 s (점검 전체 198 s) |
+| 프로세스 종료 | 띄운 PID만 정리: {'logger': 25432, 'datalink': 22724, 'agent': 3540, 'core': 36524, 'calsrv': 40592, 'gateway.1': 29836, 'ext': 21548}. 끝날 때 죽어 있던 프로세스: 없음 (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상) |
 | 로그 이상 | 0줄 |
 
 입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 관측기가 본 뒤 재개했다.
@@ -191,7 +191,7 @@
 | MA_PackagePartnerStatusReport | 1050 | 0 |
 | MA_PositionReport | 2030 | 0 |
 | MA_TaskStatus | 34 | 0 |
-| PO_Activity | 4969 | 0 |
+| PO_Activity | 4970 | 0 |
 | StoreLoadoutConfiguration | 8 | 0 |
 | StrikeActivity | 1 | 0 |
 | SystemStatus | 14 | 0 |
@@ -231,15 +231,15 @@
 | Timestamp − 모의 시각 = 시나리오 epoch (s) | 0.5 | 0.000000 | 통과 |
 | Gateway epoch_changed | 0 | 0 | 통과 |
 
-Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795398654.558113 s, 최대 1795398654.558113 s.
+Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795493682.911916 s, 최대 1795493682.911916 s.
 
-시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795398654558113], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
+시각 기준(DEC-098): 관측한 `sim/ctrl/scenario` epoch_utc_us [1795493682911916], Gateway 카운터 {'epoch_set': 1, 'epoch_changed': 0}. Gateway 로그의 기준 관련 줄 0건.
 
 | 식별자 종류 | 참조 수 | 내부 ID 수 | 같은 ID에 UUID 여럿 | 같은 UUID에 표지 여럿 | 표지 없음 |
 |---|---|---|---|---|---|
 | SystemID | 4225 | 15 | 0 | 0 | 0 |
 | TaskID | 38 | 10 | 0 | 0 | 0 |
-| CapabilityID | 5054 | 24 | 0 | 0 | 0 |
+| CapabilityID | 5055 | 24 | 0 | 0 | 0 |
 | StoreLoadoutConfigurationID | 8 | 8 | 0 | 0 | 0 |
 | RequestID | 5 | 5 | 0 | 0 | 0 |
 | OperatorRoleID | 4 | 1 | 0 | 0 | 0 |
@@ -248,13 +248,13 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795398654.558113 s, �
 | ApplicablePackageID | 1 | 1 | 0 | 0 | 0 |
 | ProposedLeaderID | 1 | 1 | 0 | 0 | 0 |
 | CommandID | 1069 | 20 | 0 | 0 | 0 |
-| SubsystemID | 5096 | 66 | 0 | 0 | 0 |
-| ActivityID | 5040 | 10 | 0 | 0 | 0 |
+| SubsystemID | 5097 | 66 | 0 | 0 | 0 |
+| ActivityID | 5041 | 10 | 0 | 0 | 0 |
 | PackageID | 1050 | 1 | 0 | 0 | 0 |
 | EntityID | 117 | 2 | 0 | 0 | 0 |
 | AssociatedID | 117 | 1 | 0 | 0 | 0 |
 
-머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9311)].
+머리 SystemID(Gateway 자신): 1종 [('2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30', 9312)].
 
 상태값(DEC-090): 내부↔외부 순서 짝 {'TaskStatus': 33, 'FlightCommandStatus': 19}. 표와 다른 대응 0종. 대응 표:
 
@@ -393,7 +393,7 @@ Timestamp: 2030건, (Timestamp − 모의 시각) 최소 1795398654.558113 s, �
 | swarm/uav-013/rx/** | 예 |
 | swarm/uav-014/rx/** | 예 |
 
-Agent 발행 키 125개(접두·종류별 {'onboard_batch/agent-0': 1, 'sim/done': 1, 'sim/uav-001': 2, 'sim/uav-002': 2, 'sim/uav-003': 2, 'sim/uav-004': 2, 'sim/uav-005': 2, 'sim/uav-006': 2, 'sim/uav-007': 2, 'sim/uav-008': 2, 'sim/uav-009': 2, 'sim/uav-010': 2, 'sim/uav-011': 2, 'sim/uav-012': 2, 'sim/uav-013': 2, 'sim/uav-014': 2, 'swarm/tx': 95}), 허용 밖 0개. MCAP 채널 479개, Agent 발행 키 중 MCAP에 없는 것 0개. truth 채널 ['truth/state']는 Core 발행이고 Agent 구독·수신 기록에는 없다.
+Agent 발행 키 125개(접두·종류별 {'onboard_batch/agent-0': 1, 'sim/done': 1, 'sim/uav-001': 2, 'sim/uav-002': 2, 'sim/uav-003': 2, 'sim/uav-004': 2, 'sim/uav-005': 2, 'sim/uav-006': 2, 'sim/uav-007': 2, 'sim/uav-008': 2, 'sim/uav-009': 2, 'sim/uav-010': 2, 'sim/uav-011': 2, 'sim/uav-012': 2, 'sim/uav-013': 2, 'sim/uav-014': 2, 'swarm/tx': 95}), 허용 밖 0개. MCAP 채널 466개, Agent 발행 키 중 MCAP에 없는 것 0개. truth 채널 ['truth/state']는 Core 발행이고 Agent 구독·수신 기록에는 없다.
 
 MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 17}. 금지 목록: zenoh, swarm_api.bus, swarm_api.keys, swarm.v1.truth_pb2, swarm.v1.sim_pb2, swarm.v1.link_pb2, swarm.v1.fa_pb2, swarm_core, swarm_bus, swarm_bridge, swarm_gateway, swarm_datalink, swarm_logger, swarm_agent.runtime, swarm_agent.cli, swarm_agent.vehicle, swarm_agent.ports.
 
@@ -438,10 +438,10 @@ MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 1
 
 | 기체 | 작업 | 승인 필요 | 요청 | 응답 | 응답 모의 s | 첫 EXECUTING 모의 s | 판정 |
 |---|---|---|---|---|---|---|---|
-| uav-001 | ap-yes | 예 | 예 | approved | 11.04 | 11.18 | 통과 |
-| uav-002 | ap-no | 예 | 예 | rejected | 10.44 | — | 통과 |
+| uav-001 | ap-yes | 예 | 예 | approved | 10.54 | 10.68 | 통과 |
+| uav-002 | ap-no | 예 | 예 | rejected | 10.54 | — | 통과 |
 | uav-003 | ap-to | 예 | 예 | 없음 | — | — | 통과 |
-| uav-004 | task-001 | 예 | 예 | approved | 0.12 | 0.26 | 통과 |
+| uav-004 | task-001 | 예 | 예 | approved | 0.04 | 0.18 | 통과 |
 | uav-009 | x-hold | 아니오 | 아니오 | 없음 | — | 10.12 | 통과 |
 | uav-010 | x-rtb | 아니오 | 아니오 | 없음 | — | 10.14 | 통과 |
 
@@ -472,7 +472,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 1
 | swarm_gateway | pub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
 | swarm_gateway | pub | MA_PositionReport@swarm.vi | 980 | 일치 |
 | swarm_gateway | pub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
-| swarm_gateway | pub | PO_Activity@swarm.ms | 4969 | 일치 |
+| swarm_gateway | pub | PO_Activity@swarm.ms | 4970 | 일치 |
 | swarm_gateway | pub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
 | swarm_gateway | pub | StrikeActivity@swarm.ms | 1 | 일치 |
 | swarm_gateway | pub | SystemStatus@swarm.vi | 14 | 일치 |
@@ -495,7 +495,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 1
 | external_c2 | sub | MA_PositionReport@swarm.p2p | 1050 | 일치 |
 | external_c2 | sub | MA_PositionReport@swarm.vi | 980 | 일치 |
 | external_c2 | sub | MA_TaskStatus@swarm.c2 | 34 | 일치 |
-| external_c2 | sub | PO_Activity@swarm.ms | 4969 | 일치 |
+| external_c2 | sub | PO_Activity@swarm.ms | 4970 | 일치 |
 | external_c2 | sub | StoreLoadoutConfiguration@swarm.ms | 8 | 일치 |
 | external_c2 | sub | StrikeActivity@swarm.ms | 1 | 일치 |
 | external_c2 | sub | SystemStatus@swarm.vi | 14 | 일치 |
@@ -513,7 +513,7 @@ MA 소스(algorithms/src/swarm_algorithms) import 34건: {'API': 17, '일반': 1
 | MA_PositionReport@swarm.p2p | 1050 | 1050 | 예 |
 | MA_PositionReport@swarm.vi | 980 | 980 | 예 |
 | MA_TaskStatus@swarm.c2 | 34 | 34 | 예 |
-| PO_Activity@swarm.ms | 4969 | 4969 | 예 |
+| PO_Activity@swarm.ms | 4970 | 4970 | 예 |
 | StoreLoadoutConfiguration@swarm.ms | 8 | 8 | 예 |
 | StrikeActivity@swarm.ms | 1 | 1 | 예 |
 | SystemStatus@swarm.vi | 14 | 14 | 예 |

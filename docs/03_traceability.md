@@ -324,6 +324,12 @@
 | TC-QA-204 | O-30 realtime 시작 첫 송신 프레임, 20회 + lockstep 5회 | `qa/o30_start.py` | DEC-040, DEC-044 |
 | TC-QA-205 | O-31 Gateway lockstep(rate 1) Core overrun, 2회 | `qa/gw_plan.py --order-trial --lockstep` | DEC-040 |
 | TC-QA-206 | O-43·O-44 Agent 틱 단계별 몫, P 고정 긴 창 9회 | `qa/perf_p1.py` (`d3_w_prof_P`·`d3_w_tl_P`·`d3_w_ti_P`), `qa/o43_phase.py` | DEC-086 |
+| TC-QA-207 | IMP-API-025 새 버스 대 37차 버스, P 고정 번갈아 2배치 12+11회와 판정 구성(고정 안 함) 6회 | `qa/perf_p1_ab.py --b-sub api/python/src --b-mod swarm_api.bus`, `qa/perf_p1_batch.py` | DEC-086, DEC-087, OPN-077 |
+| TC-QA-208 | 같은 회차 Logger 비용 짝 (P 고정, 새 버스·37차 버스) | `qa/perf_p1_ab.py summary` | DEC-086, OPN-077 |
+| TC-QA-209 | O-52 위상 0 `report_activity`와 위상 4, 새 버스·옛 버스 각 3회 | `qa/perf_p1.py` (`d3_w_prof_P`·`d3_w_tl_P`), `qa/o43_phase.py` | DEC-086, OPN-077 |
+| TC-QA-210 | 표준 적합성 C1~C6, 4회 실행(새 버스 3·옛 버스 1)과 시작 시각 기준 | `qa/conformance/run.py --repeat 2` | DEC-098 |
+| TC-QA-211 | 결정성 5종 × 3회와 DEC-044 송신 개수 장벽 로그 | `qa/p2_lostlink.py --case det --runs 3` | DEC-040, DEC-044 |
+| TC-QA-212 | O-30 전체 구성(Logger·Bridge·CAL Server·Gateway·외부 클라이언트) 시작 첫 송신, realtime 34회 + lockstep 5회 | `qa/run_release.py qa/o30_start.py --full` | DEC-040, DEC-044 |
 
 ## 시험 결과
 
@@ -555,6 +561,12 @@
 | TC-QA-204 | 재현 안 됨 | 2026-11-23 | 25회 모두 전 기체 첫 송신 프레임 0. Logger·Bridge·Gateway 없는 구성 (§46.5) |
 | TC-QA-205 | 재현 | 2026-11-23 | overrun 87·90건(§28 7·28건), 누락 프레임 0 (§46.6) |
 | TC-QA-206 | 측정 | 2026-11-23 | 위상 0 13.7 ms(Agent 밖 5.8, `report_activity` 5.3~5.9), 위상 4 5.5 ms(Agent 밖 3.7). O-52 신규 (§46.7) |
+| TC-QA-207 | 측정 | 2026-11-24 | 새 버스가 P 고정 짝 중앙값 0.10 ms 빠름(합친 중앙값 켬 1.837 대 1.887 ms, 끔 1.629 대 1.744 ms). 판정 구성 10.95배 (§47.2) |
+| TC-QA-208 | 측정 | 2026-11-24 | Logger 비용 새 버스 0.130~0.182 ms, 37차 버스 0.207~0.228 ms (§47.2) |
+| TC-QA-209 | 통과 | 2026-11-24 | 위상 0 `report_activity` 5.06 → 0.94 ms, O-52 해소. 위상 4·위상 0 Agent 밖 그대로 (§47.3) |
+| TC-QA-210 | 통과 | 2026-11-24 | 첫 실행 C3 실패(시각 기준 바뀜 0.515 s), 다시 돌린 3회 C1~C6 통과. O-53 신규 (§47.4) |
+| TC-QA-211 | 통과 | 2026-11-24 | 5종 모두 3회 같음, 누락 0. 장벽 경고·대기 0줄 (§47.5) |
+| TC-QA-212 | 재현 | 2026-11-24 | realtime 34회 중 1회 전 기체 첫 송신 프레임 7, 나머지와 lockstep 5회는 0 (§47.6) |
 
 ## 프로세스 결정
 
