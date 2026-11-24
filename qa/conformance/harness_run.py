@@ -17,6 +17,13 @@
   26  부정 입력 10종 (neg-*)
   30  StrikeActivity 자극: 관측기가 onboard/uav-005/StrikeCommand를 직접 낸다(시험 전용 주입. 기본 MA에는 무장 경로가 없다, O-45)
   70  일시정지 → /graph 스냅샷 → 종료
+
+39차(DEC-109·111·112)
+  envelope=True(기본): Gateway·외부 클라이언트 모두 봉투(MA_TxDataPayloadCommand·MA_RxDataPayload). CAL 설정은 lacal_server.yaml.
+      부정 입력에 봉투 4종(주소 밖·MessageType 불일치·봉투 없음·ASCII 아님)을 더한다.
+  envelope=False: Gateway --envelope off, 외부 --envelope off, CAL 설정은 lacal_server_raw.yaml(예전 기대값).
+  late_gw=True: Gateway를 Core가 시작해 LATE_S 동안 돈 뒤에 띄운다(시작 때 시나리오 발행을 놓쳐 조회로 받아야 한다, O-53).
+  22 s에 QueryDataRequest(MA_TASK_STATUS)를 하나 보내 QueryDataRequestStatus를 기다린다(DEC-112).
 """
 from __future__ import annotations
 
@@ -47,6 +54,8 @@ BASE_PORT = 48900
 HZ = 50
 SEED = 20261117
 T_CMD, T_MISSION, T_CANCEL, T_NEG, T_STRIKE, T_END = 10.0, 14.0, 22.0, 26.0, 30.0, 70.0
+LATE_S = 4.0          # 39차: late_gw일 때 Gateway를 띄우기 전 Core가 도는 모의 시간
+CAL_SYSTEM = "2a7d4c1e-6b0f-4e3a-9c55-0d8e7f1a2b30"   # lacal_server*.yaml system_uuid (Gateway·외부가 같은 서버에 붙는다)
 APPROVE = {"task-001": "APPROVED", "ap-yes": "APPROVED", "ap-no": "REJECTED"}
 WP = ["uav-001", "uav-002", "uav-003", "uav-004"]
 SHOOTER = "uav-005"
@@ -124,6 +133,27 @@ def scenario() -> dict:
                                     "weapons_free": [{"circle": {"center": at(1500, 3000), "radius_m": 10000.0}}]}}
 
 
+def env_negatives() -> list[dict]:
+    """39차: 봉투 부정 입력 (봉투 모드에서만). 내부 메시지는 정상 hold 명령이다"""
+    def hold(tag: str, **env) -> dict:  # noqa: ANN003
+        return {"tag": tag, "task_id": tag, "entities": ["uav-012"], "kind": "hold", "env": env}
+    return [
+        {**hold("neg-env-notaddr", dest=[gp.u("neg-env-notaddr/dest")]),
+         "why": "SpecificDestinationID에 Gateway UUID가 없다(무시해야 한다)"},
+        {**hold("neg-env-mtype", mtype="MA_ROUTE_PLAN"), "why": "봉투 MessageType이 내부 메시지와 다르다"},
+        {**hold("neg-env-none", none=True), "why": "봉투 없이 내부 메시지를 그대로 보냄"},
+        {"tag": "neg-env-ascii", "why": "내부 XML에 ASCII가 아닌 바이트", "task_id": "neg-env-ascii",
+         "entities": ["uav-012"], "kind": "hold", "label_suffix": "é", "env": {}},
+    ]
+
+
+def query_cmd() -> dict:
+    """39차: QueryDataRequest (작업 상태 최신 값)"""
+    return {"raw": "QueryDataRequest", "topic": "swarm.c2", "tag": "query task-status",
+            "data": {"RequestID": {"UUID": gp.u("q-c1"), "DescriptiveLabel": "q-c1"}, "RequestState": "NEW",
+                     "QueryMessage": {"MessageType": ["MA_TASK_STATUS"]}}}
+
+
 def negatives() -> list[dict]:
     """부정 입력. 모두 neg- 식별자. 'cmd'는 외부 클라이언트의 TaskCommand 작성기, 'raw'는 MessageData를 그대로 싣는다"""
     pts = route_pts()
@@ -164,13 +194,14 @@ def negatives() -> list[dict]:
     return out
 
 
-def cal_config(out: Path) -> Path:
-    src = (ROOT / "gateway" / "config" / "lacal_server.yaml").read_text(encoding="utf-8")
+def cal_config(out: Path, envelope: bool = True) -> Path:
+    name = "lacal_server.yaml" if envelope else "lacal_server_raw.yaml"
+    src = (ROOT / "gateway" / "config" / name).read_text(encoding="utf-8")
     txt = re.sub(r"^server_id: .*$", "server_id: calsrv-swarm-qa29", src, count=1, flags=re.M)
     txt = txt.replace("port: 8765}", f"port: {CAL_PORT}}}").replace("port: 8766}", f"port: {ADMIN_PORT}}}")
     assert f"port: {CAL_PORT}" in txt and f"port: {ADMIN_PORT}" in txt, "CAL 설정 포트 치환 실패"
     p = out / "lacal_server.yaml"
-    p.write_text("# QA 29차: gateway/config/lacal_server.yaml에서 server_id·포트만 바꿨다 (harness_run.py가 만든다)\n" + txt,
+    p.write_text(f"# QA 29차: gateway/config/{name}에서 server_id·포트만 바꿨다 (harness_run.py가 만든다)\n" + txt,
                  encoding="utf-8")
     return p
 
@@ -268,7 +299,8 @@ def http_json(url: str, timeout: float = 5.0) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
-def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN001, C901, PLR0915
+def run(out: Path, base_port: int = BASE_PORT, log=print, envelope: bool = True,  # noqa: ANN001, C901, PLR0915
+        late_gw: bool = False) -> dict:
     """원자료를 out에 쓰고 요약(marks, 진행 기록)을 돌려준다"""
     out.mkdir(parents=True, exist_ok=True)
     ext_dir = out / "ext"
@@ -279,14 +311,15 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
     sc = scenario()
     sp = out / "scenario.json"
     sp.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
-    cfg = cal_config(out)
+    cfg = cal_config(out, envelope)
+    env_arg = "on" if envelope else "off"
     os.environ["PYTHONIOENCODING"] = "utf-8"
     os.environ["CONF_AGENT_PROBE"] = str(out / "agent_probe.json")
     os.environ["GW_PROBE_OUT"] = str(out / "gw1.json")
     st = ConfStack(out / "stack", sp, base_port=base_port, lockstep=True, rate=1.0, record=True, hz=HZ,
                    core_extra=["--terrain-flat", "0"])
     extra: list = []
-    marks: dict = {"t0_epoch": time.time(), "events": []}
+    marks: dict = {"t0_epoch": time.time(), "events": [], "envelope": envelope, "late_gw": late_gw}
     ncmd = [0]
     pids: dict[str, int] = {}
     ob: ConfObserver | None = None
@@ -321,6 +354,10 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
         n = sum(c.get(k, 0) for k in ("rejected", "unmapped"))   # ext_rejected는 같은 거부를 한 번 더 센다
         return n, list(g.get("rejections", []))
 
+    def gw_ignored() -> int:
+        """39차: 주소 밖 봉투는 거부가 아니라 무시한다(envelope_not_addressed)"""
+        return int(((read_json(out / "gw1.json", default={}) or {}).get("counters", {})).get("envelope_not_addressed", 0))
+
     def tx_after(n0: int, pred) -> list[dict]:  # noqa: ANN001
         with ob.lock:
             return [r for r in ob.tx[n0:] if pred(r)]
@@ -341,19 +378,38 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
                bus=[(r["msg"], r.get("id"), r.get("dst")) for r in seen][:4])
 
     def send_negatives() -> None:
-        for c in negatives():
+        for c in negatives() + (env_negatives() if envelope else []):
             with ob.lock:
                 n0 = len(ob.tx)
             r0, _ = gw_rej()
+            i0 = gw_ignored()
             f = put_cmd({k: v for k, v in c.items() if k != "why"})
             rec = wait_sent(f) or {}
             time.sleep(1.6)            # gw1.json은 0.5 s마다 쓴다
             r1, rej = gw_rej()
+            if gw_ignored() > i0:
+                rej = [*rej, "envelope_not_addressed (무시)"]
+                r1 += 1
             seen = tx_after(n0, lambda r: str(r.get("id", "")).startswith("neg-") or "uav-999" in r.get("dst", []))
             ev(f"neg {c['tag']}", pub=rec.get("pub"), xsd_ok=rec.get("xsd_ok"), xsd_err=rec.get("xsd_err"),
                gw_rej_delta=r1 - r0, gw_rej_new=rej[-(r1 - r0):] if r1 > r0 else [],
                bus=[{"msg": r["msg"], "id": r.get("id"), "dst": r.get("dst"), "key": r["key"]} for r in seen][:4],
-               why=c["why"])
+               why=c["why"], env_xsd_ok=rec.get("env_xsd_ok"))
+
+    def send_query() -> None:
+        """39차: QueryDataRequest → QueryDataRequestStatus(PROCESSING, 끝 상태)를 외부가 받을 때까지"""
+        f = put_cmd(query_cmd())
+        rec = wait_sent(f) or {}
+        end = time.monotonic() + 8.0
+        got: list = []
+        while time.monotonic() < end:
+            got = [x[6] for x in ext_state().get("rx", []) if x[1] == "QueryDataRequestStatus"
+                   and x[6].get("req") == "q-c1"]
+            if any(g.get("state") in ("COMPLETED", "REJECTED") for g in got):
+                break
+            time.sleep(0.2)
+        ev("query q-c1 MA_TASK_STATUS", pub=rec.get("pub"), xsd_ok=rec.get("xsd_ok"),
+           states=[g.get("state") for g in got], n=[g.get("n") for g in got])
 
     try:
         cal = p0.Proc("calsrv", [str(GW_PY), "-m", "swarm_gateway.lacal_server", "--config", str(cfg)], st.out,
@@ -363,31 +419,44 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
         st.start_one("logger")
         st.start_one("datalink")
         st.start_one("agent")
-        gw = p0.Proc("gateway.1", [str(GW_PY), str(QA / "gw_wrap.py"), "--gcs", GCS, "--lacal", CAL_URL,
-                                   "--lacal-admin", f"ws://{CAL_ADMIN}", "--no-multicast", "--connect", st.endpoint(),
-                                   "--listen", f"tcp/127.0.0.1:{base_port + 30}", "--stats-s", "5"], st.out, cwd=ROOT)
-        extra.append(gw)
+        def start_gw() -> None:
+            gw = p0.Proc("gateway.1", [str(GW_PY), str(QA / "gw_wrap.py"), "--gcs", GCS, "--lacal", CAL_URL,
+                                       "--lacal-admin", f"ws://{CAL_ADMIN}", "--no-multicast", "--connect", st.endpoint(),
+                                       "--listen", f"tcp/127.0.0.1:{base_port + 30}", "--stats-s", "5",
+                                       "--envelope", env_arg], st.out, cwd=ROOT)
+            extra.append(gw)
+            end = time.monotonic() + 60
+            while "gateway: ready at" not in (st.out / "gateway.1.log").read_text(encoding="utf-8", errors="replace"):
+                assert time.monotonic() < end, "Gateway 준비 실패"
+                time.sleep(0.2)
+
         x = p0.Proc("ext", [str(GW_PY), str(QA / "gw_ext_client.py"), "--url", CAL_URL, "--admin", CAL_ADMIN,
                             "--out", str(ext_dir), "--approve", json.dumps(APPROVE),
-                            "--full", str(ext_dir / "full.jsonl")], st.out, cwd=ROOT)
+                            "--full", str(ext_dir / "full.jsonl"), "--envelope", env_arg], st.out, cwd=ROOT)
         extra.append(x)
         end = time.monotonic() + 60
         while not (ext_dir / "ext.ready").exists() and time.monotonic() < end:
             time.sleep(0.2)
         assert (ext_dir / "ext.ready").exists(), "외부 클라이언트 준비 실패"
-        while "gateway: ready at" not in (st.out / "gateway.1.log").read_text(encoding="utf-8", errors="replace"):
-            assert time.monotonic() < end, "Gateway 준비 실패"
-            time.sleep(0.2)
+        if not late_gw:
+            start_gw()
         time.sleep(st.settle)
         ob = ConfObserver([st.endpoint()])
         ob.watch_onboard()
         ob.watch_scenario()
         time.sleep(1.0)
         st.start_one("core")
+        assert gp.wait_frame(ob, 20, 90), "Core 시작 대기 실패"
+        if late_gw:     # 39차: Core가 LATE_S 돈 뒤 일시정지 상태에서 Gateway를 붙인다
+            assert gp.wait_frame(ob, int(LATE_S * HZ), 120), "Core 진행 대기 실패"
+            ob.pause()
+            gp.wait_paused(ob)
+            ev("late gateway start")
+            start_gw()
+            time.sleep(st.settle)
         pids = {n: p.p.pid for n, p in st.procs.items()} | {p.name: p.p.pid for p in extra}
         marks["pids"] = pids
         log(f"[conf] pids {pids}")
-        assert gp.wait_frame(ob, 20, 90), "Core 시작 대기 실패"
         ob.pause()
         at_f = gp.wait_paused(ob)
         pts = route_pts()
@@ -416,6 +485,7 @@ def run(out: Path, base_port: int = BASE_PORT, log=print) -> dict:  # noqa: ANN0
                                                   "data": gp.mission_data("plan-c1", "uav-011", ["r-c1"])},
                      lambda r: r["msg"] == "MissionPlan" and r.get("id") == "plan-c1")])
         goto(T_CANCEL)
+        send_query()
         send_valid([("cancel x-hold uav-009", {"task_id": "x-hold", "entities": ["uav-009"], "kind": "hold",
                                                "cancel": True},
                      lambda r: r["msg"] == "TaskCommand" and r.get("id") == "x-hold" and r.get("cancel"))])
@@ -456,8 +526,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--base-port", type=int, default=BASE_PORT)
+    ap.add_argument("--envelope", choices=("on", "off"), default="on")
+    ap.add_argument("--late-gw", action="store_true")
     a = ap.parse_args()
     try:
-        run(Path(a.out).resolve(), a.base_port)
+        run(Path(a.out).resolve(), a.base_port, envelope=a.envelope == "on", late_gw=a.late_gw)
     finally:
         h.Stack.down_all()

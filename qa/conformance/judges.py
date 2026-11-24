@@ -190,10 +190,43 @@ def judge_c2(rx: list[dict], sent: list[dict], negatives: list[dict]) -> dict:
             fails.append(f"부정 입력 {n['tag']}: 거부 기록이 없다")
     if not rx:
         fails.append("외부 수신이 0건")
+    env = judge_envelope(rx, sent)
+    fails += env["fail"]
     return {"verdict": verdict(fails), "fail": fails,
             "rx": {k: {"n": v[0], "fail": v[1]} for k, v in sorted(by.items())},
             "sent": {k: {"n": v[0], "fail": v[1]} for k, v in sorted(sent_by.items())},
-            "negatives": negatives}
+            "negatives": negatives, "envelope": env["summary"]}
+
+
+def judge_envelope(rx: list[dict], sent: list[dict]) -> dict:
+    """39차(DEC-111): 봉투와 내부 메시지를 모두 검증했는지. 봉투가 하나도 없으면(--envelope off) 판정하지 않는다.
+    rx[i]["env"]: {name, ok, mt, mt_ok, inner_ascii, hdr_same}, sent[i]["env_xsd_ok"]"""
+    fails: list[str] = []
+    env_rx = [r for r in rx if r.get("env")]
+    env_tx = [s for s in sent if s.get("env") and not s.get("negative")]
+    if not env_rx and not env_tx:
+        return {"fail": [], "summary": {"mode": "off"}}
+    bad = Counter(r["name"] for r in env_rx if not r["env"].get("ok"))
+    mt = Counter(r["name"] for r in env_rx if r["env"].get("mt_ok") is False)
+    asc = Counter(r["name"] for r in env_rx if r["env"].get("inner_ascii") is False)
+    hdr = Counter(r["name"] for r in env_rx if r["env"].get("hdr_same") is False)
+    raw = [r for r in rx if not r.get("env")]
+    for k, n in sorted(bad.items()):
+        fails.append(f"수신 봉투({k}): 봉투 XSD 재검증 실패 {n}건")
+    for k, n in sorted(mt.items()):
+        fails.append(f"수신 봉투({k}): MessageType이 내부 메시지와 다름 {n}건")
+    for k, n in sorted(asc.items()):
+        fails.append(f"수신 봉투({k}): EncodedPayload가 ASCII가 아님 {n}건")
+    if raw:
+        fails.append(f"봉투 모드인데 봉투 없이 받은 메시지 {len(raw)}건 ({', '.join(sorted({r['name'] for r in raw}))})")
+    for s in env_tx:
+        if not s.get("env_xsd_ok"):
+            fails.append(f"송신 {s['tag'] or s['name']}: 외부가 싼 봉투가 XSD 재검증에 실패")
+    return {"fail": fails, "summary": {
+        "mode": "on", "rx": len(env_rx), "rx_names": sorted({r['env']['name'] for r in env_rx}),
+        "rx_fail": sum(bad.values()), "mt_fail": sum(mt.values()), "ascii_fail": sum(asc.values()),
+        "hdr_diff": sum(hdr.values()), "raw_rx": len(raw), "tx": len(env_tx),
+        "tx_fail": sum(1 for s in env_tx if not s.get("env_xsd_ok"))}}
 
 
 # ---------------------------------------------------------------------------------------------------------- C3
@@ -716,7 +749,7 @@ def graph_flows(graph: dict) -> dict[str, dict[str, Counter]]:
 
 
 def judge_c6(declared: dict, flows: dict, tap: Counter, ext_rx: Counter, inbound_bus: dict[str, int],
-             services: tuple[str, ...] = ("swarm_gateway", "external_c2")) -> dict:
+             services: tuple[str, ...] = ("swarm_gateway", "external_c2"), negative_flows: set[str] = frozenset()) -> dict:
     """declared: 설정 파일. flows: graph_flows. tap: (name@topic) → /tap 건수(Gateway 발신).
     ext_rx: (name@topic) → 시작부터 붙어 있던 외부 클라이언트 수신 수. inbound_bus: 외부 송신 UCI → 버스 tx 수"""
     fails: list[str] = []
@@ -728,6 +761,8 @@ def judge_c6(declared: dict, flows: dict, tap: Counter, ext_rx: Counter, inbound
             obs = {k for k, v in f[kind].items() if kind == "sub" or v > 0}
             for k in sorted(d[kind] | obs):
                 st = "일치" if k in d[kind] and k in obs else ("선언만" if k in d[kind] else "선언 밖")
+                if st == "선언 밖" and svc == "external_c2" and kind == "pub" and k in negative_flows:
+                    st = "선언 밖(부정 입력)"      # 39차: 봉투 없는 부정 입력. C2에서 배달되지 않았는지 본다
                 rows.append({"service": svc, "kind": kind, "flow": k, "count": f[kind].get(k, 0), "state": st})
                 if st == "선언만":
                     fails.append(f"{svc} {kind} {k}: 선언했지만 교환되지 않음")

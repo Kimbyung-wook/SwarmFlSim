@@ -113,6 +113,10 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
                        f"{[x for x in (m['dead'] or []) if x != 'ext'] or '없음'}"
                        + (" (외부 클라이언트 ext는 STOP 파일을 받고 스스로 끝난다. 정상)" if "ext" in (m["dead"] or []) else "")],
         ["로그 이상", f"{len(m['log_issues'])}줄" + (f" (예: {m['log_issues'][0][:120]})" if m['log_issues'] else "")],
+        ["외부 교환(39차)", ("봉투 켬(DEC-111, `lacal_server.yaml`)" if m.get("envelope", True)
+                         else "봉투 끔(`--envelope off`, `lacal_server_raw.yaml`)")
+         + (". Gateway를 Core 시작 뒤에 띄움(late_gw)" if m.get("late_gw") else ". Gateway를 Core보다 먼저 띄움")
+         + (f". Gateway 시나리오 받음: {m['gw_scenario']}" if m.get("gw_scenario") else "")],
     ])
     L.append("")
     L.append("입력은 Core를 일시정지한 프레임에서 넣었다(StepFrames로 정확한 프레임까지 간 뒤). 유효 입력은 Gateway가 버스에 낸 것을 "
@@ -180,6 +184,15 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     L += table(["수신 UCI", "건수", "재검증 실패"], [[k, x["n"], x["fail"]] for k, x in r2["rx"].items()])
     L.append("")
     L += table(["송신 UCI(정상 입력)", "건수", "재검증 실패"], [[k, x["n"], x["fail"]] for k, x in r2["sent"].items()])
+    L.append("")
+    e2 = r2.get("envelope") or {"mode": "off"}
+    if e2.get("mode") == "on":
+        L.append(f"봉투(DEC-111): 받은 봉투 {e2['rx']}건({', '.join(e2['rx_names'])}) — 봉투 재검증 실패 {e2['rx_fail']}, "
+                 f"MessageType 불일치 {e2['mt_fail']}, ASCII 아님 {e2['ascii_fail']}, 봉투 머리 ≠ 내부 머리 {e2['hdr_diff']}(정보), "
+                 f"봉투 없이 받음 {e2['raw_rx']}. 보낸 봉투(정상 입력) {e2['tx']}건 중 재검증 실패 {e2['tx_fail']}. "
+                 "위 수신·송신 표는 봉투를 푼 내부 메시지 기준이다.")
+    else:
+        L.append("봉투: 끔(`--envelope off`). 내부 메시지를 그대로 주고받았다.")
     L.append("")
     L += table(["부정 입력", "내용", "외부 사전 검증", "CAL Server", "거부 기록", "버스로 나감"],
                [[x["tag"], x["why"], "통과" if x["client_xsd_ok"] else "XSD 위반", "+OK" if x["pub"].startswith("+OK")

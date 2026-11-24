@@ -11,6 +11,12 @@
   PermissionError를 낸다(데모에서 클라이언트가 죽었다). 임시 파일을 프로세스별 이름으로 쓰고 replace를 0.05 s 간격으로
   재시도하며, 끝내 실패하면 그 회차는 건너뛰고 errors에 센다(클라이언트는 죽지 않는다).
   `--full <file>`이면 받은 메시지와 보낸 메시지 전체를 JSON 줄로 덧붙여 쓴다(교체 없이 append). /tap 기록에 토픽을 더했다(tap3).
+- 39차(DEC-111 봉투): `--envelope on`(기본, Gateway 기본과 같다)이면 MA_TxDataPayloadCommand를 vi·c2·p2p·ms에서 구독해
+  봉투를 XSD로 검증하고 EncodedPayload(hexBinary)를 풀어 내부 메시지를 다시 검증한다. 보내는 것은 모두 MA_RxDataPayload로
+  싼다. 봉투 처리는 Gateway 코드(envelope.py)를 쓰지 않고 README 설명대로 따로 만든다. rx 줄 끝(8번째)에 봉투 정보
+  {name, ok, err, mt, mt_ok, dest}를 붙이고, full.jsonl rx 줄에는 내부 이름·본문과 함께 "env"(봉투 본문 요약)를 남긴다.
+  명령 파일의 "env" {dest: [UUID], mtype: 값, none: true}로 부정 입력(주소 밖·MessageType 불일치·봉투 없음)을 만든다.
+  `--envelope off`는 예전 흐름(내부 메시지를 그대로 주고받음)이다.
 
 gateway/.venv/Scripts/python.exe qa/gw_ext_client.py --url ws://127.0.0.1:18765 --admin 127.0.0.1:18766 --out <dir>
 """
@@ -34,6 +40,9 @@ from client.lacal_client import CalError, LaCalClient  # noqa: E402
 from server.omsjson import OmsJsonCodec  # noqa: E402
 
 XSD = ROOT / "third_party" / "agra_lacal" / "schema" / "A-GRA_MessageDefinitions_v6_0_a.xsd"
+TX, RX = "MA_TxDataPayloadCommand", "MA_RxDataPayload"      # 39차: 봉투 (gateway/README.md "외부 교환 봉투")
+ENV_SUBS = ("vi", "c2", "p2p", "ms")
+ENVELOPE = True                                               # main()이 --envelope으로 바꾼다
 
 # gateway/README.md "교환 메시지" 표에서 옮겼다 (Gateway 코드에서 읽지 않는다)
 EXPORTS = {
@@ -55,13 +64,14 @@ def ref(label: str) -> dict:
     return {"UUID": str(uuid.uuid4()), "DescriptiveLabel": label}
 
 
-def task_command(system_uuid: str, task_id: str, entities: list[str], kind: str, cancel: bool = False) -> dict:
+def task_command(system_uuid: str, task_id: str, entities: list[str], kind: str, cancel: bool = False,
+                 label_suffix: str = "") -> dict:
     cmds = [{"Capability": {
         "CommandID": ref(f"{task_id}/{e}"),
         "CommandState": "CANCEL" if cancel else "NEW",
         "CapabilityID": ref(f"{e}/{kind}"),
         "Ranking": {"Rank": {"Priority": 0, "PrecedenceWithinPriority": 0}},
-        "TaskID": ref(task_id),
+        "TaskID": ref(task_id + label_suffix),
     }} for e in entities]
     return {"MA_TaskCommand": {
         "SecurityInformation": {"Classification": "U", "OwnerProducer": [{"GovernmentIdentifier": "USA"}]},
@@ -80,22 +90,67 @@ def envelope(system_uuid: str, name: str, data: dict) -> dict:
     }}
 
 
-async def send_raw(cli, codec, ext, fname: str, c: dict) -> None:  # noqa: ANN001
-    """XSD를 통과하지 않는 메시지도 그대로 보내 서버 응답을 기록한다"""
-    msg = envelope(cli.system_uuid, c["raw"], c["data"])
-    rec = {"file": fname, "tag": c.get("tag", ""), "name": c["raw"], "topic": c["topic"], "t": round(time.time(), 3)}
+def message_type(name: str) -> str:
+    """39차: 메시지 이름 → MessageTypeEnum 값 (MA_TaskCommand → MA_TASK_COMMAND)"""
+    import re
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", name).upper()
+
+
+def inner_xml(codec, msg: dict) -> bytes:  # noqa: ANN001
+    """내부 메시지 XML 문서. XSD 위반 부정 입력도 싸야 하므로 여기서는 검증하지 않는다"""
+    from lxml import etree
+    return etree.tostring(codec.json_to_xml(msg), xml_declaration=True, encoding="UTF-8")
+
+
+def wrap_rx(cli, codec, msg: dict, env: dict) -> dict:  # noqa: ANN001
+    """39차: 내부 메시지 → MA_RxDataPayload (외부 쪽 CAL이 하는 일). env: {dest, mtype}"""
+    (name, body), = msg.items()
+    hdr = dict(body["MessageHeader"])
+    data = {"RxDataPayloadID": {"UUID": str(uuid.uuid4())}, "DataPayloadOriginatorID": {"UUID": cli.system_uuid},
+            "EncodedPayload": inner_xml(codec, msg).hex().upper(), "Timestamp": hdr["Timestamp"],
+            "MessageType": env.get("mtype") or message_type(name), "DestinationRouting": "TOPIC_AND_SPECIFIC_DESTINATION"}
+    if env.get("dest"):
+        data["SpecificDestinationID"] = [{"UUID": u} for u in env["dest"]]
+    return {RX: {"SecurityInformation": body["SecurityInformation"], "MessageHeader": hdr, "MessageData": data}}
+
+
+async def publish(cli, codec, ext, rec: dict, topic: str, msg: dict, env: dict | None = None) -> None:  # noqa: ANN001
+    """msg(내부)를 검증해 rec에 남기고, 봉투 모드면 싸서 보낸다. rec: xsd_ok(내부), env_xsd_ok(봉투), pub"""
+    env = env or {}
+    name = next(iter(msg))
     try:
         codec.to_xml_bytes(msg)
         rec["xsd_ok"] = True
     except Exception as e:  # noqa: BLE001
         rec["xsd_ok"], rec["xsd_err"] = False, str(e)[:200]
+    out = msg
+    if ENVELOPE and not env.get("none"):
+        try:
+            out = wrap_rx(cli, codec, msg, env)
+            codec.to_xml_bytes(out)
+            rec["env_xsd_ok"] = True
+        except Exception as e:  # noqa: BLE001
+            rec["env_xsd_ok"], rec["env_err"] = False, str(e)[:200]
+        rec["env"] = {"name": RX, "mt": out.get(RX, {}).get("MessageData", {}).get("MessageType"),
+                      "dest": env.get("dest", [])}
     try:
-        await cli.publish(c["topic"], msg)
+        await cli.publish(topic, out)
         rec["pub"] = "+OK"
     except CalError as e:
         rec["pub"] = f"-ERR {e}"[:200]
+    except Exception as e:  # noqa: BLE001  봉투를 못 만든 경우
+        rec["pub"] = f"-ERR client {e}"[:200]
     ext.cmds.append(rec)
-    ext.write_full("tx", rec["t"], c["raw"], c["topic"], msg[c["raw"]], rec["xsd_ok"])
+    ext.write_full("tx", rec["t"], name, topic, msg[name], rec["xsd_ok"],
+                   env=(out[RX]["MessageData"] | {"EncodedPayload": f"<{len(out[RX]['MessageData']['EncodedPayload'])//2} B>"})
+                   if RX in out else None)
+
+
+async def send_raw(cli, codec, ext, fname: str, c: dict) -> None:  # noqa: ANN001
+    """XSD를 통과하지 않는 메시지도 그대로 보내 서버 응답을 기록한다"""
+    msg = envelope(cli.system_uuid, c["raw"], c["data"])
+    rec = {"file": fname, "tag": c.get("tag", ""), "name": c["raw"], "topic": c["topic"], "t": round(time.time(), 3)}
+    await publish(cli, codec, ext, rec, c["topic"], msg, c.get("env"))
 
 
 def label(obj) -> str:  # noqa: ANN001
@@ -118,16 +173,59 @@ class Ext:
         self.on_approval = None            # 28차: 승인 요청 콜백
         self.sub_t: float | None = None    # 28차: 구독을 마친 시각 (늦은 구독자 판정)
 
-    def on_msg(self, topic: str):  # noqa: ANN201
+    def on_env(self, topic: str):  # noqa: ANN201
+        """39차: MA_TxDataPayloadCommand → 봉투 검증 → 내부 메시지 풀기·검증 → on_msg 처리"""
+        from lxml import etree
+        inner_cb = self.on_msg(topic)
+
         def cb(name: str, obj: dict) -> None:
-            t = round(time.time(), 3)
-            ok = True
+            info = {"name": name, "ok": True, "err": "", "mt": "", "mt_ok": None, "dest": []}
             try:
                 self.codec.to_xml_bytes(obj)
             except Exception as e:  # noqa: BLE001
-                ok = False
-                if len(self.xsd_fail) < 20:
-                    self.xsd_fail.append(f"{name}: {e}"[:300])
+                info["ok"], info["err"] = False, f"envelope: {e}"[:300]
+            md = (obj.get(name) or {}).get("MessageData", {})
+            info["mt"] = md.get("MessageType", "")
+            info["dest"] = [d.get("UUID", "") for d in md.get("SpecificDestinationID", [])]
+            try:
+                raw = bytes.fromhex(md["EncodedPayload"])
+                root = etree.fromstring(raw, parser=etree.XMLParser(resolve_entities=False, no_network=True))
+                iname = etree.QName(root).localname
+            except Exception as e:  # noqa: BLE001
+                info["ok"], info["err"] = False, f"payload: {e}"[:300]
+                inner_cb(name, obj, env=info, inner_ok=False)
+                return
+            inner_ok = True
+            try:
+                self.codec.validate_xml(root)
+                inner = self.codec.xml_to_json(root)
+            except Exception as e:  # noqa: BLE001
+                inner_ok, info["err"] = False, (info["err"] + f" inner: {e}")[:300]
+                inner = {iname: {}}
+            info["mt_ok"] = info["mt"] == message_type(iname)
+            info["inner_ascii"] = raw.isascii()
+            info["inner_bytes"] = len(raw)
+            body = obj.get(name, {})
+            info["hdr_same"] = (body.get("MessageHeader") == (inner.get(iname) or {}).get("MessageHeader"))
+            inner_cb(iname, inner, env=info, inner_ok=inner_ok)
+        return cb
+
+    def on_msg(self, topic: str):  # noqa: ANN201
+        def cb(name: str, obj: dict, env: dict | None = None, inner_ok: bool = True) -> None:
+            t = round(time.time(), 3)
+            ok = inner_ok
+            if env is not None:      # 봉투로 온 것: 내부는 on_env가 이미 검증했다
+                if not inner_ok and len(self.xsd_fail) < 20:
+                    self.xsd_fail.append(f"{name} (inner): {env.get('err')}"[:300])
+                if not env["ok"] and len(self.xsd_fail) < 20:
+                    self.xsd_fail.append(f"{env['name']} -> {name}: {env.get('err')}"[:300])
+            else:
+                try:
+                    self.codec.to_xml_bytes(obj)
+                except Exception as e:  # noqa: BLE001
+                    ok = False
+                    if len(self.xsd_fail) < 20:
+                        self.xsd_fail.append(f"{name}: {e}"[:300])
             body = obj.get(name, {})
             md = body.get("MessageData", {})
             extra = {}
@@ -158,18 +256,29 @@ class Ext:
                          "state": md.get("RequestState", "")}
                 if self.on_approval is not None:
                     self.on_approval(extra)
+            elif name == "QueryDataRequestStatus":    # 39차 (DEC-112)
+                res = (md.get("Result") or {}).get("Message", [])
+                extra = {"req": label(md.get("RequestID")), "state": md.get("RequestProcessingState", ""),
+                         "n": len(res), "types": sorted({k for r in res for k in r if k != "$type"} |
+                                                         {r.get("$type", "") for r in res})[:6]}
             elif name in ("MA_LeaderUpdateRequest", "MA_Entity", "StoreLoadoutConfiguration"):
                 extra = {"md": json.dumps(md, ensure_ascii=False, sort_keys=True)[:1500]}
             sysid = (body.get("MessageHeader") or {}).get("SystemID", {}).get("UUID", "")
             mode = (body.get("MessageHeader") or {}).get("Mode", "")
-            self.rx.append([t, name, topic, ok, sysid, mode, extra])
-            self.write_full("rx", t, name, topic, body, ok)
+            row = [t, name, topic, ok, sysid, mode, extra]
+            if env is not None:
+                row.append(env)
+            self.rx.append(row)
+            self.write_full("rx", t, name, topic, body, ok, env=env)
         return cb
 
-    def write_full(self, kind: str, t: float, name: str, topic: str, body: dict, ok: bool) -> None:
+    def write_full(self, kind: str, t: float, name: str, topic: str, body: dict, ok: bool,
+                   env: dict | None = None) -> None:
         if self.full is not None:
-            self.full.write(json.dumps({"k": kind, "t": t, "name": name, "topic": topic, "ok": ok, "body": body},
-                                       ensure_ascii=False) + "\n")
+            d = {"k": kind, "t": t, "name": name, "topic": topic, "ok": ok, "body": body}
+            if env is not None:
+                d["env"] = env
+            self.full.write(json.dumps(d, ensure_ascii=False) + "\n")
 
     def dump(self) -> None:
         d = {"rx": self.rx, "xsd_fail": self.xsd_fail, "tap": [[k[0], k[1], v] for k, v in self.tap.items()],
@@ -214,7 +323,10 @@ async def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--approve", default="", help="28차: {task_id: APPROVED|REJECTED} JSON")
     ap.add_argument("--full", default="", help="29차: 주고받은 메시지 전체를 JSON 줄로 덧붙일 파일")
+    ap.add_argument("--envelope", choices=("on", "off"), default="on", help="39차: 봉투(DEC-111). Gateway와 맞춘다")
     a = ap.parse_args()
+    global ENVELOPE
+    ENVELOPE = a.envelope == "on"
     out = Path(a.out)
     (out / "cmd").mkdir(parents=True, exist_ok=True)
     codec = OmsJsonCodec(XSD)
@@ -231,12 +343,17 @@ async def main() -> None:
     else:
         raise SystemExit("CAL Server 접속 실패")
     sub_err = {}
-    for name, iface in EXPORTS.items():
+    for iface in (ENV_SUBS if ENVELOPE else ()):
+        try:
+            await cli.subscribe(TX, f"swarm.{iface}", ext.on_env(f"swarm.{iface}"))
+        except CalError as e:
+            sub_err[f"{TX}@{iface}"] = str(e)
+    for name, iface in ({} if ENVELOPE else EXPORTS).items():
         try:
             await cli.subscribe(name, f"swarm.{iface}", ext.on_msg(f"swarm.{iface}"))
         except CalError as e:
             sub_err[name] = str(e)
-    for name, iface in EXTRA_SUBS:
+    for name, iface in ([] if ENVELOPE else EXTRA_SUBS):
         try:
             await cli.subscribe(name, f"swarm.{iface}", ext.on_msg(f"swarm.{iface}"))
         except CalError as e:
@@ -248,7 +365,9 @@ async def main() -> None:
     if rules:
         ext.on_approval = pending.append
     asyncio.create_task(tap_loop(ext, a.admin))
-    print(f"ext ready system={cli.system_uuid} subs={len(EXPORTS) + len(EXTRA_SUBS) - len(sub_err)}", flush=True)
+    nsub = len(ENV_SUBS) if ENVELOPE else len(EXPORTS) + len(EXTRA_SUBS)
+    print(f"ext ready system={cli.system_uuid} envelope={'on' if ENVELOPE else 'off'} subs={nsub - len(sub_err)}",
+          flush=True)
     (out / "ext.ready").write_text("ok", encoding="utf-8")
     done: set[str] = set()
     last = 0.0
@@ -272,21 +391,9 @@ async def main() -> None:
                 await send_raw(cli, codec, ext, f.name, c)
                 continue
             msg = task_command(cli.system_uuid, c["task_id"], c["entities"], c.get("kind", "hold"),
-                               c.get("cancel", False))
+                               c.get("cancel", False), c.get("label_suffix", ""))
             rec = {**c, "t": round(time.time(), 3), "file": f.name}
-            try:
-                codec.to_xml_bytes(msg)
-                rec["xsd_ok"] = True
-            except Exception as e:  # noqa: BLE001
-                rec["xsd_ok"] = False
-                rec["xsd_err"] = str(e)[:200]
-            try:
-                await cli.publish("swarm.c2", msg)
-                rec["pub"] = "+OK"
-            except CalError as e:
-                rec["pub"] = f"-ERR {e}"
-            ext.cmds.append(rec)
-            ext.write_full("tx", rec["t"], "MA_TaskCommand", "swarm.c2", msg["MA_TaskCommand"], rec["xsd_ok"])
+            await publish(cli, codec, ext, rec, "swarm.c2", msg, c.get("env"))
             print(f"cmd {f.name} {c['kind'] if 'kind' in c else ''} -> {rec['pub']}", flush=True)
         if time.monotonic() - last > 1.0:
             ext.dump()
