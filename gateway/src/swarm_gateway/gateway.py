@@ -33,7 +33,7 @@ from .envelope import RX, TX, EnvelopeError, Envelopes, NotAddressed, to_ascii
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, json_key, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
-from .query import QUERY, QUERY_STATUS, LatestValues
+from .query import QUERY, QUERY_STATUS, LatestValues, QueryLedger
 from .query import answer as query_answer
 from .retain import RetainedReports
 
@@ -136,6 +136,7 @@ class Gateway:
         self._outbox: asyncio.Queue | None = None
         self.retained = RetainedReports()   # 변화 보고 키별 마지막 값 (DEC-089)
         self.latest = LatestValues()        # 내보낸 메시지의 기체별 최신 값, QueryDataRequest 응답용 (DEC-112)
+        self.queries = QueryLedger()        # 받은 조회 RequestID → 끝 상태, CANCEL 응답용
         # 시나리오 조회·구독 (DEC-109): 마지막 반영한 시나리오 바이트, 받았는지, 조회 스레드
         self._scenario_lock = threading.Lock()
         self._scenario_payload: bytes | None = None
@@ -191,20 +192,27 @@ class Gateway:
         return f"{QUERY}@{self.config.topic('c2')}", f"{QUERY_STATUS}@{self.config.topic('c2')}"
 
     def handle_query(self, obj: dict) -> Outcome:
-        """외부 QueryDataRequest → QueryDataRequestStatus PROCESSING, 이어서 COMPLETED(최신 값)·REJECTED (DEC-112)"""
+        """외부 QueryDataRequest → QueryDataRequestStatus (DEC-112, IMP-GW-039).
+        NEW·UPDATE는 PROCESSING 뒤 COMPLETED(쪽마다 하나), 거부·CANCEL은 상태 하나. ResultsInNative는 원형 메시지로 다시 낸다"""
         self.counters["query_rx"] += 1
         try:
             if set(obj) != {QUERY}:
                 raise InvalidMessage(f"expected {QUERY}")
             self.to_xml(obj)
-            statuses = query_answer(obj[QUERY]["MessageData"], exported=self.exported_names(), store=self.latest,
-                                    system_uuid=self.system_uuid, limit=self.config.query_result_limit,
-                                    type_key=lambda n: json_key(self.codec.global_element(n).type.name))
+            emits = query_answer(obj[QUERY]["MessageData"], exported=self.exported_names(), store=self.latest,
+                                 ledger=self.queries, limit=self.config.query_result_limit,
+                                 type_key=lambda n: json_key(self.codec.global_element(n).type.name))
         except (InvalidMessage, ValueError, TypeError, KeyError) as exc:
             self.counters["query_invalid"] += 1
             return self._reject(Outcome("rejected", uci_name=QUERY, reason=f"{type(exc).__name__}: {exc}"))
         topic = self.config.topic("c2")
-        for state, data in statuses:
+        state, status, n = "", None, 0
+        for e in emits:
+            if e.native is not None:          # 이미 검증해 내보냈던 메시지 그대로
+                self.counters["query_native"] += 1
+                self._emit(e.topic, e.native)
+                continue
+            state, data = e.state, e.data
             status = self.envelope(QUERY_STATUS, data)
             try:
                 self.to_xml(status)
@@ -212,14 +220,16 @@ class Gateway:
                 log.warning("gateway: %s result invalid: %s", QUERY_STATUS, exc)
                 status = self.envelope(QUERY_STATUS, {"RequestID": data["RequestID"], "RequestProcessingState": "FAILED"})
                 state = "FAILED"
+                self.queries.finish(data["RequestID"]["UUID"], state)
             self.counters[f"query.{state}"] += 1
+            n += len(data.get("Result", {}).get("Message", []))
             self._emit(topic, status)
-        final = statuses[-1]
-        n = len(final[1].get("Result", {}).get("Message", []))
-        log.info("gateway: %s %s -> %s (%d results)%s", QUERY, final[1]["RequestID"].get("UUID"), final[0], n,
-                 f": {final[1]['RequestProcessingStateReason']['Description']}"
-                 if "RequestProcessingStateReason" in final[1] else "")
-        return Outcome("answered", uci_name=QUERY, topic=topic, reason=final[0], message=status)
+            if state == "FAILED":
+                break
+        md = status[QUERY_STATUS]["MessageData"]
+        log.info("gateway: %s %s -> %s (%d results)%s", QUERY, md["RequestID"].get("UUID"), state, n,
+                 f": {md['RequestProcessingStateReason']['Description']}" if "RequestProcessingStateReason" in md else "")
+        return Outcome("answered", uci_name=QUERY, topic=topic, reason=state, message=status)
 
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
@@ -420,7 +430,7 @@ class Gateway:
         self.counters[f"exported.{uci}"] += 1
         self._emit(topic, obj)
         self.retained.note(entry.full_name, uci, topic, msg, obj)
-        self.latest.note(entry.full_name, uci, msg, obj)
+        self.latest.note(entry.full_name, uci, topic, msg, obj)
         return Outcome("exported", proto=entry.full_name, uci_name=uci, topic=topic, key=key, message=obj)
 
     def _emit(self, topic: str, obj: dict) -> None:
