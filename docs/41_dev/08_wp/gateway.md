@@ -13,7 +13,11 @@ GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변�
 | `src/swarm_gateway/mapping.py` | proto 옵션에서 만드는 매핑 표 |
 | `src/swarm_gateway/converters/` | 메시지별 변환기 |
 | `src/swarm_gateway/lacal.py` | 서브모듈 경로, XSD 검증, CAL Client |
-| `src/swarm_gateway/runner.py` | LA-CAL 접속 |
+| `src/swarm_gateway/runner.py` | LA-CAL 접속, STOMP 접속(DEC-110), 준비 전 외부 메시지 보관(O-13) |
+| `src/swarm_gateway/envelope.py` | 외부 교환 봉투 `MA_TxDataPayloadCommand`·`MA_RxDataPayload`(DEC-111) |
+| `src/swarm_gateway/query.py` | `QueryDataRequest` 응답, 최신 값 보관(DEC-112) |
+| `src/swarm_gateway/stomp.py` | STOMP 1.2 클라이언트(DEC-110) |
+| `config/lacal_server_raw.yaml` | 봉투 끔(`--envelope off`)용 CAL Server 설정 |
 | `src/swarm_gateway/ids.py` | 문자열 ID ⇄ UUID |
 | `src/swarm_gateway/retain.py` | 변화 보고 키별 마지막 값 보관(`RetainedReports`), 늦게 붙은 외부 구독에 다시 PUB(`LateJoinReplayer`, DEC-089) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태의 Command-2 상태 기계(DEC-097) |
@@ -34,6 +38,9 @@ GCS 쪽 지상 참여자이고 내부 메시지와 외부 UCI 메시지를 변�
 | `--stats-s <s>` | 카운터 로그 주기, 기본 10 |
 | `--lacal-admin <url>` | CAL Server 관리 주소, 기본 `--lacal` 호스트의 8766. 그래프 이벤트(`/graph/events`)로 새 외부 구독을 알아낸다. `none`이면 끈다 |
 | `--sim-epoch <UTC>` | UCI 기준 시각 명시 재정의(ISO 8601, 시간대 필수). 시나리오 `run.epoch_utc_us`보다 앞선다 |
+| `--transport lacal\|stomp` | 외부 전송 경로, 기본 `lacal`(DEC-110). `stomp`는 `--stomp`, `--system-uuid`, `--schema-version`, `--exclude`와 함께 쓴다 |
+| `--envelope on\|off`, `--envelope-dest <UUID>` | 외부 교환 봉투(기본 켬)와 송신 봉투 목적지(DEC-111) |
+| `--scenario-query-attempts`, `--scenario-query-interval`, `--scenario-query-timeout` | 시작 때 `sim/ctrl/scenario` 조회 횟수(기본 5), 간격(0.5 s), 한 번 대기(1.0 s). 구독으로 먼저 받으면 멈춘다(DEC-109) |
 | `--bus zenoh\|memory` | 기본 `zenoh`. Zenoh가 없으면 설치 방법을 알리고 종료 코드 1로 끝난다. `memory`는 명시했을 때만 쓰고 시뮬레이터 메시지가 오지 않는다 |
 | 공통 버스 옵션 | [3.2](../03_architecture.md#32-버스-열기) |
 
@@ -71,7 +78,9 @@ InMemoryBus와 프로세스 안의 CAL Server로 돈다. 처음이면 [2.6](../0
 ## 알려진 제약
 
 - 외부 `MA_TaskCommand`는 `hold`, `return_to_base`, 취소만 받는다. 위치가 필요한 작업은 임무 계획 경로로 받는다(DEC-076). 지원 범위는 [gateway/README.md](../../../gateway/README.md#임무-계획-수신-dec-076).
-- `ready` 로그 전에 외부가 보낸 명령은 사라진다(O-13).
+- 외부 명령 구독은 접속 직후 건다. 준비 전 받은 것은 최대 256건 쌓았다가 처리한다(IMP-GW-034). 잃는 것은 Gateway 프로세스가 없거나 기동·접속 중인 구간(재기동 측정 약 1.1 s)뿐이고, 이 구간은 외부 재송신 책임이다(O-13).
+- 실행 중 합류한 Gateway는 합류 전에 시작한 작업의 현재 상태와 합류 전 승인 요청을 외부에 주지 못한다(QA O-54, OPN-095 미결). 운용에서는 Gateway를 Core보다 먼저 띄운다.
+- 의존성은 `uv sync --extra zenoh`로 맞춘다. extra 없이 다시 동기화하면 zenoh가 빠져 시작하지 못한다(QA 39차).
 - 재기동하면 보관한 마지막 값과 끝난 명령 ID 기억이 비어, 같은 끝 상태가 ID당 최대 한 번 더 나갈 수 있다(DEC-097).
 - `config/lacal_server.yaml`의 선언(`declared.pub`·`sub`)은 Gateway의 실제 PUB·SUB와 같아야 한다. TC-GW-034, TC-GW-038이 묶는다(O-20, D-39 해소).
 

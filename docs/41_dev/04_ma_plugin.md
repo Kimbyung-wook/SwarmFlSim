@@ -216,11 +216,21 @@ stateDiagram-v2
 
 위 규칙은 [algorithms/src/swarm_algorithms/common.py](../../algorithms/src/swarm_algorithms/common.py)에 구현돼 있다.
 
+좌표 변환과 경로 추종 도구는 플러그인 API로 공개돼 있다(DEC-104, 계약 0.22.0). 플러그인은 `swarm_agent` 내부 모듈을 import하지 않는다.
+
+| 모듈 | 내용 |
+|---|---|
+| `swarm_api.geo` | 평면 근사 좌표 변환. `ned_offset`(기준점 대비 북·동 오프셋 m), `offset_geo`(역변환), `wrap_pi`, `course_rad`. 스칼라와 NumPy 배열 모두 받는다 |
+| `swarm_api.racetrack` | 레이스트랙 기하·유도. `locate`, `path_error`, `dubins_course`, `vector_field_course` |
+
+`swarm_agent.geo`·`swarm_agent.racetrack`은 같은 모듈을 가리키는 호환 별칭으로 남아 있다.
+
 | 부품 | 맡는 일 |
 |---|---|
 | `TaskTracker(ctx, supported)` | `MissionPlan` 순차 수행, C2 작업 선점·취소·거부, `TaskStatus` 송신. `handle(msg)`, `update(nav)`, `status(...)`, `finish(...)` |
 | `TaskPilot(ctx, acceptance_m, hold_radius_m, speed_mps, supported)` | `TaskTracker`에 비행 수행까지 더한 것. `step()` 호출 하나로 MoveTo, Hold, RTB, SearchArea, Route를 처리 |
 | `every(ctx, hz)` | 기체마다 위상을 달리한 주기 판정 |
+| `PayloadTasker` | Track·Jam·Strike 수행과 센서 지향(DEC-106). `TaskPilot(payload_tasks=True)`로 켠다. MA 변수 `track_standoff_m`, `track_acquire_timeout_s`, `track_lost_s`, `strike_range_m` |
 | `peer_status(nav, group_id, task_id)` | `PeerStatus` 구성 |
 | `TrackSharer` | `track_share_hz` > 0이면 `ms.detections()`를 표적별 최신으로 모아 주기마다 표적당 `TrackShare` 한 건을 방송. 0이면 `detections()`를 건드리지 않는다 |
 | `CommandIds` | 비행 명령 ID 발급. 같은 목적의 흐름은 같은 ID, 흐름이 끝나면(`end()`) 새 ID(`base`, `base-2`, `base-3` …) |
@@ -255,9 +265,10 @@ stateDiagram-v2
 | 이름 | 파일 | 동작 | 매개변수 |
 |---|---|---|---|
 | `hold` | [hold.py](../../algorithms/src/swarm_algorithms/hold.py) | 첫 항법 상태의 침로·속도·고도 유지. 작업을 처리하지 않는다 | `orbit_radius_m`(0이면 직진) |
-| `waypoint` | [waypoint.py](../../algorithms/src/swarm_algorithms/waypoint.py) | `TaskPilot`으로 작업 수행 | `acceptance_m`, `hold_radius_m`, `speed_mps` |
+| `waypoint` | [waypoint.py](../../algorithms/src/swarm_algorithms/waypoint.py) | `TaskPilot`으로 작업 수행. `PayloadTasker`로 Track·Jam·Strike도 수행 | `acceptance_m`, `hold_radius_m`, `speed_mps`, `track_*`, `strike_range_m` |
 | `formation` | [formation.py](../../algorithms/src/swarm_algorithms/formation.py) | 리더-추종 편대. 리더는 `waypoint`처럼, 추종기는 슬롯을 HSA로 추종. 리더가 정해지거나 바뀌면 새 리더가 `LeaderUpdate`(`term` = 그 기체가 본 리더 변경 횟수)를 방송. 추종기는 리더 정보가 없거나 `leader_timeout_s`보다 오래되면 명령을 내지 않는다 | `group`, `peer_hz`, `leader_speed_mps`, `leader_timeout_s`, `corr_max_mps` 등 |
-| `flocking` | [flocking.py](../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds 분리·정렬·응집 일괄 MA. Route는 거부 | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
+| `approval_demo` | [approval_demo.py](../../algorithms/src/swarm_algorithms/approval_demo.py) | 승인 흐름 시험·데모 전용, 기본 MA 아님(DEC-103). `strike`만 수행하고 승인이 필요하면 승인 `ApprovalResponse` 뒤에만 유도 객체를 보낸다. 거부·시간 초과면 보내지 않고 `REJECTED` | `approval_tasks`, `approval_timeout_s` |
+| `flocking` | [flocking.py](../../algorithms/src/swarm_algorithms/flocking.py) | Reynolds 분리·정렬·응집 일괄 MA. Route와 장비 작업은 거부. 수락 다음 틱에 `EXECUTING`(IMP-AGT-057) | `cruise_mps`, `neighbor_radius_m`, `separation_m`, `w_sep`, `w_align`, `w_coh`, `peer_hz`, `stale_s`, `goal_radius_m`, `hold_radius_m`, `wander_deg`, `group` |
 
 `flocking_basic`은 예제 시나리오용 변형이다. 전체 항목은 [algorithms/TRACE.md](../../algorithms/TRACE.md).
 
@@ -265,13 +276,15 @@ stateDiagram-v2
 
 | 항목 | 내용 |
 |---|---|
-| 매개변수 | `lost_link_timeout_s`(기본 5 s), `lost_link_policy`(`hold_until_command` 기본, `resume_on_recovery`, `continue`). 내장 MA는 `LOST_LINK_PARAMS`를 `PARAMS`에 더한다 |
+| 매개변수 | `lost_link_timeout_s`(기본 5 s), `lost_link_policy`(`hold_until_command` 기본, `resume_on_recovery`, `continue`), `lost_link_recover_hold_s`(기본 5 s), `lost_link_recover_gap_s`(기본 2 s). 내장 MA는 `LOST_LINK_PARAMS`를 `PARAMS`에 더한다 |
+| 복구 확정 | `LinkMonitor`는 상실 중 Heartbeat를 다시 받으면 복구 대기에 들어간다. `lost_link_recover_hold_s` 동안 Heartbeat 간격이 `lost_link_recover_gap_s` 이하로 이어져야 "recovered"를 낸다. 간격이 넘으면 대기를 버리고(MD `recover_aborted`) 상실을 이어 간다. 확정 전에는 상실 행동을 유지한다(DEC-101(2), DEC-105) |
 | 정책 결정 | 상실 순간 현재 작업의 `TaskCommand.lost_link_policy`, 없으면 MA 변수 |
 | 선회 | 현재 위치 중심, 반경은 `hold_radius_m`과 최소 선회 반경 × 1.3 중 큰 값 |
 | 선회 중 새 작업 명령 | 복구 전이라도 선회를 끝내고 명령을 따른다. `FormationCommand`처럼 작업 밖 명령은 `release()`로 알린다 |
 | 복구(`resume_on_recovery`) | 중단한 작업을 다시 한다. 작업이 없었으면 상실 전 비행 명령을 다시 낸다(IMP-AGT-039) |
 | 기록 | MD `link_state`, `lost_link_policy`, `lost_link_action` |
 
+- 런타임은 MA와 따로 Heartbeat가 다시 온 직후 현재 `FlightCommandStatus`와 진행 중인 작업의 `TaskStatus`를 GCS에 한 번 다시 보낸다(DEC-101(1)). MA의 복구 확정보다 먼저 나갈 수 있다. MA가 이 재보고를 따로 할 필요는 없다.
 - `hold` MA는 작업이 없으므로 MA 변수만 쓴다. `formation` 추종기도 `FormationCommand`에 정책 필드가 없어 MA 변수를 쓴다.
 
 `formation`의 슬롯은 리더 FRD 기준 오프셋이다. `s`는 `spacing_m`, `k`는 추종기 순번(0부터)이다.

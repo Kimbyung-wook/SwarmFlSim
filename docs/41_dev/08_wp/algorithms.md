@@ -8,11 +8,12 @@
 
 | 경로 | 내용 |
 |---|---|
-| `src/swarm_algorithms/common.py` | `TaskTracker`, `TaskPilot`, `PlanWatcher`, `peer_status`, `every` |
+| `src/swarm_algorithms/common.py` | `TaskTracker`, `TaskPilot`, `PlanWatcher`, `PayloadTasker`, `LinkMonitor`, `LostLinkGuard`, `peer_status`, `every` |
 | `src/swarm_algorithms/hold.py` | `hold` |
 | `src/swarm_algorithms/waypoint.py` | `waypoint` |
 | `src/swarm_algorithms/formation.py` | `formation` |
 | `src/swarm_algorithms/flocking.py` | `flocking`, `flocking_basic` |
+| `src/swarm_algorithms/approval_demo.py` | `approval_demo`(승인 흐름 시험·데모 전용, 기본 MA 아님, DEC-103) |
 
 코드를 읽을 때는 작업 처리를 맡는 `common.py`의 `TaskPilot`부터 본다.
 
@@ -34,7 +35,7 @@ uv run pytest algorithms/tests
 
 - `flocking`은 Route를 거부한다.
 - 실행 중 받은 `MissionPlan`과 `RoutePlan`의 규칙은 [4.7](../04_ma_plugin.md#47-재사용-부품)에 있다. `RoutePlan`대로 비행하는 내장 MA는 `waypoint`뿐이다.
-- 기본 MA는 `track`, `strike`, `jam` 작업을 지원하지 않는다.
+- `track`, `jam`, `strike`는 `waypoint`와 `formation` 리더만 수행한다(DEC-106). `flocking`, `hold`는 `REJECTED`다. 정밀 교전 범위(MA_WEZ)는 다루지 않는다(OPN-084).
 - 다른 기체 정보는 데이터링크로 받은 `PeerStatus`만 쓴다. 링크가 나쁘면 편대 품질이 함께 나빠지는 것은 의도한 동작이다.
 
 추적: [algorithms/TRACE.md](../../../algorithms/TRACE.md).

@@ -64,7 +64,7 @@ sequenceDiagram
 
 ## 5.3 기본 FA
 
-등록명 `default`, 코드는 [agent/src/swarm_agent/fa.py](../../agent/src/swarm_agent/fa.py), 레이스트랙 기하는 [racetrack.py](../../agent/src/swarm_agent/racetrack.py)다.
+등록명 `default`, 코드는 [agent/src/swarm_agent/fa.py](../../agent/src/swarm_agent/fa.py), 레이스트랙 기하는 플러그인 API [swarm_api/racetrack.py](../../api/python/src/swarm_api/racetrack.py)다(DEC-104).
 
 - 유도: Waypoint는 직행, Orbit은 벡터장, Racetrack은 `racetrack_guidance`로 고른다.
 - 제어: 침로 오차 비례 선회율(최대 뱅크로 제한), 고도 오차 비례 상승률.

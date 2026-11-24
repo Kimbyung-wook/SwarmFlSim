@@ -37,6 +37,7 @@
 | 방향 | 키 |
 |---|---|
 | 구독 | `sim/ctrl/cmd`, `sim/clock/done/<p>`, `onboard_batch/ControlBatch/*`, `onboard/<id>/*Command` |
+| 조회 응답 | `sim/ctrl/scenario`(시나리오를 적재한 동안 지금 시나리오 한 건, 적재 전이면 답하지 않음. DEC-109) |
 | 발행 | `sim/clock/tick`, `sim/ctrl/status`, `sim/ctrl/scenario`, `sim/param/<id>/dynamics`, `truth/state`, `truth/event/<kind>`, `onboard_batch/NavigationBatch`(프레임당 1건, 기체 ID 순), `onboard/<id>/SystemStatus`, `Detection`, `*Activity` |
 
 ## 시험
