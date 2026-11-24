@@ -150,7 +150,7 @@
 
 ## 5. 시나리오 문서와 다른 점
 
-[50_operational_scenarios.md](50_operational_scenarios.md) §0.2의 상태 열은 계약 0.23.0 기준이다. 지금은 다음이 다르다.
+[50_operational_scenarios.md](50_operational_scenarios.md) §0.2의 상태 열은 계약 0.23.0 기준으로 쓰였고, 아래 차이를 반영해 갱신했다.
 
 - `TrackTask`, `JamTask`, `SensorCommand`가 미구현에서 구현됨으로 바뀌었다. 센서 지향은 track·search_area·strike에 한해서다(DEC-106, IMP-AGT-060).
 - `StrikeTask`와 `StrikeCommand`가 부분에서 구현됨으로 바뀌었다. 기본 MA `waypoint`·`formation` 리더가 수행한다.

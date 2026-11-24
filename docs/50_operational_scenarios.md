@@ -1,7 +1,7 @@
 # 편대 전장 운용 시나리오
 
 - 목적: A-GRA 기능(메시지)을 조합한 편대 운용 시나리오를 시간 순서로 정의한다. 보완 항목(OPN-079~084)의 우선순위와 시험 시나리오 작성의 근거로 쓴다.
-- 기준: 계약 0.23.0, 통합 브랜치 `wp0-contracts`(DEC-106 등록 시점).
+- 기준: 계약 0.23.0, 통합 브랜치 `wp0-contracts`(DEC-106 등록 시점). 기능 상태(§0.2·0.3)와 단계의 현재 동작은 계약 0.24.0, `wp0-contracts` 38123ee 기준으로 갱신했다(DEC-106 구현 IMP-AGT-060, DEC-107). 단계별 수행률은 [51_scenario_feasibility.md](51_scenario_feasibility.md)에 있다.
 - 기능의 출처는 등록부 §5 매핑 표, proto `uci_name`, `docs/10_contracts.md`, 기본 MA docstring으로 한정한다. 메시지명은 공개 XSD 이름과 내부 proto 이름만 쓴다.
 - 기체 계층 경계(DEC-013): MA는 L1 포트로만 주고받는다. `truth/**`는 관찰(UI·Monitor·Logger) 용도로만 쓴다.
 - 시뮬레이터 조작(`sim/ctrl/cmd`의 `InjectFault`)은 시험 진행자가 내는 사건 주입이며 L1 포트가 아니다.
@@ -12,7 +12,8 @@
 
 - 구현됨: `wp0-contracts`에 송신·수신과 기본 MA 동작이 있다.
 - 부분: 메시지는 있으나 기본 MA가 일부만 수행하거나 한쪽 방향만 있다.
-- 미구현(OPN-xxx): proto 또는 MA 동작이 없다. OPN-079는 DEC-106으로 결정됐으나 구현 전이므로 "미구현(OPN-079→DEC-106)"으로 쓴다.
+- 미구현(OPN-xxx): proto 또는 MA 동작이 없다.
+- OPN-079는 DEC-106으로 결정되고 기본 MA `PayloadTasker`(IMP-AGT-060)로 구현됐다. 이 항목은 "구현됨(DEC-106)"으로 쓴다.
 
 ### 0.2 대응 표
 
@@ -24,12 +25,12 @@
 | C2 | 임무 부여·상태 | `TaskCommand` (`MA_TaskCommand`), `TaskStatus` (`MA_TaskStatus`) | 구현됨 | ● | ● | ● | ● | ● | ● |
 | C2 | 항로 비행(정찰·선회 행위) | `TaskCommand.route` (`RouteTask`, EXT) | 구현됨 (waypoint·formation 리더. flocking은 REJECTED) | ● | ● | ○ | ○ | | |
 | C2 | 영역 정찰 | `SearchAreaTask` | 부분 (영역 중심 선회 1바퀴) | ○ | | | | | ● |
-| C2 | 표적 추적 | `TrackTask` | 미구현(OPN-079→DEC-106) | ○ | | ○ | | | ● |
-| C2 | 재밍 임무 | `JamTask` | 미구현(OPN-079→DEC-106) | | ● | | | | |
-| C2 | 타격 임무 | `StrikeTask` | 부분 (시험용 `approval_demo`만 수행, DEC-103) | | ○ | ● | ○ | | |
+| C2 | 표적 추적 | `TrackTask` | 구현됨(DEC-106) (waypoint·formation 리더, `track_standoff_m` 선회 추적) | ○ | | ○ | | | ● |
+| C2 | 재밍 임무 | `JamTask` | 구현됨(DEC-106) (영역 중심 선회 진입 뒤 재머 켬, `duration_s`) | | ● | | | | |
+| C2 | 타격 임무 | `StrikeTask` | 구현됨(DEC-106) (waypoint·formation 리더, `strike_range_m` 안에서 교전 기준 확인) | | ○ | ● | ○ | | |
 | C2 | 편대 형태 지정 | `FormationCommand` (EXT) | 구현됨 (6형태) | ● | ● | ○ | ○ | ● | ● |
 | C2 | 팀(패키지) 구성 | `GroupAssignment` (EXT), `MA_PackageManagementCommand`·`MA_PackageManagementCommandStatus` | 미구현(OPN-083) (EXT 메시지는 있고 쓰는 기본 MA·상태 보고 없음) | | | | | ○ | ● |
-| C2 | 타격 승인 | `ApprovalRequest` (`MA_ApprovalRequest`), `ApprovalResponse` (`MA_ApprovalRequestStatus`) | 부분 (MA `TaskTracker`·Gateway 경로 있음, UI 승인 화면 없음) | | | ● | ○ | | |
+| C2 | 타격 승인 | `ApprovalRequest` (`MA_ApprovalRequest`), `ApprovalResponse` (`MA_ApprovalRequestStatus`) | 부분 (MA `TaskTracker`·Gateway 경로 있음, UI 승인 화면 없음. UI는 WP5 진행 중) | | | ● | ○ | | |
 | C2 | 타격 동의 | `StrikeConsentRequest` | 미구현(OPN-084) (`ApprovalRequest`로 대신) | | | ○ | | | |
 | C2 | 운용자 역할·권한 | `MA_OperatorRole`, `MA_Authorization` | 미구현(OPN-084) | | | ○ | | | ○ |
 | C2 | GCS 링크 감시 | `GcsHeartbeat` (EXT), 상실 정책 3종 (DEC-078, DEC-101, DEC-105) | 구현됨 | ○ | ● | ○ | ● | ○ | ○ |
@@ -42,13 +43,13 @@
 | P2P | 리더 선출 | `MA_RaftVoteRequest`, `MA_RaftAppendEntriesRequest` | 미구현(OPN-080) | | | | | ● | ○ |
 | P2P | 탐지 공유 송신 | `TrackShare` (`MA_Entity`) | 구현됨 (`track_share_hz`, DEC-088) | ● | | ○ | | | ● |
 | P2P | 탐지 공유 활용(COP) | `TrackShare` 수신 융합·재배정 | 미구현(OPN-082) | ● | | ○ | | | ● |
-| MS | 센서 지향 | `SensorCommand` (`PO_Command`) | 미구현(OPN-079→DEC-106) (MA 송신자 없음) | ● | | ● | | | ● |
+| MS | 센서 지향 | `SensorCommand` (`PO_Command`) | 구현됨(DEC-106) (track·search_area·strike 수행 중 지향. 항로점 정찰(`ReconAction`)에서는 지향하지 않음) | ● | | ● | | | ● |
 | MS | 센서 상태·탐지 | `SensorActivity` (`PO_Activity`), `Detection` (EXT) | 구현됨 (FOV·거리·가시선, DEC-018) | ● | ○ | ● | | | ● |
-| MS | 재밍 | `JammerCommand` (`EA_Command`), `JammerActivity` (`EA_Activity`) | 부분 (Activity 보고 있음, MA 송신자 없음 OPN-079→DEC-106) | | ● | | ○ | | |
-| MS | 타격·결과 | `StrikeCommand`, `StrikeActivity` | 부분 (`approval_demo`만 송신) | | ○ | ● | | | |
+| MS | 재밍 | `JammerCommand` (`EA_Command`), `JammerActivity` (`EA_Activity`) | 구현됨(DEC-106) (재머 소유 기체 자신의 수신은 면제, DEC-107) | | ● | | ○ | | |
+| MS | 타격·결과 | `StrikeCommand`, `StrikeActivity` | 구현됨(DEC-106) | | ○ | ● | | | |
 | MS | 무장 탑재 현황 | `StoreLoadout` (`StoreLoadoutConfiguration`) | 구현됨 (DEC-088) | | | ● | | | |
 | MS | 교전 범위 | `MA_WEZ` | 미구현(OPN-084) | | | ○ | | | |
-| MS | 데이터 전송 | `MA_TxDataPayloadCommand`, `MA_RxDataPayload` | 미구현(OPN-084) | ○ | | | | | ○ |
+| MS | 데이터 전송 | `MA_TxDataPayloadCommand`, `MA_RxDataPayload` | 미구현(OPN-084) (기체 쪽 DMS. Gateway 외부 교환 봉투로는 쓰인다, DEC-111) | ○ | | | | | ○ |
 | MP | 임무 계획 | `MissionPlan` (`MA_MissionPlan`), `RoutePlan` (`MA_RoutePlan`) | 구현됨 (DEC-076) | ● | ● | ○ | | | ● |
 | MP | 교전 기준 | `EngagementCriteria` (`MA_EngagementCriteria`) | 구현됨 (승인 요구는 `TaskTracker`) | | ○ | ● | | | |
 | MP | 탐색 패턴·영역 분할 | (SearchArea 수행 확장) | 미구현(OPN-081) | ○ | | | | | ● |
@@ -58,12 +59,12 @@
 
 | 시나리오 | 미구현·부분 기능 | 관련 OPN |
 |---|---|---|
-| S1 | 센서 지향, COP 활용, 탐색 패턴, DMS | OPN-079, OPN-082, OPN-081, OPN-084 |
-| S2 | JamTask 수행·JammerCommand 송신, 기본 MA 타격 | OPN-079 |
-| S3 | 기본 MA 타격·센서 지향, WEZ, StrikeConsentRequest, RBAC, UI 승인 화면 | OPN-079, OPN-084 |
-| S4 | 링크 상실 중 발사 금지·재밍 유지 규칙(DEC-106(6)) | OPN-079 |
+| S1 | 항로점 정찰 중 센서 지향, COP 활용, 탐색 패턴, DMS | OPN-082, OPN-081, OPN-084 |
+| S2 | 없음(UI 재밍 작업은 WP5 진행 중) | — |
+| S3 | WEZ, StrikeConsentRequest, RBAC, UI 승인 화면(WP5 진행 중) | OPN-084 |
+| S4 | 없음 | — |
 | S5 | 리더 재선출(Raft), 패키지 상태 보고, SubsystemStatus | OPN-080, OPN-083, OPN-084 |
-| S6 | 탐색 패턴·영역 분할, COP 활용, 패키지 관리, TrackTask 재배정 | OPN-081, OPN-082, OPN-083, OPN-079 |
+| S6 | 탐색 패턴·영역 분할, COP 활용, 패키지 관리, 실행 중 TrackTask 발령·재배정 | OPN-081, OPN-082, OPN-083 |
 
 ### 0.4 공통 전제
 
@@ -78,7 +79,7 @@
 ### 목적
 
 - 쐐기 편대가 항로 정찰을 하며 탐지를 `TrackShare`로 편대원과 GCS에 공유하는 흐름을 확인한다.
-- COP 활용(OPN-082)과 센서 지향(OPN-079)의 필요 범위를 정한다.
+- COP 활용(OPN-082)과 항로점 정찰 중 센서 지향의 필요 범위를 정한다.
 
 ### 전제·초기 조건
 
@@ -106,7 +107,7 @@
    - 기대 결과: 리더 `TaskStatus` ACCEPTED → EXECUTING. VI `FlightCommand`(Waypoint·Curve) 수락을 `FlightCommandStatus`로 보고.
 3. 정찰 항로점 진입
    - 행위자: 리더 MA
-   - 포트·메시지: MS `SensorCommand`(`PO_Command`, 영역 중심 지향) — 미구현(OPN-079→DEC-106)
+   - 포트·메시지: MS `SensorCommand`(`PO_Command`, 영역 중심 지향) — 항로점 정찰에서는 내지 않는다(DEC-106은 track·search_area·strike에서만 지향)
    - 기대 결과(현재): 시나리오 기본 센서 상태로 탐지한다. 추종기는 리더 선회를 따라간다.
 4. 탐지
    - 행위자: Core → 각 기체 런타임
@@ -129,7 +130,7 @@
 
 - 추종기가 리더 `PeerStatus`를 `leader_timeout_s` 넘게 못 받음: 추종기는 현재 침로 유지. 편대 이탈로 관찰한다.
 - 정찰 중 GCS 링크 상실: 작업 `lost_link_policy`에 따른다(S4). `RESUME_ON_RECOVERY` 권장.
-- 표적이 능선 뒤로만 보임: 다른 기체 탐지가 공유돼도 자기 센서 지향을 바꾸지 않는다(OPN-079, OPN-082).
+- 표적이 능선 뒤로만 보임: 다른 기체 탐지가 공유돼도 자기 센서 지향을 바꾸지 않는다(OPN-082).
 
 ### 종료 조건
 
@@ -154,7 +155,7 @@ sequenceDiagram
     L-->>F: P2P PeerStatus
     G->>L: C2 TaskCommand(RouteTask, ReconAction)
     L->>G: C2 TaskStatus EXECUTING
-    Note over L: MS SensorCommand 미구현(OPN-079)
+    Note over L: 항로점 정찰은 SensorCommand 없음
     C->>F: MS Detection(tgt-001)
     F-->>L: P2P TrackShare(MA_Entity)
     F-->>G: P2P TrackShare(MA_Entity)
@@ -192,8 +193,7 @@ sequenceDiagram
 2. 재밍 임무 부여
    - 행위자: GCS → 재밍기
    - 포트·메시지: C2 `TaskCommand`(`JamTask`, 영역, `duration_s` 0, `lost_link_policy` CONTINUE)
-   - 기대 결과(현재): `TaskStatus` REJECTED — 미구현(OPN-079→DEC-106).
-   - 기대 결과(DEC-106 구현 뒤): 영역 중심 선회 진입 후 MS `JammerCommand`(`EA_Command`, enable) → EXECUTING.
+   - 기대 결과: 영역 중심 선회 진입 후 MS `JammerCommand`(`EA_Command`, enable) → EXECUTING(DEC-106). 재밍기에 재머가 없으면 FAILED(`no jammer`).
 3. 재밍 구역 활성
    - 행위자: Core → 재밍기 런타임 → GCS
    - 포트·메시지: MS `JammerActivity`(`EA_Activity`, zone) 1 Hz·변화 보고, `truth/event/jam_zone`(관찰)
@@ -217,13 +217,13 @@ sequenceDiagram
 8. 재밍 해제
    - 행위자: GCS → 재밍기
    - 포트·메시지: C2 `TaskCommand`(cancel)
-   - 기대 결과(DEC-106 구현 뒤): `JammerCommand`(disable), `TaskStatus` CANCELLED.
+   - 기대 결과: `JammerCommand`(disable), `TaskStatus` CANCELLED(DEC-106).
 
 ### 분기·예외
 
 - 추종기 정책이 `hold_until_command`(기본): 구역에서 추종기만 선회하고 리더는 진행해 편대가 갈라진다. 추종기 MA 변수를 `continue`로 두는 시나리오 값을 시험한다.
 - 재밍기 GCS 링크 상실: `JamTask` 정책 CONTINUE면 재밍 유지, 그 밖이면 끈다(DEC-106(6)).
-- 아군 재밍 구역 안 아군 수신: 수신단 기준이라 아군 메시지도 손실될 수 있다(DEC-028). 재밍 영역과 아군 항로 간 거리를 관찰한다.
+- 아군 재밍 구역 안 아군 수신: 수신단 기준이라 구역 안 다른 아군의 수신도 손실된다(DEC-028). 재머를 가진 기체 자신의 수신은 면제된다(DEC-107). 재밍 영역과 아군 항로 간 거리를 관찰한다.
 - 침투 중 타격 필요: S3 흐름으로 넘긴다.
 
 ### 종료 조건
@@ -235,7 +235,7 @@ sequenceDiagram
 - 구역별 JAMMED 손실 건수와 대상 인터페이스(`link/outcome`).
 - 링크 상실·복구 판정 시각과 정책별 행동(리더·추종기 차이).
 - 편대 분리 거리, 항로 이탈.
-- `JamTask` 거부 사유(현재), 재밍 시작 지연(구현 뒤).
+- 재밍 시작 지연(작업 수락 → 재머 켬).
 
 ```mermaid
 sequenceDiagram
@@ -245,8 +245,8 @@ sequenceDiagram
     participant F as 추종기
     participant D as Datalink
     G->>J: C2 TaskCommand(JamTask, CONTINUE)
-    J->>G: C2 TaskStatus REJECTED (현재, OPN-079)
-    Note over J: 구현 뒤 MS JammerCommand(EA_Command)
+    Note over J: 영역 선회 진입 뒤 MS JammerCommand(EA_Command)
+    J->>G: C2 TaskStatus EXECUTING
     J->>G: MS JammerActivity(EA_Activity)
     G->>L: C2 TaskCommand(RouteTask, CONTINUE)
     L-->>F: P2P PeerStatus
@@ -264,19 +264,19 @@ sequenceDiagram
 ### 목적
 
 - 교전 기준에 따라 탐지 → 승인 요청 → 승인·거부 → 발사 → 결과 보고까지의 흐름을 확인한다.
-- 기본 MA 타격(OPN-079→DEC-106), WEZ·타격 동의·RBAC(OPN-084)의 필요 범위를 정한다.
+- 기본 MA 타격(DEC-106)을 확인하고, WEZ·타격 동의·RBAC(OPN-084)의 필요 범위를 정한다.
 
 ### 전제·초기 조건
 
 - 기체 3대: 정찰기 `uav-002`(`camera`, `waypoint`, `track_share_hz` 1), 타격기 `uav-001`(`camera`, `agm_short`), 타격기 `uav-003`(`camera`, `fpv`).
-- 타격기 MA: 현재 `approval_demo`(시험용, DEC-103). DEC-106 구현 뒤 `waypoint`.
+- 타격기 MA: `waypoint`, MA 변수 `approval_tasks` = `strike`(승인 규칙 DEC-088, 타격 수행 DEC-106). 시험용 `approval_demo`(DEC-103)는 쓰지 않는다.
 - MP `EngagementCriteria`: `hostile_sides` red, `require_approval` true, `weapons_free` 영역 1개, `no_strike` 영역 1개.
 - 표적: 고정 `tgt-001`(weapons_free 안), `tgt-002`(no_strike 안), 이동 `tgt-003`(스크립트 경로).
 
 ### 참여자
 
 - 통제 GCS `gcs-01`. 승인 응답은 Gateway(외부 C2)가 낸다. UI 승인 화면은 없다.
-- 기체 MA(`waypoint`, `approval_demo`)와 FA.
+- 기체 MA(`waypoint`)와 FA.
 - 적: 지상 표적(고정·스크립트).
 
 ### 단계별 진행
@@ -299,8 +299,8 @@ sequenceDiagram
    - 기대 결과: `TaskStatus` ACCEPTED.
 5. 접근·교전 기준 확인
    - 행위자: 타격기 MA
-   - 포트·메시지: 표적 위치는 자기 `Detection`·수신 `TrackShare`만 사용(DEC-106(2)), `strike_range_m` 안 진입 — 미구현(OPN-079→DEC-106). 교전 범위 `MA_WEZ` — 미구현(OPN-084)
-   - 기대 결과(현재, `approval_demo`): 접근 없이 바로 승인 단계로 간다.
+   - 포트·메시지: 표적 위치는 자기 `Detection`·수신 `TrackShare`만 사용(DEC-106(2)), `strike_range_m` 안 진입 뒤 교전 기준 확인(DEC-106). 교전 범위 `MA_WEZ` — 미구현(OPN-084)
+   - 기대 결과: 표적으로 접근해 `strike_range_m` 안에서 교전 기준이 맞으면 승인 단계로 간다.
 6. 승인 요청
    - 행위자: 타격기 → GCS
    - 포트·메시지: C2 `ApprovalRequest`(`MA_ApprovalRequest`, request_id, task_id, target_id). `StrikeConsentRequest` — 미구현(OPN-084)
@@ -318,10 +318,10 @@ sequenceDiagram
 
 - 승인 거부: `ApprovalResponse` approved false → `TaskStatus` REJECTED("approval denied"), 발사 없음.
 - 승인 시간 초과: `approval_timeout_s` 경과 → REJECTED("approval timeout"), 발사 없음.
-- `no_strike` 표적(`tgt-002`) 지정: 교전 기준 불일치 → REJECTED(사유) — DEC-106(5) 구현 뒤. 현재 `approval_demo`는 승인 단계로 간다.
+- `no_strike` 표적(`tgt-002`) 지정: 교전 기준 불일치 → REJECTED(사유), 발사 없음(DEC-106(5)).
 - 잔량 없음: FAILED("no store").
-- 승인 대기 중 GCS 링크 상실: 응답이 닿지 않아 시간 초과로 끝난다. 링크 상실 선회 중 발사 금지(DEC-106(6)) — 미구현(OPN-079).
-- 이동 표적(`tgt-003`) 추적 후 타격: `TrackTask` 선행 — 미구현(OPN-079→DEC-106).
+- 승인 대기 중 GCS 링크 상실: 응답이 닿지 않아 시간 초과로 끝난다. 링크 상실 선회 중에는 발사하지 않는다(DEC-106(6)).
+- 이동 표적(`tgt-003`) 추적 후 타격: `TrackTask` 선행(DEC-106). 실행 중 발령은 UI 경로가 생긴 뒤 가능하다(지금은 시나리오 `mission_plan`).
 - FPV 타격기(`uav-003`): weapon_type `fpv`로 같은 흐름. 발사된 엔티티 ID는 `StrikeActivity.weapon_entity`(`wpn-uav-003-<순번>`).
 
 ### 종료 조건
@@ -349,7 +349,7 @@ sequenceDiagram
     R-->>G: P2P TrackShare(MA_Entity)
     R-->>S: P2P TrackShare(MA_Entity)
     G->>S: C2 TaskCommand(StrikeTask)
-    Note over S: 접근·WEZ 미구현(OPN-079, OPN-084)
+    Note over S: 접근·교전 기준 확인(DEC-106), WEZ 미구현(OPN-084)
     S->>G: C2 ApprovalRequest
     alt 승인
         G->>S: C2 ApprovalResponse(approved)
@@ -419,8 +419,8 @@ sequenceDiagram
 ### 분기·예외
 
 - 차단 중 작업 종료(Hold duration 경과 등): 선회 중 작업 진행은 멈추며, 작업 없이 복구하면 상실 전 비행 상태로 돌아간다(D-32).
-- 타격 작업 중 상실: 발사하지 않는다(DEC-106(6)) — 미구현(OPN-079).
-- 재밍 작업 중 상실: CONTINUE일 때만 재밍 유지(DEC-106(6)) — 미구현(OPN-079).
+- 타격 작업 중 상실: 발사하지 않는다(DEC-106(6)).
+- 재밍 작업 중 상실: CONTINUE일 때만 재밍 유지(DEC-106(6)).
 - 재밍 구역 경계에서 RESUME 기체의 선회·재개 반복: DEC-105 복구 조건으로 억제되는지 관찰.
 
 ### 종료 조건
@@ -554,7 +554,7 @@ sequenceDiagram
 ### 목적
 
 - 넓은 영역을 여러 편대에 나눠 탐색하고, 발견 표적을 공유해 추적으로 재배정하는 흐름을 확인한다.
-- 탐색 패턴·분할(OPN-081), COP(OPN-082), 패키지 관리(OPN-083), 추적(OPN-079)의 우선순위를 정한다.
+- 탐색 패턴·분할(OPN-081), COP(OPN-082), 패키지 관리(OPN-083)의 우선순위를 정하고 추적(DEC-106)을 확인한다.
 
 ### 전제·초기 조건
 
@@ -587,7 +587,7 @@ sequenceDiagram
    - 탐색 패턴(센서 폭 기준)과 자동 분할 — 미구현(OPN-081).
 4. 탐색·탐지
    - 행위자: Core → 각 기체
-   - 포트·메시지: MS `Detection`, `SensorActivity`. 센서 지향 `SensorCommand` — 미구현(OPN-079→DEC-106)
+   - 포트·메시지: MS `Detection`, `SensorActivity`. search_area 수행 중 영역 중심으로 `SensorCommand` 지향(DEC-106)
    - 기대 결과: 외접 원 선회로 덮지 못한 구역의 표적은 미탐지.
 5. 탐지 공유
    - 행위자: 탐지 기체
@@ -600,8 +600,8 @@ sequenceDiagram
 7. 추적 재배정
    - 행위자: GCS → 이동 표적에 가까운 편대 리더
    - 포트·메시지: C2 `TaskCommand`(`TrackTask`, target)
-   - 기대 결과(현재): REJECTED — 미구현(OPN-079→DEC-106).
-   - 기대 결과(DEC-106 구현 뒤): `track_standoff_m` 선회 추적, 위치 미상이면 `track_acquire_timeout_s` 뒤 FAILED.
+   - 기대 결과: `track_standoff_m` 선회 추적, 위치 미상이면 `track_acquire_timeout_s` 뒤 FAILED(DEC-106).
+   - 실행 중 발령 수단: UI·Gateway에 없다(UI는 WP5 진행 중). 지금은 시나리오 `mission_plan`으로 시작 때만 낼 수 있다.
    - 트랙 기반 자동 재배정 — 미구현(OPN-082).
 8. 탐색 결과 전송
    - 행위자: 편대 → GCS
@@ -651,15 +651,15 @@ sequenceDiagram
     M-->>A: P2P TrackShare(MA_Entity)
     Note over A: COP 융합 미구현(OPN-082)
     G->>B: C2 TaskCommand(TrackTask)
-    B->>G: C2 TaskStatus REJECTED (현재, OPN-079)
+    B->>G: C2 TaskStatus EXECUTING (추적, DEC-106)
     G->>A: C2 TaskCommand(ReturnToBase)
 ```
 
 ## 보완 항목 우선순위 근거
 
-- OPN-079(DEC-106 구현): S2·S3·S4·S6의 핵심 단계가 이 구현에 걸린다. 가장 많은 시나리오를 막는다.
-- OPN-082(COP 활용): S1·S6의 공유 탐지가 수신 쪽에서 쓰이지 않는다. S3 표적 위치(DEC-106(2))가 수신 `TrackShare`를 쓰므로 OPN-079와 함께 본다.
+- OPN-079(DEC-106): 구현됐다(IMP-AGT-060). S2·S3·S4의 핵심 단계가 풀렸다.
+- OPN-082(COP 활용): S1·S6의 공유 탐지가 수신 쪽에서 쓰이지 않는다. S3 표적 위치(DEC-106(2))도 수신 `TrackShare`를 쓴다.
 - OPN-081(탐색 패턴·분할): S6의 탐색 품질을 정한다. S1 정찰 항로점 정찰에도 영향.
 - OPN-080(리더 재선출): S5에서만 핵심이다. GCS 수동 재구성으로 대체 가능하다.
 - OPN-083(패키지 관리): S6 구성과 S5 상태 확인. 현재 `FormationCommand`·`params.group`으로 대체 가능하다.
-- OPN-084: WEZ는 S3 접근 판정(OPN-079와 함께), RBAC는 S3 승인 권한, DMS·성능 상태·하위 시스템 상태는 보조. 항목별로 필요할 때 추가한다.
+- OPN-084: WEZ는 S3 접근 판정(지금은 `strike_range_m`), RBAC는 S3 승인 권한, DMS·성능 상태·하위 시스템 상태는 보조. 항목별로 필요할 때 추가한다.
