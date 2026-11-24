@@ -151,6 +151,14 @@ class SimCore {
 
   std::vector<std::unique_ptr<Subscription>> subs_;
 
+  // IMP-CORE-032: sim/ctrl/scenario 조회 응답 (DEC-109). 마지막 발행본의 사본이며 비어 있으면 적재 전이다.
+  // 응답 함수는 버스 스레드에서 불리므로 이 구조체를 shared_ptr로 붙잡고 잠금 아래 포인터만 바꾼다
+  struct ScenarioReply {
+    std::mutex mu;
+    std::shared_ptr<const Sample> sample;
+  };
+  std::shared_ptr<ScenarioReply> scenario_reply_ = std::make_shared<ScenarioReply>();
+
   // 시나리오
   Scenario scenario_;
   EntityStore store_;

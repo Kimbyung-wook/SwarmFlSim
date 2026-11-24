@@ -6,7 +6,9 @@
 // TC-CORE-043: onboard/<id>/SystemStatus 변화·1 Hz 발행, 다중 고장, 결정성 (DEC-073)
 // TC-CORE-044~045: 항법·제어 일괄 메시지 (DEC-081)
 // TC-CORE-046: 모의 시각 기준 epoch_utc_us 채우기 (DEC-098)
+// TC-CORE-047: sim/ctrl/scenario 조회 응답 (DEC-109)
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -18,6 +20,7 @@
 #include <numbers>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "swarm/api/bus.hpp"
@@ -2348,6 +2351,93 @@ void test_epoch_utc() {
   CHECK(std::llabs(real.epoch_utc_us() - now) < 60'000'000);
 }
 
+// TC-CORE-047: sim/ctrl/scenario 조회 응답 (IMP-CORE-032, DEC-109)
+// - 적재 전에는 빈 응답, 적재 뒤에는 마지막 발행본과 같은 키·바이트·encoding 한 건(CLI 재정의·epoch 반영)
+// - 실행 중(첫 틱 뒤)에도 답하고, 다른 스레드의 조회가 시뮬레이션 루프와 동시에 돌아도 같은 응답이다
+// - Reset(epoch 다시 채움)과 재적재 뒤에는 새 발행본으로, 거부된 적재는 기존 응답을 그대로 둔다
+void test_scenario_query() {
+  InMemoryBus bus;
+  std::vector<Sample> pubs;
+  auto sub = bus.subscribe(keys::kSimCtrlScenario, [&](const Sample& s) { pubs.push_back(s); });
+  auto query = [&bus] { return bus.get(keys::kSimCtrlScenario, std::chrono::milliseconds(100)); };
+  auto same = [](const Sample& a, const Sample& b) {
+    return a.key == b.key && a.payload == b.payload && a.encoding == b.encoding;
+  };
+  auto parsed = [](const Sample& s) {
+    v1::Scenario m;
+    CHECK(m.ParseFromArray(s.payload.data(), static_cast<int>(s.payload.size())));
+    return m;
+  };
+  std::int64_t wall = 1'763'600'000'000'000;
+  core::CoreConfig cfg = quiet();
+  cfg.utc_now_us = [&wall] { return wall += 1'000'000; };
+  core::SimCore sim(bus, core::mock::provider(), cfg);
+  CHECK(query().empty());  // 적재 전
+
+  core::Scenario sc = one_uav();
+  core::apply_run_override(sc, {"freerun", "0", "", ""});  // CLI --mode·--rate 재정의
+  CHECK(sim.load(sc));
+  auto r = query();
+  CHECK(r.size() == 1 && pubs.size() == 1 && same(r[0], pubs.back()));
+  CHECK(r.size() == 1 && r[0].encoding == protobuf_encoding("swarm.v1.Scenario"));
+  if (r.size() == 1) {
+    const auto m = parsed(r[0]);
+    CHECK(m.run().mode() == v1::RUN_MODE_FREERUN && m.run().epoch_utc_us() == sim.epoch_utc_us());
+  }
+
+  // 실행 중(첫 틱 뒤)
+  sim.submit(start_cmd(v1::RUN_MODE_FREERUN, 0.0, 50));
+  run_frames(sim, 5);
+  r = query();
+  CHECK(sim.frame() >= 5 && r.size() == 1 && same(r[0], pubs.back()));
+  // 다른 스레드의 조회가 루프와 동시에 돈다
+  {
+    const Sample expect = pubs.back();
+    std::atomic<bool> stop{false};
+    std::atomic<int> ok{0}, bad{0};
+    std::thread q([&] {
+      while (!stop) {
+        const auto rr = query();
+        if (rr.size() == 1 && same(rr[0], expect)) ++ok;
+        else ++bad;
+      }
+    });
+    run_frames(sim, 300);
+    stop = true;
+    q.join();
+    CHECK(ok > 0 && bad == 0);
+  }
+  // 실행 중 적재는 거부되고 응답은 그대로다
+  const Sample running = pubs.back();
+  core::Scenario other = one_uav();
+  other.name = "second";
+  CHECK(!sim.load(other));
+  r = query();
+  CHECK(r.size() == 1 && same(r[0], running));
+
+  // Reset: epoch를 다시 채운 새 발행본으로 답한다
+  const auto epoch0 = sim.epoch_utc_us();
+  sim.submit(simple([](auto& c) { c.mutable_reset(); }));
+  sim.poll(Clock::now());
+  r = query();
+  CHECK(sim.state() == v1::SIM_RUN_STATE_LOADED && r.size() == 1 && same(r[0], pubs.back()));
+  CHECK(r.size() == 1 && parsed(r[0]).run().epoch_utc_us() == sim.epoch_utc_us() && sim.epoch_utc_us() != epoch0);
+
+  // 재적재: 새 시나리오로 답한다
+  CHECK(sim.load(other));
+  r = query();
+  CHECK(r.size() == 1 && same(r[0], pubs.back()) && parsed(r[0]).name() == "second");
+  // 1초 재발행 뒤에도 발행본과 같다
+  const auto n = pubs.size();
+  sim.poll(Clock::now() + std::chrono::milliseconds(1500));
+  r = query();
+  CHECK(pubs.size() == n + 1 && r.size() == 1 && same(r[0], pubs.back()));
+
+  // SimCore를 없애면 응답자도 사라진다
+  { core::SimCore gone(bus, core::mock::provider(), quiet()); }
+  CHECK(query().size() == 1);  // 남은 sim 하나만 답한다
+}
+
 int main() {
   test_freerun_progress();
   test_realtime_pacing();
@@ -2390,6 +2480,7 @@ int main() {
   test_nav_batch();
   test_control_batch();
   test_epoch_utc();
+  test_scenario_query();
   if (g_failures == 0) std::puts("swarm_core_tests: ok");
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
