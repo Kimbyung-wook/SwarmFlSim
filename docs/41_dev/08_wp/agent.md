@@ -12,7 +12,7 @@
 | `src/swarm_agent/runtime.py` | `AgentRuntime`, 프레임 처리 순서 |
 | `src/swarm_agent/vehicle.py` | 기체 한 대의 상태 |
 | `src/swarm_agent/ports.py` | 포트 6종 구현 |
-| `src/swarm_agent/fa.py`, `racetrack.py` | 기본 FA |
+| `src/swarm_agent/fa.py` | 기본 FA. 레이스트랙 기하는 `swarm_api.racetrack`(DEC-104). `racetrack.py`, `geo.py`는 호환 별칭 |
 | `src/swarm_agent/plugins.py` | entry point 로딩 |
 | `src/swarm_agent/params.py` | 기체별 매개변수 |
 | `src/swarm_agent/reporting.py` | GCS 상태 보고(DEC-056, DEC-071) |
@@ -49,7 +49,7 @@
 변화 보고에 더한 것(DEC-088, DEC-089):
 
 - `StoreLoadout`: Payload가 보낸 `onboard/<id>/StoreLoadout`을 받은 뒤로는 그 값이 `ms.loadout()`의 기준이고, 런타임이 발사로 잔량을 따로 줄이지 않는다. 적재가 있는 기체만 시작할 때와 값이 바뀔 때 `tx/ms/StoreLoadout`으로 통제 GCS에 보낸다(IMP-AGT-048).
-- 링크 복구 재보고: `GcsHeartbeat`가 MA 변수 `lost_link_timeout_s`(기본 5 s)보다 오래 끊겼다 다시 오면 다음 GCS 보고 때 그 기체의 변화 보고 키 전체와 `FlightCapability`를 한 번 다시 보낸다. 종료 상태로 지운 키와 MA의 `TaskStatus`는 대상이 아니다(IMP-AGT-049).
+- 링크 복구 재보고: `GcsHeartbeat`가 MA 변수 `lost_link_timeout_s`(기본 5 s)보다 오래 끊겼다 다시 오면 다음 GCS 보고 때 그 기체의 변화 보고 키 전체와 `FlightCapability`를 한 번 다시 보낸다. 종료 상태로 지운 키는 대상이 아니다(IMP-AGT-049). 여기에 더해 기체의 마지막 `FlightCommandStatus`(이미 보내 지운 종료 상태여도)와, MA가 C2 포트로 보낸 진행 중 작업의 마지막 `TaskStatus`를 task_id 순으로 한 번 다시 보낸다(DEC-101(1), IMP-AGT-054). 종료 상태를 보낸 작업은 목록에서 지운다.
 
 ## 시험
 

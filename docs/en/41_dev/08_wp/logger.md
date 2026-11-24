@@ -1,6 +1,6 @@
 # 8. WP7 Recording and replay (`logger/`)
 
-> Source: [docs/41_dev/08_wp/logger.md](../../../41_dev/08_wp/logger.md) at commit `8ce186c`.
+> Source: [docs/41_dev/08_wp/logger.md](../../../41_dev/08_wp/logger.md) at commit `f767bb5`.
 
 ## Responsibilities
 

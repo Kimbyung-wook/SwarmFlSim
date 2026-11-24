@@ -24,7 +24,7 @@ git submodule update --init third_party/agra_lacal
 cd gateway && uv sync --extra zenoh
 ```
 
-> 주의: `--extra zenoh`를 빼면 Gateway는 설치 방법을 알리고 종료 코드 1로 끝난다. 시뮬레이터 없이 확인만 할 때는 `--bus memory`를 명시한다. 이때는 시뮬레이터 메시지가 오지 않는다.
+> 주의: `--extra zenoh`를 빼면 Gateway는 설치 방법을 알리고 종료 코드 1로 끝난다. 저장소를 갱신한 뒤 다시 동기화할 때도 `--extra zenoh`를 붙인다. 빼고 `uv sync`를 하면 zenoh가 빠져 Gateway가 시작하지 못한다(QA 39차). 시뮬레이터 없이 확인만 할 때는 `--bus memory`를 명시한다. 이때는 시뮬레이터 메시지가 오지 않는다.
 
 ## 9.2 실행 순서
 
@@ -70,19 +70,31 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 |---|---|
 | `--sim-epoch <UTC>` | UCI 시각의 기준 시각을 고정한다. ISO 8601, 시간대 필수(예: `2026-01-01T00:00:00Z`). 시나리오 값보다 앞선다. 재현 시험용이다. 보통은 비워 시나리오 값을 쓴다([UCI 시각](#uci-시각)) |
 | `--lacal-admin <url>` | CAL Server 관리 주소. 기본은 `--lacal` 호스트의 8766. 새 외부 구독을 알아내 마지막 값을 다시 보낼 때 쓴다. `none`이면 끈다 |
+| `--envelope on\|off` | 외부 교환 봉투. 기본 `on`([봉투](#외부-교환-봉투)). `off`는 봉투 없이 UCI 메시지를 그대로 주고받고, CAL Server 설정은 `config/lacal_server_raw.yaml`을 쓴다 |
+| `--envelope-dest <UUID>` | 보내는 봉투의 목적지(외부 시스템 UUID). 반복 가능. 비우면 넣지 않는다 |
+| `--transport lacal\|stomp` | 외부 전송 경로. 기본 `lacal`. `stomp`는 A-GRA 시험 하네스 버스([시험 하네스](#시험-하네스-stomp-경로)) |
+| `--scenario-query-attempts <n>` | 시작 때 시나리오 조회 횟수, 기본 5. 0이면 조회하지 않는다(DEC-109) |
 
-**4. 외부 C2를 붙인다.** 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 보낸다. 시험용 클라이언트 구현은 [qa/gw_ext_client.py](../../qa/gw_ext_client.py)에 있다.
+옵션 전체는 [gateway/README.md](../../gateway/README.md)에 있다.
+
+실행 순서: Gateway는 시작할 때 Core에 시나리오를 조회하므로(계약 0.24.0, DEC-109) 시뮬레이터보다 늦게 켜도 알려진 기체와 UCI 기준 시각을 바로 안다. 다만 작업 상태와 승인 요청은 바뀔 때만 나오므로 늦게 켠 Gateway는 그 전에 시작한 작업의 현재 상태를 외부에 주지 못하고, 그 전의 승인 요청에 외부가 답할 수 없다. 운용에서는 Gateway를 시뮬레이터보다 먼저 띄우기를 권한다(OPN-095, 미결).
+
+**4. 외부 C2를 붙인다.** 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`·`QueryDataRequest`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 보낸다. 봉투가 켜진 기본 실행에서는 이 메시지를 `MA_RxDataPayload`에 싸서 보내고, Gateway가 내는 메시지는 각 토픽의 `MA_TxDataPayloadCommand`를 받아 푼다. 시험용 클라이언트 구현은 [qa/gw_ext_client.py](../../qa/gw_ext_client.py)에 있다.
 
 ## 9.3 시작 직후
 
-Gateway는 접속 뒤 XSD를 적재한다. 확인 실행에서 약 9초 걸렸다. 그동안 외부가 보낸 명령은 서버가 `+OK`로 답해도 받는 쪽이 없어 사라진다(O-13). 외부 C2는 `ready` 줄이 나온 뒤 명령을 보낸다.
+Gateway는 CAL Server에 접속하자마자 외부 명령 구독을 건다. 그 뒤 XSD를 적재하고(약 4 s) 버스에서 시나리오와 수신 보고를 1.5 s 받는다. 그동안 받은 외부 메시지는 받은 순서대로 최대 256건 쌓았다가 준비가 끝나면 처리한다(IMP-GW-034). 쌓였던 명령은 받은 때부터 최대 약 6 s 늦게 나간다.
 
 | 로그 | 뜻 |
 |---|---|
-| `LA-CAL connected ... not ready yet` | 접속만 됐다 |
+| `LA-CAL connected ... at +N s` | 접속됐다 |
+| `LA-CAL SUB MA_TaskCommand@swarm.c2 done` | 외부 명령 구독 완료. 이때부터 외부 메시지를 잃지 않는다 |
 | `XSD loaded, mapping built` | 검증 준비 완료 |
-| `LA-CAL SUB MA_TaskCommand@swarm.c2 done` | 외부 명령 구독 완료 |
-| `ready at +N s` | 양방향 준비 완료 |
+| `ready at +N s: ...; K external messages held, processed after 1.5 s settle` | 양방향 준비 완료. 쌓인 K건은 1.5 s 뒤 처리한다 |
+| `pre-ready <메시지> held N s -> <결과>` | 쌓였던 메시지를 처리했다 |
+| `no scenario after N queries` | 시작 때 시나리오 조회에 응답이 없었다. 구독으로 올 때를 기다린다 |
+
+- Gateway를 재기동하면 앞 Gateway가 끝난 뒤 새 구독이 걸리기까지(측정 약 1.1 s) 외부가 보낸 명령은 사라진다. CAL Server는 `+OK`로 답하지만 보관하지 않는다. 재기동 측정에서 회당 2~3건이었다(고치기 전 10~11건). 이 구간은 Gateway가 받을 수 없으므로, 외부 C2는 명령마다 `MA_TaskStatus`를 기다리고 오지 않으면 다시 보낸다(O-13).
 
 ## 9.4 외부 `MA_TaskCommand` 규칙
 
@@ -126,7 +138,7 @@ Gateway는 접속 뒤 XSD를 적재한다. 확인 실행에서 약 9초 걸렸�
 | 계획에 없는 단독 `RoutePlan` (`waypoint`) | 바로 비행한다. 수행 중 작업은 `CANCELLED`, 대기 작업은 항로가 끝나면 잇는다. `RoutePlan` 자체의 작업 상태는 오지 않는다 |
 
 - `flocking`은 항로점 둘 이상의 `route` 작업을 거부한다.
-- `flocking`은 `EXECUTING`을 보내지 않아 외부의 마지막 값이 `EXECUTION_PENDING`으로 남는다(O-28).
+- `flocking`도 다른 내장 MA처럼 수락 다음 틱에 `EXECUTING`을 보낸다(IMP-AGT-057, O-28 해소).
 
 ### 외부로 내는 상태와 시각
 
@@ -163,6 +175,34 @@ UCI 머리 `Timestamp`와 위치·속도·자세 시각은 벽시계가 아니�
 - 알려진 기체는 시나리오(`sim/ctrl/scenario`, Gateway는 읽기만 한다)의 UAV와 이 GCS가 보고를 받은 기체다. truth는 쓰지 않는다(DEC-096).
 - `MA_TaskCommand`, `MA_MissionPlan`을 거부하면 모르는 기체별로 `MA_TaskStatus`(`DROPPED`, 사유 포함)를 보내 외부에 알린다. `MA_RoutePlan`은 알릴 상태 메시지가 없어 기록만 남는다.
 
+### 외부 교환 봉투
+
+외부 인터페이스(MA-C2) 메시지는 봉투에 싸서 오간다(DEC-111, 기본 켬). 자세한 규칙은 [gateway/README.md](../../gateway/README.md#외부-교환-봉투-dec-111)에 있다.
+
+- 받기: `MA_RxDataPayload`의 `EncodedPayload`에 든 UCI XML 문서를 풀어 평소대로 처리한다. 봉투와 안의 메시지를 모두 XSD로 검증한다.
+- 목적지(`SpecificDestinationID`)가 비었거나 Gateway 시스템 UUID를 포함할 때만 받는다. 아니면 무시한다(카운터 `envelope_not_addressed`).
+- 보내기: `MA_TxDataPayloadCommand`로 싼다. 목적지는 `--envelope-dest`로 준다.
+- 봉투를 켜면 봉투 없는 메시지는 받지 않는다(`envelope required`). 봉투 안 문자열은 ASCII다. 내보낼 문자열의 ASCII가 아닌 글자는 바꾼다(`envelope_ascii_replaced`).
+
+### 조회 응답 (QueryDataRequest)
+
+외부 `QueryDataRequest`에 Gateway가 이미 내보낸 메시지의 기체별 최신 값으로 답한다(DEC-112). MA와 런타임에는 묻지 않는다.
+
+- 처리하면 `QueryDataRequestStatus` `PROCESSING` 뒤 `COMPLETED`(결과에 최신 값)를 보낸다. `ResultsPerPage`가 결과 수보다 작으면 쪽마다 `COMPLETED`를 하나씩 보낸다.
+- 내보내지 않는 메시지 종류나 조건식 조회는 `REJECTED` 하나로 거부하고 사유를 싣는다.
+- `CANCEL`은 취소할 처리가 없다. 받은 적 없는 `RequestID`는 `REJECTED`, 이미 끝난 것은 그 끝 상태를 다시 하나 보낸다.
+- 상세 규칙은 [gateway/README.md](../../gateway/README.md)의 교환 메시지 절에 있다.
+
+### 시험 하네스 STOMP 경로
+
+A-GRA 시험 하네스 버스(ActiveMQ STOMP 1.2)에 직접 붙는 두 번째 전송 경로다(DEC-110). 변환, 검증, 봉투, 알려진 기체 확인은 LA-CAL 경로와 같다. 옵션과 예는 [gateway/README.md](../../gateway/README.md#시험-하네스-stomp-경로-dec-110)에 있다.
+
+- `--transport stomp`, `--stomp <host:port>`, 우리 플랫폼 UUID `--system-uuid`, C2 UUID `--envelope-dest`를 준다. 5.0a 하네스는 `--schema-version 005.0a.ASK`이고, 이때 5.0a에 없는 `MA_NavigationReport`·`MA_Entity`는 내보내지 않는다.
+- 하네스 토픽은 보관하지 않으므로 Gateway를 하네스보다 먼저 띄운다.
+- 하네스의 시작·정지 신호에는 같은 `RequestID`로 응답한다(시작 `COMPLETED`, 정지 `CANCELED`).
+- 하네스 코드, XSD, 이미지는 저장소에 넣지 않는다. 배포 조건을 확인하지 못했기 때문이다(OPN-094, 미결). 하네스 시험은 하네스를 로컬에 따로 설치한 PC에서만 할 수 있다.
+- 실하네스 조회 시험(MA/C2 `common_query_data` 23건)은 하네스 기본 시드에서 0/23, 다른 시드에서 23/23이었다. 기본 시드가 만드는 요청이 무작위 값으로 취소(`CANCEL`) 요청이 되기 때문이다([gateway/TRACE.md](../../gateway/TRACE.md)).
+
 ## 9.7 카운터와 거부
 
 `--stats-s` 주기로 `counters` 로그가 나온다.
@@ -178,6 +218,9 @@ UCI 머리 `Timestamp`와 위치·속도·자세 시각은 벽시계가 아니�
 | `skipped_command_state` | 끝 상태 뒤라서 내지 않은 명령 상태 |
 | `replayed` | 늦게 붙은 외부 구독에 다시 보낸 값 |
 | `epoch_changed` | UCI 기준 시각을 시나리오 값으로 바꾼 횟수 |
+| `scenario_query`, `scenario_by_query`, `scenario_by_subscription` | 시작 때 시나리오 조회 횟수와, 시나리오를 받은 길 |
+| `envelope_tx`, `envelope_rx`, `envelope_not_addressed`, `envelope_invalid` | 봉투를 보내고 받은 수, 우리 앞이 아니어서 무시한 수, 형식 오류 |
+| `query_rx`, `query.COMPLETED`, `query.REJECTED` | 받은 조회와 응답 상태별 수 |
 
 - XSD 검증이나 변환에 실패한 메시지는 내보내지 않고 로그와 카운터에 남긴다. Gateway는 계속 돈다.
 - 위치 대응 메시지 하나가 실패해도 다른 대응 메시지는 내보낸다.

@@ -1,6 +1,6 @@
 # 3. Writing scenarios
 
-> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `8ce186c`.
+> Source: [docs/42_user/03_scenario.md](../../42_user/03_scenario.md) at commit `f767bb5`.
 
 A scenario is one JSON file. The schema is `scenario/src/swarm_scenario/schema/scenario.schema.json`.
 
@@ -170,12 +170,13 @@ Write registered names in `ma_plugin` and `fa_plugin`. List the names with `uv r
 | MA | What it does | Supported tasks |
 |---|---|---|
 | `hold` | Holds current heading, speed and altitude. If `orbit_radius_m` > 0, orbits in place | Does not execute mission tasks. Acts on link loss |
-| `waypoint` | Executes mission plans and C2 commands | `move_to`, `hold`, `return_to_base`, `search_area`, `route` |
-| `formation` | Leader-follower formation | Formation assignment and the leader's tasks |
-| `flocking`, `flocking_basic` | Reynolds swarming and movement to a goal point | `move_to`, `hold`, `return_to_base`, `search_area`. `route` is `REJECTED` |
+| `waypoint` | Executes mission plans and C2 commands | `move_to`, `hold`, `return_to_base`, `search_area`, `route`, `track`, `jam`, `strike` |
+| `formation` | Leader-follower formation | Formation assignment and the leader's tasks (the same tasks as `waypoint`; followers follow the leader) |
+| `flocking`, `flocking_basic` | Reynolds swarming and movement to a goal point | `move_to`, `hold`, `return_to_base`, `search_area`. `route`, `track`, `jam` and `strike` are `REJECTED` |
+| `approval_demo` | For approval-flow tests and demos only. Not a baseline MA (DEC-103) | `strike` only. When approval is needed it sends the guided object only after an approval response |
 
 - The only FA is `default`. It is used if omitted.
-- Unsupported tasks return `TaskStatus` REJECTED. Baseline MAs do not support `track`, `strike` or `jam` tasks.
+- Unsupported tasks return `TaskStatus` REJECTED. `track`, `jam` and `strike` are carried out by `waypoint` and the `formation` leader (DEC-106). The behavior is under "Payload tasks" below [3.7](#37-mission-plan-mission_plan).
 - Write parameters in `ma_params` and `fa_params`. Names and ranges can be seen in the UI parameter panel during a run. Unknown names and out-of-range values are not applied, and a rejection reason is recorded.
 
 Common parameters:
@@ -192,6 +193,12 @@ Common parameters:
 | default FA | `racetrack_guidance` | `dubins` | Racetrack guidance (`dubins`, `vector_field`) |
 | all baseline MAs | `lost_link_timeout_s` | 5 | Simulation time (s) after the last GCS Heartbeat before the link counts as lost |
 | all baseline MAs | `lost_link_policy` | `hold_until_command` | Link-loss behavior when the task has no policy |
+| all baseline MAs | `lost_link_recover_hold_s` | 5 | Simulation time (s) the Heartbeat must continue after it returns before recovery is confirmed. 0 confirms at once |
+| all baseline MAs | `lost_link_recover_gap_s` | 2 | Heartbeat gap (s) allowed while waiting for recovery. If exceeded, the wait is dropped and the link-loss behavior continues |
+| waypoint, formation | `track_standoff_m` | 1500 | Orbit radius (m) around the target for `track` tasks |
+| waypoint, formation | `track_acquire_timeout_s` | 60 | Simulation time (s) to wait until the target position is first known. When exceeded, `FAILED` (`target not found`) |
+| waypoint, formation | `track_lost_s` | 30 | Simulation time (s) target position updates may stop. When exceeded, `FAILED` (`target lost`) |
+| waypoint, formation | `strike_range_m` | 3000 | Target distance (m) at which a `strike` task checks the engagement criteria and sends the guided object |
 | waypoint, formation (leader), flocking | `approval_tasks` | empty | Task kinds that need GCS approval before they start, comma-separated (for example `move_to,hold`). Empty means run at once without approval |
 | waypoint, formation (leader), flocking | `approval_timeout_s` | 0 | Simulation time (s) to wait for an approval response. `REJECTED` when exceeded. 0 means no limit |
 | all baseline MAs | `track_share_hz` | 0 | Rate (Hz) at which the vehicle broadcasts its own detections to peers and the GCS. 0 turns it off |
@@ -214,6 +221,17 @@ Each task in `tasks` has a `task_id`, `assignees` and one task-kind key. It can 
 | `search_area` | Circular or polygonal area |
 | `route` | List of route points. For each point `position`, `speed_mps`, `acceptance_radius_m`, action (`loiter`, `recon`) |
 | `return_to_base` | Returns to the starting position |
+| `track` | `target_id` |
+| `jam` | `area` (circle or polygon), `duration_s` (0 means until cancelled) |
+| `strike` | `target_id`, `aim_point` (optional, coordinates), `weapon_type` |
+
+Payload tasks (`track`, `jam`, `strike`) are carried out by `waypoint` and the `formation` leader (DEC-106). The target position is known only from the vehicle's own detections (`Detection`) and detections shared by peers (`TrackShare`, MA variable `track_share_hz`). Truth is not used.
+
+- `track`: orbits the target at `track_standoff_m` and follows it. While running it points its own camera at the target. It does not end until cancelled or replaced by another task.
+- `jam`: orbits the area center at the area radius (or `hold_radius_m` if none). Once on the circle it turns the jammer on and sends `EXECUTING`. After `duration_s` it turns it off and reports `COMPLETED`. Without a jammer it is `FAILED` (`no jammer`).
+- `strike`: approaches the target, and within `strike_range_m` checks the scenario's `engagement_criteria` (hostile sides, allowed areas, prohibited areas). If they do not match it is `REJECTED` (with the reason) and no guided object is sent. If they match it sends a guided object from one payload station, and on reaching the target it is `COMPLETED`. Approval follows `approval_tasks` above.
+- No guided object is sent during the link-loss orbit. The jammer and sensors stay on only when the policy is `continue`; otherwise they are turned off.
+- Example: [scenario/examples/ms_tasks_demo_7.json](../../../scenario/examples/ms_tasks_demo_7.json) (tracking, area jamming, a target in an allowed area, `REJECTED` for a target in a prohibited area, tracking by a formation leader).
 
 Unsupported or invalid tasks are reported once on the first tick as `TaskStatus` `REJECTED` (for example `unsupported task strike`). This is the same rule as for plans and C2 commands received during the run (O-45).
 

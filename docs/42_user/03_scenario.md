@@ -168,12 +168,13 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | MA | 하는 일 | 지원 작업 |
 |---|---|---|
 | `hold` | 현재 침로·속도·고도 유지. `orbit_radius_m` > 0이면 그 자리 선회 | 임무 작업을 수행하지 않음. 링크 상실 행동은 한다 |
-| `waypoint` | 임무 계획과 C2 명령 수행 | `move_to`, `hold`, `return_to_base`, `search_area`, `route` |
-| `formation` | 리더-추종 편대 | 편대 지정과 리더의 작업 수행 |
-| `flocking`, `flocking_basic` | Reynolds 군집과 목표점 이동 | `move_to`, `hold`, `return_to_base`, `search_area`. `route`는 `REJECTED` |
+| `waypoint` | 임무 계획과 C2 명령 수행 | `move_to`, `hold`, `return_to_base`, `search_area`, `route`, `track`, `jam`, `strike` |
+| `formation` | 리더-추종 편대 | 편대 지정과 리더의 작업 수행(`waypoint`와 같은 작업. 추종기는 리더를 따른다) |
+| `flocking`, `flocking_basic` | Reynolds 군집과 목표점 이동 | `move_to`, `hold`, `return_to_base`, `search_area`. `route`, `track`, `jam`, `strike`는 `REJECTED` |
+| `approval_demo` | 승인 흐름 시험·데모 전용. 기본 MA가 아니다(DEC-103) | `strike`만. 승인이 필요하면 승인 응답을 받은 뒤에만 유도 객체를 보낸다 |
 
 - FA는 `default`만 있다. 생략하면 `default`를 쓴다.
-- 지원하지 않는 작업은 `TaskStatus` REJECTED로 돌아온다. 기본 MA는 `track`, `strike`, `jam` 작업을 지원하지 않는다.
+- 지원하지 않는 작업은 `TaskStatus` REJECTED로 돌아온다. `track`, `jam`, `strike`는 `waypoint`와 `formation` 리더가 수행한다(DEC-106). 동작은 [3.7](#37-임무-계획-mission_plan) 아래 "장비 작업"에 있다.
 - 매개변수는 `ma_params`, `fa_params`에 쓴다. 이름과 범위는 실행 중 UI의 매개변수 패널에서 볼 수 있다. 없는 이름이나 범위 밖 값은 적용되지 않고 거부 사유가 남는다.
 
 자주 쓰는 매개변수:
@@ -190,6 +191,12 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | default FA | `racetrack_guidance` | `dubins` | 레이스트랙 유도(`dubins`, `vector_field`) |
 | 내장 MA 전부 | `lost_link_timeout_s` | 5 | 마지막 GCS Heartbeat 뒤 링크 상실로 판단할 모의 시간(s) |
 | 내장 MA 전부 | `lost_link_policy` | `hold_until_command` | 작업에 정책이 없을 때의 링크 상실 행동 |
+| 내장 MA 전부 | `lost_link_recover_hold_s` | 5 | Heartbeat가 다시 온 뒤 복구로 확정하기까지 이어져야 하는 모의 시간(s). 0이면 바로 확정 |
+| 내장 MA 전부 | `lost_link_recover_gap_s` | 2 | 복구 대기 중 허용하는 Heartbeat 간격(s). 넘으면 대기를 버리고 상실 행동을 유지 |
+| waypoint, formation | `track_standoff_m` | 1500 | `track` 작업의 표적 둘레 선회 반경(m) |
+| waypoint, formation | `track_acquire_timeout_s` | 60 | 표적 위치를 처음 알기까지 기다리는 모의 시간(s). 넘으면 `FAILED`(`target not found`) |
+| waypoint, formation | `track_lost_s` | 30 | 표적 위치 갱신이 끊겨도 되는 모의 시간(s). 넘으면 `FAILED`(`target lost`) |
+| waypoint, formation | `strike_range_m` | 3000 | `strike` 작업에서 교전 기준을 확인하고 유도 객체를 보내는 표적 거리(m) |
 | waypoint, formation(리더), flocking | `approval_tasks` | 빈 값 | 시작 전에 GCS 승인을 받을 작업 종류, 쉼표 구분(예: `move_to,hold`). 빈 값이면 승인 없이 바로 수행 |
 | waypoint, formation(리더), flocking | `approval_timeout_s` | 0 | 승인 응답을 기다리는 모의 시간(s). 넘으면 `REJECTED`. 0이면 무한 |
 | 내장 MA 전부 | `track_share_hz` | 0 | 자기 탐지를 피어와 GCS에 방송하는 주기(Hz). 0이면 끔 |
@@ -212,6 +219,17 @@ uv run swarm-scenario export my_first.json --out my_first.pb
 | `search_area` | 원 또는 다각형 영역 |
 | `route` | 항로점 목록. 항로점마다 `position`, `speed_mps`, `acceptance_radius_m`, 행위(`loiter`, `recon`) |
 | `return_to_base` | 시작 위치로 귀환 |
+| `track` | `target_id` |
+| `jam` | `area`(원 또는 다각형), `duration_s`(0이면 취소까지) |
+| `strike` | `target_id`, `aim_point`(선택, 좌표), `weapon_type` |
+
+장비 작업(`track`, `jam`, `strike`)은 `waypoint`와 `formation` 리더가 수행한다(DEC-106). 표적 위치는 자기 탐지(`Detection`)와 피어가 공유한 탐지(`TrackShare`, MA 변수 `track_share_hz`)로만 안다. 진실값은 쓰지 않는다.
+
+- `track`: 표적 둘레를 `track_standoff_m`로 선회하며 표적을 따라간다. 수행 중에는 자기 카메라를 표적으로 향한다. 취소나 다른 작업으로 바뀔 때까지 끝나지 않는다.
+- `jam`: 영역 중심을 영역 반경(없으면 `hold_radius_m`)으로 선회하고, 원 위에 들면 재머를 켜고 `EXECUTING`을 보낸다. `duration_s`가 지나면 끄고 `COMPLETED`다. 재머가 없으면 `FAILED`(`no jammer`)다.
+- `strike`: 표적으로 다가가 `strike_range_m` 안에 들면 시나리오의 `engagement_criteria`(적대 진영, 허용 구역, 금지 구역)를 확인한다. 어긋나면 `REJECTED`(사유)이고 유도 객체를 보내지 않는다. 맞으면 탑재 장비 하나로 유도 객체를 보내고, 표적에 도달하면 `COMPLETED`다. 승인 규칙은 위 `approval_tasks`와 같다.
+- 링크 상실 선회 중에는 유도 객체를 보내지 않는다. 재머와 센서는 정책이 `continue`일 때만 유지하고 그 밖에는 끈다.
+- 예: [scenario/examples/ms_tasks_demo_7.json](../../scenario/examples/ms_tasks_demo_7.json)(추적, 영역 재밍, 허용 구역 안 대상, 금지 구역 안 대상의 `REJECTED`, 편대 리더 추적).
 
 지원하지 않거나 값이 잘못된 작업은 첫 틱에 `TaskStatus` `REJECTED`(예: `unsupported task strike`)로 한 번 보고된다. 실행 중 받은 계획이나 C2 명령과 같은 규칙이다(O-45).
 

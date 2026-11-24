@@ -1,6 +1,6 @@
 # 4. Running
 
-> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `8ce186c`.
+> Source: [docs/42_user/04_run.md](../../42_user/04_run.md) at commit `f767bb5`.
 
 To start everything at once, use the runner in [chapter 2](02_quickstart.md). To run another scenario, go to 4.1. To start processes yourself, go to 4.2.
 

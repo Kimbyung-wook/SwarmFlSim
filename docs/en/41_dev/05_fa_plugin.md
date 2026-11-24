@@ -1,6 +1,6 @@
 # 5. Writing an FA plugin
 
-> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `8ce186c`.
+> Source: [docs/41_dev/05_fa_plugin.md](../../41_dev/05_fa_plugin.md) at commit `f767bb5`.
 
 An FA (Flight Autonomy) turns the MA's flight commands into dynamics control output. Use the default FA as it is, and write your own only when comparing other guidance and control laws.
 
@@ -66,7 +66,7 @@ If you fill both `heading_rate_rps` and the coordinated-turn bank `bank = atan(V
 
 ## 5.3 Default FA
 
-Registered name `default`, code in [agent/src/swarm_agent/fa.py](../../../agent/src/swarm_agent/fa.py), racetrack geometry in [racetrack.py](../../../agent/src/swarm_agent/racetrack.py).
+Registered name `default`, code in [agent/src/swarm_agent/fa.py](../../../agent/src/swarm_agent/fa.py), racetrack geometry in the plugin API [swarm_api/racetrack.py](../../../api/python/src/swarm_api/racetrack.py) (DEC-104).
 
 - Guidance: Waypoint is direct, Orbit is a vector field, Racetrack is selected by `racetrack_guidance`.
 - Control: turn rate proportional to heading error (limited by maximum bank), climb rate proportional to altitude error.

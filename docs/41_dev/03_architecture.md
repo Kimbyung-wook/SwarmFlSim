@@ -29,6 +29,9 @@
 - 같은 PC에 다른 버스가 있으면 `--no-multicast`와 명시적 `--connect`로 섞이지 않게 한다.
 - Python `Bus.subscribe(keyexpr, callback, *, ordered=False)`의 `ordered=True`는 수신 스레드에서 바로 콜백을 불러, 같은 발행자가 낸 메시지를 구독이 달라도 발행 순서대로 받게 한다. 기본값은 구독마다 다른 스레드에서 콜백을 불러 구독 사이의 순서가 바뀔 수 있다. C++ 버스와 `InMemoryBus`는 늘 순서대로다. lockstep 순서에 기대는 런타임·도구만 쓰고, 콜백이 수신 스레드를 막으므로 짧게 끝낸다. Agent 런타임은 모든 구독을 ordered로 연다(DEC-083).
 - 다른 QoS로 키를 발행하지 않는다. `sim/clock/**`·`swarm/**`는 혼잡 제어 BLOCK, 나머지는 DROP이다(DEC-043).
+- 조회(DEC-109, 계약 0.24.0): `serve(keyexpr, handler)`는 응답자를 두고(반환 객체를 닫으면 멈춘다), `get(keyexpr, timeout)`은 시간 안에 온 응답 목록을 돌려준다. 응답자가 없으면 빈 목록이다. C++ `swarm::Bus`와 Python `Bus` 모두 있고 memory·Zenoh 백엔드가 지원한다. Core는 시나리오를 적재한 동안 `sim/ctrl/scenario`에 응답한다.
+- 늦게 붙는 참여자는 `sim/ctrl/scenario` 구독을 먼저 연 다음 `get`으로 조회한다. 구독과 조회로 같은 시나리오를 두 번 받을 수 있으므로 멱등 처리한다. Gateway는 반드시 조회한다.
+- 성능 메모: Zenoh는 세션 `put`마다 자기 세션의 구독까지 경로를 맞춰 본다. 구독이 많은 Agent(기체별 구독, DEC-100)에서 이 비용이 커서, Python `ZenohBus.put`은 키마다 선언 발행자를 한 번 만들어 다시 쓴다(DEC-108, IMP-API-025, tx put 약 40 → 9 µs). QoS와 키 사이 송신 순서는 그대로다. 선언 발행자 상한(16,384)을 넘는 키는 세션 `put`으로 보낸다.
 
 ## 3.3 키 영역과 접근 규칙
 
