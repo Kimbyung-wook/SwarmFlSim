@@ -48,7 +48,9 @@ def test_tc_agt_029_defaults_and_published_specs():
     assert vals(fa)["k_heading"] == 0.8 and vals(fa)["racetrack_guidance"] == "dubins"
     assert vals(ma) == {"acceptance_m": 80.0, "hold_radius_m": 300.0, "speed_mps": 0.0,
                         "lost_link_timeout_s": 5.0, "lost_link_recover_hold_s": 5.0, "lost_link_recover_gap_s": 2.0, "lost_link_policy": "hold_until_command",
-                        "approval_tasks": "", "approval_timeout_s": 0.0, "track_share_hz": 0.0}  # DEC-088
+                        "approval_tasks": "", "approval_timeout_s": 0.0, "track_share_hz": 0.0,  # DEC-088
+                        "track_standoff_m": 1500.0, "track_acquire_timeout_s": 60.0, "track_lost_s": 30.0,
+                        "strike_range_m": 3000.0}  # DEC-106
     spec = {s.name: s for s in fa.specs}
     assert spec["max_bank_deg"].layer == int(ParamLayer.AIRFRAME) and spec["k_heading"].layer == int(ParamLayer.CONTROL)
     assert spec["racetrack_guidance"].layer == int(ParamLayer.GUIDANCE)
@@ -56,7 +58,8 @@ def test_tc_agt_029_defaults_and_published_specs():
     assert spec["k_heading"].min == 0.0 and spec["k_heading"].max == 10.0 and spec["k_heading"].default_value.number_value == 0.8
     assert {s.name for s in ma.specs} == {"acceptance_m", "hold_radius_m", "speed_mps", "lost_link_timeout_s", "lost_link_recover_hold_s",
                                         "lost_link_recover_gap_s", "lost_link_policy",
-                                        "approval_tasks", "approval_timeout_s", "track_share_hz"}
+                                        "approval_tasks", "approval_timeout_s", "track_share_hz",
+                                        "track_standoff_m", "track_acquire_timeout_s", "track_lost_s", "strike_range_m"}
     assert not fa.rejected and not ma.rejected
     # 기체마다 FA·MA 각각 게시한다
     assert {k for k, _ in rec.msgs} >= {keys.sim_param(u, o) for u in ("uav-001", "uav-002") for o in ("fa", "ma")}

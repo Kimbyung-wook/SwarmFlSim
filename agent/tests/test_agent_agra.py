@@ -126,8 +126,9 @@ def test_tc_agt_133_approval_rules():
     respond(h, req[0].request_id, True)
     h.run_s(0.5)
     assert h.task_states("p1")[:1] == [ACC]
-    # 교전 기준 require_approval: 기본 MA가 지원하지 않는 StrikeTask는 그대로 REJECTED (요청 없음)
-    sc = make_scenario(1, "waypoint")
+    # 교전 기준 require_approval: StrikeTask를 지원하지 않는 MA(flocking)는 그대로 REJECTED (요청 없음).
+    # waypoint·formation 리더는 DEC-106부터 Strike를 수행한다(TC-AGT-150)
+    sc = make_scenario(1, "flocking")
     sc.engagement_criteria.require_approval = True
     h = Harness(sc)
     h.core.step(2)
@@ -321,7 +322,7 @@ def test_tc_agt_138_initial_plan_unsupported_rejected():
         h.run_s(1.0)
         return h
 
-    for ma in ("waypoint", "flocking"):
+    for ma in ("flocking",):                 # strike를 지원하지 않는 MA (waypoint는 DEC-106부터 지원)
         h = run(ma)
         st = [(m.task_id, m.state, m.reason) for m in of(h, "TaskStatus", A)]
         # 실행 중 계획·C2와 같은 규칙: 미지원은 REJECTED(unsupported), 시작 작업보다 먼저, 한 번만
@@ -332,5 +333,5 @@ def test_tc_agt_138_initial_plan_unsupported_rejected():
         assert of(h, "ApprovalRequest") == []
         assert not [m for m in of(h, "TaskStatus", B) if m.task_id in ("p3", "p4")]   # 배정 안 된 기체는 보고 안 함
     # 결정론: 두 번 실행의 GCS 수신이 같다
-    a, b = (run("waypoint"), run("waypoint"))
+    a, b = (run("flocking"), run("flocking"))
     assert [m.SerializeToString() for m in a.gcs_rx] == [m.SerializeToString() for m in b.gcs_rx]

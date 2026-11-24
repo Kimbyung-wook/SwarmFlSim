@@ -140,10 +140,10 @@ def test_tc_agt_080_rejected_tasks_do_not_preempt():
     send_plan(h, plan_of("p1", move("a", 20000, 0)))
     h.run_s(3.0)
     bad = c2_pb2.TaskCommand(task_id="s1", assignees=[A])
-    bad.strike.target_id = "tgt-001"
+    bad.strike.SetInParent()                  # 표적 없는 타격: 잘못된 작업 (DEC-106)
     send_plan(h, plan_of("p2", bad, move("off", 0, 0)))
     h.run_s(0.1)
-    assert h.task_states("s1") == [REJ]       # 지원하지 않는 작업은 알린다
+    assert h.task_states("s1") == [REJ]       # 잘못된 작업은 알린다
     assert h.task_states("off")[0] == ACC     # 유효한 작업이 있으면 교체
     send_plan(h, plan_of("p3", bad))
     h.run_s(1.0)

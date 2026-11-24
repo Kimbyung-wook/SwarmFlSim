@@ -1,5 +1,5 @@
-"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038, IMP-AGT-046~047, IMP-AGT-051): 작업 추적·승인, 작업 → 비행 구간,
-PeerStatus, TrackShare, 링크 상실 행동, 비행 명령 ID.
+"""MA 공용 부품 (IMP-AGT-011, IMP-AGT-016~017, IMP-AGT-038, IMP-AGT-046~047, IMP-AGT-051, IMP-AGT-060): 작업 추적·승인,
+작업 → 비행 구간, PeerStatus, TrackShare, 링크 상실 행동, 비행 명령 ID, MS 임무 수행(PayloadTasker, DEC-106).
 
 플러그인은 ctx.ports로만 송수신한다 (DEC-013). 여기 함수들도 ctx 밖의 상태를 보지 않는다.
 """
@@ -12,13 +12,14 @@ from dataclasses import dataclass
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 
-from swarm.v1 import c2_pb2, common_pb2, mp_pb2, p2p_pb2, vi_pb2
+from swarm.v1 import c2_pb2, common_pb2, mp_pb2, ms_pb2, p2p_pb2, vi_pb2
 from swarm_api import AgentContext, ParamDef, ParamLayer
 from swarm_api.geo import G_MPS2, ned_offset, wrap_pi
 from swarm_api.racetrack import path_error
 
 S = common_pb2
 PILOT_TASKS = ("move_to", "hold", "return_to_base", "search_area", "route")
+MS_TASKS = ("track", "jam", "strike")          # PayloadTasker가 수행하는 작업 (DEC-106)
 
 # 링크 상실 행동 변수 (DEC-078). 내장 MA는 PARAMS에 이 묶음을 더한다
 LOST_LINK_POLICIES = {
@@ -38,7 +39,7 @@ LOST_LINK_PARAMS = (
 )
 
 # 실행 전 GCS 승인 (IMP-AGT-046, DEC-088, DEC-075). 기본은 승인 없이 바로 수행한다
-ENGAGEMENT_TASKS = ("strike",)   # EngagementCriteria.require_approval이 참이면 승인을 받는 작업 (기본 MA는 지원하지 않아 REJECTED)
+ENGAGEMENT_TASKS = ("strike",)   # EngagementCriteria.require_approval이 참이면 승인을 받는 작업
 APPROVAL_PARAMS = (
     ParamDef("approval_tasks", "", ParamLayer.DECISION,
              description="실행 전 GCS 승인(ApprovalRequest)을 받을 작업 종류, 쉼표 구분(예: move_to,hold). 빈 값 = 없음"),
@@ -49,6 +50,17 @@ APPROVAL_PARAMS = (
 TRACK_SHARE_PARAMS = (
     ParamDef("track_share_hz", 0.0, ParamLayer.BEHAVIOR, "Hz", 0.0, 50.0,
              "자기 탐지를 TrackShare(MA_Entity)로 피어·GCS에 브로드캐스트하는 주기. 0 = 끔"),
+)
+# MS 임무 수행 (IMP-AGT-060, DEC-106). waypoint와 formation 리더가 PARAMS에 더한다
+PAYLOAD_TASK_PARAMS = (
+    ParamDef("track_standoff_m", 1500.0, ParamLayer.BEHAVIOR, "m", 10.0, 100000.0,
+             "Track 작업에서 표적 위치 둘레를 도는 선회 반경"),
+    ParamDef("track_acquire_timeout_s", 60.0, ParamLayer.DECISION, "s", 0.1, 86400.0,
+             "Track·Strike 시작 뒤 이 모의 시간 안에 표적 위치를 못 얻으면 FAILED(target not found)"),
+    ParamDef("track_lost_s", 30.0, ParamLayer.DECISION, "s", 0.1, 86400.0,
+             "Track 중 표적 위치 갱신(자기 Detection·받은 TrackShare)이 이 모의 시간을 넘게 없으면 FAILED(target lost)"),
+    ParamDef("strike_range_m", 3000.0, ParamLayer.DECISION, "m", 1.0, 100000.0,
+             "Strike 작업에서 교전 기준을 확인하고 발사하는 표적까지의 거리"),
 )
 
 
@@ -646,6 +658,14 @@ def invalid_reason(t: c2_pb2.TaskCommand) -> str:
                 or (_bad_racetrack(h.racetrack, "racetrack") if h.HasField("racetrack") else ""))
     if kind == "search_area":
         return _bad_area(t.search_area.area)
+    if kind == "track":
+        return "" if t.track.target_id else "track without target_id"
+    if kind == "strike":
+        if t.strike.HasField("aim_point"):
+            return _bad_geo(t.strike.aim_point, "aim_point")
+        return "" if t.strike.target_id else "strike without target"
+    if kind == "jam":
+        return _bad_area(t.jam.area) or _bad_num(t.jam.duration_s, 0.0, DURATION_MAX_S, "jam duration_s")
     return ""
 
 
@@ -688,13 +708,16 @@ class TaskPilot:
     - route: 항로점마다 goto(그 점의 alt_m·speed_mps·acceptance) + 행위 orbit(loiter: duration,
       recon: duration 또는 1바퀴). loop면 끝없이 반복. progress = 이번 바퀴에서 마친 항로점 / 전체
     - orbit 반경은 그 속력의 최소 선회 반경 × 1.3 이상으로 둔다. "원 위"는 |거리 − 반경| < max(0.25·반경, 50 m)
+    - payload_tasks=True면 track·jam·strike도 받아 PayloadTasker(DEC-106)가 구간과 MS 명령을 정한다. 이 작업들의 EXECUTING은
+      FA 상태가 아니라 PayloadTasker가 보낸다
     """
 
     def __init__(self, ctx: AgentContext, acceptance_m: float = 80.0, hold_radius_m: float = 300.0,
-                 speed_mps: float | None = None, supported: tuple[str, ...] = PILOT_TASKS):
+                 speed_mps: float | None = None, supported: tuple[str, ...] = PILOT_TASKS, payload_tasks: bool = False):
         self.ctx = ctx
-        self.tracker = TaskTracker(ctx, supported)
+        self.tracker = TaskTracker(ctx, supported + MS_TASKS if payload_tasks else supported)
         self.link = LostLinkGuard(ctx, self.tracker)
+        self.tasker = PayloadTasker(ctx, self) if payload_tasks else None
         self.acceptance_m = acceptance_m
         self.hold_radius_m = hold_radius_m
         self.speed_mps = speed_mps  # 작업에 속도가 없을 때
@@ -715,11 +738,15 @@ class TaskPilot:
     def leg(self) -> Leg | None:
         return self.legs[self.leg_i] if self.leg_i < len(self.legs) else None
 
-    def step(self, c2_msgs: list[Message] | None = None) -> None:
+    def step(self, c2_msgs: list[Message] | None = None, p2p_msgs: list[Message] | None = None) -> None:
+        """p2p_msgs: 이번 틱 P2P 수신(PayloadTasker가 TrackShare를 본다). None이면 포트에서 직접 읽는다"""
         ports = self.ctx.ports
         msgs = list(ports.c2.inbox() if c2_msgs is None else c2_msgs)
         for m in msgs:
             self.tracker.handle(m)
+        tasker = self.tasker
+        if tasker is not None:
+            tasker.observe(ports.p2p.inbox() if p2p_msgs is None else p2p_msgs)
         nav = ports.vi.nav()
         self.tracker.update(nav)
         action = self.link.update(msgs, nav is not None)
@@ -729,7 +756,8 @@ class TaskPilot:
                 continue
             if st.state == S.COMMAND_STATE_EXECUTING and id(task) not in self._started:
                 self._started.add(id(task))
-                self.tracker.status(task, S.COMMAND_STATE_EXECUTING, self.progress())
+                if tasker is None or task.WhichOneof("task") not in MS_TASKS:
+                    self.tracker.status(task, S.COMMAND_STATE_EXECUTING, self.progress())
             elif st.state == S.COMMAND_STATE_COMPLETED and self.leg is not None and self.leg.kind == "goto":
                 self._next_leg(nav)
             elif st.state in (S.COMMAND_STATE_REJECTED, S.COMMAND_STATE_FAILED):
@@ -740,6 +768,8 @@ class TaskPilot:
         if action == "hold":
             self.enter_lost_link_hold(nav)
         if self.link.held:
+            if tasker is not None:
+                tasker.step(nav)
             return
         if self.tracker.changed and nav is not None:
             self.tracker.changed = False
@@ -753,6 +783,16 @@ class TaskPilot:
             self._track_orbit(nav)
         if action == "resume" and self.tracker.current is None and not self.tracker.queue:
             self._restore_idle()
+        if tasker is not None:
+            tasker.step(nav)
+
+    def set_legs(self, legs: list[Leg], nav: vi_pb2.NavigationReport) -> None:
+        """지금 작업의 구간을 바꾸고 첫 구간을 바로 명령한다 (PayloadTasker가 표적 위치가 바뀔 때 쓴다)"""
+        self.legs, self.leg_i = legs, 0
+        self._command(nav)
+
+    def clear_legs(self) -> None:
+        self.legs, self.leg_i, self._cmd_id = [], 0, ""
 
     def enter_lost_link_hold(self, nav: vi_pb2.NavigationReport) -> None:
         """링크 상실 선회 시작. 사용자 MA는 덮어써서 다른 행동으로 바꿀 수 있다. 진행 중 구간과 체류 시간은 재개를 위해 남긴다"""
@@ -793,6 +833,8 @@ class TaskPilot:
         p = nav.kinematics.position
         if kind == "route":
             return self._route_legs(t.route)
+        if kind in MS_TASKS and self.tasker is not None:
+            return self.tasker.plan(t, nav)
         if kind == "search_area":
             lat, lon, r = area_circle(t.search_area.area)
             return [Leg("orbit", lat, lon, 0.0, self.speed_mps, radius=r, revs=1.0)]
@@ -912,7 +954,7 @@ class TaskPilot:
 class TrackSharer:
     """자기 임무장비 탐지(Detection)를 TrackShare(UCI MA_Entity)로 피어와 GCS에 알린다 (IMP-AGT-047, DEC-088).
 
-    track_share_hz > 0일 때만 동작한다. 매 틱 ms.detections()를 비우며 표적별 최신 탐지를 모았다가, 기체별 위상(every)으로
+    track_share_hz > 0일 때만 동작한다. 매 틱 ms.detections()(또는 받은 탐지 목록)를 비우며 표적별 최신 탐지를 모았다가, 기체별 위상(every)으로
     그동안 본 표적마다 한 건씩 브로드캐스트한다(표적 ID 순). track_id = "<자기 ID>/<표적 ID>". 꺼져 있으면 detections()를
     건드리지 않아 다른 용도로 쓸 수 있다
     """
@@ -921,12 +963,13 @@ class TrackSharer:
         self.ctx = ctx
         self.latest: dict[str, object] = {}
 
-    def step(self) -> None:
+    def step(self, detections: Iterable[ms_pb2.Detection] | None = None) -> None:
+        """detections: 이번 틱 자기 탐지(PayloadTasker가 이미 포트에서 읽은 것). None이면 포트에서 읽는다"""
         hz = self.ctx.params.get("track_share_hz", 0.0)
         if not hz or hz <= 0:                      # 기본: 아무것도 하지 않는다 (매 틱 기체마다 불리므로 짧게)
             return
         hz = float(hz)
-        for d in self.ctx.ports.ms.detections():
+        for d in (self.ctx.ports.ms.detections() if detections is None else detections):
             key = d.target_id or f"{d.payload_id}@{d.header.sim_time_us}"
             prev = self.latest.get(key)
             if prev is None or d.header.sim_time_us >= prev.header.sim_time_us:
@@ -962,3 +1005,394 @@ def distance_m(nav: vi_pb2.NavigationReport, lat: float, lon: float) -> float:
     p = nav.kinematics.position
     n, e = ned_offset(p.lat_deg, p.lon_deg, lat, lon)
     return math.hypot(float(n), float(e))
+
+
+# ---- MS 임무 수행 (IMP-AGT-060, DEC-106) ----
+
+def in_area(area, lat: float, lon: float) -> bool:
+    """수평 위치가 영역(원·다각형) 안인가. 고도 범위는 보지 않는다"""
+    if area.WhichOneof("shape") == "circle":
+        c = area.circle
+        n, e = ned_offset(c.center.lat_deg, c.center.lon_deg, lat, lon)
+        return math.hypot(float(n), float(e)) <= c.radius_m
+    vs = area.polygon.vertices
+    if len(vs) < 3:
+        return False
+    pts = [ned_offset(lat, lon, v.lat_deg, v.lon_deg) for v in vs]   # 점을 원점으로 둔 꼭짓점 (북, 동)
+    inside = False
+    for i in range(len(pts)):
+        (n1, e1), (n2, e2) = pts[i], pts[i - 1]
+        n1, e1, n2, e2 = float(n1), float(e1), float(n2), float(e2)
+        if (n1 > 0.0) != (n2 > 0.0) and 0.0 < e1 + (0.0 - n1) * (e2 - e1) / (n2 - n1):
+            inside = not inside
+    return inside
+
+
+def engagement_reason(crit: mp_pb2.EngagementCriteria | None, target_id: str, side: int | None,
+                      lat: float, lon: float) -> str:
+    """교전 기준(DEC-106(5)) 위반 사유. 문제가 없으면 빈 문자열, 진영을 몰라 판단할 수 없으면 "side unknown".
+
+    hostile_sides가 있으면 표적 ID가 있는 작업의 표적 진영(자기 Detection)이 그 안이어야 한다. 좌표만 준 작업은 진영을 보지 않는다.
+    weapons_free가 있으면 표적 위치가 그중 한 영역 안이어야 하고, no_strike 영역 안이면 안 된다
+    """
+    if crit is None:
+        return ""
+    if crit.hostile_sides and target_id:
+        if side is None:
+            return "side unknown"
+        if side not in crit.hostile_sides:
+            return "target not hostile"
+    if crit.weapons_free and not any(in_area(a, lat, lon) for a in crit.weapons_free):
+        return "outside weapons free"
+    if any(in_area(a, lat, lon) for a in crit.no_strike):
+        return "in no strike area"
+    return ""
+
+
+def strike_station(ctx: AgentContext, weapon_type: str) -> str:
+    """작업 weapon_type과 같은 종류 중 잔량이 있는 첫 스테이션(ID 순), 종류가 없으면 잔량이 있는 첫 스테이션 (IMP-AGT-056)"""
+    for s in sorted((s for s in ctx.ports.ms.loadout().stores if s.count > 0), key=lambda s: s.id):
+        if not weapon_type or s.type == weapon_type:
+            return s.id
+    return ""
+
+
+def first_payload(ctx: AgentContext, kind: str) -> str:
+    """StoreLoadout(L1 MS 포트)에서 그 종류(camera | jammer)의 첫 페이로드 ID(ID 순). 없으면 빈 문자열"""
+    ids = sorted(s.id for s in ctx.ports.ms.loadout().stores if s.type == kind)
+    return ids[0] if ids else ""
+
+
+class StrikeLauncher:
+    """발사 명령과 결과 판정 (IMP-AGT-056). approval_demo와 PayloadTasker가 같이 쓴다.
+
+    launch(): 스테이션을 골라 StrikeCommand를 내고 EXECUTING을 보낸다. 잔량이 없으면 아무것도 내지 않고 False.
+    result(): 발사한 스테이션의 StrikeActivity로 끝 상태를 정한다. IMPACT(유도 객체 도달) → COMPLETED, MISSED → FAILED("missed"),
+    REJECTED → FAILED("strike rejected: <reason>"). 파괴 여부는 판단하지 않는다(DEC-067)
+    """
+
+    def __init__(self, ctx: AgentContext, tracker: TaskTracker):
+        self.ctx = ctx
+        self.tracker = tracker
+        self.launched: tuple[str, str] | None = None   # (task_id, payload_id)
+
+    def launch(self, task: c2_pb2.TaskCommand) -> bool:
+        payload = strike_station(self.ctx, task.strike.weapon_type)
+        if not payload:
+            return False
+        cmd = ms_pb2.StrikeCommand(payload_id=payload, target_id=task.strike.target_id)
+        if task.strike.HasField("aim_point"):
+            cmd.aim_point.CopyFrom(task.strike.aim_point)
+        cmd.header.correlation_id = task.task_id
+        self.ctx.ports.ms.command(cmd)
+        self.launched = (task.task_id, payload)
+        self.ctx.ports.md.record("strike_command", task.task_id)
+        self.tracker.status(task, S.COMMAND_STATE_EXECUTING)
+        return True
+
+    def result(self, activities: Iterable[Message]) -> tuple[int, str] | None:
+        if self.launched is None:
+            return None
+        for a in activities:
+            if not isinstance(a, ms_pb2.StrikeActivity) or a.payload_id != self.launched[1]:
+                continue
+            if a.state == ms_pb2.STRIKE_STATE_IMPACT:
+                return S.COMMAND_STATE_COMPLETED, ""
+            if a.state == ms_pb2.STRIKE_STATE_MISSED:
+                return S.COMMAND_STATE_FAILED, "missed"
+            if a.state == ms_pb2.STRIKE_STATE_REJECTED:
+                return S.COMMAND_STATE_FAILED, f"strike rejected: {a.reason}" if a.reason else "strike rejected"
+        return None
+
+
+@dataclass
+class TargetFix:
+    """표적 위치 하나 (자기 Detection 또는 받은 TrackShare)"""
+    t_us: int
+    lat: float
+    lon: float
+    side: int | None = None     # 자기 Detection으로 안 진영. TrackShare에는 진영이 없다
+
+
+SENSOR_TASKS = ("track", "search_area", "strike")
+
+
+class PayloadTasker:
+    """MS 임무 수행 (IMP-AGT-060, DEC-106). TaskPilot(payload_tasks=True)이 갖고 매 틱 부른다. waypoint와 formation 리더가 쓴다.
+
+    - 표적 위치: 자기 MS Detection과 P2P로 받은 TrackShare만 쓴다(DEC-013). 표적 ID별 관측 시각이 가장 늦은 것
+    - 센서: track·search_area·strike 수행 중 자기 camera(StoreLoadout 첫 camera)에 SensorCommand(enable, pointing: 표적
+      track_entity, 좌표만 준 타격은 aim_point, 영역은 중심 geo_point)를 내고, 작업이 끝나면(취소·선점 포함) enable=False
+    - track: 표적 위치 둘레 track_standoff_m 선회, 위치가 바뀌면(max(100 m, 반경 10%)) 중심을 옮긴다. 위치를 모르면 제자리에서
+      hold_radius_m으로 선회하며 찾는다. 처음 위치를 얻으면 EXECUTING. track_acquire_timeout_s 안에 못 얻으면 FAILED("target not found"),
+      갱신이 track_lost_s를 넘게 없으면 FAILED("target lost"). 그 밖에는 취소·선점까지 이어 간다
+    - jam: 영역 중심(다각형은 외접 원)을 영역 반경으로 선회(TaskPilot orbit 구간). 원 위에 들면 JammerCommand(enable, radius_m 0 =
+      프로파일)를 켜고 EXECUTING. duration_s > 0이면 원 위에서 그 시간을 보낸 뒤 끄고 COMPLETED, 0이면 취소까지 유지.
+      jammer가 없으면 FAILED("no jammer")
+    - strike: 표적 위치(aim_point 우선, 다음으로 탐지·공유)로 간다(goto 뒤 표적 둘레 hold_radius_m 선회). strike_range_m 안에 들면
+      교전 기준을 확인해 어긋나면 REJECTED(사유). 표적 진영을 아직 모르면(hostile_sides가 있고 자기 탐지가 없으면) 계속 다가가며
+      기다리고, 범위 안에서 track_acquire_timeout_s를 넘기면 REJECTED("target side unknown"). 통과하면 StrikeLauncher로 발사하고
+      제자리 선회하며 결과를 기다린다. 승인은 TaskTracker가 작업 시작 전에 받는다(DEC-088)
+    - 링크 상실 선회 중(LostLinkGuard.held, 정책이 continue가 아닐 때): 발사하지 않고 재밍·센서를 끈다. 재개하면 센서는 바로,
+      재밍은 다시 원 위에 들면 켠다. 선회한 시간은 track 시간 제한에 넣지 않는다
+    시각은 틱의 모의 시간, 입력 순서는 lockstep 수신 순서라 결정적이다.
+    """
+
+    def __init__(self, ctx: AgentContext, pilot: TaskPilot):
+        self.ctx = ctx
+        self.pilot = pilot
+        self.tracker = pilot.tracker
+        self.launcher = StrikeLauncher(ctx, self.tracker)
+        self.detections: list[ms_pb2.Detection] = []   # 이번 틱 자기 탐지 (TrackSharer에 넘긴다)
+        self.fixes: dict[str, TargetFix] = {}
+        self._sensor: tuple[str, bytes] | None = None   # 켜 둔 (camera ID, pointing)
+        self._s_task: c2_pb2.TaskCommand | None = None
+        self._s_held = False
+        self._jammer = ""                              # 켜 둔 jammer ID
+        self._task: c2_pb2.TaskCommand | None = None   # 구간을 짠 MS 작업
+        self._begin(None)
+
+    def _begin(self, task: c2_pb2.TaskCommand | None) -> None:
+        self._task = task
+        self._t0_us = self._now_us()
+        self._resume_us = 0
+        self._held_since: int | None = None
+        self._center: tuple[float, float] | None = None    # 지금 구간이 겨냥한 표적 위치
+        self._reported = False                             # EXECUTING을 보냈다
+        self._in_range_us: int | None = None               # strike: 진영을 기다리기 시작한 시각
+        self.launcher.launched = None
+
+    def _now_us(self) -> int:
+        return round(self.ctx.sim_time_s * 1e6)
+
+    def _p(self, name: str, default: float) -> float:
+        return float(self.ctx.params.get(name, default))
+
+    # ---- 입력 ----
+
+    def observe(self, p2p_msgs: Iterable[Message]) -> None:
+        self.detections = list(self.ctx.ports.ms.detections())
+        for d in self.detections:
+            if d.target_id:
+                self._note(d.target_id, d.header.sim_time_us, d.position, d.side or None)
+        for m in p2p_msgs:
+            if isinstance(m, p2p_pb2.TrackShare) and m.target_id:
+                self._note(m.target_id, m.observed_time_us, m.position, None)
+
+    def _note(self, target_id: str, t_us: int, pos, side: int | None) -> None:
+        prev = self.fixes.get(target_id)
+        if side is None and prev is not None:
+            side = prev.side
+        if prev is None or t_us > prev.t_us or (t_us == prev.t_us and prev.side is None and side is not None):
+            self.fixes[target_id] = TargetFix(t_us, pos.lat_deg, pos.lon_deg, side)
+        elif side is not None and prev.side != side:
+            prev.side = side
+
+    def _fix(self, task: c2_pb2.TaskCommand) -> TargetFix | None:
+        kind = task.WhichOneof("task")
+        if kind == "strike" and task.strike.HasField("aim_point"):
+            a = task.strike.aim_point
+            known = self.fixes.get(task.strike.target_id) if task.strike.target_id else None
+            return TargetFix(self._now_us(), a.lat_deg, a.lon_deg, known.side if known is not None else None)
+        tid = task.track.target_id if kind == "track" else task.strike.target_id
+        return self.fixes.get(tid)
+
+    # ---- 구간 ----
+
+    def plan(self, task: c2_pb2.TaskCommand, nav: vi_pb2.NavigationReport) -> list[Leg]:
+        """TaskPilot이 새 MS 작업을 시작할 때 부른다"""
+        self._end_task()
+        self._begin(task)
+        kind = task.WhichOneof("task")
+        if kind == "jam":
+            lat, lon, r = area_circle(task.jam.area)
+            d = task.jam.duration_s
+            return [Leg("orbit", lat, lon, 0.0, self.pilot.speed_mps, radius=r or self.pilot.hold_radius_m,
+                        duration=d if d > 0 else None)]
+        fix = self._fix(task)
+        if fix is None:
+            return [self._search_leg(nav)]
+        self._center = (fix.lat, fix.lon)
+        return self._legs_to(kind, fix)
+
+    def _search_leg(self, nav: vi_pb2.NavigationReport) -> Leg:
+        p = nav.kinematics.position
+        return Leg("orbit", p.lat_deg, p.lon_deg, 0.0, self.pilot.speed_mps, radius=self.pilot.hold_radius_m)
+
+    def _legs_to(self, kind: str, fix: TargetFix) -> list[Leg]:
+        speed = self.pilot.speed_mps
+        if kind == "track":
+            return [Leg("orbit", fix.lat, fix.lon, 0.0, speed, radius=self._p("track_standoff_m", 1500.0))]
+        return [Leg("goto", fix.lat, fix.lon, 0.0, speed, self.pilot.acceptance_m),
+                Leg("orbit", fix.lat, fix.lon, 0.0, speed, radius=self.pilot.hold_radius_m)]
+
+    def _moved(self, fix: TargetFix, limit_m: float) -> bool:
+        if self._center is None:
+            return True
+        n, e = ned_offset(self._center[0], self._center[1], fix.lat, fix.lon)
+        return math.hypot(float(n), float(e)) > limit_m
+
+    # ---- 매 틱 ----
+
+    def step(self, nav: vi_pb2.NavigationReport | None) -> None:
+        task = self.tracker.current
+        held = self.pilot.link.held
+        acts = self.ctx.ports.ms.activities()
+        if self._task is not None and task is not self._task:
+            self._end_task()
+        if self._task is not None:
+            if self.launcher.launched is not None:     # 링크 상실 선회 중에도 결과는 받는다
+                r = self.launcher.result(acts)
+                if r is not None:
+                    self._finish(*r)
+                    task = self.tracker.current
+            if self._task is not None:
+                if held:
+                    self._on_held()
+                elif nav is not None:
+                    self._on_free()
+                    self._run(self._task, nav)
+                    task = self.tracker.current
+        self._update_sensor(task, held)
+
+    def _on_held(self) -> None:
+        if self._held_since is None:
+            self._held_since = self._now_us()
+        if self._jammer:
+            self._jam(False)
+
+    def _on_free(self) -> None:
+        if self._held_since is not None:
+            now = self._now_us()
+            self._t0_us += now - self._held_since
+            if self._in_range_us is not None:
+                self._in_range_us += now - self._held_since
+            self._resume_us, self._held_since = now, None
+
+    def _run(self, task: c2_pb2.TaskCommand, nav: vi_pb2.NavigationReport) -> None:
+        kind = task.WhichOneof("task")
+        if kind == "jam":
+            self._run_jam(task)
+            return
+        if self.launcher.launched is not None:
+            return                                         # 발사 뒤: 선회하며 결과를 기다린다
+        now = self._now_us()
+        fix = self._fix(task)
+        if fix is None:
+            if now - self._t0_us > round(self._p("track_acquire_timeout_s", 60.0) * 1e6):
+                self._finish(S.COMMAND_STATE_FAILED, "target not found")
+            return
+        if kind == "track":
+            if now - max(fix.t_us, self._resume_us) > round(self._p("track_lost_s", 30.0) * 1e6):
+                self._finish(S.COMMAND_STATE_FAILED, "target lost")
+                return
+            if not self._reported:
+                self._reported = True
+                self.tracker.status(task, S.COMMAND_STATE_EXECUTING)
+            if self._moved(fix, max(100.0, 0.1 * self._p("track_standoff_m", 1500.0))):
+                self._center = (fix.lat, fix.lon)
+                self.pilot.set_legs(self._legs_to(kind, fix), nav)
+            return
+        # strike
+        if self._moved(fix, 100.0):
+            self._center = (fix.lat, fix.lon)
+            self.pilot.set_legs(self._legs_to(kind, fix), nav)
+        if distance_m(nav, fix.lat, fix.lon) > self._p("strike_range_m", 3000.0):
+            return
+        reason = engagement_reason(self.ctx.ports.mp.engagement_criteria(), task.strike.target_id, fix.side,
+                                   fix.lat, fix.lon)
+        if reason == "side unknown":
+            if self._in_range_us is None:
+                self._in_range_us = now
+            elif now - self._in_range_us > round(self._p("track_acquire_timeout_s", 60.0) * 1e6):
+                self._finish(S.COMMAND_STATE_REJECTED, "target side unknown")
+            return
+        if reason:
+            self._finish(S.COMMAND_STATE_REJECTED, reason)
+            return
+        if not self.launcher.launch(task):
+            self._finish(S.COMMAND_STATE_FAILED, "no store")
+            return
+        self.pilot.set_legs([self._search_leg(nav)], nav)
+
+    def _run_jam(self, task: c2_pb2.TaskCommand) -> None:
+        if not first_payload(self.ctx, "jammer"):
+            self._finish(S.COMMAND_STATE_FAILED, "no jammer")
+            return
+        if not self._jammer and self.pilot._on_station_since is not None:
+            self._jam(True)
+            if not self._reported:
+                self._reported = True
+                self.tracker.status(task, S.COMMAND_STATE_EXECUTING)
+
+    def _jam(self, on: bool) -> None:
+        jid = first_payload(self.ctx, "jammer") if on else self._jammer
+        cmd = ms_pb2.JammerCommand(payload_id=jid, enable=on, radius_m=0.0)
+        if on and self._task is not None:
+            cmd.header.correlation_id = self._task.task_id
+        self.ctx.ports.ms.command(cmd)
+        self.ctx.ports.md.record("jammer", "on" if on else "off")
+        self._jammer = jid if on else ""
+
+    def _finish(self, state: int, reason: str = "") -> None:
+        self.pilot.clear_legs()
+        self.tracker.finish(state, reason)
+        self.tracker.changed = False
+        self._end_task()
+
+    def _end_task(self) -> None:
+        if self._jammer:
+            self._jam(False)
+        self._task = None
+        self.launcher.launched = None
+
+    @property
+    def active(self) -> bool:
+        """수행 중인 MS 작업이나 켜 둔 센서가 있다"""
+        return self._task is not None or self._sensor is not None
+
+    def release_payloads(self) -> None:
+        """작업 수행을 멈춘다(편대 리더가 추종기로 바뀐 경우). 켜 둔 재밍·센서를 끈다"""
+        if self._task is not None:
+            self._end_task()
+        self._update_sensor(None, False)
+
+    # ---- 센서 ----
+
+    def _update_sensor(self, task: c2_pb2.TaskCommand | None, held: bool) -> None:
+        if task is self._s_task and held == self._s_held:
+            return                                         # 대부분의 틱: 바뀐 것이 없다
+        self._s_task, self._s_held = task, held
+        want = None if held or task is None else self._pointing(task)
+        if want == self._sensor:
+            return
+        if want is None:
+            cam = self._sensor[0]
+            self.ctx.ports.ms.command(ms_pb2.SensorCommand(payload_id=cam, enable=False))
+            self.ctx.ports.md.record("sensor", "off")
+        else:
+            cmd = ms_pb2.SensorCommand(payload_id=want[0], enable=True)
+            cmd.pointing.ParseFromString(want[1])
+            cmd.header.correlation_id = task.task_id
+            self.ctx.ports.ms.command(cmd)
+            self.ctx.ports.md.record("sensor", task.task_id)
+        self._sensor = want
+
+    def _pointing(self, task: c2_pb2.TaskCommand) -> tuple[str, bytes] | None:
+        kind = task.WhichOneof("task")
+        if kind not in SENSOR_TASKS:
+            return None
+        cam = first_payload(self.ctx, "camera")
+        if not cam:
+            return None
+        g = ms_pb2.GimbalPointing()
+        if kind == "track":
+            g.track_entity = task.track.target_id
+        elif kind == "strike" and task.strike.target_id:
+            g.track_entity = task.strike.target_id
+        elif kind == "strike":
+            g.geo_point.CopyFrom(task.strike.aim_point)
+        else:
+            lat, lon = area_centroid(task.search_area.area)
+            g.geo_point.lat_deg, g.geo_point.lon_deg = lat, lon
+        return cam, g.SerializeToString(deterministic=True)

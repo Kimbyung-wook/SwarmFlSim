@@ -49,7 +49,7 @@ def test_tc_agt_015_waypoint_mission_plan_and_status():
     t1.move_to.speed_mps = 28.0
     t2 = plan.tasks.add(task_id="t2", assignees=["uav-001"])
     t2.move_to.destination.lat_deg, t2.move_to.destination.lon_deg, t2.move_to.destination.alt_m = dest(3000, 3000)
-    plan.tasks.add(task_id="t3", assignees=["uav-001"]).strike.target_id = "tgt-001"  # 지원 안 함: REJECTED (O-45)
+    plan.tasks.add(task_id="t3", assignees=["uav-001"]).strike.SetInParent()  # 표적 없는 타격: REJECTED (O-45, DEC-106)
     h = Harness(make_scenario(1, "waypoint", course_deg=0.0, mission_plan=plan))
     h.run_s(400.0)
     for t in ("t1", "t2"):
@@ -71,7 +71,7 @@ def test_tc_agt_015_c2_preempt_reject_and_rtb():
     mv.move_to.destination.lat_deg, mv.move_to.destination.lon_deg, _ = dest(0, 2500)
     send_c2(h.bus, "gcs-01", mv, ["uav-001"])
     strike = c2_pb2.TaskCommand(task_id="c2", assignees=["uav-001"])
-    strike.strike.target_id = "tgt-001"
+    strike.strike.SetInParent()                       # 표적 없는 타격은 거부 (DEC-106 전에는 미지원으로 거부)
     send_c2(h.bus, "gcs-01", strike, ["uav-001"])
     h.run_s(200.0)
     assert h.task_states("t1")[-1] == S.COMMAND_STATE_CANCELLED
