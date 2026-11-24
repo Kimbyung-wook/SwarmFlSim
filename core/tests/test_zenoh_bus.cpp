@@ -1,4 +1,5 @@
 // TC-CORE-001: ZenohBus 송수신 (두 세션, 로컬 TCP) + SimCore가 Zenoh로 tick·truth 발행
+// TC-CORE-047: 다른 세션에서 sim/ctrl/scenario 조회 (적재 뒤·실행 중, DEC-109)
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -109,7 +110,24 @@ int main() {
   cfg.stop_after_frames = 50;
   cfg.log = [](const std::string&) {};
   core::SimCore sim(a, core::mock::provider(), cfg);
-  sim.load(core::builtin_scenario(20));
+  // TC-CORE-047: 적재 전에는 응답이 없다
+  CHECK(b.get(keys::kSimCtrlScenario, 300ms).empty());
+  const core::Scenario builtin = core::builtin_scenario(20);
+  sim.load(builtin);
+  v1::Scenario expected = core::to_proto(builtin);
+  expected.mutable_run()->set_epoch_utc_us(sim.epoch_utc_us());
+  const std::string expected_bytes = expected.SerializeAsString();
+  auto reply_ok = [&](const std::vector<Sample>& r) {
+    return r.size() == 1 && r[0].key == keys::kSimCtrlScenario &&
+           std::string(r[0].payload.begin(), r[0].payload.end()) == expected_bytes &&
+           r[0].encoding == "application/protobuf;swarm.v1.Scenario";
+  };
+  std::vector<Sample> reply;
+  CHECK(wait_for([&] {  // 응답자 선언 전파를 기다린다
+    reply = b.get(keys::kSimCtrlScenario, 300ms);
+    return !reply.empty();
+  }));
+  CHECK(reply_ok(reply));
   std::thread runner([&] { sim.run(); });
 
   v1::SimCommand start;
@@ -120,6 +138,12 @@ int main() {
   std::this_thread::sleep_for(300ms);  // core 구독 전파
   b.put(keys::kSimCtrlCmd, {reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()},
         protobuf_encoding("swarm.v1.SimCommand"));
+
+  // TC-CORE-047: 실행 중(첫 틱 뒤)에도 같은 응답이다
+  CHECK(wait_for([&] { return ticks >= 5; }));
+  const auto running_reply = b.get(keys::kSimCtrlScenario, 500ms);
+  CHECK(ticks >= 5 && reply_ok(running_reply));
+  std::printf("zenoh: scenario query replies=%zu (loaded) %zu (running)\n", reply.size(), running_reply.size());
 
   runner.join();  // 50 프레임 = 약 1 s
   std::this_thread::sleep_for(300ms);

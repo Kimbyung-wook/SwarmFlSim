@@ -5,6 +5,7 @@
 // IMP-CORE-028: onboard/<id>/SystemStatus 발행 (DEC-073)
 // IMP-CORE-029·030: 항법·제어 일괄 메시지 (DEC-081)
 // IMP-CORE-031: 모의 시각 기준 RunSpec.epoch_utc_us 채우기 (DEC-098)
+// IMP-CORE-032: sim/ctrl/scenario 조회 응답 (DEC-109)
 #include "swarm/core/sim_core.hpp"
 
 #include <algorithm>
@@ -85,6 +86,22 @@ SimCore::SimCore(Bus& bus, DynamicsProvider provider, CoreConfig cfg)
     }
     wake();
   }));
+  // IMP-CORE-032: 조회에는 마지막 발행본 사본으로 답한다. 적재 전이면 빈 응답이다 (DEC-109).
+  // 버스 스레드에서 불리며 잠금은 포인터 복사에만 쓰므로 시뮬레이션 루프를 막지 않는다
+  try {
+    subs_.push_back(bus_.serve(keys::kSimCtrlScenario, [reply = scenario_reply_](std::string_view) {
+      std::shared_ptr<const Sample> cur;
+      {
+        std::lock_guard lock(reply->mu);
+        cur = reply->sample;
+      }
+      std::vector<Sample> out;
+      if (cur) out.push_back(*cur);
+      return out;
+    }));
+  } catch (const std::logic_error& e) {
+    log(std::string("scenario query disabled: ") + e.what());
+  }
 }
 
 SimCore::~SimCore() { subs_.clear(); }
@@ -372,7 +389,16 @@ void SimCore::publish_params(std::size_t i) {
 void SimCore::publish_scenario() {
   v1::Scenario msg = to_proto(scenario_);
   msg.mutable_run()->set_epoch_utc_us(epoch_utc_us_);
-  publish(std::string(keys::kSimCtrlScenario), msg);
+  // IMP-CORE-032: 발행본과 같은 바이트·encoding을 조회 응답으로 둔다 (DEC-109)
+  const std::string bytes = msg.SerializeAsString();
+  auto sample = std::make_shared<Sample>(Sample{std::string(keys::kSimCtrlScenario),
+                                                std::vector<std::uint8_t>(bytes.begin(), bytes.end()),
+                                                protobuf_encoding(msg.GetDescriptor()->full_name())});
+  {
+    std::lock_guard lock(scenario_reply_->mu);
+    scenario_reply_->sample = sample;
+  }
+  bus_.put(sample->key, sample->payload, sample->encoding);
 }
 
 // IMP-CORE-031: 시나리오에 적힌 값이 있으면 그대로, 없으면 지금의 벽시계 UTC로 채운다 (DEC-098)
