@@ -1,6 +1,6 @@
 # 8. WP6 Traffic Monitor (`ui/monitor/`)
 
-> Source: [docs/41_dev/08_wp/monitor.md](../../../41_dev/08_wp/monitor.md) at commit `f767bb5`.
+> Source: [docs/41_dev/08_wp/monitor.md](../../../41_dev/08_wp/monitor.md) at commit `0a331b0`.
 
 ## Responsibilities
 
