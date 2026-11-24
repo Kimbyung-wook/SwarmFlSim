@@ -73,8 +73,30 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                    help="틱 단계별 계측 결과 JSON 경로(프레임 위상별, 기본 꺼짐). 환경 변수 SWARM_AGENT_PROFILE로도 켠다 (DEC-086)")
     p.add_argument("--list-plugins", action="store_true", help="등록된 MA/FA 플러그인 이름을 출력하고 종료")
     p.add_argument("-v", "--verbose", action="store_true")
+    h = p.add_argument_group("test harness (DEC-113, 시험 전용, 기본 꺼짐)")
+    h.add_argument("--harness-stomp", default="", metavar="HOST:PORT",
+                   help="A-GRA 시험 하네스 STOMP 브로커. 주면 --harness-vehicle 기체의 VI·MS 포트를 onboard 대신 하네스로 주고받는다")
+    h.add_argument("--harness-vehicle", default="", help="하네스로 돌릴 기체 ID (기본: 맡은 기체 중 첫 번째)")
+    h.add_argument("--harness-system-uuid", default="c5a0850c-282d-3211-b852-b92eb618a4ad",
+                   help="UCI MessageHeader.SystemID (하네스 platform_system_id)")
+    h.add_argument("--harness-schema-version", default="005.0a.ASK", help="UCI MessageHeader.SchemaVersion")
+    h.add_argument("--harness-no-inject", action="store_true", help="시작 신호에 시험 작업을 넣지 않는다")
     add_bus_args(p)
     return p.parse_args(argv)
+
+
+def start_harness(a: argparse.Namespace, rt: AgentRuntime):
+    """--harness-stomp가 있을 때만 swarm_gateway를 읽는다 (DEC-113)"""
+    if not a.harness_stomp:
+        return None
+    from .harness_bridge import HarnessBridge, HarnessConfig
+    host, _, port = a.harness_stomp.rpartition(":")
+    bridge = HarnessBridge(HarnessConfig(host=host or "127.0.0.1", port=int(port), vehicle=a.harness_vehicle,
+                                         system_uuid=a.harness_system_uuid, schema_version=a.harness_schema_version,
+                                         inject=not a.harness_no_inject))
+    bridge.start()
+    rt.harness = bridge
+    return bridge
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
                                          activity_max_hz=a.activity_max_hz, vi_report_hz=a.vi_report_hz,
                                          profile=a.profile),
                       registry, threaded=True)
+    harness = start_harness(a, rt)
     if a.scenario:
         rt.load(read_scenario(a.scenario))
 
@@ -115,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
                      s.ticks, len(rt.vehicles), wall, 1e3 * s.ma_s / s.ticks, 1e3 * s.fa_s / s.ticks,
                      1e3 * fs[len(fs) // 2], 1e3 * fs[int(len(fs) * 0.99)])
         rt.close()
+        if harness is not None:
+            log.info("harness counters %s", dict(harness.counters))
+            harness.close()
         bus.close()
     return 0
 
