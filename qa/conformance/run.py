@@ -44,6 +44,7 @@ def judge_run(rd: Path, st: dict) -> tuple[dict, dict]:
     c4 = J.judge_c4(**A.c4_inputs(r, gwd["proto"]))
     seqs, approvals, commands = A.c5_inputs(r)
     c5 = J.judge_c5(seqs, approvals, commands)
+    c5["joined_mid"] = list(getattr(r, "c5_joined_mid", []))
     d, fl, tap, ext_rx, inbound = A.c6_inputs(r)
     c6 = J.judge_c6(d, fl, tap, ext_rx, inbound, negative_flows=A.c6_negative_flows(r))
     observed = {x[1] for x in r.ext.get("rx", [])} | {k for k, n in inbound.items() if n > 0}

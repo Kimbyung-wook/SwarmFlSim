@@ -67,6 +67,12 @@ class Run:
         self.events = self.marks.get("events", [])
         # 벽시계 → 모의 시각: 관측기 이벤트(epoch, sim_s)로 구간 보간 대신 가장 가까운 앞 이벤트 기준
         self.bus_in = self.obs.get("bus_in", [])
+        # 39차(late_gw): Gateway가 붙기 전 GCS 수신은 Gateway 입력이 아니다. 붙은 프레임(일시정지 중) 뒤 것만 짝짓는다
+        self.gw_join_s = next((e["sim_s"] for e in self.events if e["tag"] == "late gateway start"), None)
+        self.bus_before_join = []
+        if self.gw_join_s is not None:
+            self.bus_before_join = [b for b in self.bus_in if b[0] <= self.gw_join_s]
+            self.bus_in = [b for b in self.bus_in if b[0] > self.gw_join_s]
 
     def vehicles(self) -> list[str]:
         return [e["id"] for e in self.scenario.get("entities", []) if e.get("autonomy")]
@@ -300,6 +306,18 @@ def c5_inputs(r: Run) -> tuple[dict, list, list]:
         elif x["name"] == "MA_FlightCommandStatus":
             seqs["MA_FlightCommandStatus(외부)"][label(md.get("CommandID"))].append(
                 md.get("CommandProcessingState"))
+    # 39차(late_gw): Gateway가 붙기 전에 시작한 작업 순서는 합류 시점 상태(내부 마지막 값)를 앞에 붙여 전이만 본다.
+    # 외부 쪽은 그 상태의 DEC-090 표 값을 붙인다. 붙인 순서는 r.c5_joined_mid에 남긴다(정보)
+    r.c5_joined_mid = []
+    before = {}
+    for _s, short, src, _h, det in r.bus_before_join:
+        if short == "TaskStatus":
+            before[f"{src}/{det['task']}"] = det["state"]
+    for key, st0 in sorted(before.items()):
+        for name, val in (("TaskStatus(내부)", st0), ("MA_TaskStatus(외부)", J.STATE_MAP["TaskStatus"].get(st0, st0))):
+            if key in seqs[name]:
+                seqs[name][key].insert(0, val)
+                r.c5_joined_mid.append(f"{name} {key}: 합류 시점 {val}")
     seqs = {k: dict(v) for k, v in seqs.items()}
     resp: dict[tuple[str, str], tuple[str, float]] = {}
     for t in r.obs.get("tx", []):

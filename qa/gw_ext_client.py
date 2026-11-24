@@ -52,7 +52,8 @@ EXPORTS = {
     "PO_Activity": "ms", "EA_Activity": "ms", "StrikeActivity": "ms", "StoreLoadoutConfiguration": "ms",
 }
 # DEC-072 uci_also: NavigationReport → swarm.vi, PeerStatus → swarm.p2p (16차)
-EXTRA_SUBS = [("MA_PositionReport", "vi"), ("MA_PositionReport", "p2p")]
+EXTRA_SUBS = [("MA_PositionReport", "vi"), ("MA_PositionReport", "p2p"),
+              ("QueryDataRequestStatus", "c2")]     # 39차: 조회 응답 (DEC-112, 봉투 끔일 때)
 VI_DETAIL = ("SystemStatus", "MA_FlightCommandStatus", "MA_FlightCapability")
 
 

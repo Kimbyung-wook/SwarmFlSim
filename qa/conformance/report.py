@@ -322,6 +322,11 @@ def build(R: dict) -> str:  # noqa: C901, PLR0912, PLR0915
     for t in r5["fail"]:
         L.append(f"- 실패: {t}")
     L.append("")
+    if r5.get("joined_mid"):
+        L.append(f"Gateway가 늦게 붙음(late_gw): 합류 전에 시작한 작업 순서 {len(r5['joined_mid'])}개는 합류 시점 상태(내부 마지막 "
+                 "값, 외부는 DEC-090 표 값)를 앞에 붙여 전이만 판정했다. 외부 C2는 이 작업들의 합류 전 상태를 받지 못한다(정보): "
+                 + "; ".join(r5["joined_mid"][:8]))
+        L.append("")
     # 9. C6
     r6 = res["C6"]
     L.append("## 9. C6 OMS / LA-CAL 왕복")
