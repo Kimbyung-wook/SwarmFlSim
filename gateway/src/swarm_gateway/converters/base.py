@@ -18,6 +18,7 @@ import datetime as dt
 import math
 import logging
 import threading
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
@@ -78,19 +79,24 @@ class SimClock:
         self.wall = wall
         self.last_us: int | None = None
         self.changes = 0                     # 기준을 바꾼 횟수 (첫 메시지 기준 → 시나리오, 시나리오 → 새 시나리오)
+        self.mono: Callable[[], float] = time.monotonic
+        self.since: float | None = None      # 지금 기준을 정한 단조 시각
+        self.last_change: dict | None = None # 마지막 전환 (로그와 같은 값, 시험·진단용)
         self._lock = threading.Lock()
 
     def _anchor(self, sim_us: int) -> dt.datetime:
         if self.epoch is None:
             self.epoch = self.wall() - dt.timedelta(microseconds=sim_us)
             self.source = self.FIRST
+            self.since = self.mono()
             logging.getLogger("swarm_gateway").warning(
                 "gateway: no scenario epoch yet; UCI time = %s + sim time (wall clock at sim %.3f s)",
                 uci_timestamp(self.epoch), sim_us / 1e6)
         return self.epoch
 
-    def on_scenario_epoch(self, epoch_utc_us: int) -> str | None:
-        """시나리오의 기준 시각. 처음 정했으면 "set", 바꿨으면 "changed", 그대로면 None"""
+    def on_scenario_epoch(self, epoch_utc_us: int, via: str = "subscription") -> str | None:
+        """시나리오의 기준 시각. 처음 정했으면 "set", 바꿨으면 "changed", 그대로면 None.
+        `via`는 시나리오를 받은 길(subscription·query, DEC-109)로 로그에만 쓴다"""
         if epoch_utc_us <= 0:
             return None
         new = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=epoch_utc_us)
@@ -103,15 +109,24 @@ class SimClock:
                 return None
             if self.source == self.SCENARIO and new == self.epoch:
                 return None
-            old, old_source = self.epoch, self.source
-            self.epoch, self.source = new, self.SCENARIO
+            old, old_source, old_since = self.epoch, self.source, self.since
+            now = self.mono()
+            self.epoch, self.source, self.since = new, self.SCENARIO, now
             if old is not None:
                 self.changes += 1
+                self.last_change = {
+                    "old": old, "new": new, "old_source": old_source, "via": via,
+                    "shift_s": (new - old).total_seconds(),
+                    "after_s": None if old_since is None else now - old_since,   # 앞 기준으로 낸 시간
+                    "sim_s": None if self.last_us is None else self.last_us / 1e6}
+            change = self.last_change
         if old is None:
-            log.info("gateway: UCI time = %s + sim time (scenario epoch)", uci_timestamp(new))
+            log.info("gateway: UCI time = %s + sim time (scenario epoch by %s)", uci_timestamp(new), via)
             return "set"
-        log.warning("gateway: UCI time base changed %s -> %s (%s -> scenario, shift %+.3f s)",
-                    uci_timestamp(old), uci_timestamp(new), old_source, (new - old).total_seconds())
+        log.warning("gateway: UCI time base changed %s -> %s (%s -> scenario by %s, shift %+.3f s, "
+                    "%s on %s base, last sim %s)", uci_timestamp(old), uci_timestamp(new), old_source, via,
+                    change["shift_s"], "?" if change["after_s"] is None else f"{change['after_s']:.3f} s",
+                    old_source, "-" if change["sim_s"] is None else f"{change['sim_s']:.3f} s")
         return "changed"
 
     def at(self, sim_us: int) -> dt.datetime:

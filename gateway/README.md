@@ -70,6 +70,9 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--lacal-admin` | `--lacal` 호스트의 8766 | CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 보낸다 (DEC-089). `none`이면 끈다 |
 | `--sim-epoch` | 없음(시나리오 값) | 모의 시각 0의 UTC 명시 재정의, 재현 시험용 (ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`). 시나리오 값보다 우선한다 (DEC-098) |
+| `--scenario-query-attempts` | 5 | 시작 때 `sim/ctrl/scenario` 조회 횟수. 구독으로 먼저 받으면 멈춘다. 0이면 조회하지 않는다 (DEC-109) |
+| `--scenario-query-interval` | 0.5 | 응답이 없을 때 다음 조회까지 s |
+| `--scenario-query-timeout` | 1.0 | 조회 한 번의 응답 대기 s |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
 외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다.
@@ -117,6 +120,14 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 - Gateway가 재기동하면 끝난 ID를 기억하지 못한다. 재기동 뒤 처음 보는 ID의 보고는 첫 보고로 보고 한 번 낸다. 그래서 재기동 앞뒤로 같은 끝 상태가 ID당 최대 한 번 더 나갈 수 있다. 그 뒤는 다시 막는다. 외부는 재기동 전 끝 상태를 받은 ID의 다음 보고를 무시하면 된다.
 - 수행 상태(`MA_FlightActivity`)는 내지 않는다.
 
+### 시나리오 받기 (DEC-096, DEC-109)
+
+- 시작 때 `sim/ctrl/scenario` 구독을 먼저 열고, 그다음 같은 키를 조회(`Bus.get`)한다. Core는 시나리오를 적재해 둔 동안 이 키에 답한다(계약 0.24.0). 재발행(적재 직후·첫 틱 전 1 s마다)이 끝난 뒤 켠 Gateway도 조회로 받는다.
+- 응답이 없으면 `--scenario-query-interval` 간격으로 다시 조회한다(최대 `--scenario-query-attempts`번, 한 번 `--scenario-query-timeout` s). 그 사이 구독으로 먼저 받으면 조회를 멈춘다. 다 해도 없으면 경고 `no scenario after N queries`를 남기고 구독으로 올 때를 기다린다(그동안 알려진 기체는 수신 보고만, UCI 시각은 첫 메시지 기준).
+- 조회는 별도 스레드에서 한다(Zenoh `get`은 응답이나 시간 초과까지 막는다). 조회가 실패해도 구독은 그대로다(`scenario_query_error`).
+- 같은 시나리오(같은 바이트)를 조회와 구독으로, 또는 재발행으로 여러 번 받아도 한 번만 반영한다(`scenario_duplicate`). 알려진 기체의 보고 목록을 비우지 않고 기준 시각도 다시 정하지 않는다. 내용이 다른 시나리오(재적재)는 아래 규칙대로 새로 반영한다.
+- 카운터: `scenario_query`(조회 횟수), `scenario_by_query`·`scenario_by_subscription`(반영한 길), `scenario_duplicate`, `scenario_query_none`, `scenario_query_error`.
+
 ### UCI 시각 (D-36, DEC-098)
 
 - UCI 머리 `Timestamp`와 위치·속도·자세 시각은 벽시계가 아니라 메시지 모의 시각(`header.sim_time_us`)의 UTC다. `MA_Entity`의 운동·식별 시각은 관측 모의 시각(`observed_time_us`)이다.
@@ -124,9 +135,9 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
   1. `--sim-epoch` (명시 재정의, 재현 시험용). 시나리오 값이 와도 바꾸지 않는다(로그만).
   2. `sim/ctrl/scenario`의 `Scenario.run.epoch_utc_us` (0이 아닐 때). Core가 적재 때 채워 알리므로 보통 이 값이다.
   3. 시나리오를 받기 전에 온 첫 메시지: 그때 벽시계 − 그 모의 시각. 경고 로그 `no scenario epoch yet`를 남긴다.
-- 3으로 정한 뒤 시나리오 값이 오면 **시나리오 값으로 바꾼다**. 다른 참여자(Logger·UI 등)와 같은 기준을 써야 하고, 시나리오 값이 실행 전체의 기준이기 때문이다. 바꾼 차이는 경고 로그 `UCI time base changed ... shift ±N s`와 카운터 `epoch_changed`에 남는다.
+- 3으로 정한 뒤 시나리오 값이 오면 **시나리오 값으로 바꾼다**. 다른 참여자(Logger·UI 등)와 같은 기준을 써야 하고, 시나리오 값이 실행 전체의 기준이기 때문이다. 바꾼 차이는 경고 로그와 카운터 `epoch_changed`에 남는다. 로그에는 받은 길(조회·구독), 차이, 앞 기준으로 낸 시간, 그때까지 본 마지막 모의 시각이 있다. 예: `UCI time base changed A -> B (first_message -> scenario by query, shift +N s, 0.515 s on first_message base, last sim 0.700 s)`.
 - 새 시나리오를 적재해 다른 값이 오면 그 값으로 다시 정한다(`epoch_changed`). 같은 값의 재발행과 값 0은 기준을 바꾸지 않는다.
-- C3 기준((Timestamp − 모의 시각)이 한 실행 안에서 일정)과의 관계: 한 기준 안에서는 일시정지·배속에서도 차이가 일정하다. 차이가 바뀌는 곳은 (a) 시나리오를 받기 전 첫 메시지 기준으로 낸 보고에서 시나리오 기준으로 넘어갈 때 한 번, (b) 새 시나리오 적재(새 실행)뿐이다. (a)는 Gateway가 Core보다 늦게 켜져도 `sim/ctrl/scenario`를 곧 받으므로(늦게 붙는 참여자 포함) 보통 일어나지 않는다. 일어나면 로그·카운터로 그 시점이 보인다.
+- C3 기준((Timestamp − 모의 시각)이 한 실행 안에서 일정)과의 관계: 한 기준 안에서는 일시정지·배속에서도 차이가 일정하다. 차이가 바뀌는 곳은 (a) 시나리오를 받기 전 첫 메시지 기준으로 낸 보고에서 시나리오 기준으로 넘어갈 때 한 번, (b) 새 시나리오 적재(새 실행)뿐이다. (a)는 시작 때 조회(DEC-109)로 시나리오를 먼저 받으면 일어나지 않는다. 조회 응답보다 rx 보고가 먼저 오거나 Core가 아직 적재하지 않았을 때만 일어나고, 그때는 로그·카운터로 바뀐 시점이 보인다(QA O-53에서 본 0.515 s 전환이 이 경우다).
 
 ### 알려진 기체 (D-35)
 

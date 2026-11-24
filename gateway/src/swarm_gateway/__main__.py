@@ -44,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--sim-epoch", type=_utc, default=None,
                     help="모의 시각 0의 UTC 명시 재정의 (예: 2026-01-01T00:00:00Z, 재현 시험용). UCI 시각 = 이 값 + 모의 시각. "
                          "비우면 시나리오의 run.epoch_utc_us, 시나리오 전에는 첫 메시지 기준 (DEC-098)")
+    ap.add_argument("--scenario-query-attempts", type=int, default=5,
+                    help="시작 때 sim/ctrl/scenario 조회 횟수. 구독으로 먼저 받으면 멈춘다. 0이면 조회하지 않는다 (DEC-109)")
+    ap.add_argument("--scenario-query-interval", type=float, default=0.5,
+                    help="응답이 없을 때 다음 조회까지 s (기본 %(default)s)")
+    ap.add_argument("--scenario-query-timeout", type=float, default=1.0,
+                    help="조회 한 번의 응답 대기 s (기본 %(default)s)")
     ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
                     help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")
@@ -67,7 +73,10 @@ async def _run(args) -> None:
                              connect=args.connect, listen=args.listen,
                              multicast_scouting=not args.no_multicast))
     running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix,
-                                                     sim_epoch=args.sim_epoch), args.lacal,
+                                                     sim_epoch=args.sim_epoch,
+                                                     scenario_query_attempts=args.scenario_query_attempts,
+                                                     scenario_query_interval_s=args.scenario_query_interval,
+                                                     scenario_query_timeout_s=args.scenario_query_timeout), args.lacal,
                                   service_id=args.service, inbound_topic=args.inbound_topic,
                                   admin_url=None if args.lacal_admin.lower() == "none" else args.lacal_admin)
     try:

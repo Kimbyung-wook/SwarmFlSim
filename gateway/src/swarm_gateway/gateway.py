@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import threading
 from collections import Counter, deque
 from dataclasses import dataclass, field, replace
 from typing import Awaitable, Callable
@@ -58,6 +59,11 @@ class GatewayConfig:
     mode: str = "SIMULATION"         # MessageHeader.Mode
     classification: str = "U"
     owner_producer: str = "USA"      # 공개 스키마 예제 값 (SecurityInformation 필수 항목)
+    # 시작 때 시나리오 조회 (DEC-109): 구독을 연 뒤 get. 응답이 없으면 interval 뒤 다시, 최대 attempts번.
+    # 구독으로 먼저 받으면 멈춘다. attempts=0이면 조회하지 않는다
+    scenario_query_attempts: int = 5
+    scenario_query_timeout_s: float = 1.0
+    scenario_query_interval_s: float = 0.5
     rejection_log: int = 200
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
@@ -107,6 +113,12 @@ class Gateway:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._outbox: asyncio.Queue | None = None
         self.retained = RetainedReports()   # 변화 보고 키별 마지막 값 (DEC-089)
+        # 시나리오 조회·구독 (DEC-109): 마지막 반영한 시나리오 바이트, 받았는지, 조회 스레드
+        self._scenario_lock = threading.Lock()
+        self._scenario_payload: bytes | None = None
+        self._scenario_seen = threading.Event()
+        self._query_stop = threading.Event()
+        self._query_thread: threading.Thread | None = None
         self._check_converters()
 
     # ------------------------------------------------------------------ 매핑
@@ -155,8 +167,50 @@ class Gateway:
         self._subs.append(self.bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_scenario))
         log.info("gateway %s: subscribed %s; export %d UCI targets, import %s", self.config.gcs,
                  keys.rx_all(self.config.gcs), len(self.export_targets()), self.import_names())
+        # 구독을 연 다음 조회한다 (DEC-109). get은 막을 수 있어 스레드에서 한다
+        if self.config.scenario_query_attempts > 0:
+            self._query_stop.clear()
+            self._query_thread = threading.Thread(target=self.query_scenario, name="gateway-scenario-query",
+                                                  daemon=True)
+            self._query_thread.start()
+
+    def query_scenario(self) -> bool:
+        """`sim/ctrl/scenario` 조회. 응답이나 구독으로 시나리오를 받으면 True (IMP-GW-035, DEC-109)"""
+        cfg = self.config
+        for attempt in range(1, cfg.scenario_query_attempts + 1):
+            if self._scenario_seen.is_set():
+                log.info("gateway: scenario already received by subscription; query stopped (attempt %d)", attempt)
+                return True
+            if self._query_stop.is_set():
+                return False
+            self.counters["scenario_query"] += 1
+            try:
+                replies = self.bus.get(keys.SIM_CTRL_SCENARIO, cfg.scenario_query_timeout_s)
+            except Exception as exc:   # 조회 실패도 구독은 그대로다
+                self.counters["scenario_query_error"] += 1
+                log.warning("gateway: scenario query %d failed: %s", attempt, exc)
+                replies = []
+            for s in replies:
+                self._on_scenario(s, via="query")
+            if replies:
+                log.info("gateway: scenario received by query (attempt %d/%d)", attempt, cfg.scenario_query_attempts)
+                return True
+            if attempt < cfg.scenario_query_attempts and self._query_stop.wait(cfg.scenario_query_interval_s):
+                return False
+        if self._scenario_seen.is_set():
+            return True
+        log.warning("gateway: no scenario after %d queries; waiting for sim/ctrl/scenario publication "
+                    "(known entities from reports only, UCI time from first message)", cfg.scenario_query_attempts)
+        self.counters["scenario_query_none"] += 1
+        return False
+
+    def wait_scenario_query(self, timeout: float | None = None) -> None:
+        """시험용: 조회 스레드가 끝날 때까지 기다린다"""
+        if self._query_thread is not None:
+            self._query_thread.join(timeout)
 
     def close(self) -> None:
+        self._query_stop.set()
         for s in self._subs:
             s.close()
         self._subs.clear()
@@ -184,16 +238,29 @@ class Gateway:
             self.counters["internal_error"] += 1
             log.exception("gateway: unexpected error on %s", sample.key)
 
-    def _on_scenario(self, sample: Sample) -> None:
-        sc = sim_pb2.Scenario()
-        try:
-            sc.ParseFromString(sample.payload)
-        except DecodeError:
-            self.counters["bad_scenario"] += 1
-            log.warning("gateway: cannot parse %s", sample.key)
-            return
+    def _on_scenario(self, sample: Sample, via: str = "subscription") -> None:
+        """구독(버스 스레드)과 조회(조회 스레드)에서 온다. 같은 내용은 한 번만 반영한다 (DEC-109 멱등)"""
+        with self._scenario_lock:
+            if sample.payload == self._scenario_payload:
+                self.counters["scenario_duplicate"] += 1
+                return
+            sc = sim_pb2.Scenario()
+            try:
+                sc.ParseFromString(sample.payload)
+            except DecodeError:
+                self.counters["bad_scenario"] += 1
+                log.warning("gateway: cannot parse %s", sample.key)
+                return
+            self._scenario_payload = sample.payload
+            self.counters[f"scenario_by_{via}"] += 1
+            self._scenario_seen.set()
+            log.info("gateway: scenario %r by %s (%d entities, epoch %d us)", sc.name, via, len(sc.entities),
+                     sc.run.epoch_utc_us)
+            self._apply_scenario(sc, via)
+
+    def _apply_scenario(self, sc: sim_pb2.Scenario, via: str) -> None:
         self.entities.on_scenario(sc)
-        what = self.clock.on_scenario_epoch(sc.run.epoch_utc_us)   # 계약 §1 시간 규칙 (DEC-098)
+        what = self.clock.on_scenario_epoch(sc.run.epoch_utc_us, via)   # 계약 §1 시간 규칙 (DEC-098)
         if what:
             self.counters[f"epoch_{what}"] += 1
 
