@@ -202,6 +202,7 @@ def test_external_c2_declares_every_gateway_flow(gateway):
            if e.uci_name not in gateway.import_names()}
     ext = cfg["services"]["external_c2"]["declared"]
     assert len(pub) == 15
+    pub.add(gateway.query_flows()[1])                                  # 조회 응답 (DEC-112)
     assert set(ext["sub"]) == pub == set(cfg["services"]["swarm_gateway"]["declared"]["pub"])
     readme = (CONFIG_DIR.parent / "README.md").read_text(encoding="utf-8")
     for flow in pub:

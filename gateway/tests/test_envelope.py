@@ -237,6 +237,8 @@ def test_declared_flows_match_mode(codec, fname, envelope):
     else:
         pub = {f"{u}@{gw.config.topic(e.iface)}" for e, u in gw.export_targets() if e.uci_name not in gw.import_names()}
         sub = {f"{e.uci_name}@{gw.config.topic(e.iface)}" for e in gw.import_entries()}
+        pub.add(gw.query_flows()[1])                                   # 조회 (DEC-112)
+        sub.add(gw.query_flows()[0])
     assert set(cfg["swarm_gateway"]["declared"]["pub"]) == pub == set(cfg["external_c2"]["declared"]["sub"])
     assert set(cfg["swarm_gateway"]["declared"]["sub"]) == sub == set(cfg["external_c2"]["declared"]["pub"])
 

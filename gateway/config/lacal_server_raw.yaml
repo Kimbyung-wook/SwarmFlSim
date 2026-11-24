@@ -24,15 +24,17 @@ services:
             MA_FlightCapability@swarm.vi, MA_TaskStatus@swarm.c2, MA_ApprovalRequest@swarm.c2,
             MA_PackagePartnerStatusReport@swarm.p2p, MA_PositionReport@swarm.p2p, MA_LeaderUpdateRequest@swarm.p2p, MA_Entity@swarm.p2p,
             PO_Activity@swarm.ms, EA_Activity@swarm.ms, StrikeActivity@swarm.ms,
-            StoreLoadoutConfiguration@swarm.ms]
-      sub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp]
+            StoreLoadoutConfiguration@swarm.ms, QueryDataRequestStatus@swarm.c2]   # 조회 응답 (DEC-112)
+      sub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp,
+            QueryDataRequest@swarm.c2]
   external_c2:                # 외부 C2(운용자) 모사, 시험·수동 연동용
     service: 6c0b0f8e-3d2a-4f1b-8e47-91a3c5d7e202
     declared:
-      pub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp]
+      pub: [MA_TaskCommand@swarm.c2, MA_ApprovalRequestStatus@swarm.c2, MA_MissionPlan@swarm.mp, MA_RoutePlan@swarm.mp,
+            QueryDataRequest@swarm.c2]
       # Gateway가 외부로 내는 흐름 전부 = swarm_gateway declared.pub (README 교환 표, QA D-39)
       sub: [MA_NavigationReport@swarm.vi, MA_PositionReport@swarm.vi, SystemStatus@swarm.vi, MA_FlightCommandStatus@swarm.vi,
             MA_FlightCapability@swarm.vi, MA_TaskStatus@swarm.c2, MA_ApprovalRequest@swarm.c2,
             MA_PackagePartnerStatusReport@swarm.p2p, MA_PositionReport@swarm.p2p, MA_LeaderUpdateRequest@swarm.p2p, MA_Entity@swarm.p2p,
             PO_Activity@swarm.ms, EA_Activity@swarm.ms, StrikeActivity@swarm.ms,
-            StoreLoadoutConfiguration@swarm.ms]
+            StoreLoadoutConfiguration@swarm.ms, QueryDataRequestStatus@swarm.c2]

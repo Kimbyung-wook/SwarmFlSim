@@ -203,6 +203,17 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | 수신 | `ApprovalResponse` → `swarm/<gcs>/tx/c2/ApprovalResponse` | `MA_ApprovalRequestStatus` | `swarm.c2` |
 | 수신 | `RoutePlan` → `swarm/<gcs>/tx/mp/RoutePlan` | `MA_RoutePlan` | `swarm.mp` |
 | 수신 | `MissionPlan` → `swarm/<gcs>/tx/mp/MissionPlan` | `MA_MissionPlan` | `swarm.mp` |
+| 수신 | (버스로 넘기지 않음, Gateway가 답함) | `QueryDataRequest` | `swarm.c2` |
+| 발행 | (조회 응답, 위 최신 값으로) | `QueryDataRequestStatus` | `swarm.c2` |
+
+조회(DEC-112): 외부 `QueryDataRequest`에 Gateway가 이미 내보낸 메시지의 기체별 최신 값으로 답한다(MA·런타임에 묻지 않는다).
+`QueryDataRequestStatus` PROCESSING을 먼저 내고, 이어서 COMPLETED(`Result.Message`에 최신 값) 또는 REJECTED(사유)를 낸다.
+CANCEL은 CANCELED 하나다. 최신 값은 (UCI 이름, 보고 기체, 키)마다 마지막 것 하나이고, 키는 변화 보고 보관 규칙과 같다(TaskStatus는 작업마다).
+- 답하는 조회: `QueryMessage.MessageType`이 모두 위 발행 메시지(비우면 전부). `QueryResultLimit`은 결과 수 상한(기본 최대 256).
+  `MessageData.SystemID`가 우리 시스템 UUID가 아니면 결과 없이 COMPLETED. `MostRecentMessagesOnly`는 그대로 만족한다.
+- 거부: 내보내지 않는 메시지 종류(CAPABILITY_UNAVAILABLE), 조건식 `Query`·`QueryIdentifiersOnly`·`ResultsInNative`·결과 수보다 작은
+  `ResultsPerPage`(INVALID_INPUT_PARAMETER). 사유 설명은 `RequestProcessingStateReason.Description`에 싣는다.
+- 카운터: `query_rx`, `query.PROCESSING`·`query.COMPLETED`·`query.REJECTED`·`query.CANCELED`, `query_invalid`.
 
 ### ID 변환
 
@@ -256,10 +267,11 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `tools/measure_o13.py` | 재기동 준비 전 손실 측정 (QA O-13, 계획 §35.5) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
+| `src/swarm_gateway/query.py` | `QueryDataRequest` 응답, 최신 값 보관 (DEC-112) |
 | `src/swarm_gateway/stomp.py` | STOMP 1.2 클라이언트 (DEC-110) |
 | `src/swarm_gateway/envelope.py` | 외부 교환 봉투 `MA_TxDataPayloadCommand`·`MA_RxDataPayload` (DEC-111) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |
 | `src/swarm_gateway/__main__.py` | 진입점 |
 | `src/swarm_gateway/lacal_server.py` | agra_lacal CAL Server 기동 래퍼 |
 | `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`. `external_c2`는 Gateway가 내는 흐름을 모두 구독으로 선언한다, D-39). 봉투 흐름(DEC-111: 토픽별 `MA_TxDataPayloadCommand`, `MA_RxDataPayload`) |
-| `config/lacal_server_raw.yaml` | 봉투 끔(`--envelope off`)용. 교환 표 15개 흐름 그대로 (10차까지와 같다) |
+| `config/lacal_server_raw.yaml` | 봉투 끔(`--envelope off`)용. 교환 표 15개 흐름(10차까지와 같다)과 조회 흐름(DEC-112) |

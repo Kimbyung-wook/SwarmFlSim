@@ -31,8 +31,10 @@ from .command_state import CommandStateGate
 from .entities import KnownEntities
 from .envelope import RX, TX, EnvelopeError, Envelopes, NotAddressed, to_ascii
 from .ids import IdMap
-from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
+from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, json_key, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
+from .query import QUERY, QUERY_STATUS, LatestValues
+from .query import answer as query_answer
 from .retain import RetainedReports
 
 log = logging.getLogger("swarm_gateway")
@@ -84,6 +86,7 @@ class GatewayConfig:
     envelope_destinations: tuple[str, ...] = ()   # 송신 SpecificDestinationID (외부 시스템 UUID). 비우면 넣지 않는다
     schema_version: str = SCHEMA_VERSION          # MessageHeader.SchemaVersion (DEC-110: 5.0a 하네스면 005.0a.ASK)
     exclude_messages: tuple[str, ...] = ()        # 내보내지 않을 UCI 메시지 (DEC-110: 5.0a에 없는 MA_NavigationReport·MA_Entity)
+    query_result_limit: int = 256                 # QueryDataRequest 응답 결과 수 상한 (DEC-112)
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
@@ -132,6 +135,7 @@ class Gateway:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._outbox: asyncio.Queue | None = None
         self.retained = RetainedReports()   # 변화 보고 키별 마지막 값 (DEC-089)
+        self.latest = LatestValues()        # 내보낸 메시지의 기체별 최신 값, QueryDataRequest 응답용 (DEC-112)
         # 시나리오 조회·구독 (DEC-109): 마지막 반영한 시나리오 바이트, 받았는지, 조회 스레드
         self._scenario_lock = threading.Lock()
         self._scenario_payload: bytes | None = None
@@ -176,6 +180,46 @@ class Gateway:
 
     def import_names(self) -> list[str]:
         return sorted({e.uci_name for e in self.import_entries()})
+
+    def exported_names(self) -> set[str]:
+        """외부로 내보내는 UCI 메시지 (QueryDataRequest로 조회할 수 있는 것, DEC-112)"""
+        inbound = set(self.import_names())
+        return {u for e, u in self.export_targets() if e.uci_name not in inbound and u not in self.config.exclude_messages}
+
+    def query_flows(self) -> tuple[str, str]:
+        """(받는 흐름, 내는 흐름) 조회 응답용 LA-CAL `<이름>@<토픽>` (봉투를 끈 실행, DEC-112)"""
+        return f"{QUERY}@{self.config.topic('c2')}", f"{QUERY_STATUS}@{self.config.topic('c2')}"
+
+    def handle_query(self, obj: dict) -> Outcome:
+        """외부 QueryDataRequest → QueryDataRequestStatus PROCESSING, 이어서 COMPLETED(최신 값)·REJECTED (DEC-112)"""
+        self.counters["query_rx"] += 1
+        try:
+            if set(obj) != {QUERY}:
+                raise InvalidMessage(f"expected {QUERY}")
+            self.to_xml(obj)
+            statuses = query_answer(obj[QUERY]["MessageData"], exported=self.exported_names(), store=self.latest,
+                                    system_uuid=self.system_uuid, limit=self.config.query_result_limit,
+                                    type_key=lambda n: json_key(self.codec.global_element(n).type.name))
+        except (InvalidMessage, ValueError, TypeError, KeyError) as exc:
+            self.counters["query_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=QUERY, reason=f"{type(exc).__name__}: {exc}"))
+        topic = self.config.topic("c2")
+        for state, data in statuses:
+            status = self.envelope(QUERY_STATUS, data)
+            try:
+                self.to_xml(status)
+            except InvalidMessage as exc:   # 보관한 값은 이미 검증했다. 그래도 실패하면 결과 없이 FAILED
+                log.warning("gateway: %s result invalid: %s", QUERY_STATUS, exc)
+                status = self.envelope(QUERY_STATUS, {"RequestID": data["RequestID"], "RequestProcessingState": "FAILED"})
+                state = "FAILED"
+            self.counters[f"query.{state}"] += 1
+            self._emit(topic, status)
+        final = statuses[-1]
+        n = len(final[1].get("Result", {}).get("Message", []))
+        log.info("gateway: %s %s -> %s (%d results)%s", QUERY, final[1]["RequestID"].get("UUID"), final[0], n,
+                 f": {final[1]['RequestProcessingStateReason']['Description']}"
+                 if "RequestProcessingStateReason" in final[1] else "")
+        return Outcome("answered", uci_name=QUERY, topic=topic, reason=final[0], message=status)
 
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
@@ -376,6 +420,7 @@ class Gateway:
         self.counters[f"exported.{uci}"] += 1
         self._emit(topic, obj)
         self.retained.note(entry.full_name, uci, topic, msg, obj)
+        self.latest.note(entry.full_name, uci, msg, obj)
         return Outcome("exported", proto=entry.full_name, uci_name=uci, topic=topic, key=key, message=obj)
 
     def _emit(self, topic: str, obj: dict) -> None:
@@ -472,6 +517,9 @@ class Gateway:
 
     def handle_external(self, uci_name: str, obj: dict) -> Outcome:
         """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/<c2|mp>/<msg>"""
+        if uci_name == QUERY:   # 버스로 넘기지 않고 Gateway가 답한다 (DEC-112)
+            self.counters["ext_rx"] += 1
+            return self.handle_query(obj)
         self.counters["ext_rx"] += 1
         candidates = [e for e in self.import_entries() if e.uci_name == uci_name]
         if not candidates:

@@ -224,6 +224,9 @@ def test_o20_lacal_config_declares_all_gateway_messages(gateway):
     pub = {f"{u}@{gateway.config.topic(e.iface)}" for e, u in gateway.export_targets()
            if e.uci_name not in gateway.import_names()}                # 받는 명령은 되돌려 보내지 않는다
     sub = {f"{e.uci_name}@{gateway.config.topic(e.iface)}" for e in gateway.import_entries()}
+    q_sub, q_pub = gateway.query_flows()                               # 조회 (DEC-112)
+    pub.add(q_pub)
+    sub.add(q_sub)
     assert "MA_PositionReport@swarm.vi" in declared["pub"] and "MA_PositionReport@swarm.p2p" in declared["pub"]
     assert set(declared["pub"]) == pub
     assert set(declared["sub"]) == sub

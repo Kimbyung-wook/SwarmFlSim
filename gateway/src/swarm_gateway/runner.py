@@ -28,6 +28,7 @@ from swarm_api.bus import Bus
 
 from .converters import load_converters
 from .envelope import RX
+from .query import QUERY
 from .gateway import Gateway, GatewayConfig, inbound_entries
 from .lacal import LaCalClient, OmsJsonCodec
 from .mapping import MappingTable
@@ -124,6 +125,8 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
     for entry in inbound_entries(MappingTable.from_descriptors(), load_converters()):
         topic = (inbound_topic or config.topic("c2")) if entry.iface == "c2" else config.topic(entry.iface)
         wanted[f"{RX if config.envelope else entry.uci_name}@{topic}"] = None   # 봉투면 토픽마다 MA_RxDataPayload (DEC-111)
+    if not config.envelope:   # 조회는 Gateway가 답한다 (DEC-112). 봉투면 MA_RxDataPayload@c2에 들어 있다
+        wanted[f"{QUERY}@{inbound_topic or config.topic('c2')}"] = None
     for flow in wanted:
         name, topic = flow.split("@")
         await client.subscribe(name, topic, inbox.on_message)
@@ -134,7 +137,7 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
     # 2) XSD 적재·매핑 생성. 이벤트 루프를 막지 않게 스레드에서 한다 (그동안 받은 메시지는 inbox로)
     gw = await asyncio.to_thread(Gateway, bus, config, codec=codec, sink=client.publish)
     log.info("gateway: XSD loaded, mapping built at +%.2f s", time.monotonic() - t0)
-    importable = {e.uci_name for e in gw.import_entries()} | ({RX} if config.envelope else set())
+    importable = {e.uci_name for e in gw.import_entries()} | {RX if config.envelope else QUERY}
     missing = [s for s in subscribed if s.split("@")[0] not in importable]
     if missing:   # XSD에 없는 수신 메시지: handle_external이 거부한다
         log.warning("gateway: subscribed but not importable (no XSD element): %s", sorted(missing))
@@ -189,7 +192,7 @@ async def start_stomp_gateway(bus: Bus, config: GatewayConfig, host: str, port: 
              time.monotonic() - t0)
     inbox = PreReadyInbox(limit=inbox_limit)
     names = [RX] if config.envelope else [e.uci_name for e in inbound_entries(MappingTable.from_descriptors(),
-                                                                              load_converters())]
+                                                                              load_converters())] + [QUERY]
     dests = [stomp_topic(n) for n in dict.fromkeys(names)]
     for d in dests:
         await client.subscribe(d, lambda dest, body, hdr: inbox.on_message(dest, body))
