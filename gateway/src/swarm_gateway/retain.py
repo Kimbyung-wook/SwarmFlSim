@@ -65,6 +65,9 @@ class RetainedReports:
         self.rules = RETAINED if rules is None else rules
         self._items: OrderedDict[tuple, dict] = OrderedDict()
         self._lock = threading.Lock()
+        # 봉투 송신(DEC-111)이면 외부는 내부 이름이 아니라 봉투 이름(MA_TxDataPayloadCommand)@토픽을 구독한다.
+        # 그 구독에는 그 토픽의 마지막 값 전부를 다시 보낸다
+        self.envelope_name: str | None = None
 
     def retains(self, full_name: str) -> bool:
         return full_name in self.rules
@@ -84,11 +87,15 @@ class RetainedReports:
 
     def latest(self, uci: str, topic: str) -> list[dict]:
         with self._lock:
-            return [o for (u, t, *_), o in self._items.items() if u == uci and t == topic]
+            return [o for (u, t, *_), o in self._items.items()
+                    if t == topic and (u == uci or uci == self.envelope_name)]
 
     def targets(self) -> set[tuple[str, str]]:
         with self._lock:
-            return {(u, t) for (u, t, *_) in self._items}
+            out = {(u, t) for (u, t, *_) in self._items}
+        if self.envelope_name:
+            out |= {(self.envelope_name, t) for _, t in out}
+        return out
 
     def __len__(self) -> int:
         with self._lock:

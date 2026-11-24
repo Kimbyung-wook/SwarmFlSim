@@ -219,11 +219,14 @@ def test_dec090_no_extension_fields(gateway, sent, codec):
 # ---------------------------------------------------------------- TC-GW-034
 def test_o20_lacal_config_declares_all_gateway_messages(gateway):
     """CAL Server 설정의 declared가 Gateway가 실제로 PUB·SUB하는 것과 같다 (MA_PositionReport 포함)"""
-    cfg = yaml.safe_load((CONFIG_DIR / "lacal_server.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((CONFIG_DIR / "lacal_server_raw.yaml").read_text(encoding="utf-8"))
     declared = cfg["services"]["swarm_gateway"]["declared"]
     pub = {f"{u}@{gateway.config.topic(e.iface)}" for e, u in gateway.export_targets()
            if e.uci_name not in gateway.import_names()}                # 받는 명령은 되돌려 보내지 않는다
     sub = {f"{e.uci_name}@{gateway.config.topic(e.iface)}" for e in gateway.import_entries()}
+    q_sub, q_pub = gateway.query_flows()                               # 조회 (DEC-112)
+    pub.add(q_pub)
+    sub.add(q_sub)
     assert "MA_PositionReport@swarm.vi" in declared["pub"] and "MA_PositionReport@swarm.p2p" in declared["pub"]
     assert set(declared["pub"]) == pub
     assert set(declared["sub"]) == sub

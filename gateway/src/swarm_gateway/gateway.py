@@ -12,11 +12,14 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import threading
+import uuid
 from collections import Counter, deque
 from dataclasses import dataclass, field, replace
 from typing import Awaitable, Callable
 
 from google.protobuf.message import DecodeError
+from lxml import etree
 from swarm.v1 import c2_pb2, common_pb2, link_pb2, options_pb2, sim_pb2
 from swarm_api import keys
 from swarm_api.bus import Bus, Sample, protobuf_encoding
@@ -26,9 +29,12 @@ from .converters import (AlsoConverter, ConvContext, ConversionError, Converter,
 from .converters.base import SimClock
 from .command_state import CommandStateGate
 from .entities import KnownEntities
+from .envelope import RX, TX, EnvelopeError, Envelopes, NotAddressed, to_ascii
 from .ids import IdMap
-from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
+from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, json_key, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
+from .query import QUERY, QUERY_STATUS, LatestValues
+from .query import answer as query_answer
 from .retain import RetainedReports
 
 log = logging.getLogger("swarm_gateway")
@@ -47,6 +53,16 @@ def inbound_entries(table: MappingTable, converters: dict[str, Converter]) -> li
     return [e for e in table.exportable()
             if e.l1 in INBOUND_L1 and e.full_name in converters and converters[e.full_name].supports_import()]
 
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False)
+
+
+def _root_name(body: bytes) -> str:
+    try:
+        return etree.QName(etree.fromstring(body, parser=_XML_PARSER)).localname
+    except (etree.XMLSyntaxError, ValueError):
+        return ""
+
+
 Sink = Callable[[str, dict], "Awaitable[None] | None"]
 
 
@@ -58,7 +74,19 @@ class GatewayConfig:
     mode: str = "SIMULATION"         # MessageHeader.Mode
     classification: str = "U"
     owner_producer: str = "USA"      # 공개 스키마 예제 값 (SecurityInformation 필수 항목)
+    # 시작 때 시나리오 조회 (DEC-109): 구독을 연 뒤 get. 응답이 없으면 interval 뒤 다시, 최대 attempts번.
+    # 구독으로 먼저 받으면 멈춘다. attempts=0이면 조회하지 않는다
+    scenario_query_attempts: int = 5
+    scenario_query_timeout_s: float = 1.0
+    scenario_query_interval_s: float = 0.5
     rejection_log: int = 200
+    # 외부 인터페이스 봉투 (DEC-111): 켜면 송신을 MA_TxDataPayloadCommand로 싸고 MA_RxDataPayload를 받는다.
+    # 라이브러리 기본은 끔(내부 메시지 그대로), 실행(CLI) 기본은 켬
+    envelope: bool = False
+    envelope_destinations: tuple[str, ...] = ()   # 송신 SpecificDestinationID (외부 시스템 UUID). 비우면 넣지 않는다
+    schema_version: str = SCHEMA_VERSION          # MessageHeader.SchemaVersion (DEC-110: 5.0a 하네스면 005.0a.ASK)
+    exclude_messages: tuple[str, ...] = ()        # 내보내지 않을 UCI 메시지 (DEC-110: 5.0a에 없는 MA_NavigationReport·MA_Entity)
+    query_result_limit: int = 256                 # QueryDataRequest 응답 결과 수 상한 (DEC-112)
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
@@ -107,6 +135,16 @@ class Gateway:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._outbox: asyncio.Queue | None = None
         self.retained = RetainedReports()   # 변화 보고 키별 마지막 값 (DEC-089)
+        self.latest = LatestValues()        # 내보낸 메시지의 기체별 최신 값, QueryDataRequest 응답용 (DEC-112)
+        # 시나리오 조회·구독 (DEC-109): 마지막 반영한 시나리오 바이트, 받았는지, 조회 스레드
+        self._scenario_lock = threading.Lock()
+        self._scenario_payload: bytes | None = None
+        self._scenario_seen = threading.Event()
+        self._query_stop = threading.Event()
+        self._query_thread: threading.Thread | None = None
+        self.envelopes = Envelopes(self.codec, list(config.envelope_destinations))
+        if config.envelope:
+            self.retained.envelope_name = TX
         self._check_converters()
 
     # ------------------------------------------------------------------ 매핑
@@ -143,6 +181,46 @@ class Gateway:
     def import_names(self) -> list[str]:
         return sorted({e.uci_name for e in self.import_entries()})
 
+    def exported_names(self) -> set[str]:
+        """외부로 내보내는 UCI 메시지 (QueryDataRequest로 조회할 수 있는 것, DEC-112)"""
+        inbound = set(self.import_names())
+        return {u for e, u in self.export_targets() if e.uci_name not in inbound and u not in self.config.exclude_messages}
+
+    def query_flows(self) -> tuple[str, str]:
+        """(받는 흐름, 내는 흐름) 조회 응답용 LA-CAL `<이름>@<토픽>` (봉투를 끈 실행, DEC-112)"""
+        return f"{QUERY}@{self.config.topic('c2')}", f"{QUERY_STATUS}@{self.config.topic('c2')}"
+
+    def handle_query(self, obj: dict) -> Outcome:
+        """외부 QueryDataRequest → QueryDataRequestStatus PROCESSING, 이어서 COMPLETED(최신 값)·REJECTED (DEC-112)"""
+        self.counters["query_rx"] += 1
+        try:
+            if set(obj) != {QUERY}:
+                raise InvalidMessage(f"expected {QUERY}")
+            self.to_xml(obj)
+            statuses = query_answer(obj[QUERY]["MessageData"], exported=self.exported_names(), store=self.latest,
+                                    system_uuid=self.system_uuid, limit=self.config.query_result_limit,
+                                    type_key=lambda n: json_key(self.codec.global_element(n).type.name))
+        except (InvalidMessage, ValueError, TypeError, KeyError) as exc:
+            self.counters["query_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=QUERY, reason=f"{type(exc).__name__}: {exc}"))
+        topic = self.config.topic("c2")
+        for state, data in statuses:
+            status = self.envelope(QUERY_STATUS, data)
+            try:
+                self.to_xml(status)
+            except InvalidMessage as exc:   # 보관한 값은 이미 검증했다. 그래도 실패하면 결과 없이 FAILED
+                log.warning("gateway: %s result invalid: %s", QUERY_STATUS, exc)
+                status = self.envelope(QUERY_STATUS, {"RequestID": data["RequestID"], "RequestProcessingState": "FAILED"})
+                state = "FAILED"
+            self.counters[f"query.{state}"] += 1
+            self._emit(topic, status)
+        final = statuses[-1]
+        n = len(final[1].get("Result", {}).get("Message", []))
+        log.info("gateway: %s %s -> %s (%d results)%s", QUERY, final[1]["RequestID"].get("UUID"), final[0], n,
+                 f": {final[1]['RequestProcessingStateReason']['Description']}"
+                 if "RequestProcessingStateReason" in final[1] else "")
+        return Outcome("answered", uci_name=QUERY, topic=topic, reason=final[0], message=status)
+
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
         """버스 구독: swarm/<gcs>/rx/**와 시나리오(sim/ctrl/scenario, 알려진 기체 목록용 D-35)"""
@@ -155,8 +233,50 @@ class Gateway:
         self._subs.append(self.bus.subscribe(keys.SIM_CTRL_SCENARIO, self._on_scenario))
         log.info("gateway %s: subscribed %s; export %d UCI targets, import %s", self.config.gcs,
                  keys.rx_all(self.config.gcs), len(self.export_targets()), self.import_names())
+        # 구독을 연 다음 조회한다 (DEC-109). get은 막을 수 있어 스레드에서 한다
+        if self.config.scenario_query_attempts > 0:
+            self._query_stop.clear()
+            self._query_thread = threading.Thread(target=self.query_scenario, name="gateway-scenario-query",
+                                                  daemon=True)
+            self._query_thread.start()
+
+    def query_scenario(self) -> bool:
+        """`sim/ctrl/scenario` 조회. 응답이나 구독으로 시나리오를 받으면 True (IMP-GW-035, DEC-109)"""
+        cfg = self.config
+        for attempt in range(1, cfg.scenario_query_attempts + 1):
+            if self._scenario_seen.is_set():
+                log.info("gateway: scenario already received by subscription; query stopped (attempt %d)", attempt)
+                return True
+            if self._query_stop.is_set():
+                return False
+            self.counters["scenario_query"] += 1
+            try:
+                replies = self.bus.get(keys.SIM_CTRL_SCENARIO, cfg.scenario_query_timeout_s)
+            except Exception as exc:   # 조회 실패도 구독은 그대로다
+                self.counters["scenario_query_error"] += 1
+                log.warning("gateway: scenario query %d failed: %s", attempt, exc)
+                replies = []
+            for s in replies:
+                self._on_scenario(s, via="query")
+            if replies:
+                log.info("gateway: scenario received by query (attempt %d/%d)", attempt, cfg.scenario_query_attempts)
+                return True
+            if attempt < cfg.scenario_query_attempts and self._query_stop.wait(cfg.scenario_query_interval_s):
+                return False
+        if self._scenario_seen.is_set():
+            return True
+        log.warning("gateway: no scenario after %d queries; waiting for sim/ctrl/scenario publication "
+                    "(known entities from reports only, UCI time from first message)", cfg.scenario_query_attempts)
+        self.counters["scenario_query_none"] += 1
+        return False
+
+    def wait_scenario_query(self, timeout: float | None = None) -> None:
+        """시험용: 조회 스레드가 끝날 때까지 기다린다"""
+        if self._query_thread is not None:
+            self._query_thread.join(timeout)
 
     def close(self) -> None:
+        self._query_stop.set()
         for s in self._subs:
             s.close()
         self._subs.clear()
@@ -168,9 +288,21 @@ class Gateway:
             "SecurityInformation": {"Classification": self.config.classification,
                                     "OwnerProducer": [{"GovernmentIdentifier": self.config.owner_producer}]},
             "MessageHeader": {"SystemID": {"UUID": self.system_uuid}, "Timestamp": uci_timestamp(at or self.ctx.now()),
-                              "SchemaVersion": SCHEMA_VERSION, "Mode": self.config.mode},
+                              "SchemaVersion": self.config.schema_version, "Mode": self.config.mode},
             "MessageData": data,
         }}
+
+    def outbound(self, obj: dict) -> dict:
+        """전송 직전 모양. 봉투를 켜면 MA_TxDataPayloadCommand (DEC-111)"""
+        if not self.config.envelope:
+            return obj
+        env = self.envelopes.wrap(obj)
+        self.counters["envelope_tx"] += 1
+        return env
+
+    def inbound_names(self) -> list[str]:
+        """외부에서 받을 UCI 메시지 이름. 봉투를 켜면 MA_RxDataPayload 하나"""
+        return [RX] if self.config.envelope else self.import_names()
 
     def to_xml(self, obj: dict) -> bytes:
         """OMS JSON → UCI XML. XSD 검증에 실패하면 InvalidMessage"""
@@ -184,16 +316,29 @@ class Gateway:
             self.counters["internal_error"] += 1
             log.exception("gateway: unexpected error on %s", sample.key)
 
-    def _on_scenario(self, sample: Sample) -> None:
-        sc = sim_pb2.Scenario()
-        try:
-            sc.ParseFromString(sample.payload)
-        except DecodeError:
-            self.counters["bad_scenario"] += 1
-            log.warning("gateway: cannot parse %s", sample.key)
-            return
+    def _on_scenario(self, sample: Sample, via: str = "subscription") -> None:
+        """구독(버스 스레드)과 조회(조회 스레드)에서 온다. 같은 내용은 한 번만 반영한다 (DEC-109 멱등)"""
+        with self._scenario_lock:
+            if sample.payload == self._scenario_payload:
+                self.counters["scenario_duplicate"] += 1
+                return
+            sc = sim_pb2.Scenario()
+            try:
+                sc.ParseFromString(sample.payload)
+            except DecodeError:
+                self.counters["bad_scenario"] += 1
+                log.warning("gateway: cannot parse %s", sample.key)
+                return
+            self._scenario_payload = sample.payload
+            self.counters[f"scenario_by_{via}"] += 1
+            self._scenario_seen.set()
+            log.info("gateway: scenario %r by %s (%d entities, epoch %d us)", sc.name, via, len(sc.entities),
+                     sc.run.epoch_utc_us)
+            self._apply_scenario(sc, via)
+
+    def _apply_scenario(self, sc: sim_pb2.Scenario, via: str) -> None:
         self.entities.on_scenario(sc)
-        what = self.clock.on_scenario_epoch(sc.run.epoch_utc_us)   # 계약 §1 시간 규칙 (DEC-098)
+        what = self.clock.on_scenario_epoch(sc.run.epoch_utc_us, via)   # 계약 §1 시간 규칙 (DEC-098)
         if what:
             self.counters[f"epoch_{what}"] += 1
 
@@ -244,12 +389,21 @@ class Gateway:
         return conv if conv is not None and conv.supports_export() else None
 
     def _export_one(self, entry: MappingEntry, uci: str, msg, key: str, ctx: ConvContext, at: dt.datetime) -> Outcome:
+        if uci in self.config.exclude_messages:   # 상대 스키마 판에 없는 메시지 (DEC-110)
+            self.counters[f"excluded.{uci}"] += 1
+            return Outcome("excluded", proto=entry.full_name, uci_name=uci, key=key, reason="excluded by config")
         conv = self.converter_for(entry, uci)
         if conv is None:
             return self._reject(Outcome("unmapped", proto=entry.full_name, uci_name=uci, key=key,
                                         reason="no converter"))
         try:
             obj = self.envelope(uci, conv.to_uci(msg, ctx), at)
+            if self.config.envelope:   # 봉투 안 문자열은 ASCII (DEC-111). 공개 XSD 문자열 패턴도 [ -~]다
+                fixed = [0]
+                obj = to_ascii(obj, fixed)
+                if fixed[0]:
+                    self.counters["envelope_ascii_replaced"] += fixed[0]
+                    log.warning("gateway: %d non-ASCII strings replaced in %s", fixed[0], uci)
             self.to_xml(obj)
         except (ConversionError, InvalidMessage, ValueError, TypeError, KeyError) as exc:
             self.counters["invalid"] += 1
@@ -266,13 +420,14 @@ class Gateway:
         self.counters[f"exported.{uci}"] += 1
         self._emit(topic, obj)
         self.retained.note(entry.full_name, uci, topic, msg, obj)
+        self.latest.note(entry.full_name, uci, msg, obj)
         return Outcome("exported", proto=entry.full_name, uci_name=uci, topic=topic, key=key, message=obj)
 
     def _emit(self, topic: str, obj: dict) -> None:
         if self._outbox is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(self._outbox.put_nowait, (topic, obj))
         elif self.sink is not None:
-            res = self.sink(topic, obj)
+            res = self.sink(topic, self.outbound(obj))
             if asyncio.iscoroutine(res):
                 res.close()
                 raise RuntimeError("async sink needs Gateway.start() inside an event loop")
@@ -288,7 +443,7 @@ class Gateway:
         while True:
             topic, obj = await self._outbox.get()
             try:
-                res = self.sink(topic, obj) if self.sink else None
+                res = self.sink(topic, self.outbound(obj)) if self.sink else None
                 if asyncio.iscoroutine(res):
                     await res
                 self.counters["sent"] += 1
@@ -304,8 +459,67 @@ class Gateway:
             await asyncio.sleep(0.01)
 
     # ------------------------------------------------------------------ 2단계: 수신
+    def handle_incoming(self, uci_name: str, obj: dict) -> Outcome:
+        """전송 경로에서 받은 메시지. 봉투(MA_RxDataPayload)면 풀어서 handle_external로 (DEC-111)"""
+        if uci_name != RX:
+            if self.config.envelope:
+                self.counters["ext_rx"] += 1
+                return self._reject(Outcome("rejected", uci_name=uci_name, reason=f"envelope required ({RX})"))
+            return self.handle_external(uci_name, obj)
+        self.counters["envelope_rx"] += 1
+        try:
+            name, inner = self.envelopes.unwrap(obj, self.system_uuid)
+        except NotAddressed as exc:
+            self.counters["envelope_not_addressed"] += 1
+            log.info("gateway: %s ignored: %s", RX, exc)
+            return Outcome("ignored", uci_name=RX, reason=str(exc))
+        except EnvelopeError as exc:
+            self.counters["envelope_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=RX, reason=str(exc)))
+        return self.handle_external(name, inner)
+
+    def handle_xml(self, body: bytes) -> Outcome:
+        """UCI XML 문서 한 건(STOMP 본문, DEC-110). XSD 검증 → OMS JSON → handle_incoming"""
+        try:
+            root = etree.fromstring(body, parser=_XML_PARSER)
+            self.codec.validate_xml(root)
+            obj = self.codec.xml_to_json(root)
+        except (etree.XMLSyntaxError, InvalidMessage, ValueError, KeyError) as exc:
+            self.counters["ext_rx"] += 1
+            self.counters["ext_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=_root_name(body), reason=f"invalid XML: {exc}"))
+        return self.handle_incoming(next(iter(obj)), obj)
+
+    def signal_ack(self, body: bytes, start: bool) -> dict:
+        """시험 하네스 시작·정지 신호(ServiceConfigurationChangeRequest)의 응답 (DEC-110).
+        RequestID를 그대로 싣고 시작은 COMPLETED, 정지는 CANCELED. 신호는 검증하지 않고 RequestID만 읽는다"""
+        rid: dict = {}
+        try:
+            root = etree.fromstring(body, parser=_XML_PARSER)
+            node = root.find("{*}MessageData/{*}RequestID")
+            if node is not None:
+                u, label = node.findtext("{*}UUID"), node.findtext("{*}DescriptiveLabel")
+                if u:
+                    rid["UUID"] = str(uuid.UUID(u.strip()))
+                if label:
+                    rid["DescriptiveLabel"] = label
+        except (etree.XMLSyntaxError, ValueError):
+            pass
+        if "UUID" not in rid:
+            rid["UUID"] = str(uuid.uuid4())
+        self.counters["signal_start" if start else "signal_stop"] += 1
+        obj = self.envelope("ServiceConfigurationChangeRequestStatus",
+                            {"RequestID": rid, "RequestProcessingState": "COMPLETED" if start else "CANCELED"})
+        self.to_xml(obj)
+        log.info("gateway: test harness %s signal %s acked", "start" if start else "stop",
+                 rid.get("DescriptiveLabel", rid["UUID"]))
+        return obj
+
     def handle_external(self, uci_name: str, obj: dict) -> Outcome:
         """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/<c2|mp>/<msg>"""
+        if uci_name == QUERY:   # 버스로 넘기지 않고 Gateway가 답한다 (DEC-112)
+            self.counters["ext_rx"] += 1
+            return self.handle_query(obj)
         self.counters["ext_rx"] += 1
         candidates = [e for e in self.import_entries() if e.uci_name == uci_name]
         if not candidates:

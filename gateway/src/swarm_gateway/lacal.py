@@ -38,7 +38,7 @@ def _ensure_path() -> Path:
 _ensure_path()
 
 from client.lacal_client import CalError, LaCalClient  # noqa: E402
-from server.omsjson import InvalidMessage, OmsJsonCodec  # noqa: E402
+from server.omsjson import InvalidMessage, OmsJsonCodec, json_key  # noqa: E402
 
 __all__ = ["CalError", "LaCalClient", "InvalidMessage", "OmsJsonCodec", "SCHEMA_VERSION",
            "lacal_root", "schema_path", "load_codec", "uci_timestamp"]

@@ -22,14 +22,18 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Callable
 
 from swarm_api.bus import Bus
 
 from .converters import load_converters
+from .envelope import RX
+from .query import QUERY
 from .gateway import Gateway, GatewayConfig, inbound_entries
 from .lacal import LaCalClient, OmsJsonCodec
 from .mapping import MappingTable
 from .retain import LateJoinReplayer, admin_url_for
+from .stomp import StompClient
 
 log = logging.getLogger("swarm_gateway")
 
@@ -48,10 +52,14 @@ class PreReadyInbox:
     dropped: int = 0         # 상한을 넘어 버린 오래된 것
     flushed: int = 0
     _direct: bool = False
+    handle: Callable[[str, object], object] | None = None   # 비우면 gateway.handle_incoming (STOMP는 XML 본문 처리)
 
-    def on_message(self, name: str, obj: dict) -> None:
+    def _call(self, name: str, obj):
+        return (self.handle or self.gateway.handle_incoming)(name, obj)
+
+    def on_message(self, name: str, obj) -> None:
         if self._direct and self.gateway is not None:
-            self.gateway.handle_external(name, obj)
+            self._call(name, obj)
             return
         self.held += 1
         self.queued.append((time.monotonic(), name, obj))
@@ -65,7 +73,7 @@ class PreReadyInbox:
         outs = []
         while self.queued:
             t, name, obj = self.queued.popleft()
-            out = self.gateway.handle_external(name, obj)
+            out = self._call(name, obj)
             outs.append(out)
             self.flushed += 1
             log.info("gateway: pre-ready %s held %.2f s -> %s%s", name, time.monotonic() - t, out.status,
@@ -113,17 +121,23 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
     # 1) 외부 명령 구독을 먼저 건다. 받은 것은 준비될 때까지 쌓는다 (O-13)
     inbox = PreReadyInbox(limit=inbox_limit)
     subscribed = []
+    wanted: dict[str, None] = {}
     for entry in inbound_entries(MappingTable.from_descriptors(), load_converters()):
         topic = (inbound_topic or config.topic("c2")) if entry.iface == "c2" else config.topic(entry.iface)
-        await client.subscribe(entry.uci_name, topic, inbox.on_message)
-        subscribed.append(f"{entry.uci_name}@{topic}")
-        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", entry.uci_name, topic, time.monotonic() - t0)
+        wanted[f"{RX if config.envelope else entry.uci_name}@{topic}"] = None   # 봉투면 토픽마다 MA_RxDataPayload (DEC-111)
+    if not config.envelope:   # 조회는 Gateway가 답한다 (DEC-112). 봉투면 MA_RxDataPayload@c2에 들어 있다
+        wanted[f"{QUERY}@{inbound_topic or config.topic('c2')}"] = None
+    for flow in wanted:
+        name, topic = flow.split("@")
+        await client.subscribe(name, topic, inbox.on_message)
+        subscribed.append(flow)
+        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", name, topic, time.monotonic() - t0)
     sub_s = time.monotonic() - t0
     log.info("gateway: receiving external commands from +%.2f s; held until ready", sub_s)
     # 2) XSD 적재·매핑 생성. 이벤트 루프를 막지 않게 스레드에서 한다 (그동안 받은 메시지는 inbox로)
     gw = await asyncio.to_thread(Gateway, bus, config, codec=codec, sink=client.publish)
     log.info("gateway: XSD loaded, mapping built at +%.2f s", time.monotonic() - t0)
-    importable = {e.uci_name for e in gw.import_entries()}
+    importable = {e.uci_name for e in gw.import_entries()} | {RX if config.envelope else QUERY}
     missing = [s for s in subscribed if s.split("@")[0] not in importable]
     if missing:   # XSD에 없는 수신 메시지: handle_external이 거부한다
         log.warning("gateway: subscribed but not importable (no XSD element): %s", sorted(missing))
@@ -147,3 +161,84 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
 
     flusher = asyncio.create_task(flush_later())
     return Running(gw, client, sender, ready, replayer, inbox, sub_s, flusher)
+
+
+# ---------------------------------------------------------------------- STOMP (DEC-110)
+SIGNAL_START = "/topic/TestHarness_StartSignal"
+SIGNAL_STOP = "/topic/TestHarness_StopSignal"
+SIGNAL_ACK = "/topic/TestHarness_SignalAck"
+
+
+def stomp_topic(uci_name: str) -> str:
+    """하네스 토픽 규칙: `/topic/<UCI 메시지 이름>`"""
+    return f"/topic/{uci_name}"
+
+
+async def start_stomp_gateway(bus: Bus, config: GatewayConfig, host: str, port: int, *, system_uuid: str,
+                              login: str = "", passcode: str = "", codec: OmsJsonCodec | None = None,
+                              settle_s: float = DEFAULT_SETTLE_S, inbox_limit: int = DEFAULT_INBOX_LIMIT,
+                              signals: bool = True) -> Running:
+    """A-GRA 시험 하네스 버스(ActiveMQ STOMP)에 붙는다 (IMP-GW-037, DEC-110). LA-CAL 실행기와 같은 Gateway·변환기를 쓴다.
+
+    - 받기: `/topic/MA_RxDataPayload`(봉투, DEC-111) 또는 봉투를 끄면 `/topic/<수신 UCI 이름>`. 본문은 UCI XML이다.
+    - 내기: `/topic/<UCI 이름>`(봉투면 `/topic/MA_TxDataPayloadCommand`)에 XSD를 통과한 UCI XML.
+    - 시작·정지 신호(`TestHarness_StartSignal`·`StopSignal`)에 `TestHarness_SignalAck`로 응답한다(`signals`).
+    - 하네스 토픽은 비지속이라 하네스보다 먼저 띄워 구독해 둔다. 구독은 XSD 적재 전에 걸고, 그동안 온 것은 쌓는다(O-13과 같다).
+    system_uuid: 우리 플랫폼 UUID(MessageHeader.SystemID, 봉투 목적지 대조)."""
+    t0 = time.monotonic()
+    client = StompClient(host, port, login=login, passcode=passcode)
+    info = await client.connect()
+    log.info("gateway: STOMP connected to %s:%d (server %s) at +%.2f s", host, port, info.get("server", "?"),
+             time.monotonic() - t0)
+    inbox = PreReadyInbox(limit=inbox_limit)
+    names = [RX] if config.envelope else [e.uci_name for e in inbound_entries(MappingTable.from_descriptors(),
+                                                                              load_converters())] + [QUERY]
+    dests = [stomp_topic(n) for n in dict.fromkeys(names)]
+    for d in dests:
+        await client.subscribe(d, lambda dest, body, hdr: inbox.on_message(dest, body))
+        log.info("gateway: STOMP SUBSCRIBE %s done at +%.2f s", d, time.monotonic() - t0)
+    # 신호는 쌓지 않고 Gateway가 생기는 즉시 응답한다(정착 시간을 기다리지 않는다). 그 전에 온 것만 잠깐 둔다
+    early_signals: list[tuple[str, bytes]] = []
+    state: dict = {}
+
+    async def ack(dest: str, body: bytes) -> None:
+        g = state["gw"]
+        await client.send(SIGNAL_ACK, g.to_xml(g.signal_ack(body, dest == SIGNAL_START)))
+
+    async def on_signal(dest: str, body: bytes, hdr: dict) -> None:
+        if "gw" in state:
+            await ack(dest, body)
+        else:
+            early_signals.append((dest, body))
+
+    if signals:
+        for d in (SIGNAL_START, SIGNAL_STOP):
+            await client.subscribe(d, on_signal)
+            dests.append(d)
+    sub_s = time.monotonic() - t0
+
+    async def sink(topic: str, obj: dict) -> None:
+        name = next(iter(obj))
+        await client.send(stomp_topic(name), gw.to_xml(obj))
+
+    gw = await asyncio.to_thread(Gateway, bus, config, codec=codec, sink=sink)
+    log.info("gateway: XSD loaded, mapping built at +%.2f s", time.monotonic() - t0)
+    gw.system_uuid = system_uuid
+    inbox.gateway, inbox.handle = gw, (lambda dest, body: gw.handle_xml(body))
+    state["gw"] = gw
+    for dest, body in early_signals:
+        await ack(dest, body)
+    gw.start()
+    sender = asyncio.create_task(gw.run_sender())
+    ready = time.monotonic() - t0
+    log.info("gateway: ready at +%.2f s: STOMP %s, system %s, schema %s, envelope %s, excluded %s; %d held",
+             ready, dests, system_uuid, config.schema_version, "on" if config.envelope else "off",
+             list(config.exclude_messages), len(inbox.queued))
+
+    async def flush_later():
+        if settle_s > 0:
+            await asyncio.sleep(settle_s)
+        inbox.flush()
+
+    flusher = asyncio.create_task(flush_later())
+    return Running(gw, client, sender, ready, None, inbox, sub_s, flusher)  # type: ignore[arg-type]
