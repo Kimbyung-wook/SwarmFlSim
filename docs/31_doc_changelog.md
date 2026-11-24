@@ -169,3 +169,4 @@
 | 2026-11-24 | `4d8d6d3` | IMP-CORE-032, DEC-109 | 병합: WP1 Core가 `sim/ctrl/scenario` 조회에 마지막 발행본(같은 바이트·encoding)으로 응답, TC-CORE-047 | 없음 | 해당 없음 | |
 | 2026-11-24 | `9714604` | TC-QA-213, DEC-109 | 병합: QA C3 시각 기준 = 시나리오 조건, 반복 실행 C3 합산, `docs/44` C3 문구 | 없음 | 해당 없음 | |
 | 2026-11-24 | `bba9368` | IMP-GW-035~038, DEC-109~112 | 병합: WP9 Gateway 시작 시 시나리오 조회, 외부 교환 봉투(LA-CAL 경로, CLI 기본 켬), 시험 하네스 STOMP 경로, QueryDataRequest 응답, TC-GW-047~065. 실하네스 조회 시험 0/23(CANCEL 요청) | 사용자 매뉴얼 Gateway 실행 옵션(`--envelope`, STOMP 경로)·하네스 시험 | 미처리 | |
+| 2026-11-24 | `c4b6eb9` | IMP-GW-039, DEC-112, OPN-088 | 병합: WP9 QueryDataRequest 응답 6.0a 상태 뜻 정리(거부는 REJECTED 한 건, SystemID 비필터, 쪽 나눔, ResultsInNative 원래 메시지 전달, CANCEL UNKNOWN_ID), TC-GW-066~069. 실하네스 시드 1 23/23·시드 42 0/23, OPN-088에 하네스와의 차이 기록 | 없음 | 해당 없음 | |
