@@ -129,6 +129,18 @@ def inject(ob: Obs, events: list[tuple]) -> list[int]:
     return done
 
 
+MD_DUMP = False   # --md-dump: Agent를 qa/md_dump_agent.py로 띄워 MD 기록(link_state 등)을 <out>/md.json에 남긴다 (QA 37차)
+
+
+class MdStack(h.Stack):
+    def _cmd(self, name: str) -> list[str]:
+        c = super()._cmd(name)
+        if name == "agent":
+            os.environ["QA_MD_DUMP"] = str(self.out / "md.json")
+            c = [sys.executable, str(Path(__file__).parent / "md_dump_agent.py"), *c[3:]]
+        return c
+
+
 def stack(out: Path, sc: dict | Path, port: int, rate: float, hb_off: bool = False) -> tuple[h.Stack, Obs]:
     out.mkdir(parents=True, exist_ok=True)
     if isinstance(sc, dict):
@@ -136,7 +148,8 @@ def stack(out: Path, sc: dict | Path, port: int, rate: float, hb_off: bool = Fal
         p.write_text(json.dumps(sc, ensure_ascii=False, indent=1), encoding="utf-8")
     else:
         p = sc
-    st = h.Stack(out, p, base_port=port, lockstep=True, rate=rate, record=False, core_extra=["--terrain-flat", "0"])
+    st = (MdStack if MD_DUMP else h.Stack)(out, p, base_port=port, lockstep=True, rate=rate, record=False,
+                                          core_extra=["--terrain-flat", "0"])
     st.start_one("datalink", ["--heartbeat-hz", "0"] if hb_off else None)
     st.start_one("agent")
     time.sleep(st.settle)
@@ -507,9 +520,12 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--base-port", type=int, default=49300)
     ap.add_argument("--runs", type=int, default=5)
+    ap.add_argument("--md-dump", action="store_true", help="Agent MD 기록을 <out>/md.json에 남긴다 (qa/md_dump_agent.py)")
     ap.add_argument("--only", default="")
     ap.add_argument("--wall-limit", type=float, default=3600.0, help="하네스 전체 시간 제한 s. 넘으면 스택을 내리고 끝낸다 (0이면 없음)")
     a = ap.parse_args()
+    global MD_DUMP
+    MD_DUMP = a.md_dump
     if a.wall_limit > 0:
         def _limit() -> None:
             print(f"TIMEOUT {a.wall_limit:.0f} s", flush=True)

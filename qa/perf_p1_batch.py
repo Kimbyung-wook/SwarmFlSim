@@ -117,7 +117,7 @@ def run(a: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     if not quiet(out, max_sys=a.max_sys):
         return 2
-    cmd = [sys.executable, str(ROOT / "qa" / "perf_p1.py"), "--out", f"{a.out}/{a.label}", "--only", ",".join(CFGS),
+    cmd = [sys.executable, str(ROOT / "qa" / "perf_p1.py"), "--out", f"{a.out}/{a.label}", "--only", a.only or ",".join(CFGS),
            "--repeat", str(a.repeat), "--meas", "7500", "--base-port", str(a.base_port)]
     log(out, f"start {a.label}")
     with (out / f"{a.label}.log").open("w", encoding="utf-8") as lf:
@@ -229,6 +229,7 @@ def main() -> int:
     r.add_argument("--repeat", type=int, default=6)
     r.add_argument("--base-port", type=int, default=44000)   # 49152~ 임시 포트 범위를 피한다
     r.add_argument("--max-sys", type=float, default=5.0, help="시작 조건: 시스템 CPU %% 이하가 30 s")
+    r.add_argument("--only", default="", help="CFGS 가운데 일부만 (QA 37차: P 고정 둘만)")
     sm = sub.add_parser("summary")
     sm.add_argument("--out", default="qa/out/perf_g")
     sm.add_argument("--labels", default="", help="쉼표로 구분한 묶음 폴더. 비우면 모두")

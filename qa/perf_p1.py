@@ -102,6 +102,7 @@ C = [
     Cfg("d3_w_a4_nar_P", agents=4, narrow=True, pcore=True),
     # QA 26차: Agent 틱 단계별 계측 (DEC-086). 긴 창으로 돌린다
     Cfg("d3_w_prof", profile=True), Cfg("d3_w_log_prof", logger=True, profile=True),
+    Cfg("d3_w_prof_P", profile=True, pcore=True), Cfg("d3_w_tl_P", timeline=True, pcore=True),   # QA 37차 O-43·44 (기본 스케줄링이 E 코어로 갈 때)
 ]
 BY = {c.name: c for c in C}
 
