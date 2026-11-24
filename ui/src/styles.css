@@ -127,3 +127,28 @@ button.link { background: none; border: none; color: var(--accent); padding: 0 4
 .stall-badge { padding: 0 6px; border-radius: 3px; background: #7a2a2a; color: #ffd9d9; font-weight: 600; }
 .missed-badge { padding: 0 6px; border-radius: 3px; background: #5a4a1a; color: #ffe9a8; font-weight: 600; }
 .route-flock-note { font-size: 12px; color: #fcd34d; padding: 2px 0; }
+
+/* IMP-UI-085~092: 운용 시나리오 보완 (승인·시험 진행자·교전 기준·수신 정보) */
+.mission .poly-row { font-size: 12px; }
+.appr { display: flex; flex-direction: column; flex-shrink: 0; max-height: 35%; min-height: 0; overflow: hidden; border-bottom: 1px solid var(--line); }
+.appr.appr-wait { background: #2a1f0b; border-bottom-color: #ca8a04; }
+.appr-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.appr-list li { padding: 5px 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+.appr-list li.appr-done { opacity: 0.8; }
+.appr-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.appr-head .tgt { color: #fca5a5; }
+.appr-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; font-variant-numeric: tabular-nums; }
+.appr-btns { margin-left: auto; display: flex; gap: 4px; }
+button.ok { background: #14532d; border-color: #16a34a; }
+button.no, button.danger { background: #4c1d1d; border-color: #b91c1c; }
+.extra { flex-shrink: 0; border-top: 1px solid var(--line); max-height: 40%; overflow-y: auto; }
+.tester { border-bottom: 1px solid var(--line); }
+.tester > summary { padding: 6px 10px; cursor: pointer; }
+.tester .hint { padding: 0 10px 6px; font-size: 12px; }
+.tester .check { display: inline-flex; align-items: center; gap: 3px; }
+.tester button.primary { background: #1e40af; border-color: #3b82f6; }
+.fault-list { list-style: none; margin: 0; padding: 0 10px 6px; font-size: 12px; }
+.fault-list li { display: flex; gap: 8px; align-items: baseline; }
+.crit-areas .cmd-row > span:first-child { min-width: 90px; }
+.crit-area { padding: 0 10px 2px 20px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.sel-rx { color: #a5b4fc; }

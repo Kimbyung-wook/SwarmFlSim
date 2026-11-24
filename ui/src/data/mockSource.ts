@@ -5,7 +5,14 @@
 // IMP-UI-063: truth/event/<kind>와 SensorActivity(rx/ms)를 각본(MockEvents)으로 낸다. 발사체는 truth/state에 함께 싣는다 (DEC-046).
 // IMP-UI-041: 대상 UAV는 임무대로 비행하고(MockScenario.command), 구간 진행·완료를 TaskStatus(EXECUTING·COMPLETED)로 보낸다.
 // IMP-UI-082: Agent 런타임처럼 UAV마다 NavigationReport를 1 Hz(모의 시간)로 rx/vi에 내고, 보낸 C2 봉투를 tx로 되돌려 준다 (기체 행동 표시)
+// IMP-UI-093: 고장 주입·승인 요청·교전 기준·StoreLoadout·LeaderUpdate·TrackShare 흉내 (MockOps)
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { ApprovalResponseSchema, FormationCommandSchema } from "../gen/swarm/v1/c2_pb";
+import type { TaskCommand } from "../gen/swarm/v1/c2_pb";
+import { EngagementCriteriaSchema } from "../gen/swarm/v1/mp_pb";
+import { ParamOwner } from "../gen/swarm/v1/sim_pb";
+import type { Outbound } from "./mockOps";
+import { MockOps } from "./mockOps";
 import { NavigationReportSchema } from "../gen/swarm/v1/vi_pb";
 import type { TruthFrame } from "../gen/swarm/v1/truth_pb";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
@@ -68,6 +75,7 @@ export class MockSource implements DataSource {
   private readonly events: MockEvents | null;
   /** 마지막으로 발행한 프레임의 sim 시각(s). 이벤트 구간 (prev, now] 계산용 */
   private lastPubS = -1;
+  private readonly ops: MockOps;
 
   constructor(opts: Partial<MockSourceOptions> = {}, private readonly clock: MockClock = browserClock) {
     this.opts = { ...DEFAULTS, ...opts };
@@ -75,6 +83,7 @@ export class MockSource implements DataSource {
     this.mode = this.opts.mode;
     this.scenario = new MockScenario(this.opts.scenario);
     this.events = this.opts.events ? new MockEvents(this.gcs) : null;
+    this.ops = new MockOps(this.gcs);
   }
 
   get entityCount(): number {
@@ -89,6 +98,7 @@ export class MockSource implements DataSource {
     this.state = SimRunState.LOADED;
     this.publish();
     this.publishParams();
+    this.publishLoadouts();
     if (this.opts.autoStart) this.run();
   }
 
@@ -130,10 +140,15 @@ export class MockSource implements DataSource {
         this.state = SimRunState.LOADED;
         this.params = new MockParams();
         this.events?.reset();
+        this.ops.reset();
         this.lastPubS = -1;
         this.publish();
         this.publishParams();
+        this.publishLoadouts();
         break;
+      case "fault":
+        this.ops.fault(c.value, this.simTimeUs());
+        return;
       case "setParams": {
         // 다음 프레임 시작에 적용하는 것을 즉시 적용으로 흉내 낸다. 거부는 EntityParams.rejected로 돌려준다
         const v = c.value;
@@ -143,7 +158,7 @@ export class MockSource implements DataSource {
         return;
       }
       default:
-        // load·shutdown·fault는 목 소스에서 다루지 않는다
+        // load·shutdown은 목 소스에서 다루지 않는다
         return;
     }
     this.handlers.status(this.status());
@@ -152,17 +167,71 @@ export class MockSource implements DataSource {
   sendC2(out: OutgoingC2): void {
     const env = out.envelope;
     this.handlers.tx(out.key, env);
-    if (env.msgType !== TaskCommandSchema.typeName) return;
+    const now = this.simTimeUs();
+    switch (env.msgType) {
+      case EngagementCriteriaSchema.typeName:
+        this.ops.onCriteria(fromBinary(EngagementCriteriaSchema, env.payload));
+        return;
+      case ApprovalResponseSchema.typeName: {
+        const r = fromBinary(ApprovalResponseSchema, env.payload);
+        const a = this.ops.answer(r.requestId);
+        if (!a) return; // 모르는·이미 처리한 요청 (늦은 응답)
+        if (r.approved) this.execute(a.cmd, [a.entity]);
+        else this.reply(a.entity, a.cmd.taskId, CommandState.REJECTED, 0, "approval denied");
+        return;
+      }
+      case FormationCommandSchema.typeName: {
+        const f = fromBinary(FormationCommandSchema, env.payload);
+        const o = this.ops.leader(f.groupId, f.members, f.leader, now, this.frame);
+        if (o) this.emit(o);
+        return;
+      }
+      case TaskCommandSchema.typeName:
+        break;
+      default:
+        return;
+    }
     const cmd = fromBinary(TaskCommandSchema, env.payload);
-    const rejected = new Set(this.scenario.command(cmd, Number(this.simTimeUs()) / 1e6));
+    const direct: string[] = [];
     for (const id of cmd.assignees) {
+      if (!this.ops.linked(id, now)) continue; // 링크 단절·파괴: 받지 못한다
+      if (cmd.cancel) {
+        if (this.ops.cancelAwaiting(id, cmd.taskId)) {
+          this.reply(id, cmd.taskId, CommandState.CANCELLED, 0, "");
+          continue;
+        }
+      } else if (this.ops.needsApproval(cmd, String(this.params.value(id, ParamOwner.MA, "approval_tasks") ?? ""))) {
+        const { out: req, preempted } = this.ops.request(id, cmd, now, this.frame);
+        if (preempted) this.reply(id, preempted, CommandState.CANCELLED, 0, "preempted");
+        this.emit(req);
+        continue;
+      } else {
+        const pre = this.ops.dropAwaiting(id, cmd.taskId);
+        if (pre) this.reply(id, pre, CommandState.CANCELLED, 0, "preempted");
+      }
+      direct.push(id);
+    }
+    if (direct.length) this.execute(cmd, direct);
+  }
+
+  /** 대상 기체 ids가 작업을 시작한다 */
+  private execute(cmd: TaskCommand, ids: string[]): void {
+    const sub = ids.length === cmd.assignees.length ? cmd : create(TaskCommandSchema, { ...cmd, assignees: ids });
+    const rejected = new Set(this.scenario.command(sub, Number(this.simTimeUs()) / 1e6));
+    for (const id of ids) {
       const state = cmd.cancel ? CommandState.CANCELLED : rejected.has(id) ? CommandState.REJECTED : CommandState.ACCEPTED;
+      if (!rejected.has(id)) this.ops.onTask(id, cmd);
       this.reply(id, cmd.taskId, state, 0, rejected.has(id) ? "목 소스: 다룰 수 없는 임무" : "목 소스: 수락");
     }
   }
 
+  private emit(o: Outbound): void {
+    if (this.ops.linked(o.env.header?.source ?? "", this.simTimeUs())) this.handlers.rx(o.key, o.env);
+  }
+
   private reply(id: string, taskId: string, state: CommandState, progress: number, reason: string): void {
     const simTimeUs = this.simTimeUs();
+    if (!this.ops.linked(id, simTimeUs)) return;
     const st = create(TaskStatusSchema, {
       header: { simTimeUs, frame: this.frame, source: id, correlationId: taskId },
       taskId,
@@ -242,8 +311,13 @@ export class MockSource implements DataSource {
       if (a.kind === EntityKind.UAV) for (const o of MOCK_OWNERS) this.handlers.params(this.params.snapshot(a.id, o, t));
   }
 
+  private publishLoadouts(): void {
+    for (const a of this.scenario.actors) if (a.kind === EntityKind.UAV) this.emit(this.ops.loadout(a.id, this.simTimeUs(), this.frame));
+  }
+
   private publish(): void {
     const f = this.scenario.frameAt(this.frame, this.opts.frameHz);
+    this.ops.applyFrame(f);
     const nowS = Number(this.simTimeUs()) / 1e6;
     const evs = this.events && nowS > this.lastPubS ? this.events.step(this.lastPubS, nowS, f) : [];
     this.handlers.truth(f);
@@ -253,13 +327,15 @@ export class MockSource implements DataSource {
     if (this.lastPubS < 0 || Math.floor(nowS) > Math.floor(this.lastPubS)) this.publishNav(f);
     this.lastPubS = nowS;
     for (const r of this.scenario.takeReports()) this.reply(r.entityId, r.taskId, r.state, r.progress, r.reason);
+    const timeoutOf = (id: string) => Number(this.params.value(id, ParamOwner.MA, "approval_timeout_s") ?? 0);
+    for (const a of this.ops.expired(this.simTimeUs(), timeoutOf)) this.reply(a.entity, a.cmd.taskId, CommandState.REJECTED, 0, "approval timeout");
   }
 
   /** UAV마다 NavigationReport (잡음 없음) */
   private publishNav(f: TruthFrame): void {
     const simTimeUs = this.simTimeUs();
     for (const e of f.entities) {
-      if (e.kind !== EntityKind.UAV || !e.alive) continue;
+      if (e.kind !== EntityKind.UAV || !e.alive || !this.ops.linked(e.id, simTimeUs)) continue;
       const header = { simTimeUs, frame: this.frame, source: e.id };
       const nav = create(NavigationReportSchema, { header, kinematics: e.kinematics });
       const env = create(LinkEnvelopeSchema, {
@@ -272,6 +348,7 @@ export class MockSource implements DataSource {
       });
       this.handlers.rx(`swarm/${this.gcs}/rx/vi/NavigationReport`, env);
     }
+    for (const o of this.ops.tracks(f, simTimeUs, this.frame)) this.emit(o);
   }
 }
 

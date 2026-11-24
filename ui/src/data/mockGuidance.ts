@@ -1,6 +1,8 @@
 // IMP-UI-041: 목 소스 임무 비행. TaskCommand를 구간(직진·선회)으로 바꾸고 선회율 제한 유도로 따라간다 (REQ-UI-003, REQ-UI-004, DEC-033)
 // 지도 임무를 화면에서 확인하려는 흉내다. 실제 동역학·임무 판단은 Sim Core와 Agent가 맡는다.
+// IMP-UI-085·089: 다각형 정찰, 재밍(영역 외접 원 선회, duration_s 뒤 완료), 추적(표적 둘레 선회). 기본 MA 구간 규칙(common.py area_circle)을 흉내 낸다
 import type { TaskCommand } from "../gen/swarm/v1/c2_pb";
+import type { Area } from "../gen/swarm/v1/common_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
 import { TurnDirection } from "../gen/swarm/v1/vi_pb";
 
@@ -13,6 +15,8 @@ const MIN_SPEED = 15;
 export const GUIDE_DEFAULT_RADIUS_M = 300;
 const ARRIVE_M = 200;
 const STRIKE_ORBIT_M = 400;
+/** 기본 MA track_standoff_m */
+const TRACK_STANDOFF_M = 1500;
 
 export interface Ned2 {
   n: number;
@@ -169,6 +173,22 @@ export class Guided {
   }
 }
 
+/** 영역 → 선회 원. 다각형은 꼭짓점 중심에서 가장 먼 꼭짓점까지 (기본 MA area_circle). 고도 0이면 현재 고도는 호출부가 모르므로 1000 m */
+function areaCircle(a: Area | undefined, ctx: PlanContext): { c: Ned2; r: number; alt: number } | null {
+  const sh = a?.shape;
+  if (sh?.case === "circle" && sh.value.center && sh.value.radiusM > 0) {
+    return { c: ctx.toNed(sh.value.center), r: sh.value.radiusM, alt: sh.value.center.altM || 1000 };
+  }
+  if (sh?.case === "polygon" && sh.value.vertices.length >= 3) {
+    const vs = sh.value.vertices.map((v) => ctx.toNed(v));
+    const c = { n: vs.reduce((x, v) => x + v.n, 0) / vs.length, e: vs.reduce((x, v) => x + v.e, 0) / vs.length };
+    const r = Math.max(...vs.map((v) => Math.hypot(v.n - c.n, v.e - c.e)));
+    const alt = sh.value.vertices.reduce((x, v) => x + v.altM, 0) / vs.length;
+    return r > 0 ? { c, r, alt: alt || 1000 } : null;
+  }
+  return null;
+}
+
 /** 시나리오가 넘기는 좌표 변환과 표적 위치 */
 export interface PlanContext {
   toNed(g: { latDeg: number; lonDeg: number }): Ned2;
@@ -234,12 +254,22 @@ export function planFor(cmd: TaskCommand, k: number, cur: GuideState, ctx: PlanC
       return plan([goto(aim, alt, undefined, 250), hold(aim, alt, STRIKE_ORBIT_M)], 0);
     }
     case "searchArea": {
-      const sh = t.value.area?.shape;
-      if (sh?.case !== "circle" || !sh.value.center) return null;
-      const c = ctx.toNed(sh.value.center);
-      const r = sh.value.radiusM;
-      const alt = sh.value.center.altM;
-      return plan([hold(c, alt, r, 1, lap(r)), hold(c, alt, r)], 0);
+      const a = areaCircle(t.value.area, ctx);
+      if (!a) return null;
+      return plan([hold(a.c, a.alt, a.r, 1, lap(a.r)), hold(a.c, a.alt, a.r)], 0);
+    }
+    case "jam": {
+      const a = areaCircle(t.value.area, ctx);
+      if (!a) return null;
+      const d = t.value.durationS > 0 ? t.value.durationS : null;
+      return d ? plan([hold(a.c, a.alt, a.r, 1, d), hold(a.c, a.alt, a.r)], 0) : plan([hold(a.c, a.alt, a.r)], 0);
+    }
+    case "track": {
+      const id = t.value.targetId;
+      const last = id ? ctx.entityNed(id) : null;
+      if (!last) return null;
+      let memo = last;
+      return plan([hold(() => (memo = ctx.entityNed(id) ?? memo), cur.alt - dAlt, TRACK_STANDOFF_M)], 0);
     }
     case "route": {
       const legs: Leg[] = [];

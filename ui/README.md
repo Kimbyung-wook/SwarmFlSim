@@ -88,12 +88,18 @@ flowchart LR
 ## 명령 전송 (REQ-UI-002~004, DEC-013, DEC-014)
 
 - 시뮬레이션 통제: 도구 막대의 시작(LOADED일 때)·일시정지·재개·스텝(1 프레임)·리셋·배속 → `sim/ctrl/cmd`(`SimCommand`, issuer = UI ID).
-- C2: `TaskCommand`(MoveTo·Hold·Strike·SearchArea·Route·RTB), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
+- C2: `TaskCommand`(MoveTo·Hold·Racetrack·Strike·Track·SearchArea·Jam·Route·RTB, 작업별 `lost_link_policy`, 진행 중 작업 취소), `FormationCommand`, `GroupAssignment`를 `LinkEnvelope`(iface C2, dst = 대상 기체)로 싸서 `swarm/<gcs>/tx/c2/<msg>`로 보낸다. 데이터링크(WP4)가 기체의 `swarm/<id>/rx/c2/<msg>`로 전달한다.
 - 응답: `swarm/<gcs>/rx/**`의 `TaskStatus`를 task_id로 명령에 붙여 기체별 상태·진행률을 명령 패널에 표시한다. 지도 전시는 `truth/state`를 쓴다.
 - task_id는 `<UI ID>-t<n>`이라 여러 UI가 동시에 명령해도 겹치지 않는다 (DEC-020).
 - 재생 중(`SimStatus.replay`)에는 도구 막대에 "재생"이 뜨고 시작·일시정지·스텝·배속 버튼이 꺼진다 (DEC-031).
 - 목 소스에서 `kp_roll`에 10 초과를 적용하면 소유자가 거부하는 경우를 볼 수 있다(거부 표시 확인용).
 - 목 소스는 TaskCommand에 `TaskStatus(ACCEPTED)`만 돌려주고 기동은 흉내 내지 않는다.
+- 정찰·재밍 영역은 원 또는 다각형이다. 임무 창에서 영역 "다각형"을 고른 뒤 지도를 우클릭할 때마다 꼭짓점이 늘어난다(3~100점, 되돌리기).
+- 승인: `swarm/<gcs>/rx/c2/ApprovalRequest`가 오면 승인 패널에 대기로 뜨고, 승인·거부는 `ApprovalResponse`(tx/c2)로 간다. Gateway(DEC-075)도 응답할 수 있어서 tx에서 처음 본 응답을 "처리(누가)"로, 뒤 응답을 "늦은 응답(무시)"로 표시한다(MA는 처음 응답만 처리).
+- 교전 기준: `교전 기준 배포`가 `EngagementCriteria`를 `swarm/<gcs>/tx/mp/EngagementCriteria`(iface MP)로 보낸다. 기본 MA는 실행 중 받은 기준으로 바꿔 승인 필요 여부와 교전 판단에 쓴다.
+- 시험 진행자 고장 주입: C2 패널과 분리된 `시험 진행자: 고장 주입` 메뉴가 `sim/ctrl/cmd`(`SimCommand.fault`)로 보낸다. 시뮬레이션 통제이므로 관찰 전용 UI(GCS 미지정)에서도 쓸 수 있다(브리지 역할 control 필요).
+- GCS 수신 정보(rx만, DEC-013): TrackShare 트랙은 지도에 "트랙 표적 ← 보낸 기체"로, StoreLoadout 잔량과 편대 리더(LeaderUpdate, 없으면 보낸 편대 명령의 지정 리더)는 선택 패널에 표시한다.
+- 목 소스는 위 흐름을 흉내 낸다. 교전 기준 require_approval이거나 MA 변수 `approval_tasks`에 든 작업이면 승인을 요청한다(목 기본 `approval_timeout_s` 60 s). 고장 주입(KILL·링크 단절)과 StoreLoadout·LeaderUpdate·TrackShare도 낸다.
 
 ## 카메라 시점 (REQ-UI-007, 구조만)
 

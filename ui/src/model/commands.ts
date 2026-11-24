@@ -3,10 +3,24 @@
 // dst는 명령을 받을 기체(assignees·members). 데이터링크(WP4)가 그 기체의 swarm/<id>/rx/c2/<msg>로 전달한다.
 // IMP-UI-043: 선회 대기·항로점 선회에 레이스트랙(RacetrackShape) 지정 (DEC-034)
 // IMP-UI-035: 지도 임무(이동·선회 대기·타격·정찰·항로)를 MissionSpec으로 받아 TaskCommand를 만든다 (DEC-033)
+// IMP-UI-085: 재밍(JamTask: 영역, duration_s)·추적(TrackTask: target_id) 작업 (DEC-106)
+// IMP-UI-086: 승인 응답 ApprovalResponse(tx/c2, DEC-075)
+// IMP-UI-088: 작업별 링크 상실 정책 TaskCommand.lost_link_policy
+// IMP-UI-089: 정찰·재밍 다각형 영역(Polygon, 3~100점)
+// IMP-UI-091: 교전 기준 EngagementCriteria 배포 (swarm/<gcs>/tx/mp, L1 MP)
 import type { DescMessage, MessageInitShape, MessageShape } from "@bufbuild/protobuf";
 import { create, toBinary } from "@bufbuild/protobuf";
 import type { FormationShape } from "../gen/swarm/v1/c2_pb";
-import { FormationCommandSchema, GroupAssignmentSchema, RouteWaypointSchema, TaskCommandSchema } from "../gen/swarm/v1/c2_pb";
+import {
+  ApprovalResponseSchema,
+  FormationCommandSchema,
+  GroupAssignmentSchema,
+  LostLinkPolicy,
+  RouteWaypointSchema,
+  TaskCommandSchema,
+} from "../gen/swarm/v1/c2_pb";
+import type { Side } from "../gen/swarm/v1/entity_pb";
+import { EngagementCriteriaSchema } from "../gen/swarm/v1/mp_pb";
 import type { LinkEnvelope } from "../gen/swarm/v1/link_pb";
 import { LinkEnvelopeSchema } from "../gen/swarm/v1/link_pb";
 import { L1Interface } from "../gen/swarm/v1/options_pb";
@@ -18,6 +32,11 @@ export const ENVELOPE_ENCODING = `application/protobuf;${LinkEnvelopeSchema.type
 
 export function c2TxKey(gcs: string, msgName: string): string {
   return `swarm/${gcs}/tx/c2/${msgName}`;
+}
+
+/** swarm/<gcs>/tx/mp/<msg> (임무 계획 인터페이스, EngagementCriteria) */
+export function mpTxKey(gcs: string, msgName: string): string {
+  return `swarm/${gcs}/tx/mp/${msgName}`;
 }
 
 /** 보낼 C2 메시지 하나 */
@@ -62,14 +81,41 @@ export interface WaypointSpec {
   action: WaypointAction;
 }
 
+/** 정찰·재밍 영역. polygon(3점 이상)이 있으면 다각형, 없으면 center·radiusM 원 */
+export interface AreaSpec {
+  center: GeoPoint;
+  radiusM: number;
+  polygon?: GeoPoint[];
+}
+
+/** MA 상한 (algorithms common.py AREA_MAX_VERTICES) */
+export const AREA_MAX_VERTICES = 100;
+
 /** 지도에서 내리는 임무 하나 */
 export type MissionSpec =
   | { kind: "moveTo"; destination: GeoPoint; speedMps?: number }
   | { kind: "hold"; center?: GeoPoint; radiusM?: number; durationS?: number; direction: TurnDirection; racetrack?: RacetrackSpec }
   | { kind: "strike"; weapon: WeaponType; targetId?: string; aimPoint?: GeoPoint }
-  | { kind: "search"; center: GeoPoint; radiusM: number }
+  | ({ kind: "search" } & AreaSpec)
+  | ({ kind: "jam"; durationS?: number } & AreaSpec)
+  | { kind: "track"; targetId: string }
   | { kind: "route"; waypoints: WaypointSpec[]; loop: boolean }
   | { kind: "returnToBase" };
+
+export const LOST_LINK_LABEL: Record<LostLinkPolicy, string> = {
+  [LostLinkPolicy.UNSPECIFIED]: "MA 기본",
+  [LostLinkPolicy.HOLD_UNTIL_COMMAND]: "선회 후 명령 대기",
+  [LostLinkPolicy.RESUME_ON_RECOVERY]: "복구 시 재개",
+  [LostLinkPolicy.CONTINUE]: "계속 수행",
+};
+
+/** 교전 기준 (EngagementCriteria). 영역은 원(중심·반경)만 지도 입력 없이 숫자로 받는다 */
+export interface CriteriaSpec {
+  hostileSides: Side[];
+  requireApproval: boolean;
+  weaponsFree: AreaSpec[];
+  noStrike: AreaSpec[];
+}
 
 type TaskInit = MessageInitShape<typeof TaskCommandSchema>["task"];
 type WaypointInit = MessageInitShape<typeof RouteWaypointSchema>;
@@ -95,6 +141,18 @@ function waypointInit(w: WaypointSpec): WaypointInit {
   }
   return { position: geo(w.position), speedMps: opt(w.speedMps), action };
 }
+
+function areaInit(a: AreaSpec) {
+  if (a.polygon && a.polygon.length > 0) {
+    if (a.polygon.length < 3) throw new Error("다각형 영역은 꼭짓점이 3개 이상이어야 한다");
+    if (a.polygon.length > AREA_MAX_VERTICES) throw new Error(`다각형 영역 꼭짓점은 ${AREA_MAX_VERTICES}개까지`);
+    return { shape: { case: "polygon" as const, value: { vertices: a.polygon.map(geo) } } };
+  }
+  if (!(a.radiusM > 0)) throw new Error("영역 반경은 0보다 커야 한다");
+  return { shape: { case: "circle" as const, value: { center: geo(a.center), radiusM: a.radiusM } } };
+}
+
+const fmtArea = (a: AreaSpec) => (a.polygon && a.polygon.length ? `다각형 ${a.polygon.length}점` : `${fmtGeo(a.center)} r${a.radiusM.toFixed(0)}`);
 
 /** MissionSpec → TaskCommand.task와 요약 */
 export function missionTask(m: MissionSpec): { task: TaskInit; summary: string } {
@@ -122,11 +180,17 @@ export function missionTask(m: MissionSpec): { task: TaskInit; summary: string }
         summary: `타격 ${m.targetId ?? fmtGeo(m.aimPoint!)} (${m.weapon})`,
       };
     case "search":
-      if (!(m.radiusM > 0)) throw new Error("정찰 반경은 0보다 커야 한다");
+      return { task: { case: "searchArea", value: { area: areaInit(m) } }, summary: `정찰 ${fmtArea(m)}` };
+    case "jam": {
+      const dur = opt(m.durationS);
       return {
-        task: { case: "searchArea", value: { area: { shape: { case: "circle", value: { center: geo(m.center), radiusM: m.radiusM } } } } },
-        summary: `정찰 ${fmtGeo(m.center)} r${m.radiusM.toFixed(0)}`,
+        task: { case: "jam", value: { area: areaInit(m), durationS: dur ?? 0 } },
+        summary: `재밍 ${fmtArea(m)}${dur ? ` ${dur.toFixed(0)} s` : " (해제까지)"}`,
       };
+    }
+    case "track":
+      if (!m.targetId) throw new Error("추적에는 표적이 필요하다");
+      return { task: { case: "track", value: { targetId: m.targetId } }, summary: `추적 ${m.targetId}` };
     case "route":
       if (m.waypoints.length === 0) throw new Error("항로점이 없다");
       return {
@@ -169,13 +233,38 @@ export class C2Commander {
     return this.mission({ kind: "returnToBase" }, assignees);
   }
 
-  /** 지도 임무. taskId를 주면 그 작업을 같은 ID로 대체한다(항로 재전송, DEC-033) */
-  mission(spec: MissionSpec, assignees: readonly string[], taskId?: string): OutgoingC2 {
+  /**
+   * 지도 임무. taskId를 주면 그 작업을 같은 ID로 대체한다(항로 재전송, DEC-033).
+   * lostLinkPolicy는 이 작업의 링크 상실 행동. UNSPECIFIED(기본)면 MA 변수 lost_link_policy를 따른다
+   */
+  mission(spec: MissionSpec, assignees: readonly string[], taskId?: string, lostLinkPolicy = LostLinkPolicy.UNSPECIFIED): OutgoingC2 {
     if (assignees.length === 0) throw new Error("대상 기체가 없다");
     const { task, summary } = missionTask(spec);
     const id = taskId ?? `${this.uiId}-t${++this.taskCounter}`;
-    const msg = create(TaskCommandSchema, { header: this.header(id), taskId: id, assignees: [...assignees], task });
-    return { ...this.wrap(TaskCommandSchema, msg, assignees, id), summary, taskId: id, mission: spec };
+    const msg = create(TaskCommandSchema, { header: this.header(id), taskId: id, assignees: [...assignees], task, lostLinkPolicy });
+    const pol = lostLinkPolicy !== LostLinkPolicy.UNSPECIFIED ? ` · 상실 시 ${LOST_LINK_LABEL[lostLinkPolicy]}` : "";
+    return { ...this.wrap(TaskCommandSchema, msg, assignees, id), summary: summary + pol, taskId: id, mission: spec };
+  }
+
+  /** 승인 요청에 대한 응답 (DEC-075). 요청한 기체에게만 보낸다 */
+  approval(requestId: string, approved: boolean, requester: string): OutgoingC2 {
+    if (!requestId || !requester) throw new Error("승인 요청 ID와 요청 기체가 필요하다");
+    const msg = create(ApprovalResponseSchema, { header: this.header(requestId), requestId, approved });
+    return { ...this.wrap(ApprovalResponseSchema, msg, [requester], requestId), summary: `${approved ? "승인" : "거부"} ${requestId}` };
+  }
+
+  /** 교전 기준 배포 (L1 MP, swarm/<gcs>/tx/mp/EngagementCriteria). 기본 MA는 받는 즉시 이후 승인·타격 판단에 쓴다 */
+  engagementCriteria(c: CriteriaSpec, dst: readonly string[]): OutgoingC2 {
+    if (dst.length === 0) throw new Error("대상 기체가 없다");
+    const msg = create(EngagementCriteriaSchema, {
+      header: this.header(""),
+      hostileSides: [...c.hostileSides],
+      requireApproval: c.requireApproval,
+      weaponsFree: c.weaponsFree.map(areaInit),
+      noStrike: c.noStrike.map(areaInit),
+    });
+    const parts = [c.requireApproval ? "승인 필요" : "승인 없음", `무기 사용 ${c.weaponsFree.length}`, `타격 금지 ${c.noStrike.length}`];
+    return { ...this.wrap(EngagementCriteriaSchema, msg, dst, "", L1Interface.MP), summary: `교전 기준 (${parts.join(", ")})` };
   }
 
   cancel(taskId: string, assignees: readonly string[]): OutgoingC2 {
@@ -210,9 +299,9 @@ export class C2Commander {
     return { simTimeUs: c.simTimeUs, frame: c.frame, source: this.gcs, correlationId };
   }
 
-  private wrap<D extends DescMessage>(schema: D, msg: MessageShape<D>, dst: readonly string[], correlationId: string) {
+  private wrap<D extends DescMessage>(schema: D, msg: MessageShape<D>, dst: readonly string[], correlationId: string, iface = L1Interface.C2) {
     const name = SHORT_NAME(schema);
-    const key = c2TxKey(this.gcs, name);
+    const key = iface === L1Interface.MP ? mpTxKey(this.gcs, name) : c2TxKey(this.gcs, name);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     // 내부 메시지 헤더의 seq도 같은 값으로 맞춘다
@@ -221,7 +310,7 @@ export class C2Commander {
       header: { ...this.header(correlationId), seq },
       publisher: this.uiId, // DEC-077: GCS tx 키는 UI와 Gateway가 함께 쓴다. seq는 발행자·키별
       dst: [...dst],
-      iface: L1Interface.C2,
+      iface,
       msgType: schema.typeName,
       payload: toBinary(schema, msg),
       priority: 0,

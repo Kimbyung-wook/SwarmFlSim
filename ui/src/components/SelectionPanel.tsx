@@ -1,5 +1,8 @@
 // IMP-UI-017: 선택 목록 패널 (REQ-UI-002). 명령은 CommandPanel(IMP-UI-031)
+// IMP-UI-090: GCS가 받은 탑재물 잔량(StoreLoadout)과 편대·리더(LeaderUpdate·PeerStatus, 없으면 지정 FormationCommand)
+import type { PayloadSpec } from "../gen/swarm/v1/entity_pb";
 import type { CameraMode } from "../model/camera";
+import type { GroupView } from "../model/gcsPicture";
 import type { EntityView } from "../model/entityView";
 import { isAirborneKind, kindLabel, sideLabel } from "../model/entityView";
 import { iconUrl } from "../model/symbology";
@@ -13,6 +16,15 @@ interface Props {
   onRemove(id: string): void;
   onClear(): void;
   onCamera(id: string | null, mode: CameraMode): void;
+  /** GCS가 받은 기체 정보 (rx). 없으면 표시하지 않는다 */
+  loadoutOf?: (id: string) => PayloadSpec[] | undefined;
+  groupOf?: (id: string) => GroupView | null;
+}
+
+/** 무장(수량 있는 탑재물)은 잔량, 센서·재머는 종류만 */
+function fmtStores(ss: PayloadSpec[]): string {
+  if (ss.length === 0) return "탑재물 없음";
+  return ss.map((s) => (s.count > 0 || /aam|agm|fpv/.test(s.type) ? `${s.type} ${s.count}` : s.type)).join(" · ");
 }
 
 const CAMERA_LABEL: Record<CameraMode, string> = { free: "자유", chase: "추적", fpv: "1인칭", gimbal: "짐벌" };
@@ -21,7 +33,7 @@ function fmtHeading(rad: number): string {
   return `${String(Math.round((rad * 180) / Math.PI) % 360).padStart(3, "0")}°`;
 }
 
-export function SelectionPanel({ entities, ids, followId, cameraMode, onFocus, onRemove, onClear, onCamera }: Props) {
+export function SelectionPanel({ entities, ids, followId, cameraMode, onFocus, onRemove, onClear, onCamera, loadoutOf, groupOf }: Props) {
   return (
     <section className="sel">
       <header className="panel-head">
@@ -51,6 +63,23 @@ export function SelectionPanel({ entities, ids, followId, cameraMode, onFocus, o
                     {e.energy < 1 && <span>잔량 {(e.energy * 100).toFixed(0)}%</span>}
                   </div>
                 )}
+                {(() => {
+                  const st = loadoutOf?.(id);
+                  const g = groupOf?.(id);
+                  if (!st && !g) return null;
+                  return (
+                    <div className="sel-detail sel-rx" title="GCS가 받은 보고 (StoreLoadout, LeaderUpdate·PeerStatus). 지정 = 이 GCS가 보낸 편대 명령">
+                      {st && <span>잔량 {fmtStores(st)}</span>}
+                      {g && (
+                        <span>
+                          편대 {g.groupId}
+                          {g.leader ? (g.leader === id ? " · 리더" : ` · 리더 ${g.leader}`) : ""}
+                          {g.from === "command" ? " (지정)" : ""}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 {e && isAirborneKind(e.kind) && (
                   <div className="sel-camera">
                     {(["chase", "fpv"] as const).map((m) => (

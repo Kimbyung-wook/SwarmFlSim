@@ -1,5 +1,6 @@
 // IMP-UI-027: 명령 기록과 swarm/<gcs>/rx/** 상태 보고 (REQ-UI-003, REQ-UI-004)
 // 보낸 명령을 task_id로 기억하고, 데이터링크를 거쳐 돌아온 TaskStatus를 기체별로 붙인다.
+// IMP-UI-088: 작업 취소(TaskCommand.cancel)는 새 기록을 만들지 않고 원래 작업에 취소 요청을 표시한다
 import { fromBinary } from "@bufbuild/protobuf";
 import { TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
@@ -24,6 +25,8 @@ export interface TaskEntry {
   reports: Map<string, ReportView>;
   /** 지도 임무면 그 내용 (IMP-UI-038) */
   mission?: MissionSpec;
+  /** 취소를 보냈다 (IMP-UI-088). 결과는 기체별 CANCELLED 보고로 안다 */
+  cancelRequested?: boolean;
 }
 
 export interface RxView {
@@ -50,6 +53,15 @@ export function commandStateLabel(s: CommandState): string {
   return STATE_LABEL[s] ?? "?";
 }
 
+/** 취소할 수 있는 작업: TaskCommand(지도 임무·Hold·RTB)로 보냈고, 대상 중 끝나지 않은 기체가 있다 */
+export function cancellable(e: TaskEntry): boolean {
+  if (!e.mission || e.error || e.assignees.length === 0) return false;
+  return !e.assignees.every((id) => {
+    const r = e.reports.get(id);
+    return r !== undefined && TERMINAL.has(r.state);
+  });
+}
+
 export class TaskLog {
   private readonly tasks = new Map<string, TaskEntry>();
   /** 최근 수신(종류 무관) */
@@ -60,6 +72,16 @@ export class TaskLog {
     private readonly maxTasks = 30,
     private readonly maxRx = 20,
   ) {}
+
+  /** 취소를 보낸 작업. 기록이 없으면 undefined */
+  cancelSent(taskId: string): TaskEntry | undefined {
+    const e = this.tasks.get(taskId);
+    if (e) {
+      e.cancelRequested = true;
+      this.version++;
+    }
+    return e;
+  }
 
   sent(out: OutgoingC2, error = ""): TaskEntry {
     // TaskCommand는 task_id, 그 밖(편대·그룹)은 메시지 이름#seq로 구분한다

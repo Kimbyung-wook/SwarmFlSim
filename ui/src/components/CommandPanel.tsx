@@ -1,11 +1,12 @@
 // IMP-UI-031: 명령 패널. 선택한 기체에 Hold·RTB TaskCommand, 편대 FormationCommand, 부대 그룹 지정·호출 (REQ-UI-002~004)
 // 지도 임무는 우클릭 임무 창(IMP-UI-039). 보낸 항로는 여기서 다시 편집한다(IMP-UI-040). 명령 상태는 swarm/<gcs>/rx/**의 TaskStatus로 표시한다.
+// IMP-UI-088: 보낸 작업 행의 취소 단추 (TaskCommand.cancel, 같은 task_id·대상)
 import { useState } from "react";
 import { FormationShape } from "../gen/swarm/v1/c2_pb";
 import { CommandState } from "../gen/swarm/v1/common_pb";
 import type { GroupSlot } from "../model/groups";
 import type { TaskEntry } from "../model/taskLog";
-import { commandStateLabel } from "../model/taskLog";
+import { cancellable, commandStateLabel } from "../model/taskLog";
 import type { RxView } from "../model/taskLog";
 
 /** 거부·실패는 사유를 툴팁이 아니라 본문에 보인다 */
@@ -26,6 +27,8 @@ interface Props {
   onRecallGroup(slot: GroupSlot): void;
   /** 보낸 항로를 다시 편집 */
   onEditRoute(t: TaskEntry): void;
+  /** 작업 취소 */
+  onCancelTask?(t: TaskEntry): void;
 }
 
 const SHAPES: [FormationShape, string][] = [
@@ -107,6 +110,16 @@ export function CommandPanel(p: Props) {
               <span className="muted task-id">{t.id}</span>
               {t.mission?.kind === "route" && !t.error && (
                 <button className="link" onClick={() => p.onEditRoute(t)} title="항로를 다시 편집해 같은 task_id로 보낸다">편집</button>
+              )}
+              {p.onCancelTask && cancellable(t) && (
+                <button
+                  className="link"
+                  disabled={p.disabledReason !== null}
+                  onClick={() => p.onCancelTask?.(t)}
+                  title={p.disabledReason ?? (t.cancelRequested ? "취소를 보냈다. 다시 보낸다" : "이 작업을 취소한다 (TaskCommand.cancel)")}
+                >
+                  {t.cancelRequested ? "취소 중" : "취소"}
+                </button>
               )}
             </div>
             {t.error ? (

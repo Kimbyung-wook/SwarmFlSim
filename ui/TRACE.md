@@ -95,6 +95,15 @@
 | IMP-UI-082 | 소스 입력 확장: `tx`·`scenario` 처리기, BusSource가 `sim/ctrl/scenario`와 `swarm/<gcs>/tx/**` 구독. 목 소스는 보낸 C2를 tx로 되돌리고 UAV마다 모의 1초에 NavigationReport를 낸다. 목 RTB 귀환점은 기체 시작 위치, 중심 없는 Hold·RTB 선회는 기체별 반경 엇갈림 없음, 기본 반경 300 m(MA와 같음). `?uavs=N`(1~200)으로 목 UAV 수 지정 | `src/data/source.ts`, `src/data/busSource.ts`, `src/data/mockSource.ts`, `src/data/mockScenario.ts`, `src/data/mockGuidance.ts`, `src/data/sourceConfig.ts` | REQ-UI-003 | TC-UI-072, TC-UI-073 |
 | IMP-UI-083 | 행동 표시 연결: App이 소스 입력을 `ActivityStore`에 넣고 MapView가 250 ms마다 바뀐 경우만 레이어를 동기화. 툴바 `행동: 전체/선택 기체/끔`(기본 전체). 보낸 임무 표시(활성 임무 도형)는 행동 표시로 대체해 중복 제거 | `src/App.tsx`, `src/components/MapView.tsx`, `src/components/Toolbar.tsx`, `src/model/activityMode.ts` | REQ-UI-003 | TC-UI-071, TC-UI-073 |
 | IMP-UI-084 | 로컬 지도 자료 탐지가 404를 내지 않는다(QA O-7): dev·preview 서버의 `/data/.probe?path=`가 늘 200 `{"exists": bool}`로 답하고 `dataExists`가 이를 먼저 묻는다. 엔드포인트가 없는 배포에서는 예전처럼 직접 GET(SPA 폴백 HTML은 없음). 탐지 결과(로컬 영상·DEM 사용 여부, 최대 레벨 13)는 그대로. `/data/**` 제공 미들웨어를 `vite.config.ts`에서 `src/server/offlineData.ts`로 옮김 | `src/data/dataProbe.ts`, `src/server/offlineData.ts`, `src/cesium/viewer.ts`, `vite.config.ts` | REQ-SIM-003 | TC-UI-074, TC-UI-075 |
+| IMP-UI-085 | 임무 창 재밍·추적 탭(DEC-106): 재밍은 원·다각형 영역과 시간(duration_s, 0 = 해제까지)으로 `JamTask`, 추적은 적 위 우클릭의 target_id로 `TrackTask`. 행동 표시는 재밍 영역 외곽선(종류 "재밍"). 목 소스는 재밍 영역 둘레, 추적 표적 1500 m 둘레를 돈다 | `src/model/commands.ts`, `src/components/MissionPanel.tsx`, `src/model/activity.ts`, `src/data/mockGuidance.ts` | REQ-UI-003 | TC-UI-076, TC-UI-084 |
+| IMP-UI-086 | 승인 요청 표시와 응답: `swarm/<gcs>/rx/c2/ApprovalRequest`를 대기 목록에 넣고 승인·거부 단추로 `ApprovalResponse`(tx/c2, dst = 요청 기체)를 보낸다. Gateway(DEC-075)와 공존: tx에서 처음 본 응답을 "처리(누가)"로, 뒤 응답은 "늦은 응답(무시)"로 표시(MA는 처음 응답만 처리). 남은 시간은 MA 변수 `approval_timeout_s` 기준, 작업 결과(거부·시간 초과)는 요청 기체의 TaskStatus로 붙인다 | `src/model/approvals.ts`, `src/components/ApprovalPanel.tsx` | REQ-UI-003 | TC-UI-077, TC-UI-084 |
+| IMP-UI-087 | 시험 진행자 고장 주입 메뉴(DEC-014): C2 패널과 분리된 `시험 진행자: 고장 주입`에서 선택 엔티티에 `SimCommand.fault`(InjectFault: GCS 링크 단절·링크 전체 단절·엔진·센서·항법·KILL, 지속 시간, 해제). KILL은 해제 없음. 관찰 전용 UI(GCS 미지정)에서도 쓸 수 있다 — 운용자 C2가 아니라 시뮬레이션 통제이므로(브리지 역할 control 필요). 활성 고장 목록·남은 시간 | `src/model/faults.ts`, `src/components/FaultPanel.tsx` | REQ-UI-001, REQ-UI-003 | TC-UI-078, TC-UI-084 |
+| IMP-UI-088 | 작업 취소와 작업별 링크 상실 정책: 명령 패널의 진행 중 임무에 "취소"(같은 task_id·대상의 `TaskCommand.cancel`), 보낸 뒤 "취소 중". 임무 창·항로 편집기에서 `lost_link_policy`(MA 기본·선회 후 명령 대기·복구 시 재개·계속 수행) 선택 | `src/model/commands.ts`, `src/model/taskLog.ts`, `src/components/CommandPanel.tsx`, `src/components/MissionPanel.tsx` | REQ-UI-003 | TC-UI-079, TC-UI-084 |
+| IMP-UI-089 | 정찰·재밍 다각형 영역: 영역 "다각형"을 고르면 메뉴 지점이 첫 꼭짓점이고 이후 지도 우클릭마다 꼭짓점을 더한다(되돌리기, 3~100점). 미리보기는 번호 붙은 꼭짓점과 닫힌 선 | `src/model/commands.ts`, `src/model/missionOverlay.ts`, `src/components/MissionPanel.tsx`, `src/App.tsx` | REQ-UI-003 | TC-UI-080 |
+| IMP-UI-090 | GCS 수신 정보 표시(DEC-013, rx만): `swarm/<gcs>/rx/**`의 TrackShare를 지도에 "트랙 표적 ← 보낸 기체"(30초 지나면 지움), StoreLoadout 잔량과 편대·리더(LeaderUpdate 우선, 없으면 보낸 FormationCommand의 지정 리더)를 선택 패널에 | `src/model/gcsPicture.ts`, `src/components/SelectionPanel.tsx`, `src/App.tsx` | REQ-UI-003 | TC-UI-081, TC-UI-083 |
+| IMP-UI-091 | 교전 기준 배포: 적대 진영·타격 전 승인 필요·무기 사용 영역·타격 금지 영역(원, 중심 = 마지막 우클릭)을 `EngagementCriteria`로 `swarm/<gcs>/tx/mp/EngagementCriteria`(iface MP)에 보낸다. 기본 MA가 실행 중 받은 기준으로 바꿔 승인 필요 여부·교전 판단에 쓰는 것을 확인함(common.py `needs_approval`·`engagement_reason`) | `src/model/commands.ts`, `src/components/CriteriaPanel.tsx` | REQ-UI-003 | TC-UI-082, TC-UI-084 |
+| IMP-UI-092 | 운용 시나리오 보완 연결: App이 rx·tx를 승인·수신 정보 저장소에 넣고 리셋(모의 시각 되감기) 때 지운다. 승인 패널은 선택 패널 위, 교전 기준·고장 주입은 명령 패널 아래 | `src/App.tsx`, `src/styles.css` | REQ-UI-003 | TC-UI-084, TC-UI-085 |
+| IMP-UI-093 | 목 소스 운용 흉내: 교전 기준·MA 변수 `approval_tasks`에 따른 ApprovalRequest(처음 응답만 처리, `approval_timeout_s` 시간 초과, 선점·취소), 고장 주입(KILL 파괴, GCS 링크 단절 동안 명령·보고 끊김, 지속 시간 뒤 복구), 연결 때 StoreLoadout, 편대 지정 때 LeaderUpdate, 추적 중 1 Hz TrackShare | `src/data/mockOps.ts`, `src/data/mockSource.ts`, `src/data/mockParams.ts` | REQ-UI-003 | TC-UI-083, TC-UI-085 |
 | IMP-UI-041 | 목 소스 임무 비행: 선회율 제한 유도(직진·선회 구간), 이동·선회·타격·정찰·항로(반복)·귀환·취소, TaskStatus 구간 진행(EXECUTING)·완료(COMPLETED)·거부(REJECTED), 시각 되감기 시 해석 궤도 복귀 | `src/data/mockGuidance.ts`, `src/data/mockScenario.ts`, `src/data/mockSource.ts` | REQ-UI-003, REQ-UI-004 | TC-UI-024, TC-UI-025 |
 
 ## 시험 (TC)
@@ -162,6 +171,16 @@
 | TC-UI-073 | 브라우저 수동 확인(미리보기 5175, 목 소스): `?uavs=20` 20대 Hold → o·옅은 선회원·대시선, 기체가 그린 원 위를 돎. RTB 수락 뒤 귀환 표시. `?uavs=100` 100대 Hold에서 메인 스레드 지연 평균 4.8 ms(끔 4.6 ms)·최대 12.4 ms(끔 11.6 ms). 선택 해제 뒤에도 `행동: 전체`면 도형 유지, 글은 선택 기체만. 창이 가려진 상태라 FPS(rAF)는 측정 불가 | 수동 | IMP-UI-081~083 | 통과 |
 | TC-UI-074 | 탐지 엔드포인트: 파일 유무와 무관하게 200 JSON, 데이터 디렉터리 밖·빈 경로는 없음, 파일 제공 200/404 유지. 타일 없음·있음에서 `dataExists`는 각각 false·true이고 요청은 모두 200 탐지뿐. 엔드포인트 없는 정적 서버·SPA 폴백·네트워크 실패에서 직접 GET 결과와 같음. /data/ 밖 URL은 직접 GET, 경로 인코딩 1회 (4건) | `ui/src/data/dataProbe.test.ts` | IMP-UI-084 | 통과 |
 | TC-UI-075 | 브라우저 수동 확인: 빈 데이터 디렉터리(`SWARM_DATA_DIR`, 미리보기 5176)에서 탐지 요청 4건 모두 200, 콘솔 오류 0, 툴바 "지도 내장 · 지형 타원체". 로컬 타일 있음(5174)에서 콘솔 오류 0, 4xx 응답 0(확대·축소 포함), 툴바 "지도 로컬 · 지형 DEM" | 수동 | IMP-UI-084 | 통과 |
+| TC-UI-076 | 재밍 JamTask(원·시간, 0 = 해제까지)·추적 TrackTask(target_id, 표적 없으면 거부)·재밍 행동 외곽선 | `ui/src/model/scenarioOps.test.ts` | IMP-UI-085 | 통과 |
+| TC-UI-077 | ApprovalResponse 봉투(tx/c2, dst, publisher), 처음 응답 = 처리·뒤 응답 = 늦음·되돌림 중복 제거, 시간 초과·다른 기체 보고, 남은 시간 (3건) | `ui/src/model/scenarioOps.test.ts` | IMP-UI-086 | 통과 |
+| TC-UI-078 | InjectFault 명령(지속 시간·해제·KILL 해제 불가), 주입 기록(같은 종류 하나·만료·해제·Reset) (2건) | `ui/src/model/scenarioOps.test.ts` | IMP-UI-087 | 통과 |
+| TC-UI-079 | 링크 상실 정책 필드·요약, 취소 명령과 취소 가능 여부 (2건) | `ui/src/model/scenarioOps.test.ts` | IMP-UI-088 | 통과 |
+| TC-UI-080 | 다각형 영역(꼭짓점, 3점 미만·100점 초과 거부, 빈 다각형은 원), 미리보기 꼭짓점·닫힌 선 (2건) | `ui/src/model/scenarioOps.test.ts` | IMP-UI-089 | 통과 |
+| TC-UI-081 | TrackShare(출처별 최신, 30초 만료)·StoreLoadout·LeaderUpdate(term)·FormationCommand 지정 리더 (2건) | `ui/src/model/scenarioOps.test.ts` | IMP-UI-090 | 통과 |
+| TC-UI-082 | EngagementCriteria 봉투(tx/mp, iface MP), 진영·승인·영역 | `ui/src/model/scenarioOps.test.ts` | IMP-UI-091 | 통과 |
+| TC-UI-083 | 목 소스: 기준 require_approval이면 타격 승인 대기·처음 응답만 처리, approval_tasks 거부·시간 초과·대기 중 취소, GCS 링크 단절 동안 명령·보고 없음과 복구, KILL 파괴·Reset, StoreLoadout·LeaderUpdate·TrackShare (5건) | `ui/src/data/mockOps.test.ts` | IMP-UI-090, IMP-UI-093 | 통과 |
+| TC-UI-084 | 패널 렌더링: 임무 창 추적·재밍 탭과 상실 선택, 취소·취소 중, 승인 패널(대기 단추·남은 시간·처리 gateway·늦은 응답·관찰 전용 비활성), 고장 주입 메뉴(KILL 해제 없음), 교전 기준 (5건) | `ui/src/components/scenarioPanels.test.tsx` | IMP-UI-085~088, 091~092 | 통과 |
+| TC-UI-085 | 브라우저 수동 확인(미리보기 5174, 목 소스): 선택 패널 "잔량 camera · jammer · agm_short 2", 교전 기준 "타격 전 승인 필요" 배포 뒤 타격 → 승인 요청(남은 59 s) → 승인 → "승인 처리 (이 UI)·작업: 수락", 임무 창 추적·재밍 탭·상실 선택, 추적 전송 뒤 지도 "트랙 표적 ← uav-004", GCS 링크 단절 주입 → 활성 목록 "해제까지·해제", 콘솔 오류 0 | 수동 | IMP-UI-085~093 | 통과 |
 
 
 - 1차 자동 시험: `npm test` 8개 파일 38건 통과 (vitest 5.0.5). `npm run build` 통과 (tsc 7.0.2, vite 8.3.5).
@@ -177,4 +196,5 @@
 - 데모 결함 3건(우클릭 어긋남·깜빡임·선택 해제 잔상, 기준 `wp0-contracts` f5fea80): `npx vitest run` 27파일 173건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-068
 - 기체별 현재 행동 표시(기준 `wp0-contracts` 9dec1c9, 계약 변경 없음): `npx vitest run` 29파일 196건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-073
 - 타일 탐지 404 제거(QA O-7, 기준 `wp0-contracts` 92cdb9c): `npx vitest run` 30파일 200건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-075
+- 운용 시나리오 UI 보완(docs/51 §4, 기준 `wp0-contracts` 38123ee, 계약 변경 없음): `npx vitest run` 33파일 224건 통과, `tsc -b`·`npm run build` 통과, 브라우저 확인 TC-UI-085
 - 데이터링크(WP4)·Agent(WP3)와의 실제 왕복(명령 → 기체 반응 → TaskStatus)은 해당 WP 통합 뒤 확인한다.

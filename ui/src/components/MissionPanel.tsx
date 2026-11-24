@@ -1,15 +1,19 @@
 // IMP-UI-075: 타격 지정의 종류 선택 라벨을 매뉴얼과 같은 "유도 객체 종류"로 (식별자·proto 필드는 그대로)
 // IMP-UI-044: 레이스트랙 선회 대기(반경·직선 길이·축 방향·방향·시간), 항로점 선회의 원형/레이스트랙 선택 (DEC-034)
 // IMP-UI-039: 임무 창. 우클릭 지점의 임무 메뉴(이동·선회 대기·타격·정찰)와 Ctrl+우클릭 항로점 편집 (REQ-UI-003, REQ-UI-004, DEC-033)
+// IMP-UI-085: 재밍(영역·시간)·추적(적 위 우클릭 → target_id) 탭 (DEC-106)
+// IMP-UI-088: 작업별 링크 상실 정책 선택 (임무 창·항로 편집, TaskCommand.lost_link_policy)
+// IMP-UI-089: 정찰·재밍 영역을 원 또는 다각형으로. 다각형은 메뉴 지점이 첫 꼭짓점이고 이후 우클릭마다 꼭짓점을 더한다
 import { useEffect, useState } from "react";
+import { LostLinkPolicy } from "../gen/swarm/v1/c2_pb";
 import { TurnDirection } from "../gen/swarm/v1/vi_pb";
-import type { MissionSpec, WaypointAction, WeaponType } from "../model/commands";
-import { WEAPON_TYPES } from "../model/commands";
+import type { GeoPoint, MissionSpec, WaypointAction, WeaponType } from "../model/commands";
+import { AREA_MAX_VERTICES, LOST_LINK_LABEL, WEAPON_TYPES } from "../model/commands";
 import type { MapPoint } from "../model/mapInput";
 import { DEFAULT_LOITER_RADIUS_M } from "../model/missionOverlay";
 import type { RouteDraft } from "../model/routeDraft";
 
-export type MenuKind = "moveTo" | "hold" | "racetrack" | "strike" | "search";
+export type MenuKind = "moveTo" | "hold" | "racetrack" | "strike" | "track" | "search" | "jam";
 
 export interface MenuState {
   point: MapPoint;
@@ -22,8 +26,35 @@ const KINDS: [MenuKind, string][] = [
   ["hold", "선회 대기"],
   ["racetrack", "레이스트랙 선회"],
   ["strike", "타격 지정"],
+  ["track", "추적"],
   ["search", "정찰"],
+  ["jam", "재밍"],
 ];
+
+/** 표적이 필요한 임무 (적 위 우클릭) */
+const TARGET_KINDS = new Set<MenuKind>(["track"]);
+const AREA_KINDS = new Set<MenuKind>(["search", "jam"]);
+
+const POLICIES: LostLinkPolicy[] = [
+  LostLinkPolicy.UNSPECIFIED,
+  LostLinkPolicy.HOLD_UNTIL_COMMAND,
+  LostLinkPolicy.RESUME_ON_RECOVERY,
+  LostLinkPolicy.CONTINUE,
+];
+
+export function PolicySelect(p: { value: LostLinkPolicy; onChange(v: LostLinkPolicy): void }) {
+  return (
+    <select
+      value={p.value}
+      onChange={(e) => p.onChange(Number(e.target.value) as LostLinkPolicy)}
+      title="GCS 링크 상실 때 이 작업의 행동 (TaskCommand.lost_link_policy). MA 기본 = MA 변수 lost_link_policy"
+    >
+      {POLICIES.map((v) => (
+        <option key={v} value={v}>{LOST_LINK_LABEL[v]}</option>
+      ))}
+    </select>
+  );
+}
 
 const DIRS: [TurnDirection, string][] = [
   [TurnDirection.UNSPECIFIED, "자동"],
@@ -66,17 +97,23 @@ function DirSelect(p: { value: TurnDirection; onChange(d: TurnDirection): void }
 
 interface MenuProps {
   menu: MenuState;
+  /** 그리는 중인 다각형 꼭짓점. null이면 원 영역 */
+  polygon?: readonly MapPoint[] | null;
+  /** 다각형 그리기 시작(첫 꼭짓점 = 메뉴 지점)·고침·끝(null). 없으면 원 영역만 */
+  onPolygon?(v: MapPoint[] | null): void;
   targetCount: number;
   disabledReason: string | null;
   /** 기본 고도: 대상 기체 평균 */
   defaultAltM: number;
   /** 지도 미리보기용 현재 내용 */
   onPreview(spec: MissionSpec | null): void;
-  onSend(spec: MissionSpec): void;
+  onSend(spec: MissionSpec, policy: LostLinkPolicy): void;
   onClose(): void;
 }
 
 export function MissionMenu(p: MenuProps) {
+  const [jamS, setJamS] = useState(0);
+  const [policy, setPolicy] = useState(LostLinkPolicy.UNSPECIFIED);
   const [kind, setKind] = useState<MenuKind>(p.menu.targetId ? "strike" : "moveTo");
   const [altM, setAlt] = useState(Math.round(p.defaultAltM));
   const [speed, setSpeed] = useState(0);
@@ -89,12 +126,20 @@ export function MissionMenu(p: MenuProps) {
   const [axisDeg, setAxisDeg] = useState(90);
   const pt = p.menu.point;
 
-  // 새 지점을 우클릭하면 표적 유무에 맞춰 기본 임무를 바꾼다
+  // 새 지점을 우클릭하면 표적 유무에 맞춰 기본 임무를 바꾼다. 표적 임무(추적)는 표적이 있으면 그대로 둔다
   useEffect(() => {
-    setKind(p.menu.targetId ? "strike" : (k) => (k === "strike" ? "moveTo" : k));
+    setKind((k) => (p.menu.targetId ? (TARGET_KINDS.has(k) ? k : "strike") : k === "strike" || TARGET_KINDS.has(k) ? "moveTo" : k));
   }, [p.menu]);
 
+  // 영역 임무가 아니면 다각형 그리기를 끝낸다
+  useEffect(() => {
+    if (!AREA_KINDS.has(kind) && p.polygon) p.onPolygon?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+
   const center = { latDeg: pt.latDeg, lonDeg: pt.lonDeg, altM };
+  const poly: GeoPoint[] | undefined = p.polygon?.map((v) => ({ latDeg: v.latDeg, lonDeg: v.lonDeg, altM }));
+  const area = { center, radiusM: searchR, polygon: poly };
   const spec: MissionSpec =
     kind === "moveTo"
       ? { kind, destination: center, speedMps: speed || undefined }
@@ -111,7 +156,11 @@ export function MissionMenu(p: MenuProps) {
           ? p.menu.targetId
             ? { kind, weapon, targetId: p.menu.targetId }
             : { kind, weapon, aimPoint: { latDeg: pt.latDeg, lonDeg: pt.lonDeg, altM: pt.heightM } }
-          : { kind: "search", center, radiusM: searchR };
+          : kind === "track"
+            ? { kind, targetId: p.menu.targetId ?? "" }
+            : kind === "jam"
+              ? { kind, ...area, durationS: jamS || undefined }
+              : { kind: "search", ...area };
 
   const key = JSON.stringify(spec);
   useEffect(() => {
@@ -120,7 +169,14 @@ export function MissionMenu(p: MenuProps) {
   }, [key]);
   useEffect(() => () => p.onPreview(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const off = p.disabledReason !== null || p.targetCount === 0;
+  const nPoly = p.polygon?.length ?? 0;
+  const invalid =
+    TARGET_KINDS.has(kind) && !p.menu.targetId
+      ? "적 위를 우클릭해 표적을 정한다"
+      : AREA_KINDS.has(kind) && p.polygon && nPoly < 3
+        ? "다각형은 꼭짓점이 3개 이상이어야 한다"
+        : null;
+  const off = p.disabledReason !== null || p.targetCount === 0 || invalid !== null;
   return (
     <section className="mission">
       <header className="panel-head">
@@ -134,13 +190,20 @@ export function MissionMenu(p: MenuProps) {
       </div>
       <div className="mission-kinds" role="radiogroup">
         {KINDS.map(([k, l]) => (
-          <button key={k} className={k === kind ? "on" : undefined} role="radio" aria-checked={k === kind} onClick={() => setKind(k)}>
+          <button
+            key={k}
+            className={k === kind ? "on" : undefined}
+            role="radio"
+            aria-checked={k === kind}
+            title={TARGET_KINDS.has(k) && !p.menu.targetId ? "적 위를 우클릭하면 쓸 수 있다" : undefined}
+            onClick={() => setKind(k)}
+          >
             {l}
           </button>
         ))}
       </div>
       <div className="mission-form">
-        {kind !== "strike" && (
+        {kind !== "strike" && kind !== "track" && (
           <div className="row">
             <span>고도</span>
             <Num value={altM} onChange={setAlt} step={50} unit="m" title="목표 고도(MSL)" />
@@ -189,15 +252,54 @@ export function MissionMenu(p: MenuProps) {
             </div>
           </>
         )}
-        {kind === "search" && (
-          <div className="row">
-            <span>반경</span>
-            <Num value={searchR} onChange={setSearchR} min={100} step={100} unit="m" title="정찰 원 반경" />
+        {kind === "track" && (
+          <div className="row muted">
+            {p.menu.targetId
+              ? `표적 ${p.menu.targetId} (target_id) 둘레를 MA 변수 track_standoff_m 반경으로 돈다`
+              : "적 위를 우클릭해 표적을 정한다"}
           </div>
         )}
+        {AREA_KINDS.has(kind) && (
+          <>
+            <div className="row">
+              <span>영역</span>
+              <select
+                value={p.polygon ? "polygon" : "circle"}
+                disabled={!p.onPolygon}
+                onChange={(e) => p.onPolygon?.(e.target.value === "polygon" ? [pt] : null)}
+                title="SearchArea·Jam 영역 모양"
+              >
+                <option value="circle">원</option>
+                <option value="polygon">다각형</option>
+              </select>
+              {!p.polygon && <Num value={searchR} onChange={setSearchR} min={100} step={100} unit="m" title="영역 원 반경" />}
+            </div>
+            {p.polygon && (
+              <div className="row muted poly-row">
+                <span>{nPoly}점</span>
+                <span>우클릭: 꼭짓점 추가 (최대 {AREA_MAX_VERTICES})</span>
+                <button className="link" disabled={nPoly <= 1} onClick={() => p.onPolygon?.(p.polygon!.slice(0, -1))} title="마지막 꼭짓점 삭제">
+                  되돌리기
+                </button>
+              </div>
+            )}
+            {kind === "jam" && (
+              <div className="row">
+                <span>시간</span>
+                <Num value={jamS} onChange={setJamS} step={30} unit="s" title="재밍 시간 (duration_s). 0이면 해제(다음 명령·취소)까지" />
+                <span className="muted">{jamS ? "" : "해제까지"}</span>
+              </div>
+            )}
+          </>
+        )}
+        <div className="row">
+          <span title="링크 상실">상실</span>
+          <PolicySelect value={policy} onChange={setPolicy} />
+        </div>
       </div>
+      {invalid && <div className="row muted hint">{invalid}</div>}
       <div className="cmd-row">
-        <button className="primary" disabled={off} title={p.disabledReason ?? ""} onClick={() => p.onSend(spec)}>
+        <button className="primary" disabled={off} title={p.disabledReason ?? invalid ?? ""} onClick={() => p.onSend(spec, policy)}>
           전송 ({p.targetCount}대)
         </button>
         <span className="muted">Esc 닫기</span>
@@ -226,11 +328,12 @@ interface RouteProps {
   onRemove(i: number): void;
   onReorder(from: number, to: number): void;
   onLoop(loop: boolean): void;
-  onSend(): void;
+  onSend(policy: LostLinkPolicy): void;
   onCancel(): void;
 }
 
 export function RouteEditor(p: RouteProps) {
+  const [policy, setPolicy] = useState(LostLinkPolicy.UNSPECIFIED);
   const n = p.draft.waypoints.length;
   const count = p.targetCount || p.draft.assignees.length;
   const off = p.disabledReason !== null || count === 0 || n === 0;
@@ -319,7 +422,8 @@ export function RouteEditor(p: RouteProps) {
         <label className="check">
           <input type="checkbox" checked={p.draft.loop} onChange={(e) => p.onLoop(e.target.checked)} /> 반복
         </label>
-        <button className="primary" disabled={off} title={p.disabledReason ?? (count === 0 ? "기체를 선택한다" : p.flocking?.length ? "flocking MA 기체는 항로를 거부할 수 있다" : "")} onClick={p.onSend}>
+        <PolicySelect value={policy} onChange={setPolicy} />
+        <button className="primary" disabled={off} title={p.disabledReason ?? (count === 0 ? "기체를 선택한다" : p.flocking?.length ? "flocking MA 기체는 항로를 거부할 수 있다" : "")} onClick={() => p.onSend(policy)}>
           {p.draft.taskId ? "다시 전송" : "전송"} ({count}대)
         </button>
       </div>
