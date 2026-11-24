@@ -1,4 +1,4 @@
-// TC-LNK-001~035: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
+// TC-LNK-001~036: 데이터링크 시험. InMemoryBus에 Datalink를 붙이고 tick·truth·tx를 직접 발행한다.
 // 인자로 TC ID를 받아 해당 시험만 실행한다
 #include <algorithm>
 #include <cmath>
@@ -2009,6 +2009,83 @@ void tc035() {
   }
 }
 
+// ---- TC-LNK-036: 재머 소유 기체 수신 면제 (DEC-107) ----
+struct SelfJamRun {
+  std::vector<int> reasons;
+  std::vector<std::string> states;  // 키 + 바이트
+};
+
+SelfJamRun run_self_jam(bool checks) {
+  DatalinkConfig cfg;
+  cfg.state_period_s = 0.5;
+  Rig r({{"gcs-01", v1::ENTITY_KIND_GCS, v1::SIDE_BLUE, 0.0, 50.0},
+         {"uav-001", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5000.0},
+         {"uav-002", v1::ENTITY_KIND_UAV, v1::SIDE_BLUE, 5500.0},
+         {"uav-003", v1::ENTITY_KIND_UAV, v1::SIDE_RED, 5200.0}},
+        cfg);
+  SelfJamRun out;
+  auto sub = r.bus.subscribe("link/state/**", [&](const Sample& smp) {
+    out.states.push_back(smp.key + std::string(reinterpret_cast<const char*>(smp.payload.data()), smp.payload.size()));
+  });
+  auto count = [&](const std::string& src, const std::string& dst, v1::DropReason want) {
+    int n = 0;
+    for (int i = 0; i < 10; ++i) {
+      const v1::DropReason got = r.send_one(src, dst);
+      out.reasons.push_back(got);
+      n += got == want;
+    }
+    return n == 10;
+  };
+  auto last_state = [&](const std::string& a, const std::string& b) {
+    v1::LinkState found;
+    for (const auto& st : r.states)
+      if (st.a() == a && st.b() == b) found = st;
+    return found;
+  };
+  r.tick();
+  // (1) uav-001이 자기 영역(5000 m, 반경 2000 m) 안. uav-002·uav-003(적)도 같은 영역 안
+  r.jam("uav-001", 5000.0, 2000.0, true);
+  const bool own_c2 = count("gcs-01", "uav-001", v1::DROP_REASON_NONE);
+  const bool own_peer = count("uav-002", "uav-001", v1::DROP_REASON_NONE);
+  const bool other_c2 = count("gcs-01", "uav-002", v1::DROP_REASON_JAMMED);
+  const bool other_peer = count("uav-001", "uav-002", v1::DROP_REASON_JAMMED);
+  const bool enemy = count("uav-001", "uav-003", v1::DROP_REASON_JAMMED);
+  for (int k = 0; k < 30; ++k) r.tick();
+  const v1::LinkState own_link = last_state("gcs-01", "uav-001");
+  const v1::LinkState peer_link = last_state("uav-001", "uav-002");
+  const bool ps_own = !r.dl->pair_state("gcs-01", "uav-001").jammed && !r.dl->pair_state("uav-001", "gcs-01").jammed;
+  const bool ps_peer = r.dl->pair_state("uav-001", "uav-002").jammed;
+  // (2) uav-002 소유 영역이 uav-001을 덮는다: 남의 영역이므로 JAMMED
+  r.jam("uav-002", 5500.0, 2000.0, true);
+  const bool owner_in_other = count("gcs-01", "uav-001", v1::DROP_REASON_JAMMED);
+  const bool ps_owner_in_other = r.dl->pair_state("gcs-01", "uav-001").jammed;
+  // (3) uav-001 영역을 끄면 uav-002는 자기 영역 안에만 있으므로 수신된다
+  r.jam("uav-001", 5000.0, 2000.0, false);
+  const bool own_only = count("gcs-01", "uav-002", v1::DROP_REASON_NONE);
+  for (int k = 0; k < 30; ++k) r.tick();
+  const v1::LinkState after = last_state("gcs-01", "uav-001");
+  if (checks) {
+    check(own_c2, "owner inside own zone: GCS -> owner delivered");
+    check(own_peer, "owner inside own zone: peer -> owner delivered");
+    check(other_c2, "other vehicle in same zone: GCS -> it JAMMED");
+    check(other_peer, "other vehicle in same zone: owner -> it JAMMED (same side)");
+    check(enemy, "enemy vehicle in zone: JAMMED");
+    check(!own_link.jammed() && own_link.state() != v1::LINK_STATE_KIND_DOWN, "link/state gcs-owner not jammed");
+    check(peer_link.jammed() && peer_link.state() == v1::LINK_STATE_KIND_DOWN, "link/state owner-other jammed");
+    check(ps_own && ps_peer, "pair_state jammed per end, owner exempt");
+    check(owner_in_other && ps_owner_in_other, "owner inside another's zone: JAMMED");
+    check(own_only, "vehicle only inside its own zone: delivered");
+    check(after.jammed(), "link/state jammed by other's zone");
+  }
+  return out;
+}
+
+void tc036() {
+  const SelfJamRun a = run_self_jam(true);
+  const SelfJamRun b = run_self_jam(false);
+  check(a.reasons == b.reasons && a.states == b.states && !a.states.empty(), "deterministic");
+}
+
 struct Case {
   const char* id;
   void (*fn)();
@@ -2024,7 +2101,7 @@ const Case kCases[] = {
     {"TC-LNK-023", tc023}, {"TC-LNK-024", tc024}, {"TC-LNK-025", tc025}, {"TC-LNK-026", tc026},
     {"TC-LNK-027", tc027}, {"TC-LNK-028", tc028}, {"TC-LNK-029", tc029},
     {"TC-LNK-030", tc030}, {"TC-LNK-031", tc031}, {"TC-LNK-032", tc032}, {"TC-LNK-033", tc033}, {"TC-LNK-034", tc034},
-    {"TC-LNK-035", tc035},
+    {"TC-LNK-035", tc035}, {"TC-LNK-036", tc036},
 };
 
 }  // namespace
