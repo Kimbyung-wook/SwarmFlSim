@@ -76,6 +76,17 @@ FINDINGS = [
      "resolution": "계약 42c7e06(0.20.0 유지): §3.2 swarm/<dst>/rx/<iface>/<msg> 구독자 칸에 '수신 엔티티의 Agent 런타임"
                    "(자기 기체 swarm/<dst>/rx/**로 구독)'을 적었다. sim/clock/done/*·sim/ctrl/cmd는 30차에 이미 §3.2 구독자 칸에 있다. "
                    "34차에 parse_contract_keys가 구독자 칸의 구독 키 표현식도 읽게 해 SUPPLEMENT_SUB를 비웠다"},
+    {"id": "O-53", "item": "C3", "wp": "WP1(Core)·WP9(Gateway)", "level": "보통 (38차)",
+     "match": ["Gateway 시각 기준이 시나리오 값이 아님"],
+     "match_any": [["Gateway 시각 기준이 시나리오 값이 아님"], ["Gateway epoch_changed", "UCI 시각 기준이 바뀌었다"],
+                   ["UCI Timestamp − 모의 시각이 시나리오 epoch_utc_us와 다름"]],
+     "title": "시작 때 Gateway가 sim/ctrl/scenario를 기체 보고보다 늦게 받거나 받지 못해 첫 메시지 기준을 쓴다",
+     "detail": "Gateway SimClock은 시나리오를 받기 전 첫 메시지 벽시계로 기준을 정한다. 뒤에 시나리오가 오면 바꾸고(epoch_changed), "
+               "끝내 오지 않으면 첫 메시지 기준이 남는다. 38차 적합성 8회 중 3회. 이때 'UCI Timestamp가 모의 시각을 따르지 "
+               "않음' 문구가 같이 나오면 D-36(벽시계 Timestamp)이 아니라 이 관찰 때문이다. epoch_changed와 epoch 불일치 문구도 "
+               "시작 때 기준이 바뀐 결과라 이 관찰로 묶는다(적합성 실행은 실행 중 시나리오를 다시 적재하지 않는다).",
+     "resolution": "DEC-109(계약 0.24.0): Core가 sim/ctrl/scenario 조회에 답하고(WP1) Gateway가 시작 때 조회한다(WP9). "
+                   "구현·병합 뒤 다시 시험한다"},
     {"id": "O-45", "item": "C6", "wp": "WP3", "level": "낮음 (28차)",
      "match": [],
      "title": "기본 MA에 무장 경로가 없어 StrikeActivity는 시험 전용 주입으로만 나온다 (기존 O-45)",
@@ -97,7 +108,8 @@ def attach(results: dict) -> tuple[list[dict], list[tuple[str, str]]]:
     for f in FINDINGS:
         hits = []
         for i, (item, kind, t) in enumerate(texts):
-            if item == f["item"] and f["match"] and all(m in t for m in f["match"]):
+            pats = f.get("match_any") or ([f["match"]] if f["match"] else [])   # match_any: 문구 묶음 가운데 하나 (38차)
+            if item == f["item"] and any(all(m in t for m in pat) for pat in pats):
                 hits.append(t)
                 used.add(i)
         out.append({**f, "hits": hits})

@@ -5641,3 +5641,42 @@ P 고정 구성의 E 표시는 시스템 CPU가 E 코어 쪽에 40% 넘게 몰�
 - 아직 열린 관찰은 5건이다. O-30, O-31, O-43, O-44, O-53이다.
 - **결함 40건**: 해소 31, 결정됨 9, 아직 열림 0, 사용자 결정 필요 0.
 - **관찰 53건**: 해소 24, 결정됨 24, 아직 열림 5, 사용자 결정 필요 0.
+
+## 48. 38차 후속: C3 시각 기준 = 시나리오 조건 (2026-11-24)
+
+PM 결정(38차 병합 7a4874a 뒤)에 따라 C3에 시각 기준 조건을 더했다. O-53 자체는 DEC-109(계약 0.24.0)로 WP1·WP9가 고친다. 다시 시험하는 것은 두 WP 병합 뒤다.
+
+### 48.1 바꾼 것
+
+| 곳 | 내용 |
+|---|---|
+| `qa/conformance/judges.py` `judge_epoch` | (c) Gateway 시각 기준 = 시나리오. Gateway 로그에 `no scenario epoch yet`(첫 메시지 기준)이 있거나 `epoch_set`이 0이면 실패. 결과에 `base`(scenario·first_message·없음)를 남긴다 |
+| `qa/conformance/run.py` | `--repeat`에서 C3는 실행 하나라도 실패하면 실패로 센다. 실패 문구에 `runN:`을 붙인다. 다른 항목은 run1 판정 그대로다 |
+| `qa/conformance/report.py` | C3 대조 표에 "Gateway 시각 기준" 행 |
+| `qa/conformance/findings.py` | O-53 항목. 문구 묶음 가운데 하나만 맞아도 되는 `match_any`를 더했다(시각 기준·`epoch_changed`·epoch 불일치 문구) |
+| `qa/conformance/history.py` | 분류 정정 줄(`mode: correction`). 이력 파일은 덧붙이기만 하므로(DEC-095) 앞선 실행의 발견을 새 줄로 바꾸고 메모를 단다. 실행 7(D-36 → O-53)과 실행 8(새 조건으로는 run2 실패)에 붙였다 |
+| `docs/44` C3 | 시각 기준 행에 조건을 더하고, 반복 실행 중 하나라도 실패하면 C3 실패라는 문구를 넣었다. 둘 다 **WP0 확인 사항**으로 표시했다 |
+
+### 48.2 기존 원자료 다시 판정 (TC-QA-213)
+
+`run.py --reuse <run> --no-doc`으로 다시 판정했다(`qa/out/qa38/rejudge`).
+
+| 실행 | Gateway 기준 | 이전 C3 | 새 C3 | 발견 |
+|---|---|---|---|---|
+| 2026-11-24 run1 | first_message → scenario | 실패 | 실패 | D-36, O-53 |
+| 2026-11-24 run2 | first_message → scenario | 실패 | 실패 | O-53 |
+| 2026-11-24b run1 | scenario | 통과 | 통과 | — |
+| 2026-11-24b run2 | first_message (시나리오 없음) | 통과 | **실패** | O-53 |
+| qa38/conf_new2 run1 | scenario | 통과 | 통과 | — |
+| qa38/conf_oldbus run2 | scenario | 통과 | 통과 | — |
+| 2026-11-23 run1 (36차) | scenario | 통과 | 통과 | — |
+
+- 미분류 실패는 0이다. 2026-11-24 run1에는 Timestamp 변동 문구 때문에 D-36도 같이 붙는다. O-53 항목 설명에 그 경우를 적었다.
+- 도구 시험 `qa/conformance/tests`는 94건 모두 통과다(새 시험 7건: `test_epoch.py` 6, `test_history.py` 1).
+- docs/45는 마지막 공식 실행(실행 8, 이전 도구)의 보고 그대로다. 다음 공식 실행 때 새 조건으로 다시 만들어진다.
+
+### 48.3 시험
+
+| TC | 내용 | 결과 |
+|---|---|---|
+| TC-QA-213 | C3 (c) 시각 기준 = 시나리오, 반복 실행 C3 합산, O-53 분류, 이력 정정 줄. 도구 시험과 38차 원자료 7회 재판정 | 통과 |
