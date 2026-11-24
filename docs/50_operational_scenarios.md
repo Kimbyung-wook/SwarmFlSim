@@ -1,7 +1,7 @@
 # 편대 전장 운용 시나리오
 
 - 목적: A-GRA 기능(메시지)을 조합한 편대 운용 시나리오를 시간 순서로 정의한다. 보완 항목(OPN-079~084)의 우선순위와 시험 시나리오 작성의 근거로 쓴다.
-- 기준: 계약 0.23.0, 통합 브랜치 `wp0-contracts`(DEC-106 등록 시점). 기능 상태(§0.2·0.3)와 단계의 현재 동작은 계약 0.24.0, `wp0-contracts` 38123ee 기준으로 갱신했다(DEC-106 구현 IMP-AGT-060, DEC-107). 단계별 수행률은 [51_scenario_feasibility.md](51_scenario_feasibility.md)에 있다.
+- 기준: 계약 0.23.0, 통합 브랜치 `wp0-contracts`(DEC-106 등록 시점). 기능 상태(§0.2·0.3)와 단계의 현재 동작은 계약 0.24.0, `wp0-contracts` 38123ee 기준으로 갱신했고, UI 보완(IMP-UI-085~093)은 1f2f147 기준으로 반영했다(DEC-106 구현 IMP-AGT-060, DEC-107). 단계별 수행률은 [51_scenario_feasibility.md](51_scenario_feasibility.md)에 있다.
 - 기능의 출처는 등록부 §5 매핑 표, proto `uci_name`, `docs/10_contracts.md`, 기본 MA docstring으로 한정한다. 메시지명은 공개 XSD 이름과 내부 proto 이름만 쓴다.
 - 기체 계층 경계(DEC-013): MA는 L1 포트로만 주고받는다. `truth/**`는 관찰(UI·Monitor·Logger) 용도로만 쓴다.
 - 시뮬레이터 조작(`sim/ctrl/cmd`의 `InjectFault`)은 시험 진행자가 내는 사건 주입이며 L1 포트가 아니다.
@@ -30,7 +30,7 @@
 | C2 | 타격 임무 | `StrikeTask` | 구현됨(DEC-106) (waypoint·formation 리더, `strike_range_m` 안에서 교전 기준 확인) | | ○ | ● | ○ | | |
 | C2 | 편대 형태 지정 | `FormationCommand` (EXT) | 구현됨 (6형태) | ● | ● | ○ | ○ | ● | ● |
 | C2 | 팀(패키지) 구성 | `GroupAssignment` (EXT), `MA_PackageManagementCommand`·`MA_PackageManagementCommandStatus` | 미구현(OPN-083) (EXT 메시지는 있고 쓰는 기본 MA·상태 보고 없음) | | | | | ○ | ● |
-| C2 | 타격 승인 | `ApprovalRequest` (`MA_ApprovalRequest`), `ApprovalResponse` (`MA_ApprovalRequestStatus`) | 부분 (MA `TaskTracker`·Gateway 경로 있음, UI 승인 화면 없음. UI는 WP5 진행 중) | | | ● | ○ | | |
+| C2 | 타격 승인 | `ApprovalRequest` (`MA_ApprovalRequest`), `ApprovalResponse` (`MA_ApprovalRequestStatus`) | 구현됨 (MA `TaskTracker`, Gateway 경로, UI 승인 패널 IMP-UI-086) | | | ● | ○ | | |
 | C2 | 타격 동의 | `StrikeConsentRequest` | 미구현(OPN-084) (`ApprovalRequest`로 대신) | | | ○ | | | |
 | C2 | 운용자 역할·권한 | `MA_OperatorRole`, `MA_Authorization` | 미구현(OPN-084) | | | ○ | | | ○ |
 | C2 | GCS 링크 감시 | `GcsHeartbeat` (EXT), 상실 정책 3종 (DEC-078, DEC-101, DEC-105) | 구현됨 | ○ | ● | ○ | ● | ○ | ○ |
@@ -60,8 +60,8 @@
 | 시나리오 | 미구현·부분 기능 | 관련 OPN |
 |---|---|---|
 | S1 | 항로점 정찰 중 센서 지향, COP 활용, 탐색 패턴, DMS | OPN-082, OPN-081, OPN-084 |
-| S2 | 없음(UI 재밍 작업은 WP5 진행 중) | — |
-| S3 | WEZ, StrikeConsentRequest, RBAC, UI 승인 화면(WP5 진행 중) | OPN-084 |
+| S2 | 없음 | — |
+| S3 | WEZ, StrikeConsentRequest, RBAC | OPN-084 |
 | S4 | 없음 | — |
 | S5 | 리더 재선출(Raft), 패키지 상태 보고, SubsystemStatus | OPN-080, OPN-083, OPN-084 |
 | S6 | 탐색 패턴·영역 분할, COP 활용, 패키지 관리, 실행 중 TrackTask 발령·재배정 | OPN-081, OPN-082, OPN-083 |
@@ -275,7 +275,7 @@ sequenceDiagram
 
 ### 참여자
 
-- 통제 GCS `gcs-01`. 승인 응답은 Gateway(외부 C2)가 낸다. UI 승인 화면은 없다.
+- 통제 GCS `gcs-01`. 승인 응답은 UI 승인 패널(IMP-UI-086) 또는 Gateway(외부 C2)가 낸다. 먼저 온 응답만 처리된다.
 - 기체 MA(`waypoint`)와 FA.
 - 적: 지상 표적(고정·스크립트).
 
@@ -601,7 +601,7 @@ sequenceDiagram
    - 행위자: GCS → 이동 표적에 가까운 편대 리더
    - 포트·메시지: C2 `TaskCommand`(`TrackTask`, target)
    - 기대 결과: `track_standoff_m` 선회 추적, 위치 미상이면 `track_acquire_timeout_s` 뒤 FAILED(DEC-106).
-   - 실행 중 발령 수단: UI·Gateway에 없다(UI는 WP5 진행 중). 지금은 시나리오 `mission_plan`으로 시작 때만 낼 수 있다.
+   - 실행 중 발령 수단: UI 임무 창 추적 탭(IMP-UI-085). Gateway 외부 `MA_TaskCommand`로는 받지 않는다.
    - 트랙 기반 자동 재배정 — 미구현(OPN-082).
 8. 탐색 결과 전송
    - 행위자: 편대 → GCS
