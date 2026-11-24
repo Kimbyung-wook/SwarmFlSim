@@ -159,3 +159,4 @@
 | 2026-11-24 | `9033cfa` | OPN-079~084, DEC-106 | 병합: 편대 전장 운용 시나리오 S1~S6(`docs/50_operational_scenarios.md`), 시나리오 × A-GRA 기능 대응 표, 보완 우선순위 근거 | 사용자 매뉴얼 시나리오 예시(선택) | 미처리 | |
 | 2026-11-24 | (이 커밋) | OPN-085~088 | WP0: A-GRA 공개 zip 대조 결과 등록(외부 데이터 봉투, 6.0a 오류·확인 응답, 계획 변경 알림, 시험 하네스). `docs/44` §4 한계에 대조 결과·Change Log 근거·VI 배포 표기 취급 추가 | 없음 | 해당 없음 | |
 | 2026-11-24 | `7e245df` | IMP-AGT-060, DEC-106 | 병합: WP3 기본 MA MS 임무 수행 `PayloadTasker`(waypoint·formation 리더의 센서 지향, Track, Jam, Strike), 새 MA 변수 `track_standoff_m`·`track_acquire_timeout_s`·`track_lost_s`·`strike_range_m`, 예제 `ms_tasks_demo_7.json`, TC-AGT-150~157 | 사용자 매뉴얼 기본 MA 작업 종류·MA 변수 | 미처리 | |
+| 2026-11-24 | (이 커밋) | OPN-089, DEC-107 | WP0: 자기 재밍 등록·결정(재머 소유 기체의 수신만 면제, 다른 수신은 DEC-028대로). 계약 변경 없음 | 사용자 매뉴얼 재밍 판정 설명 | 미처리 | |
