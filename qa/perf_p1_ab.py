@@ -1,6 +1,7 @@
 """P1 두 경우 번갈아 비교 (QA 37차, OPN-077, TC-QA-200~).
 
-(가) 현재 작업 트리의 Agent, (나) --b-src 의 agent/src(측정용 임시 worktree에 패치를 적용한 것)를 PYTHONPATH로 앞에 둔 Agent.
+(가) 현재 작업 트리의 Agent, (나) --b-src 의 --b-sub(기본 agent/src, 측정용 임시 worktree)를 PYTHONPATH로 앞에 둔 Agent.
+38차는 (나)를 이전 버스(1ce5b40 api/python/src)로 둔다: --b-sub api/python/src --b-mod swarm_api.bus
 C++ 빌드·proto·나머지 Python은 같다. 한 묶음 안에서 가·나를 회차마다 번갈아(가1 나1 가2 나2 …) perf_p1_batch.py run을
 --repeat 1로 부른다. 회차마다 유휴 게이트(다른 시뮬레이터 없음 + 시스템 CPU 조건 30 s)를 지난다.
 
@@ -25,19 +26,21 @@ CASES = ("A", "B")
 DEC087 = {"d3_w_log": 12.43, "d3_w": 13.52, "d3_w_log_P": 12.27, "d3_w_P": 13.00}
 
 
-def check_b(src: Path) -> str:
-    """(나) Agent가 정말 패치된 소스를 가져오는지 본다"""
+def check_b(src: Path, mod: str) -> str:
+    """(나) 프로세스가 정말 --b-src 쪽 소스를 가져오는지 본다 (모듈 파일 경로를 찍는다)"""
     env = {**os.environ, "PYTHONPATH": str(src)}
-    r = subprocess.run([sys.executable, "-c", "import swarm_agent, swarm_agent.messages as m; "
-                        "print(swarm_agent.__file__, len(m.rx_inbound()))"], env=env, capture_output=True, text=True)
+    code = f"import {mod} as m; print(m.__file__)"
+    if mod == "swarm_agent":
+        code = "import swarm_agent, swarm_agent.messages as m; print(swarm_agent.__file__, len(m.rx_inbound()))"
+    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
     return r.stdout.strip() or r.stderr.strip()[-300:]
 
 
 def run(a: argparse.Namespace) -> int:
     out = ROOT / a.out
     out.mkdir(parents=True, exist_ok=True)
-    src = Path(a.b_src).resolve() / "agent" / "src"
-    chk = check_b(src)
+    src = Path(a.b_src).resolve() / a.b_sub
+    chk = check_b(src, a.b_mod)
     with (out / "progress.txt").open("a", encoding="utf-8") as f:
         f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} {a.batch} B 소스 확인: {chk}\n")
     if str(src) not in chk:
@@ -104,6 +107,8 @@ def main() -> int:
     r.add_argument("--batch", required=True)
     r.add_argument("--n", type=int, default=6)
     r.add_argument("--b-src", required=True, help="(나) 패치를 적용한 worktree 경로")
+    r.add_argument("--b-sub", default="agent/src", help="(나) worktree 안에서 PYTHONPATH 앞에 둘 경로 (38차: api/python/src)")
+    r.add_argument("--b-mod", default="swarm_agent", help="확인할 모듈 (38차: swarm_api.bus)")
     r.add_argument("--base-port", type=int, default=44000)
     r.add_argument("--max-sys", type=float, default=10.0)
     r.add_argument("--cfgs", default="", help="perf_p1_batch --only (예: d3_w_log_P,d3_w_P)")
