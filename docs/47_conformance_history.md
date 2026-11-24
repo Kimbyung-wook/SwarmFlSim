@@ -16,10 +16,24 @@
 | 6 | 2026-11-23 | `qa/out/conformance/2026-11-23` | `c86563d` (dirty) | 0.22.0 | `0faf629` | `0d70268` | 20261117 | 2 | 통과 | 통과 | 통과 | 통과 | 통과 | 통과 | 정보 | 없음 |
 | 7 | 2026-11-24 | `qa/out/conformance/2026-11-24` | `4b70012` (dirty) | 0.23.0 | `0faf629` | `0d70268` | 20261117 | 2 | 통과 | 통과 | **실패** (← 통과) | 통과 | 통과 | 통과 | 정보 | O-53 |
 | 8 | 2026-11-24 | `qa/out/conformance/2026-11-24b` | `4b70012` (dirty) | 0.23.0 | `0faf629` | `0d70268` | 20261117 | 2 | 통과 | 통과 | **통과** (← 실패) | 통과 | 통과 | 통과 | 정보 | O-53 |
+| 9 | 2026-11-24 | `qa/out/conformance/2026-11-24-late` | `fdcc245` | 0.24.0 | `9714604` | `fdcc245` | 20261117 | 3 | 통과 | 통과 | **실패** (← 통과) | 통과 | **실패** (← 통과) | 통과 | 정보 | 없음 |
+| 10 | 2026-11-24 | `qa/out/conformance/2026-11-24-raw` | `fdcc245` (dirty) | 0.24.0 | `9714604` | `fdcc245` | 20261117 | 1 | 통과 | 통과 | **통과** (← 실패) | 통과 | **통과** (← 실패) | **실패** (← 통과) | 정보 | 없음 |
+| 11 | 2026-11-24 | `qa/out/conformance/2026-11-24-env` | `fdcc245` (dirty) | 0.24.0 | `9714604` | `fdcc245` | 20261117 | 5 | 통과 | 통과 | 통과 | 통과 | 통과 | **통과** (← 실패) | 정보 | 없음 |
+| 12 | 2026-11-24 | `qa/out/conformance/2026-11-24-late2` | `e012aab` (dirty) | 0.24.0 | `9714604` | `e012aab` | 20261117 | 3 | 통과 | 통과 | 통과 | 통과 | 통과 | 통과 | 정보 | 없음 |
+| 13 | 2026-11-24 | `qa/out/conformance/2026-11-24-raw2` | `e012aab` (dirty) | 0.24.0 | `9714604` | `e012aab` | 20261117 | 1 | 통과 | 통과 | 통과 | 통과 | 통과 | 통과 | 정보 | 없음 |
+| 14 | 2026-11-24 | `qa/out/conformance/2026-11-24-env2` | `e012aab` (dirty) | 0.24.0 | `9714604` | `e012aab` | 20261117 | 3 | 통과 | 통과 | 통과 | 통과 | 통과 | 통과 | 정보 | 없음 |
 
 - 실행 1은 결과 폴더의 `result.json`에서 소급 기록했다. git에서 얻은 값: criteria_commit, tool_commit.
 - 실행 7: C3 실패는 시작 때 Gateway가 sim/ctrl/scenario보다 기체 보고를 먼저 받아 시각 기준을 바꾼 것이다(O-53, docs/21 §47.4). 원인이 D-36(벽시계 Timestamp)과 다르다 (도구 자동 분류: D-36)
 - 실행 8: 그때 도구로는 C3 통과다. run2에서 Gateway가 시나리오를 끝까지 받지 못했다(로그 no scenario epoch yet, epoch_set 0). 38차에 더한 C3 시각 기준 조건(docs/44)으로 다시 판정하면 run2가 C3 실패다(O-53, qa/out/qa38/rejudge) (도구 자동 분류: 없음)
+- 실행 9: 봉투 on, Gateway 늦게 붙음(late_gw). run1: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0; run2: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0; run3: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0 (도구 자동 분류: D-36, O-53)
+- 실행 9: 39차 도구 오류: Gateway 합류 전 GCS 수신까지 짝지어 C3 위치·Timestamp·상태 짝과 C5 시작 상태가 어긋났다(도구 e012aab에서 고침). 같은 구성 재실행은 2026-11-24-late2. 제품 결함 아님 (도구 자동 분류: D-36, O-53)
+- 실행 10: 봉투 off. run1: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0 (도구 자동 분류: 없음)
+- 실행 10: 39차 도구 오류: 봉투 끔 외부 클라이언트가 QueryDataRequestStatus를 구독하지 않아 C6가 실패했다(도구 e012aab에서 고침). 재실행은 2026-11-24-raw2 (도구 자동 분류: 없음)
+- 실행 11: 봉투 on. run1: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run2: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run3: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run4: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run5: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0
+- 실행 12: 봉투 on, Gateway 늦게 붙음(late_gw). run1: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0; run2: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0; run3: query=1 by_query=1 by_subscription=0 duplicate=0 query_none=0 query_error=0
+- 실행 13: 봉투 off. run1: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0
+- 실행 14: 봉투 on. run1: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run2: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0; run3: query=5 by_query=0 by_subscription=1 duplicate=0 query_none=1 query_error=0
 
 핵심 수치:
 
@@ -33,6 +47,12 @@
 | 6 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
 | 7 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.52 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
 | 8 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9312건·실패 0, 부정 입력 10종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 9 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 8059건·실패 0, 부정 입력 14종 중 버스로 나감 0 | 위치 1904쌍 최대 차 1.47e-05 rad, Timestamp 변동 5.00 s | 구독 103·발행 122키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 4건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 10 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9311건·실패 0, 부정 입력 10종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 1, /tap 불일치 1 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 11 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9313건·실패 0, 부정 입력 14종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 12 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 8084건·실패 0, 부정 입력 14종 중 버스로 나감 0 | 위치 1914쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 122키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 13 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9313건·실패 0, 부정 입력 10종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
+| 14 | XSD 860(MA_ 179), 대응 UCI 23, 송신 14·수신 4, 실패 0 | 수신 9313건·실패 0, 부정 입력 14종 중 버스로 나감 0 | 위치 2030쌍 최대 차 0 rad, Timestamp 변동 0.00 s | 구독 103·발행 125키, 허용 밖 0, SIM 포트 메시지 0 | 전이 위반 0건, 승인 필요 4건 중 위반 0 | 선언 불일치 0, /tap 불일치 0 | 버스 직접 열기 0, 진입점 open_bus 6/6, 적용성 해당·부분 30행 중 근거 없음 0 |
 
 ## 2. 점검 조건 변경 이력
 
@@ -40,6 +60,10 @@
 
 | 커밋 | 날짜 | 바뀐 것 | 제목 | 관련 DEC |
 |---|---|---|---|---|
+| `e012aab` | 2026-11-24 | 도구(qa/conformance) | QA 39차 도구 수정: 늦은 Gateway 짝짓기, 봉투 끔 조회 응답 구독 | — |
+| `fdcc245` | 2026-11-24 | 도구(qa/conformance) | QA 39차 도구: 외부 교환 봉투(DEC-111)·늦은 Gateway·조회 응답 점검 (TC-QA-214~215) | DEC-111 |
+| `4f046d6` | 2026-11-24 | 기준(docs/44), 도구(qa/conformance) | QA 38차 후속: C3 시각 기준 = 시나리오 조건(O-53, DEC-109), 반복 실행 C3 합산, 이력 정정 줄 (TC-QA-213) | DEC-095, DEC-109 |
+| `f5d7ef0` | 2026-11-24 | 기준(docs/44) | OPN-085~088 등록: A-GRA 공개 zip 대조(데이터 봉투, 6.0a 오류·확인 응답, 계획 변경 알림, 시험 하네스), docs/44 한계 갱신 | — |
 | `0faf629` | 2026-11-22 | 기준(docs/44) | docs/44 C3: epoch_changed는 epoch 일치 확인과 함께 판정 (DEC-098, QA 34차 §43.5) | DEC-098 |
 | `0d70268` | 2026-11-22 | 도구(qa/conformance) | QA 34차 도구: §3.2 구독자 칸의 구독 키를 읽어 SUPPLEMENT_SUB 비움 (O-50 해소, TC-QA-187~188) | — |
 | `a2aa607` | 2026-11-21 | 기준(docs/44) | DEC-099: A-GRA L1 DDS 요구에 맞춘 미들웨어 변경 보류, DEC-002 유지 (OPN-071) | DEC-002, DEC-099 |
@@ -71,7 +95,7 @@
 | O-47 | 1 (`b80a848`) | 2 (`2ee7ebb`) | 3 (`e91a5fe`) | 해소 | `e91a5fe` 도구, `fd1b8e1` 도구, `da9287c` 기준(DEC-097) | 기준 변경(DEC-097 `da9287c`) |
 | O-48 | 1 (`b80a848`) | 5 (`0d70268`) | 6 (`c86563d`) | 해소 | `0faf629` 기준(DEC-098) | 제품 변경 |
 | O-49 | 1 (`b80a848`) | 5 (`0d70268`) | 6 (`c86563d`) | 해소 | `0faf629` 기준(DEC-098) | 제품 변경 |
-| O-53 | 7 (`4b70012`) | 8 (`4b70012`) | — | 재현 | — | — |
+| O-53 | 7 (`4b70012`) | 8 (`4b70012`) | 9 (`fdcc245`) | 해소 | `fdcc245` 도구, `4f046d6` 기준·도구(DEC-095, DEC-109), `f5d7ef0` 기준 | 기준 변경(DEC-109 `4f046d6`) |
 
 도구 발견 목록에는 있지만 기록된 실행에서 나온 적 없는 발견: D-40, O-50, O-45. 기록 전 실행에서 나왔거나, 원자료 재판정에서만 나왔거나, 문서 항목이다(docs/21).
 

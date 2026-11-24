@@ -67,6 +67,12 @@ class Run:
         self.events = self.marks.get("events", [])
         # 벽시계 → 모의 시각: 관측기 이벤트(epoch, sim_s)로 구간 보간 대신 가장 가까운 앞 이벤트 기준
         self.bus_in = self.obs.get("bus_in", [])
+        # 39차(late_gw): Gateway가 붙기 전 GCS 수신은 Gateway 입력이 아니다. 붙은 프레임(일시정지 중) 뒤 것만 짝짓는다
+        self.gw_join_s = next((e["sim_s"] for e in self.events if e["tag"] == "late gateway start"), None)
+        self.bus_before_join = []
+        if self.gw_join_s is not None:
+            self.bus_before_join = [b for b in self.bus_in if b[0] <= self.gw_join_s]
+            self.bus_in = [b for b in self.bus_in if b[0] > self.gw_join_s]
 
     def vehicles(self) -> list[str]:
         return [e["id"] for e in self.scenario.get("entities", []) if e.get("autonomy")]
@@ -75,14 +81,19 @@ class Run:
 # ------------------------------------------------------------------------------------------------- C2
 
 def c2_inputs(r: Run) -> tuple[list, list, list]:
-    rx = [{"client": "ext", "name": x[1], "ok": x[3]} for x in r.ext.get("rx", [])]
+    # 39차: 봉투로 온 것은 rx 줄 8번째에 봉투 정보(이름·검증·MessageType)가 있다. name은 내부 메시지 이름이다
+    rx = [{"client": "ext", "name": x[1], "ok": x[3], "env": x[7] if len(x) > 7 else None} for x in r.ext.get("rx", [])]
     sent = []
     for c in r.ext.get("cmds", []):
         name = c.get("name") or "MA_TaskCommand"
         tag = c.get("tag") or f"{c.get('task_id', '')} {c.get('kind', '')}{' cancel' if c.get('cancel') else ''}".strip()
         neg = str(tag).startswith("neg-") or str(c.get("task_id", "")).startswith("neg-")
-        sent.append({"tag": tag, "name": name, "xsd_ok": c.get("xsd_ok"), "pub": c.get("pub"), "negative": neg})
+        sent.append({"tag": tag, "name": name, "xsd_ok": c.get("xsd_ok"), "pub": c.get("pub"), "negative": neg,
+                     "env_xsd_ok": c.get("env_xsd_ok"), "env": c.get("env")})
     negs = []
+    gw_sub = J.graph_flows(r.graph).get(GW_SERVICE, {}).get("sub", {}) if r.graph else None
+    raw_neg = {c.get("tag") or c.get("task_id"): f"{c.get('name') or 'MA_TaskCommand'}@{c.get('topic') or 'swarm.c2'}"
+               for c in r.ext.get("cmds", []) if (c.get("env") or {}).get("none")}
     for e in r.events:
         if not e["tag"].startswith("neg "):
             continue
@@ -92,6 +103,9 @@ def c2_inputs(r: Run) -> tuple[list, list, list]:
             how = f"CAL Server 거부: {pub[:120]}"
         elif e.get("gw_rej_new"):
             how = "Gateway 거부: " + " / ".join(e["gw_rej_new"])[:200]
+        elif e["tag"][4:] in raw_neg and gw_sub is not None and raw_neg[e["tag"][4:]] not in gw_sub:
+            # 39차: 봉투 없는 내부 메시지. CAL Server는 declared를 강제하지 않아 받지만 Gateway가 구독하지 않아 배달되지 않는다
+            how = f"Gateway 구독 없음: {raw_neg[e['tag'][4:]]}는 Gateway에 배달되지 않음(/graph)"
         negs.append({"tag": e["tag"][4:], "why": e.get("why", ""), "on_bus": bool(e.get("bus")),
                      "bus_key": "; ".join(f"{b['key']} id={b.get('id')} dst={b.get('dst')}" for b in e.get("bus", [])),
                      "how": how, "client_xsd_ok": e.get("xsd_ok"), "pub": pub[:160]})
@@ -167,7 +181,8 @@ def c3_inputs(r: Run) -> tuple[list, list, dict, list, list, dict]:
             if "UUID" in o and isinstance(o["UUID"], str) and key:
                 ids[key].append((o.get("DescriptiveLabel", ""), o["UUID"]))
             for k2, v in o.items():
-                walk(v, k2)
+                if k2 != "MessageHeader":   # 39차: QueryDataRequestStatus 결과 안의 메시지 머리도 머리로 본다
+                    walk(v, k2)
         elif isinstance(o, list):
             for v in o:
                 walk(v, key)
@@ -291,6 +306,18 @@ def c5_inputs(r: Run) -> tuple[dict, list, list]:
         elif x["name"] == "MA_FlightCommandStatus":
             seqs["MA_FlightCommandStatus(외부)"][label(md.get("CommandID"))].append(
                 md.get("CommandProcessingState"))
+    # 39차(late_gw): Gateway가 붙기 전에 시작한 작업 순서는 합류 시점 상태(내부 마지막 값)를 앞에 붙여 전이만 본다.
+    # 외부 쪽은 그 상태의 DEC-090 표 값을 붙인다. 붙인 순서는 r.c5_joined_mid에 남긴다(정보)
+    r.c5_joined_mid = []
+    before = {}
+    for _s, short, src, _h, det in r.bus_before_join:
+        if short == "TaskStatus":
+            before[f"{src}/{det['task']}"] = det["state"]
+    for key, st0 in sorted(before.items()):
+        for name, val in (("TaskStatus(내부)", st0), ("MA_TaskStatus(외부)", J.STATE_MAP["TaskStatus"].get(st0, st0))):
+            if key in seqs[name]:
+                seqs[name][key].insert(0, val)
+                r.c5_joined_mid.append(f"{name} {key}: 합류 시점 {val}")
     seqs = {k: dict(v) for k, v in seqs.items()}
     resp: dict[tuple[str, str], tuple[str, float]] = {}
     for t in r.obs.get("tx", []):
@@ -330,15 +357,26 @@ def c6_inputs(r: Run) -> tuple[dict, dict, Counter, Counter, dict]:
     for name, origin, topic, n in r.ext.get("tap3", []):
         if origin in gw_nodes or origin == GW_SERVICE:
             tap[f"{name}@{topic}"] += n
-    ext_rx = Counter(f"{x[1]}@{x[2]}" for x in r.ext.get("rx", []))
+    # 39차: 서버를 지나간 것은 봉투 이름이다(/tap·선언과 같은 이름으로 센다)
+    ext_rx = Counter(f"{x[7]['name'] if len(x) > 7 else x[1]}@{x[2]}" for x in r.ext.get("rx", []))
     inbound = {}
     sent_names = {c.get("name") or "MA_TaskCommand" for c in r.ext.get("cmds", [])
                   if str(c.get("pub", "")).startswith("+OK")}
     for uci in sorted(sent_names):
+        if uci == "QueryDataRequest":     # 39차: 버스로 넘기지 않고 Gateway가 답한다(DEC-112) → 받은 응답 수
+            inbound["QueryDataRequest(→QueryDataRequestStatus)"] = sum(
+                1 for x in r.ext.get("rx", []) if x[1] == "QueryDataRequestStatus")
+            continue
         busmsg = EXT_TO_BUS.get(uci)
         inbound[uci] = sum(1 for t in r.obs.get("tx", []) if t.get("msg") == busmsg
                            and not str(t.get("id", "")).startswith("neg-"))
     return declared, flows, tap, ext_rx, inbound
+
+
+def c6_negative_flows(r: Run) -> set[str]:
+    """39차: 부정 입력(봉투 없음)으로 외부가 일부러 낸 선언 밖 흐름"""
+    return {f"{c.get('name') or 'MA_TaskCommand'}@{c.get('topic') or 'swarm.c2'}" for c in r.ext.get("cmds", [])
+            if (c.get("env") or {}).get("none")}
 
 
 # ------------------------------------------------------------------------------------------------- C1·C7 (정적)

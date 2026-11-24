@@ -44,11 +44,24 @@ def judge_run(rd: Path, st: dict) -> tuple[dict, dict]:
     c4 = J.judge_c4(**A.c4_inputs(r, gwd["proto"]))
     seqs, approvals, commands = A.c5_inputs(r)
     c5 = J.judge_c5(seqs, approvals, commands)
+    c5["joined_mid"] = list(getattr(r, "c5_joined_mid", []))
     d, fl, tap, ext_rx, inbound = A.c6_inputs(r)
-    c6 = J.judge_c6(d, fl, tap, ext_rx, inbound)
+    c6 = J.judge_c6(d, fl, tap, ext_rx, inbound, negative_flows=A.c6_negative_flows(r))
     observed = {x[1] for x in r.ext.get("rx", [])} | {k for k, n in inbound.items() if n > 0}
     extra = {"observed": observed, "c5_commands": commands, "run": r}
     return {"C2": c2, "C3": c3, "C4": c4, "C5": c5, "C6": c6}, extra
+
+
+def gw_scenario(rd: Path) -> str:
+    """39차(DEC-109): Gateway가 시나리오를 어느 경로로 받았는지 (gw1.json 카운터)"""
+    import json
+    try:
+        c = json.loads((rd / "gw1.json").read_text(encoding="utf-8")).get("counters", {})
+    except (OSError, ValueError):
+        return "gw1.json 없음"
+    keys = ("scenario_query", "scenario_by_query", "scenario_by_subscription", "scenario_duplicate", "scenario_query_none",
+            "scenario_query_error")
+    return f"{rd.name}: " + " ".join(f"{k.removeprefix('scenario_')}={c.get(k, 0)}" for k in keys)
 
 
 def key_numbers(res: dict) -> dict:
@@ -65,7 +78,7 @@ def key_numbers(res: dict) -> dict:
               f"SIM 포트 메시지 {sum(1 for x in c4['ports'] if not x['ok'])}",
         "C5": f"전이 위반 {len(c5['fail'])}건, 승인 필요 {sum(1 for a in c5['approvals'] if a['need'])}건 중 위반 "
               f"{sum(1 for a in c5['approvals'] if a['need'] and not a.get('ok', True))}",
-        "C6": f"선언 불일치 {sum(1 for x in c6['declared'] if x['state'] != '일치')}, /tap 불일치 "
+        "C6": f"선언 불일치 {sum(1 for x in c6['declared'] if x['state'] not in ('일치', '선언 밖(부정 입력)'))}, /tap 불일치 "
               f"{sum(1 for x in c6['tap'] if not x['ok'])}",
         "C7": f"버스 직접 열기 {len(res['C7']['direct_open'])}, 진입점 open_bus "
               f"{sum(res['C7']['entries'].values())}/{len(res['C7']['entries'])}, 적용성 해당·부분 "
@@ -81,6 +94,8 @@ def main() -> int:  # noqa: PLR0915
     ap.add_argument("--reuse", default="", help="점검 실행 없이 판정할 이전 실행 폴더")
     ap.add_argument("--base-port", type=int, default=48900)
     ap.add_argument("--no-doc", action="store_true", help="docs/45를 쓰지 않고 <out>/report.md만 쓴다")
+    ap.add_argument("--envelope", choices=("on", "off"), default="on", help="39차: 봉투(DEC-111). off면 lacal_server_raw.yaml")
+    ap.add_argument("--late-gw", action="store_true", help="39차: Gateway를 Core가 돈 뒤에 띄운다(시나리오 조회 경로)")
     a = ap.parse_args()
     t0 = time.time()
     out = Path(a.out)
@@ -99,7 +114,7 @@ def main() -> int:  # noqa: PLR0915
             for i in range(a.repeat):
                 rd = out / f"run{i + 1}"
                 print(f"[conf] 점검 실행 {i + 1}/{a.repeat} → {rd}", flush=True)
-                harness_run.run(rd, a.base_port)
+                harness_run.run(rd, a.base_port, envelope=a.envelope == "on", late_gw=a.late_gw)
                 runs.append(rd)
         finally:
             h.Stack.down_all()
@@ -161,6 +176,8 @@ def main() -> int:  # noqa: PLR0915
                 "n_vehicles": len(r.vehicles()), "cal": "28765/28766", "zenoh": f"{a.base_port}~{a.base_port + 30}",
                 "sim_s": round(sim_end, 1), "wall_s": round(m.get("t1_epoch", 0) - m.get("t0_epoch", 0)),
                 "pids": m.get("pids"), "dead": m.get("dead_at_end"), "log_issues": m.get("log_issues", []),
+                "envelope": m.get("envelope", True), "late_gw": m.get("late_gw", False),
+                "gw_scenario": [gw_scenario(rr.d) for _, x in all_res for rr in [x["run"]]],
                 "events": m.get("events", [])},
     }
     R["meta"]["elapsed_s"] = round(time.time() - t0)
@@ -172,7 +189,11 @@ def main() -> int:  # noqa: PLR0915
         REPORT_DOC.write_text(md, encoding="utf-8", newline="\n")
         print(f"[conf] 보고서 → {REPORT_DOC.relative_to(ROOT)}", flush=True)
         # DEC-095: 실행마다 이력 한 줄을 덧붙이고 docs/47을 다시 만든다 (--no-doc 실행은 남기지 않는다)
-        H.append(H.make_entry(R, repeat=len(all_res), mode="reuse" if a.reuse else "run"))
+        ent = H.make_entry(R, repeat=len(all_res), mode="reuse" if a.reuse else "run")
+        if not a.reuse:     # 39차: 외부 교환 방식·Gateway 기동 순서를 남긴다
+            ent["notes"] = [f"봉투 {a.envelope}" + (", Gateway 늦게 붙음(late_gw)" if a.late_gw else "")
+                            + ". " + "; ".join(R["run"]["gw_scenario"])]
+        H.append(ent)
         H.write_doc()
         print(f"[conf] 이력 → {H.HISTORY.relative_to(ROOT)}, {H.HISTORY_DOC.relative_to(ROOT)}", flush=True)
     for k, _ in report.ITEMS:

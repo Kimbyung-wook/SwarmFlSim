@@ -333,6 +333,13 @@
 | TC-QA-211 | 결정성 5종 × 3회와 DEC-044 송신 개수 장벽 로그 | `qa/p2_lostlink.py --case det --runs 3` | DEC-040, DEC-044 |
 | TC-QA-212 | O-30 전체 구성(Logger·Bridge·CAL Server·Gateway·외부 클라이언트) 시작 첫 송신, realtime 34회 + lockstep 5회 | `qa/run_release.py qa/o30_start.py --full` | DEC-040, DEC-044 |
 | TC-QA-213 | C3 시각 기준 = 시나리오 조건, 반복 실행 C3 합산, O-53 분류, 이력 정정 줄 (도구 시험과 38차 원자료 재판정) | `qa/conformance/tests`, `qa/conformance/run.py --reuse` | DEC-095, DEC-098, DEC-109 |
+| TC-QA-214 | 봉투 판정 도구: C2 봉투·내부 재검증, C6 봉투 이름 기준과 부정 입력 흐름, 외부 클라이언트 봉투 ↔ Gateway `envelope.py` 대조 | `qa/conformance/tests`, `qa/gw_ext_client.py --envelope` | DEC-111 |
+| TC-QA-215 | 표준 적합성 C1~C6 봉투 켬 반복(5+3+병합 뒤 1회), C3 시각 기준 = 시나리오 | `qa/conformance/run.py --repeat 5` | DEC-098, DEC-109, DEC-111 |
+| TC-QA-216 | 표준 적합성 C1~C6 Gateway 늦게 붙음 3회(시나리오 조회 경로) | `qa/conformance/run.py --repeat 3 --late-gw` | DEC-109 |
+| TC-QA-217 | 표준 적합성 C1~C6 `--envelope off` + `lacal_server_raw.yaml` | `qa/conformance/run.py --envelope off` | DEC-111 |
+| TC-QA-218 | QueryDataRequest → QueryDataRequestStatus PROCESSING·COMPLETED (적합성 실행 안) | `qa/conformance/harness_run.py` | DEC-112 |
+| TC-QA-219 | 결정성 5종 × 3회와 DEC-044 송신 개수 장벽 로그 | `qa/p2_lostlink.py --case det --runs 3` | DEC-040, DEC-044 |
+| TC-QA-220 | P1 판정 구성 6회와 같은 회차 Logger 끔 짝 | `qa/perf_p1_batch.py run --only d3_w_log,d3_w --repeat 6` | DEC-086, DEC-087 |
 
 ## 시험 결과
 
@@ -571,6 +578,13 @@
 | TC-QA-211 | 통과 | 2026-11-24 | 5종 모두 3회 같음, 누락 0. 장벽 경고·대기 0줄 (§47.5) |
 | TC-QA-212 | 재현 | 2026-11-24 | realtime 34회 중 1회 전 기체 첫 송신 프레임 7, 나머지와 lockstep 5회는 0 (§47.6) |
 | TC-QA-213 | 통과 | 2026-11-24 | 도구 시험 94건 통과. 재판정 7회 중 첫 메시지 기준 3회 실패(그중 1회는 이전 판정 통과), 시나리오 기준 4회 통과 (§48.2) |
+| TC-QA-214 | 통과 | 2026-11-24 | 도구 시험 100건 통과(새 6건). 봉투 부정 입력 4종 버스로 나감 0 (§49.2) |
+| TC-QA-215 | 통과 | 2026-11-24 | 9회 모두 C1~C6 통과, 받은 봉투 9,313건 재검증 실패 0, 시각 기준 시나리오 9/9. O-53 해소 (§49.3) |
+| TC-QA-216 | 통과 | 2026-11-24 | 3회 모두 C1~C6 통과, 조회로 시나리오 받음 3/3. O-54 신규 (§49.4) |
+| TC-QA-217 | 통과 | 2026-11-24 | C1~C6 통과, 선언 21흐름 모두 교환 (§49.5) |
+| TC-QA-218 | 통과 | 2026-11-24 | 모든 실행에서 PROCESSING → COMPLETED(13건) (§49.3) |
+| TC-QA-219 | 통과 | 2026-11-24 | 5종 모두 3회 같음. 장벽 경고·대기 0줄 (§49.6) |
+| TC-QA-220 | 측정 | 2026-11-24 | 10.57배(1.892 ms), 짝 11.39배, Logger 비용 0.154 ms. r4·r5 배경 부하(tailscaled), 부하 전 4회 10.94배 (§49.7) |
 
 ## 프로세스 결정
 
