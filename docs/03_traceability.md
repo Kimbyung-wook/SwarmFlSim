@@ -39,7 +39,7 @@
 | REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084, DEC-086, DEC-087, DEC-100 | WP10, WP1, WP3, WP4, WP7 | IMP-AGT-010, IMP-AGT-040~045(043 Superseded by IMP-AGT-052), IMP-AGT-052, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025~026, IMP-LOG-012~014 | TC-QA-114~118, TC-QA-133~154, 156, TC-AGT-118~131, TC-AGT-142, TC-API-008~009, TC-CORE-044~045, TC-LNK-030~032, TC-LOG-011~013 | 검증완료 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
-| REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078, DEC-101, DEC-105 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039, IMP-AGT-054~055, IMP-AGT-059 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126, TC-AGT-144~145, TC-AGT-149 | 구현중 |
+| REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078, DEC-101, DEC-105 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039, IMP-AGT-054~055, IMP-AGT-059 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126, TC-AGT-144~145, TC-AGT-149, TC-QA-202 | 구현중 |
 | REQ-LNK-004 | PRP-LNK-001, PRP-LNK-002 | DEC-008 | WP4 | IMP-LNK-001, 008 | TC-LNK-001, 004~006, 008~009, 011 | 구현중 |
 | REQ-CFG-001 | PRP-CFG-001 | DEC-029, DEC-050 | WP5, WP7 | IMP-API-008~010, IMP-CORE-006~007, 025, IMP-SCN-001, 003, 006~008, 011~012 | TC-CORE-009, 011~012, 039, TC-SCN-001~002, 004~010, 014~016 | 구현중 |
 | REQ-CFG-002 | PRP-CFG-001 |  | WP7 | IMP-SCN-001~004 | TC-SCN-001~007 | 구현중 |
@@ -315,6 +315,13 @@
 | TC-QA-197 | approval_demo 승인·거부·시간 초과, Gateway 외부 경로 | `qa/gw_approval36.py` | DEC-088, DEC-103, REQ-STD-001 |
 | TC-QA-198 | 시작 계획 미지원 작업 보고, 같은 틱 TaskStatus 순서(실제 스택 2회) | `qa/gw_agra.py` | DEC-088, DEC-102 |
 | TC-QA-199 | Gateway 재기동 외부 PUB 손실 5회 | `gateway/tools/measure_o13.py` | DEC-089 |
+| TC-QA-200 | OPN-077 (가) 기체별 `rx/**` 대 (나) 정확 키, 번갈아 P 고정 6+6회와 1차 기본·P 6+6회 | `qa/perf_p1_ab.py`, `qa/perf_p1_batch.py` | DEC-086, DEC-087, OPN-077 |
+| TC-QA-201 | 같은 회차 Logger 비용 짝 (P 고정, (가)·(나)) | `qa/perf_p1_ab.py summary` | DEC-086, OPN-077 |
+| TC-QA-202 | DEC-105 복구 간격 조건, 재밍 경계 실스택과 md 기록 | `qa/p2_lostlink.py --case jam --md-dump`, `qa/md_dump_agent.py` | DEC-085, DEC-101, DEC-105 |
+| TC-QA-203 | O-3 realtime MS 포트 탐지 구간 대 버스, 3회 | `qa/run_release.py qa/p5_e2e.py --mode realtime --fault` | DEC-051 |
+| TC-QA-204 | O-30 realtime 시작 첫 송신 프레임, 20회 + lockstep 5회 | `qa/o30_start.py` | DEC-040, DEC-044 |
+| TC-QA-205 | O-31 Gateway lockstep(rate 1) Core overrun, 2회 | `qa/gw_plan.py --order-trial --lockstep` | DEC-040 |
+| TC-QA-206 | O-43·O-44 Agent 틱 단계별 몫, P 고정 긴 창 9회 | `qa/perf_p1.py` (`d3_w_prof_P`·`d3_w_tl_P`·`d3_w_ti_P`), `qa/o43_phase.py` | DEC-086 |
 
 ## 시험 결과
 
@@ -539,6 +546,13 @@
 | TC-QA-197 | 통과 | 2026-11-23 | 승인 → 발사 → COMPLETED 5.98 s, 거부 REJECTED 발사 0, 응답 없음 15.04 s REJECTED 발사 0 (§45.5) |
 | TC-QA-198 | 통과 | 2026-11-23 | uav-005 REJECTED(unsupported task strike) 2/2, uav-001 TaskStatus 순서 2/2 (§45.5) |
 | TC-QA-199 | 통과 | 2026-11-23 | 회당 손실 2건(0.5 s, 접속 전), 접속 뒤·SUB 뒤 0 (§45.6) |
+| TC-QA-200 | 측정 | 2026-11-24 | (나)가 P 고정 Logger 켬 +0.176 ms, 끔 +0.173 ms 느림. 1차 기본·P도 +0.16~0.19 ms. (가) 판정 구성 10.90배 (§46.2) |
+| TC-QA-201 | 측정 | 2026-11-24 | Logger 비용 (가) 0.183 ms, (나) 0.178 ms (각 6쌍) (§46.2) |
+| TC-QA-202 | 통과 | 2026-11-23 | uav-007 상실 1회, `recover_aborted` 69.08·97.10, 72.08 재개 → 72.10 재상실 없음. 재보고는 recovering 시점 그대로 (§46.3) |
+| TC-QA-203 | 재현 안 됨 | 2026-11-23 | 3회 모두 MS 탐지 구간이 고장 창 밖에서 이어지고 건수가 버스와 같음 (§46.4) |
+| TC-QA-204 | 재현 안 됨 | 2026-11-23 | 25회 모두 전 기체 첫 송신 프레임 0. Logger·Bridge·Gateway 없는 구성 (§46.5) |
+| TC-QA-205 | 재현 | 2026-11-23 | overrun 87·90건(§28 7·28건), 누락 프레임 0 (§46.6) |
+| TC-QA-206 | 측정 | 2026-11-23 | 위상 0 13.7 ms(Agent 밖 5.8, `report_activity` 5.3~5.9), 위상 4 5.5 ms(Agent 밖 3.7). O-52 신규 (§46.7) |
 
 ## 프로세스 결정
 
