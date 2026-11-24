@@ -261,7 +261,7 @@ ID 규칙은 [01_id_convention.md](01_id_convention.md)를 따른다. 기준일�
 | OPN-074 | realtime에서 같은 링크의 메시지가 지연 표본 차이로 뒤바뀌어 도착(QA O-46) | Resolved by DEC-102 |
 | OPN-075 | 승인 흐름을 시험할 MA 부재(QA O-2). 기본 MA 중 발사 명령을 내는 것이 없다 | Resolved by DEC-103 |
 | OPN-076 | 내장 MA가 플러그인 API 밖의 `swarm_agent.geo`·`swarm_agent.racetrack`을 import(QA O-48) | Resolved by DEC-104 |
-| OPN-077 | DEC-100 뒤 P1 여유 축소(QA 35차: 규칙상 10.21배·여유 2%, 조용한 상태 11.15배, DEC-087 대비 +0.18 ms). 원인은 `swarm/<id>/rx/**` 기체별 구독 100개가 발행 쪽 경로 계산에 붙는 비용(맞는 put 4.4 → 30.8 µs)과 Logger `**`와 겹칠 때 모든 put에 붙는 비용. DEC-086(1)에 따라 의미를 바꾸지 않는 수단부터: (A) Agent가 기체별로 받는 L1 메시지의 정확한 키로 구독 (B) 발행 쪽 `declare_publisher`로 경로 계산을 미리 함(버스 API, WP0) | Open |
+| OPN-077 | DEC-100 뒤 P1 여유 축소(QA 35차: 규칙상 10.21배·여유 2%, 조용한 상태 11.15배, DEC-087 대비 +0.18 ms). 원인은 `swarm/<id>/rx/**` 기체별 구독 100개가 발행 쪽 경로 계산에 붙는 비용(맞는 put 4.4 → 30.8 µs)과 Logger `**`와 겹칠 때 모든 put에 붙는 비용. DEC-086(1)에 따라 의미를 바꾸지 않는 수단부터: (A) Agent가 기체별로 받는 L1 메시지의 정확한 키로 구독 (B) 발행 쪽 `declare_publisher`로 경로 계산을 미리 함(버스 API, WP0). QA 37차(§46): (A)는 P-core 고정 6회씩 번갈아 Logger 켬 +0.176 ms, 끔 +0.173 ms 느려 채택하지 않는다. 같은 측정에서 1 Hz 프레임 `report_activity`가 1.43 → 5.3~5.9 ms(O-52)로 늘어 DEC-087 대비 증가분 대부분을 설명하므로 O-52 원인부터 본다. (B)는 그 뒤 판단 | Open |
 | OPN-078 | DEC-101 복구 유지 시간이 잠깐 들린 Heartbeat를 거르지 못함(QA O-51). 유지 시간(5 s)과 상실 판정 시간(5 s)이 같아 유지 중 다시 상실 판정이 날 수 없다 | Resolved by DEC-105 |
 
 ## 5. A-GRA 메시지 매핑 (골격)
