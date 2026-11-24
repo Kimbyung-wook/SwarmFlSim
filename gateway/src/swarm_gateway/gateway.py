@@ -27,6 +27,7 @@ from .converters import (AlsoConverter, ConvContext, ConversionError, Converter,
 from .converters.base import SimClock
 from .command_state import CommandStateGate
 from .entities import KnownEntities
+from .envelope import RX, TX, EnvelopeError, Envelopes, NotAddressed, to_ascii
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
@@ -65,6 +66,10 @@ class GatewayConfig:
     scenario_query_timeout_s: float = 1.0
     scenario_query_interval_s: float = 0.5
     rejection_log: int = 200
+    # 외부 인터페이스 봉투 (DEC-111): 켜면 송신을 MA_TxDataPayloadCommand로 싸고 MA_RxDataPayload를 받는다.
+    # 라이브러리 기본은 끔(내부 메시지 그대로), 실행(CLI) 기본은 켬
+    envelope: bool = False
+    envelope_destinations: tuple[str, ...] = ()   # 송신 SpecificDestinationID (외부 시스템 UUID). 비우면 넣지 않는다
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
@@ -119,6 +124,9 @@ class Gateway:
         self._scenario_seen = threading.Event()
         self._query_stop = threading.Event()
         self._query_thread: threading.Thread | None = None
+        self.envelopes = Envelopes(self.codec, list(config.envelope_destinations))
+        if config.envelope:
+            self.retained.envelope_name = TX
         self._check_converters()
 
     # ------------------------------------------------------------------ 매핑
@@ -226,6 +234,18 @@ class Gateway:
             "MessageData": data,
         }}
 
+    def outbound(self, obj: dict) -> dict:
+        """전송 직전 모양. 봉투를 켜면 MA_TxDataPayloadCommand (DEC-111)"""
+        if not self.config.envelope:
+            return obj
+        env = self.envelopes.wrap(obj)
+        self.counters["envelope_tx"] += 1
+        return env
+
+    def inbound_names(self) -> list[str]:
+        """외부에서 받을 UCI 메시지 이름. 봉투를 켜면 MA_RxDataPayload 하나"""
+        return [RX] if self.config.envelope else self.import_names()
+
     def to_xml(self, obj: dict) -> bytes:
         """OMS JSON → UCI XML. XSD 검증에 실패하면 InvalidMessage"""
         return self.codec.to_xml_bytes(obj)
@@ -317,6 +337,12 @@ class Gateway:
                                         reason="no converter"))
         try:
             obj = self.envelope(uci, conv.to_uci(msg, ctx), at)
+            if self.config.envelope:   # 봉투 안 문자열은 ASCII (DEC-111). 공개 XSD 문자열 패턴도 [ -~]다
+                fixed = [0]
+                obj = to_ascii(obj, fixed)
+                if fixed[0]:
+                    self.counters["envelope_ascii_replaced"] += fixed[0]
+                    log.warning("gateway: %d non-ASCII strings replaced in %s", fixed[0], uci)
             self.to_xml(obj)
         except (ConversionError, InvalidMessage, ValueError, TypeError, KeyError) as exc:
             self.counters["invalid"] += 1
@@ -339,7 +365,7 @@ class Gateway:
         if self._outbox is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(self._outbox.put_nowait, (topic, obj))
         elif self.sink is not None:
-            res = self.sink(topic, obj)
+            res = self.sink(topic, self.outbound(obj))
             if asyncio.iscoroutine(res):
                 res.close()
                 raise RuntimeError("async sink needs Gateway.start() inside an event loop")
@@ -355,7 +381,7 @@ class Gateway:
         while True:
             topic, obj = await self._outbox.get()
             try:
-                res = self.sink(topic, obj) if self.sink else None
+                res = self.sink(topic, self.outbound(obj)) if self.sink else None
                 if asyncio.iscoroutine(res):
                     await res
                 self.counters["sent"] += 1
@@ -371,6 +397,25 @@ class Gateway:
             await asyncio.sleep(0.01)
 
     # ------------------------------------------------------------------ 2단계: 수신
+    def handle_incoming(self, uci_name: str, obj: dict) -> Outcome:
+        """전송 경로에서 받은 메시지. 봉투(MA_RxDataPayload)면 풀어서 handle_external로 (DEC-111)"""
+        if uci_name != RX:
+            if self.config.envelope:
+                self.counters["ext_rx"] += 1
+                return self._reject(Outcome("rejected", uci_name=uci_name, reason=f"envelope required ({RX})"))
+            return self.handle_external(uci_name, obj)
+        self.counters["envelope_rx"] += 1
+        try:
+            name, inner = self.envelopes.unwrap(obj, self.system_uuid)
+        except NotAddressed as exc:
+            self.counters["envelope_not_addressed"] += 1
+            log.info("gateway: %s ignored: %s", RX, exc)
+            return Outcome("ignored", uci_name=RX, reason=str(exc))
+        except EnvelopeError as exc:
+            self.counters["envelope_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=RX, reason=str(exc)))
+        return self.handle_external(name, inner)
+
     def handle_external(self, uci_name: str, obj: dict) -> Outcome:
         """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/<c2|mp>/<msg>"""
         self.counters["ext_rx"] += 1

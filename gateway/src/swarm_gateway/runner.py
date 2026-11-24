@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from swarm_api.bus import Bus
 
 from .converters import load_converters
+from .envelope import RX
 from .gateway import Gateway, GatewayConfig, inbound_entries
 from .lacal import LaCalClient, OmsJsonCodec
 from .mapping import MappingTable
@@ -51,7 +52,7 @@ class PreReadyInbox:
 
     def on_message(self, name: str, obj: dict) -> None:
         if self._direct and self.gateway is not None:
-            self.gateway.handle_external(name, obj)
+            self.gateway.handle_incoming(name, obj)
             return
         self.held += 1
         self.queued.append((time.monotonic(), name, obj))
@@ -65,7 +66,7 @@ class PreReadyInbox:
         outs = []
         while self.queued:
             t, name, obj = self.queued.popleft()
-            out = self.gateway.handle_external(name, obj)
+            out = self.gateway.handle_incoming(name, obj)
             outs.append(out)
             self.flushed += 1
             log.info("gateway: pre-ready %s held %.2f s -> %s%s", name, time.monotonic() - t, out.status,
@@ -113,17 +114,21 @@ async def start_gateway(bus: Bus, config: GatewayConfig, url: str, *, service_id
     # 1) 외부 명령 구독을 먼저 건다. 받은 것은 준비될 때까지 쌓는다 (O-13)
     inbox = PreReadyInbox(limit=inbox_limit)
     subscribed = []
+    wanted: dict[str, None] = {}
     for entry in inbound_entries(MappingTable.from_descriptors(), load_converters()):
         topic = (inbound_topic or config.topic("c2")) if entry.iface == "c2" else config.topic(entry.iface)
-        await client.subscribe(entry.uci_name, topic, inbox.on_message)
-        subscribed.append(f"{entry.uci_name}@{topic}")
-        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", entry.uci_name, topic, time.monotonic() - t0)
+        wanted[f"{RX if config.envelope else entry.uci_name}@{topic}"] = None   # 봉투면 토픽마다 MA_RxDataPayload (DEC-111)
+    for flow in wanted:
+        name, topic = flow.split("@")
+        await client.subscribe(name, topic, inbox.on_message)
+        subscribed.append(flow)
+        log.info("gateway: LA-CAL SUB %s@%s done at +%.2f s", name, topic, time.monotonic() - t0)
     sub_s = time.monotonic() - t0
     log.info("gateway: receiving external commands from +%.2f s; held until ready", sub_s)
     # 2) XSD 적재·매핑 생성. 이벤트 루프를 막지 않게 스레드에서 한다 (그동안 받은 메시지는 inbox로)
     gw = await asyncio.to_thread(Gateway, bus, config, codec=codec, sink=client.publish)
     log.info("gateway: XSD loaded, mapping built at +%.2f s", time.monotonic() - t0)
-    importable = {e.uci_name for e in gw.import_entries()}
+    importable = {e.uci_name for e in gw.import_entries()} | ({RX} if config.envelope else set())
     missing = [s for s in subscribed if s.split("@")[0] not in importable]
     if missing:   # XSD에 없는 수신 메시지: handle_external이 거부한다
         log.warning("gateway: subscribed but not importable (no XSD element): %s", sorted(missing))

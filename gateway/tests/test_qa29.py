@@ -197,7 +197,7 @@ def test_sim_clock_anchor_and_cli():
 # ---------------------------------------------------------------- TC-GW-038 (D-39)
 def test_external_c2_declares_every_gateway_flow(gateway):
     """external_c2의 declared.sub = Gateway가 외부로 내는 흐름 전부 (README 교환 표 15개)"""
-    cfg = yaml.safe_load((CONFIG_DIR / "lacal_server.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((CONFIG_DIR / "lacal_server_raw.yaml").read_text(encoding="utf-8"))
     pub = {f"{u}@{gateway.config.topic(e.iface)}" for e, u in gateway.export_targets()
            if e.uci_name not in gateway.import_names()}
     ext = cfg["services"]["external_c2"]["declared"]

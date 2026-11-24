@@ -70,12 +70,25 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--no-multicast` | 꺼짐(멀티캐스트 켬) | Zenoh 멀티캐스트 스카우팅을 끈다. 같은 PC의 다른 버스와 섞이지 않게 할 때 `--connect`와 함께 쓴다. 다른 참여자(Core·Datalink·Agent·브리지)와 같은 옵션이다 (D-27) |
 | `--lacal-admin` | `--lacal` 호스트의 8766 | CAL Server 관리 주소. 새 외부 구독에 변화 보고 마지막 값을 보낸다 (DEC-089). `none`이면 끈다 |
 | `--sim-epoch` | 없음(시나리오 값) | 모의 시각 0의 UTC 명시 재정의, 재현 시험용 (ISO 8601, 시간대 필수, 예 `2026-01-01T00:00:00Z`). 시나리오 값보다 우선한다 (DEC-098) |
+| `--envelope` | `on` | 외부 교환 봉투 (DEC-111). `on`이면 `MA_TxDataPayloadCommand`로 보내고 `MA_RxDataPayload`를 받는다. `off`는 내부 UCI 메시지를 그대로 주고받는다(9차까지의 동작, CAL Server 설정은 `config/lacal_server_raw.yaml`) |
+| `--envelope-dest` | 없음 | 송신 봉투의 `SpecificDestinationID`(외부 시스템 UUID, 여러 번 가능). 비우면 넣지 않는다 |
 | `--scenario-query-attempts` | 5 | 시작 때 `sim/ctrl/scenario` 조회 횟수. 구독으로 먼저 받으면 멈춘다. 0이면 조회하지 않는다 (DEC-109) |
 | `--scenario-query-interval` | 0.5 | 응답이 없을 때 다음 조회까지 s |
 | `--scenario-query-timeout` | 1.0 | 조회 한 번의 응답 대기 s |
 | `--stats-s` | 10 | 카운터 로그 주기 |
 
-외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다.
+외부 C2 쪽은 같은 CAL Server에 `external_c2` 서비스로 접속해 `swarm.c2` 토픽에 `MA_TaskCommand`·`MA_ApprovalRequestStatus`를, `swarm.mp` 토픽에 `MA_RoutePlan`·`MA_MissionPlan`을 PUB하면 된다. 봉투를 켠 실행(기본)에서는 이 메시지를 `MA_RxDataPayload`에 싸서 같은 토픽에 PUB하고, Gateway가 내는 메시지는 각 토픽의 `MA_TxDataPayloadCommand`를 SUB해 푼다(아래 "외부 교환 봉투").
+
+### 외부 교환 봉투 (DEC-111)
+
+- 외부 인터페이스(MA-C2) 메시지는 전송 경로(LA-CAL·STOMP)와 상관없이 봉투로 오간다. 토픽은 내부 메시지의 토픽 그대로다(`swarm.vi`·`swarm.c2`·`swarm.p2p`·`swarm.ms`·`swarm.mp`).
+- 받기: `MA_RxDataPayload`의 `EncodedPayload`(xs:hexBinary)는 내부 메시지 UCI XML 문서 전체(XML 선언 포함)를 문자당 1바이트로 넣은 것이다. Gateway는 봉투를 XSD로 검증하고, 풀어 낸 내부 XML도 XSD로 검증한 뒤 기존 수신 처리(변환·알려진 기체 확인)로 넘긴다. `MessageType`은 내부 메시지와 같아야 한다.
+- `SpecificDestinationID`가 비었거나 Gateway 시스템 UUID(LA-CAL이 준 값)를 포함할 때만 받는다. 아니면 거부가 아니라 무시한다(`envelope_not_addressed`).
+- 보내기: `MA_TxDataPayloadCommand`. 머리는 내부 메시지 머리를 복사하고, 새 `CommandID`(매번), `CommandState` NEW, `Priority` 1/1, `MessageType`(내부 메시지 열거값), `Timestamp`(내부 머리 시각), `--envelope-dest`가 있으면 `SpecificDestinationID`, `DestinationRouting` TOPIC_AND_SPECIFIC_DESTINATION을 싣는다. 봉투도 XSD로 검증한다. 거부 통지 `MA_TaskStatus`(D-35)와 늦게 붙은 구독자 재전송(DEC-089)도 봉투로 나간다. 재전송은 `MA_TxDataPayloadCommand@<토픽>` 구독에 그 토픽의 마지막 값을 보낸다.
+- `MessageType` 열거값은 XSD `MessageTypeEnum`에서 메시지 이름을 대문자 밑줄 표기로 바꿔 찾는다(`MA_TaskCommand` → `MA_TASK_COMMAND`). 목록을 따로 두지 않는다.
+- ASCII: 봉투 안 문자열은 ASCII다. 공개 XSD의 문자열 패턴도 `[ -~]`다. 봉투를 켜면 내보낼 문자열의 ASCII가 아닌 글자를 바꾼다(é → e, 그 밖은 `?`, `envelope_ascii_replaced`). 받은 내부 XML에 ASCII가 아닌 바이트가 있으면 거부한다.
+- 봉투를 켜면 봉투 없는 내부 메시지는 받지 않는다(`envelope required`). 기체 간(MA-MA)은 Datalink를 거치는 내부 P2P라 봉투와 무관하다.
+- 카운터: `envelope_tx`, `envelope_rx`, `envelope_not_addressed`, `envelope_invalid`, `envelope_ascii_replaced`.
 
 예: 같은 PC에서 Zenoh 라우터(또는 Datalink 등)에 직접 붙고 멀티캐스트를 끈다.
 
@@ -221,7 +234,9 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `tools/measure_o13.py` | 재기동 준비 전 손실 측정 (QA O-13, 계획 §35.5) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
+| `src/swarm_gateway/envelope.py` | 외부 교환 봉투 `MA_TxDataPayloadCommand`·`MA_RxDataPayload` (DEC-111) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |
 | `src/swarm_gateway/__main__.py` | 진입점 |
 | `src/swarm_gateway/lacal_server.py` | agra_lacal CAL Server 기동 래퍼 |
-| `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`. `external_c2`는 교환 표의 발행 15개 흐름을 모두 구독으로 선언한다, D-39) |
+| `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`. `external_c2`는 Gateway가 내는 흐름을 모두 구독으로 선언한다, D-39). 봉투 흐름(DEC-111: 토픽별 `MA_TxDataPayloadCommand`, `MA_RxDataPayload`) |
+| `config/lacal_server_raw.yaml` | 봉투 끔(`--envelope off`)용. 교환 표 15개 흐름 그대로 (10차까지와 같다) |

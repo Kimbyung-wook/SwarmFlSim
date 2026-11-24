@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import logging
 import sys
+import uuid
 
 from swarm_api.bus import BusConfig, open_bus, zenoh_available
 
@@ -44,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--sim-epoch", type=_utc, default=None,
                     help="모의 시각 0의 UTC 명시 재정의 (예: 2026-01-01T00:00:00Z, 재현 시험용). UCI 시각 = 이 값 + 모의 시각. "
                          "비우면 시나리오의 run.epoch_utc_us, 시나리오 전에는 첫 메시지 기준 (DEC-098)")
+    ap.add_argument("--envelope", choices=("on", "off"), default="on",
+                    help="외부 교환 봉투 (DEC-111): on이면 MA_TxDataPayloadCommand로 보내고 MA_RxDataPayload를 받는다. "
+                         "off는 내부 UCI 메시지를 그대로 주고받는다(9차까지의 동작, 기본 %(default)s)")
+    ap.add_argument("--envelope-dest", action="append", default=[], metavar="UUID", type=lambda v: str(uuid.UUID(v)),
+                    help="송신 봉투의 SpecificDestinationID (외부 시스템 UUID, 여러 번 가능). 비우면 넣지 않는다")
     ap.add_argument("--scenario-query-attempts", type=int, default=5,
                     help="시작 때 sim/ctrl/scenario 조회 횟수. 구독으로 먼저 받으면 멈춘다. 0이면 조회하지 않는다 (DEC-109)")
     ap.add_argument("--scenario-query-interval", type=float, default=0.5,
@@ -73,7 +79,8 @@ async def _run(args) -> None:
                              connect=args.connect, listen=args.listen,
                              multicast_scouting=not args.no_multicast))
     running = await start_gateway(bus, GatewayConfig(gcs=args.gcs, participant=args.participant, topic_prefix=args.topic_prefix,
-                                                     sim_epoch=args.sim_epoch,
+                                                     sim_epoch=args.sim_epoch, envelope=args.envelope == "on",
+                                                     envelope_destinations=tuple(args.envelope_dest),
                                                      scenario_query_attempts=args.scenario_query_attempts,
                                                      scenario_query_interval_s=args.scenario_query_interval,
                                                      scenario_query_timeout_s=args.scenario_query_timeout), args.lacal,
