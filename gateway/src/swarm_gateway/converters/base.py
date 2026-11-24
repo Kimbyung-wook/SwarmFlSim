@@ -26,6 +26,7 @@ from typing import Callable, ClassVar
 
 from google.protobuf.message import Message
 
+from ..codes import CodeTable
 from ..ids import IdMap
 from ..lacal import uci_timestamp
 
@@ -158,6 +159,7 @@ class ConvContext:
     now: Callable[[], dt.datetime] | None = None    # 비우면 clock.now. 1단계는 메시지마다 그 모의 시각으로 바꿔 쓴다
     routes: BoundedStore = field(default_factory=BoundedStore)      # 수신한 RoutePlan (UUID → 메시지, DEC-076)
     approvals: BoundedStore = field(default_factory=BoundedStore)   # 내보낸 ApprovalRequest (request_id → 요청 기체)
+    codes: CodeTable = field(default_factory=CodeTable)             # 운용자 6016 번호표 (IMP-GW-040, 기본 비어 있음)
 
     def __post_init__(self) -> None:
         if self.now is None:

@@ -33,6 +33,7 @@ from .envelope import RX, TX, EnvelopeError, Envelopes, NotAddressed, to_ascii
 from .ids import IdMap
 from .lacal import SCHEMA_VERSION, InvalidMessage, OmsJsonCodec, json_key, load_codec, uci_timestamp
 from .mapping import EXT, SIM, STD, MappingEntry, MappingTable
+from .codes import CodeTable
 from .query import QUERY, QUERY_STATUS, LatestValues, QueryLedger
 from .query import answer as query_answer
 from .retain import RetainedReports
@@ -87,6 +88,7 @@ class GatewayConfig:
     schema_version: str = SCHEMA_VERSION          # MessageHeader.SchemaVersion (DEC-110: 5.0a 하네스면 005.0a.ASK)
     exclude_messages: tuple[str, ...] = ()        # 내보내지 않을 UCI 메시지 (DEC-110: 5.0a에 없는 MA_NavigationReport·MA_Entity)
     query_result_limit: int = 256                 # QueryDataRequest 응답 결과 수 상한 (DEC-112)
+    codes: CodeTable = field(default_factory=CodeTable)   # 무장·플랫폼 종류 → MIL-STD-6016 번호 (IMP-GW-040). 비우면 싣지 않는다
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
@@ -123,7 +125,7 @@ class Gateway:
         self.codec = codec or load_codec()
         self.ids = ids or IdMap()
         self.clock = SimClock(config.sim_epoch)
-        self.ctx = ConvContext(ids=self.ids, gcs=config.gcs, clock=self.clock)
+        self.ctx = ConvContext(ids=self.ids, gcs=config.gcs, clock=self.clock, codes=config.codes.check(self.codec))
         self.entities = KnownEntities(config.gcs)
         self.commands = CommandStateGate()   # 외부 명령 상태 상태 기계 (DEC-097)   # 외부 명령이 가리킬 수 있는 기체 (D-35)
         self.sink = sink

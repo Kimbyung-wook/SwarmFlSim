@@ -91,12 +91,29 @@ class StrikeActivityConverter(Converter):
         return {"SubsystemID": _subsystem(ctx, msg), "Activity": [act]}
 
 
+MAX_HARDPOINTS = 256   # 한 무장의 Hardpoint 상한 (잔량이 이보다 크면 Mnemonic의 수량만 맞다)
+
+
 @register
 class StoreLoadoutConverter(Converter):
+    """무장마다 Loadout 하나. Mnemonic `id:typexN`은 그대로 둔다(호환).
+    번호표(`ctx.codes.stores`)에 그 종류가 있으면 잔량만큼 Hardpoint(Location 1..N)를 붙이고
+    각 Hardpoint(추상 StoreLoadoutItemPET → StoreLoadoutItemType)의 PossibleStore.Mission에 StoreType{번호, StoreCategory}와 종류 이름을 싣는다 (IMP-GW-040).
+    잔량 0이면 Hardpoint 없음. 번호가 없으면 그 전과 같다"""
     proto = "swarm.v1.StoreLoadout"
 
     def to_uci(self, msg: ms_pb2.StoreLoadout, ctx: ConvContext) -> dict:
         out: dict = {"StoreLoadoutConfigurationID": ctx.ids.ref("loadout", msg.header.source)}
-        if msg.stores:
-            out["Loadout"] = [{"Mnemonic": f"{s.id}:{s.type}x{s.count}"[:256]} for s in msg.stores]
+        loadout = []
+        for s in msg.stores:
+            item: dict = {"Mnemonic": f"{s.id}:{s.type}x{s.count}"[:256]}
+            code = ctx.codes.stores.get(s.type)
+            if code is not None and s.count > 0:
+                mission = {"StoreType": {"StoreType": code.store_type, "StoreCategory": code.category},
+                           "Mnemonic": s.type[:256] or s.id[:256]}
+                item["Hardpoint"] = [{"$type": "StoreLoadoutItemType", "Location": i, "PossibleStore": [{"Mission": mission}]}
+                                     for i in range(1, min(s.count, MAX_HARDPOINTS) + 1)]
+            loadout.append(item)
+        if loadout:
+            out["Loadout"] = loadout
         return out

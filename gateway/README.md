@@ -67,6 +67,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `--system-uuid` | GCS ID의 uuid5 | 우리 플랫폼 UUID(`MessageHeader.SystemID`, 받은 봉투 목적지 대조). STOMP에서만 쓴다. LA-CAL은 CAL Server가 준 값을 쓴다 |
 | `--schema-version` | `006.0.ASK` | `MessageHeader.SchemaVersion`. 5.0a 하네스는 `005.0a.ASK` |
 | `--exclude` | 없음(`005`로 시작하면 `MA_NavigationReport`·`MA_Entity`) | 내보내지 않을 UCI 메시지(여러 번 가능, `excluded.<이름>` 카운터). `none`이면 비운다 |
+| `--codes` | 없음 | 무장·플랫폼 종류 → MIL-STD-6016 번호표 YAML (형식 `config/codes.example.yaml`, IMP-GW-040). 비우면 번호를 싣지 않는다. 아래 "무장·탑재·트랙 분류" |
 | `--participant` | `gateway-0` | 발행 참여자 ID. `LinkEnvelope.publisher`에 싣는다 (DEC-077) |
 | `--service` | `swarm_gateway` | CAL Server 설정의 service_id |
 | `--topic-prefix` | `swarm` | LA-CAL 토픽 `<prefix>.<iface>` (vi, c2, p2p, ms) |
@@ -219,6 +220,21 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
   이미 끝난 RequestID는 그 끝 상태를 결과 없이 다시 하나 낸다(최근 1024개 기억).
 - 카운터: `query_rx`, `query.PROCESSING`·`query.COMPLETED`·`query.REJECTED`·`query.FAILED`, `query_native`, `query_invalid`.
 
+### 무장·탑재·트랙 분류 (IMP-GW-040, DEC-051·DEC-068)
+
+6.0a XSD는 무장 종류(`StoreType.StoreType`)와 플랫폼 종류(`PlatformType`)를 MIL-STD-6016 숫자 번호로 싣게 하고, 그 열거를 정의하지 않는다.
+번호는 저장소에 두지 않는다. 운용자가 `--codes` 파일로 주고, 기본은 비어 있다(`config/codes.example.yaml`은 빈 표와 형식 주석뿐).
+열거 값(`StoreCategoryEnum`·`EnvironmentEnum`·`ThreatEnum`)은 시작할 때 XSD 열거로 검사한다.
+
+| 메시지 | 번호표 없음(기본, 그 전과 같다) | 번호표에 그 종류가 있을 때 더하는 공개 필드 |
+|---|---|---|
+| `StoreLoadoutConfiguration` | 무장마다 `Loadout[].Mnemonic` = `id:typexN` | 같은 Loadout에 잔량 N만큼 `Hardpoint`(`StoreLoadoutItemType`, Location 1..N, 최대 256), 각 `PossibleStore[].Mission` = `StoreType{StoreType 번호, StoreCategory}`·`Mnemonic`(종류 이름). 잔량 0이면 없음 |
+| `MA_Entity` | `Identity.Standard` UNKNOWN 50 %, `Environment`(EntityKind에서) | `Identity.Platform[]` = `PlatformType` 번호, `PlatformTypeCategory`(생략하면 Environment), `ThreatType`(번호표에 적었을 때), `Confidence` 100. `Standard`는 그대로 |
+| `StrikeActivity` | 활동 상태·무장 플래그 | 없음. `MunitionInFlight`·`MA_MunitionActive`는 `TimeToImpact`가 필수인데 proto에 값이 없다(OPN-096) |
+
+- 번호표 키: `stores`는 `PayloadSpec.type`(예 `agm_short`), `platforms`는 `EntityKind` 이름에서 `ENTITY_KIND_`를 뗀 것(예 `FPV`, `MISSILE`).
+- `GenericUnitTypeEnum`(UAV 값)은 Link16 메타데이터의 "보고하는 데이터링크 종류"라 엔티티 분류로 쓰지 않는다.
+
 ### ID 변환
 
 - 내부 문자열 ID(엔티티·작업·명령)는 고정 이름공간의 UUIDv5로 바꾸고 `DescriptiveLabel`에 원래 ID를 싣는다.
@@ -271,6 +287,7 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `tools/measure_o13.py` | 재기동 준비 전 손실 측정 (QA O-13, 계획 §35.5) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
+| `src/swarm_gateway/codes.py` | 운용자 MIL-STD-6016 번호표 읽기·검사 (IMP-GW-040) |
 | `src/swarm_gateway/query.py` | `QueryDataRequest` 응답, 최신 값 보관 (DEC-112) |
 | `src/swarm_gateway/stomp.py` | STOMP 1.2 클라이언트 (DEC-110) |
 | `src/swarm_gateway/envelope.py` | 외부 교환 봉투 `MA_TxDataPayloadCommand`·`MA_RxDataPayload` (DEC-111) |
@@ -278,4 +295,5 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/__main__.py` | 진입점 |
 | `src/swarm_gateway/lacal_server.py` | agra_lacal CAL Server 기동 래퍼 |
 | `config/lacal_server.yaml` | 시험·연동용 CAL Server 설정 (서비스 `swarm_gateway`, `external_c2`. `external_c2`는 Gateway가 내는 흐름을 모두 구독으로 선언한다, D-39). 봉투 흐름(DEC-111: 토픽별 `MA_TxDataPayloadCommand`, `MA_RxDataPayload`) |
+| `config/codes.example.yaml` | `--codes` 형식 예시. 빈 표와 자리표시 주석뿐, 실제 번호 없음 (IMP-GW-040) |
 | `config/lacal_server_raw.yaml` | 봉투 끔(`--envelope off`)용. 교환 표 15개 흐름(10차까지와 같다)과 조회 흐름(DEC-112) |
