@@ -36,7 +36,7 @@
 | REQ-BHV-004 | PRP-BHV-002, PRP-BHV-003 | DEC-001, DEC-070 | WP3 | IMP-API-005, IMP-AGT-005, 012, IMP-EXP-001~004 | TC-AGT-006, 014, TC-EXP-001~007 | 구현중 |
 | REQ-NET-001 | PRP-NET-001, PRP-NET-002, PRP-NET-003, PRP-SIM-002 | DEC-002, DEC-010 | WP0, WP1 | IMP-API-001, 003~004, 007, IMP-CORE-007, IMP-LNK-011, IMP-LOG-005, 007, IMP-UI-001, 011, 020~022, IMP-INT-001, IMP-LOG-009, IMP-API-014, IMP-CORE-014, IMP-AGT-023, IMP-LNK-015~016 | TC-API-001~005, TC-CORE-012, 024~025, TC-AGT-035~037, TC-LNK-016, TC-UI-002, 008, 010~016, TC-INT-001~004 | 구현중 |
 | REQ-PRF-001 | PRP-BHV-002, PRP-SIM-001 | DEC-006 | WP1, WP3, WP10 | IMP-CORE-003, 008, IMP-MON-008, IMP-SCN-005, IMP-AGT-010, IMP-INT-002 | TC-CORE-002, 007, 013, TC-MON-009, TC-SCN-001, TC-INT-001 | 구현중 |
-| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084, DEC-086, DEC-087, DEC-100 | WP10, WP1, WP3, WP4, WP7 | IMP-AGT-010, IMP-AGT-040~045(043 Superseded by IMP-AGT-052), IMP-AGT-052, IMP-API-022, IMP-CORE-029~030, IMP-LNK-025~026, IMP-LOG-012~014 | TC-QA-114~118, TC-QA-133~154, 156, TC-AGT-118~131, TC-AGT-142, TC-API-008~009, TC-CORE-044~045, TC-LNK-030~032, TC-LOG-011~013 | 검증완료 |
+| REQ-PRF-002 | PRP-BHV-002 | DEC-005, DEC-006, DEC-079~084, DEC-086, DEC-087, DEC-100 | WP10, WP1, WP3, WP4, WP7 | IMP-AGT-010, IMP-AGT-040~045(043 Superseded by IMP-AGT-052), IMP-AGT-052, IMP-API-022, IMP-API-025, IMP-CORE-029~030, IMP-LNK-025~026, IMP-LOG-012~014 | TC-QA-114~118, TC-QA-133~154, 156, TC-AGT-118~131, TC-AGT-142, TC-API-008~009, TC-API-011, TC-CORE-044~045, TC-LNK-030~032, TC-LOG-011~013 | 검증완료 |
 | REQ-LNK-001 | PRP-LNK-001 | DEC-002, DEC-029, DEC-032, DEC-039, DEC-077 | WP4 | IMP-LNK-001~006, 008, 011, 014~016, 023 | TC-LNK-001~002, 004~006, 008~009, 011, 014~015, 024~026 | 구현중 |
 | REQ-LNK-002 | PRP-LNK-001 | DEC-009, DEC-028, DEC-030, DEC-055 | WP4 | IMP-CORE-011, IMP-LNK-007, 010, 012~013 | TC-CORE-016, TC-LNK-003, 007, 012~013 | 구현중 |
 | REQ-LNK-003 | PRP-LNK-001 | DEC-009, DEC-078, DEC-101, DEC-105 | WP3, WP4 | IMP-CORE-011, IMP-LNK-010, IMP-LNK-024, IMP-AGT-037~039, IMP-AGT-054~055, IMP-AGT-059 | TC-CORE-016, TC-LNK-007, TC-LNK-027~029, TC-AGT-094~117, TC-QA-119~126, TC-AGT-144~145, TC-AGT-149, TC-QA-202 | 구현중 |
@@ -87,6 +87,7 @@
 | IMP-API-022 | 계약 0.18.0: Python `Bus.subscribe(..., ordered=True)` 순서 보존 구독, ZenohBus 직접 콜백 | `api/python/src/swarm_api/bus.py`, `docs/10_contracts.md` §3.4 | DEC-083 |
 | IMP-API-023 | D-34: Zenoh 미발견 시 CMake 경고, `SWARM_REQUIRE_ZENOH=ON`이면 구성 실패 | `bus/CMakeLists.txt` | DEC-022, DEC-026 |
 | IMP-API-024 | 모의 시각 기준 `RunSpec.epoch_utc_us`, 계약 0.20.0, 계약 §1 시간 규칙 | `proto/swarm/v1/sim.proto`, `api/python/src/swarm_api/__init__.py`, `docs/10_contracts.md` | DEC-098 |
+| IMP-API-025 | Python `ZenohBus.put`이 키마다 발행자를 한 번 선언해 다시 쓴다(QoS·혼잡 정책은 세션 put과 같음, 상한 `MAX_DECLARED_PUBLISHERS` 16384 넘는 키는 세션 put, close에서 정리). 구독이 많은 발행 세션의 경로 계산 비용을 줄인다(Agent 자기 구독 705개에서 tx put 약 40 → 9 µs, ControlBatch 22 → 2 µs) | `api/python/src/swarm_api/bus.py` | OPN-077, DEC-086, DEC-100, QA O-52 |
 | TC-API-001 | 키 생성, 엔티티 ID 검증, 키 표현식 일치 | `api/python/tests/test_keys.py` | IMP-API-003 |
 | TC-API-002 | InMemoryBus 발행·구독·해제 | `api/python/tests/test_bus.py` | IMP-API-004 |
 | TC-API-003 | C++ 키·버스, 생성 코드 링크 | `api/cpp/tests/test_api.cpp` | IMP-API-002~004 |
@@ -97,6 +98,7 @@
 | TC-API-008 | 두 Zenoh 세션 사이에서 서로 다른 키 둘을 번갈아 보낼 때 `ordered=True` 구독 둘의 콜백 순서가 송신 순서와 같다. memory 백엔드도 `ordered`를 받는다 | `api/python/tests/test_open_bus.py` | IMP-API-022 |
 | TC-API-009 | Zenoh put 경로 비용 측정 도구 (`swarm_bus_bench`, ctest 제외). 2026-11-15 측정 2.5~3.2 µs/put, 키 정규화 생략은 이득 없음 | `bus/bench/bench_put.cpp` | DEC-086 |
 | TC-API-010 | 계약 버전 0.20.0, `epoch_utc_us` 기본 0과 직렬화 왕복 | `api/python/tests/test_contract_epoch.py` | DEC-098 |
+| TC-API-011 | 선언한 발행자 송신: 키·페이로드·encoding 동일, 키 다섯 개를 섞은 300건의 송신 순서 유지, 상한을 넘는 키는 세션 put, close 뒤 발행자 정리 | `api/python/tests/test_open_bus.py` | OPN-077, DEC-043, DEC-083 |
 
 | ID | 내용 | 위치 | 근거 |
 |---|---|---|---|

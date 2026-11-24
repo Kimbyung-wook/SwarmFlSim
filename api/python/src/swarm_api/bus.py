@@ -5,6 +5,7 @@ Zenoh 백엔드는 선택 의존성이다: uv sync --extra zenoh (eclipse-zenoh)
 """
 
 import json
+import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -83,6 +84,8 @@ class _ZenohSubscription:
 
 # DEC-043: lockstep 장벽과 데이터링크 경로
 LOCKSTEP_PATH_PREFIXES = ("sim/clock/", "swarm/")
+# OPN-077(B): 세션 하나가 미리 선언해 두는 발행자 수 상한 (기체 100대 Agent의 발행 키 수보다 넉넉히)
+MAX_DECLARED_PUBLISHERS = 16384
 
 
 class ZenohBus:
@@ -102,22 +105,49 @@ class ZenohBus:
             conf.insert_json5("scouting/multicast/enabled", "false")
         self._session = zenoh.open(conf)
         self._zenoh = zenoh
+        self._publishers: dict[str, Any] = {}
+        self._pub_lock = threading.Lock()
 
-    def put(self, key: str, payload: bytes, encoding: str) -> None:
-        if "*" in key:
-            raise ValueError(f"wildcard in put key: {key!r}")
+    def _publisher(self, key: str) -> Any:
+        # OPN-077(B): 키마다 발행자를 한 번 선언해 다시 쓴다. 세션 put은 매번 자기 세션의 구독까지 경로를 맞춰 보므로
+        # 구독이 많은 세션(Agent, DEC-100)에서 put 비용이 커진다. QoS는 세션 put과 같고 같은 세션의 같은 우선순위
+        # 큐로 나가므로 키 사이 송신 순서는 그대로다 (DEC-043, DEC-083). 상한을 넘는 키는 세션 put으로 보낸다
+        pub = self._publishers.get(key)
+        if pub is not None or len(self._publishers) >= MAX_DECLARED_PUBLISHERS:
+            return pub
+        with self._pub_lock:
+            pub = self._publishers.get(key)
+            if pub is None and len(self._publishers) < MAX_DECLARED_PUBLISHERS:
+                pub = self._session.declare_publisher(
+                    key,
+                    priority=self._zenoh.Priority.DATA,
+                    congestion_control=self._congestion(key),
+                    express=False,
+                )
+                self._publishers[key] = pub
+        return pub
+
+    def _congestion(self, key: str) -> Any:
         # DEC-043: lockstep 경로 키는 같은 우선순위·BLOCK으로 보내 혼잡 시 버리지 않고 링크 큐 하나의 순서를 지킨다
-        congestion = (
+        return (
             self._zenoh.CongestionControl.BLOCK
             if key.startswith(LOCKSTEP_PATH_PREFIXES)
             else self._zenoh.CongestionControl.DROP
         )
+
+    def put(self, key: str, payload: bytes, encoding: str) -> None:
+        if "*" in key:
+            raise ValueError(f"wildcard in put key: {key!r}")
+        pub = self._publisher(key)
+        if pub is not None:
+            pub.put(payload, encoding=encoding or None)
+            return
         self._session.put(
             key,
             payload,
             encoding=encoding or None,
             priority=self._zenoh.Priority.DATA,
-            congestion_control=congestion,
+            congestion_control=self._congestion(key),
             express=False,
         )
 
@@ -132,6 +162,10 @@ class ZenohBus:
         return _ZenohSubscription(self._session.declare_subscriber(keyexpr, handler))
 
     def close(self) -> None:
+        with self._pub_lock:
+            pubs, self._publishers = list(self._publishers.values()), {}
+        for pub in pubs:
+            pub.undeclare()
         self._session.close()
 
 
