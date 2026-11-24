@@ -537,10 +537,13 @@ bool Datalink::peers(const Node& a, const Node& b) const {
   return a.side == v1::SIDE_UNSPECIFIED || b.side == v1::SIDE_UNSPECIFIED || a.side == b.side;
 }
 
+// DEC-028: 엔티티가 재밍 영역 안이면 jammed. DEC-107(IMP-LNK-028): 그 영역의 owner가 엔티티 자신이면 그 영역은 건너뛴다.
+// 다른 엔티티 소유 영역은 진영과 관계없이 그대로 본다. 수신 판정(static_check_locked)과 link/state(pair_state_locked)가
+// 모두 이 함수를 쓴다
 bool Datalink::jammed_locked(const Node& n) const {
   if (!n.has_pos) return false;
   for (const auto& [owner, z] : jam_zones_)
-    if (in_jam_area(n.pos, z)) return true;
+    if (owner != n.id && in_jam_area(n.pos, z)) return true;
   return false;
 }
 
