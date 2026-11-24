@@ -53,6 +53,9 @@ const MA: ParamSpec[] = [
   spec({ name: "formation", layer: ParamLayer.BEHAVIOR, def: "line", description: "편대 형상 이름", runtime: true }),
   spec({ name: "aggressiveness", layer: ParamLayer.DECISION, def: 0.5, min: 0, max: 1, description: "교전 적극성" }),
   spec({ name: "autonomous_strike", layer: ParamLayer.DECISION, def: false, description: "표적 자동 지정 허용", runtime: false }),
+  // IMP-UI-086: 기본 MA와 같은 이름의 승인 변수. 목 소스는 남은 시간 표시를 보이려고 시간 제한 기본을 60 s로 둔다(기본 MA는 0 = 무한)
+  spec({ name: "approval_tasks", layer: ParamLayer.DECISION, def: "", description: "실행 전 GCS 승인을 받을 작업 종류, 쉼표 구분 (예: strike,jam)" }),
+  spec({ name: "approval_timeout_s", layer: ParamLayer.DECISION, def: 60, unit: "s", min: 0, max: 86400, description: "승인 응답을 기다리는 모의 시간, 넘으면 REJECTED. 0 = 무한" }),
 ];
 
 const SPECS: Record<number, ParamSpec[]> = {
@@ -123,6 +126,11 @@ export class MockParams {
     }
     this.rejected.set(this.k(id, owner), rej);
     return rej;
+  }
+
+  /** 적용된 값 하나 */
+  value(id: string, owner: ParamOwner, name: string): unknown {
+    return this.ensure(id, owner)[name];
   }
 
   snapshot(id: string, owner: ParamOwner, simTimeUs: bigint): EntityParams {

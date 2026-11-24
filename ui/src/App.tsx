@@ -2,11 +2,21 @@
 // IMP-UI-034: 버스 소스(브리지) 선택, C2 명령 전송·상태 표시, 부대 그룹 단축키 (REQ-UI-002~004, DEC-027)
 // IMP-UI-040: 우클릭 임무 메뉴·Ctrl+우클릭 항로 편집·보낸 임무 지도 표시 연결 (REQ-UI-003, REQ-UI-004, DEC-033)
 // IMP-UI-083: 보낸 임무 표시를 기체별 현재 행동(ActivityStore)으로 바꾼다. 작업은 TaskStatus로 수행이 확인된 뒤부터 그린다
+// IMP-UI-092: 운용 시나리오 보완 연결(docs/51 §4): 재밍·추적·다각형 영역·링크 상실 정책(임무 창), 작업 취소, 승인 패널,
+//   시험 진행자 고장 주입, 교전 기준 배포, GCS 수신 트랙(지도)·잔량·편대 리더(선택 패널)
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { create } from "@bufbuild/protobuf";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { FormationShape } from "./gen/swarm/v1/c2_pb";
+import type { FormationShape, LostLinkPolicy } from "./gen/swarm/v1/c2_pb";
+import type { FaultKind } from "./gen/swarm/v1/sim_pb";
 import { ParamOwner } from "./gen/swarm/v1/sim_pb";
+import { ApprovalPanel } from "./components/ApprovalPanel";
+import { CriteriaPanel } from "./components/CriteriaPanel";
+import { FaultPanel } from "./components/FaultPanel";
+import type { ApprovalView } from "./model/approvals";
+import { ApprovalStore, approvalRemainingS } from "./model/approvals";
+import { FaultLog, faultCommand } from "./model/faults";
+import { GcsPicture } from "./model/gcsPicture";
 import { SimCommandSchema } from "./gen/swarm/v1/sim_pb";
 import { ActivityStore } from "./model/activity";
 import type { ActivityMode } from "./model/activityMode";
@@ -30,14 +40,15 @@ import { ParamStore, flockingEntities, setParamsCommands } from "./model/params"
 import type { ParamScalar } from "./model/params";
 import { Toolbar } from "./components/Toolbar";
 import type { CameraMode } from "./model/camera";
-import type { GeoPoint, MissionSpec, OutgoingC2, TaskKind } from "./model/commands";
-import { C2Commander } from "./model/commands";
+import type { CriteriaSpec, GeoPoint, MissionSpec, OutgoingC2, TaskKind } from "./model/commands";
+import { AREA_MAX_VERTICES, C2Commander } from "./model/commands";
 import type { GroupSlot } from "./model/groups";
 import { GroupStore, groupId, slotFromKey } from "./model/groups";
 import { isAirborneKind } from "./model/entityView";
 import { LiveState } from "./model/liveState";
 import type { MapPoint, RightClick } from "./model/mapInput";
 import type { Overlay } from "./model/missionOverlay";
+import type { TaskEntry } from "./model/taskLog";
 import { combine, draftOverlay, emptyOverlay, missionOverlay } from "./model/missionOverlay";
 import type { RouteDraft } from "./model/routeDraft";
 import * as route from "./model/routeDraft";
@@ -107,6 +118,12 @@ export function App() {
       }),
     [params],
   );
+  const approvals = useMemo(() => new ApprovalStore(UI_ID), []);
+  const picture = useMemo(() => new GcsPicture(), []);
+  const faults = useMemo(() => new FaultLog(), []);
+  const lastSimUs = useRef(-1n);
+  const [criteria, setCriteria] = useState<CriteriaSpec>({ hostileSides: [Side.RED], requireApproval: false, weaponsFree: [], noStrike: [] });
+  const [lastPoint, setLastPoint] = useState<GeoPoint | null>(null);
   const [activityMode, setActivityMode] = useState<ActivityMode>("all");
   const commander = useMemo(() => (source.gcs ? new C2Commander(source.gcs, UI_ID, () => live.frame) : null), [source, live]);
   const [selection, setSelection] = useState<readonly string[]>([]);
@@ -120,6 +137,10 @@ export function App() {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [preview, setPreview] = useState<MissionSpec | null>(null);
   const [draft, setDraft] = useState<RouteDraft | null>(null);
+  /** 정찰·재밍 다각형을 그리는 중이면 꼭짓점 (IMP-UI-089) */
+  const [poly, setPoly] = useState<MapPoint[] | null>(null);
+  const polyRef = useRef(poly);
+  polyRef.current = poly;
   const menuRef = useRef(menu);
   menuRef.current = menu;
   const draftRef = useRef(draft);
@@ -132,13 +153,26 @@ export function App() {
       status: (s) => {
         live.onStatus(s);
         activity.onSimStatus(s.simTimeUs, simRate(s));
+        // Reset(모의 시각이 크게 뒤로 감): 지난 실행의 승인 요청·수신 정보·주입 기록을 지운다
+        if (lastSimUs.current >= 0n && s.simTimeUs + 1_000_000n < lastSimUs.current) {
+          approvals.clear();
+          picture.clear();
+          faults.clear();
+        }
+        lastSimUs.current = s.simTimeUs;
       },
       rx: (k, env) => {
         tasks.received(k, env);
         live.onRx(k, env);
         activity.onRx(k, env);
+        approvals.onRx(k, env);
+        picture.onRx(k, env);
       },
-      tx: (k, env) => activity.onTx(k, env),
+      tx: (k, env) => {
+        activity.onTx(k, env);
+        approvals.onTx(k, env);
+        picture.onTx(k, env);
+      },
       scenario: (s) => activity.onScenario(s),
       event: (_k, ev) => live.onEvent(ev),
       params: (p) => params.onParams(p),
@@ -151,7 +185,7 @@ export function App() {
       unsub();
       source.close();
     };
-  }, [source, live, tasks, params, activity]);
+  }, [source, live, tasks, params, activity, approvals, picture, faults]);
 
   useEffect(() => {
     if (conn?.state === "open") setError(null);
@@ -224,6 +258,8 @@ export function App() {
       const entry = tasks.sent(out);
       // 작업 내용은 tx 구독으로도 돌아오지만(브리지가 되돌려 주지 않을 수 있어) 직접 넣는다. 같은 task_id면 덮어쓴다
       activity.onTx(out.key, out.envelope);
+      approvals.onTx(out.key, out.envelope);
+      picture.onTx(out.key, out.envelope);
       try {
         source.sendC2(out);
       } catch (e) {
@@ -232,7 +268,56 @@ export function App() {
       }
       refresh();
     },
-    [commander, source, tasks, activity, flash],
+    [commander, source, tasks, activity, approvals, picture, flash],
+  );
+
+  /** 작업 취소 (IMP-UI-088). 새 기록을 만들지 않고 원래 작업에 표시한다 */
+  const cancelTask = useCallback(
+    (t: TaskEntry) => {
+      if (!commander) return;
+      try {
+        source.sendC2(commander.cancel(t.id, t.assignees));
+        tasks.cancelSent(t.id);
+      } catch (e) {
+        flash(`취소 전송 실패: ${errText(e)}`);
+      }
+      refresh();
+    },
+    [commander, source, tasks, flash],
+  );
+
+  const answerApproval = useCallback(
+    (v: ApprovalView, approved: boolean) => issue((c) => c.approval(v.requestId, approved, v.requester)),
+    [issue],
+  );
+
+  /** 고장 주입 (IMP-UI-087). 시뮬레이션 통제라 GCS 지정과 무관하다 */
+  const injectFault = useCallback(
+    (ids: readonly string[], kind: FaultKind, durationS: number) => {
+      for (const id of ids) {
+        try {
+          send(faultCommand(id, kind, durationS));
+          faults.injected(id, kind, durationS, live.frame.simTimeUs);
+        } catch (e) {
+          flash(errText(e));
+        }
+      }
+      refresh();
+    },
+    [send, faults, live, flash],
+  );
+
+  const clearFault = useCallback(
+    (id: string, kind: FaultKind) => {
+      try {
+        send(faultCommand(id, kind, 0, true));
+        faults.cleared(id, kind);
+      } catch (e) {
+        flash(errText(e));
+      }
+      refresh();
+    },
+    [send, faults, flash],
   );
 
   const task = useCallback(
@@ -250,24 +335,24 @@ export function App() {
   );
 
   const sendMission = useCallback(
-    (spec: MissionSpec) => {
+    (spec: MissionSpec, policy: LostLinkPolicy) => {
       const ids = targetsRef.current;
       if (ids.length === 0) return;
-      issue((c) => c.mission(spec, ids));
+      issue((c) => c.mission(spec, ids, undefined, policy));
       setMenu(null);
     },
     [issue],
   );
 
   /** 항로 전송. 한 번 보낸 항로는 같은 task_id로 다시 보내 전체를 바꾼다 */
-  const sendRoute = useCallback(() => {
+  const sendRoute = useCallback((policy: LostLinkPolicy) => {
     const d = draftRef.current;
     if (!d) return;
     const ids = targetsRef.current.length ? targetsRef.current : d.assignees;
     if (ids.length === 0) return;
     let taskId = d.taskId;
     issue((c) => {
-      const out = c.mission(route.routeSpec(d), ids, d.taskId ?? undefined);
+      const out = c.mission(route.routeSpec(d), ids, d.taskId ?? undefined, policy);
       taskId = out.taskId ?? null;
       return out;
     });
@@ -277,6 +362,13 @@ export function App() {
   const onRightClick = useCallback(
     (rc: RightClick) => {
       if (rc.kind === "menu") {
+        // 다각형을 그리는 중이면 꼭짓점을 더한다. 메뉴 지점(첫 꼭짓점)은 그대로
+        if (polyRef.current && menuRef.current) {
+          const v = polyRef.current;
+          if (v.length < AREA_MAX_VERTICES) setPoly([...v, rc.point]);
+          return;
+        }
+        setLastPoint({ latDeg: rc.point.latDeg, lonDeg: rc.point.lonDeg, altM: rc.point.heightM });
         const e = rc.entityId ? live.get(rc.entityId) : undefined;
         const targetId = e && e.alive && e.side === Side.RED ? e.id : null;
         setMenu({ point: rc.point, targetId });
@@ -287,6 +379,11 @@ export function App() {
     },
     [live, avgAlt],
   );
+
+  // 임무 창이 닫히면 다각형 그리기도 끝낸다
+  useEffect(() => {
+    if (!menu) setPoly(null);
+  }, [menu]);
 
   const onWaypointDrag = useCallback((i: number, p: MapPoint) => {
     setDraft((d) => (d && i < d.waypoints.length ? route.moveWaypoint(d, i, p) : d));
@@ -375,11 +472,28 @@ export function App() {
     : cfg.kind === "bus" && conn?.state !== "open"
       ? "브리지 미연결"
       : null;
+  /** 시뮬레이션 통제(sim/ctrl/cmd)는 GCS 지정과 무관하다 */
+  const simCtrlReason = cfg.kind === "bus" && conn?.state !== "open" ? "브리지 미연결" : null;
+
+  // 교전 기준 받는 기체: 선택한 아군 비행체, 없으면 살아 있는 아군 비행체 모두
+  const allFriendly = live.frame.entities.filter((e) => e.alive && isControllable(e) && isAirborneKind(e.kind)).map((e) => e.id);
+  const critDst = targets.length ? targets : allFriendly;
+  const nowUs = activity.simNowUs();
+  const pendingApprovals = approvals.pending();
+  const recentApprovals = approvals.list().filter((v) => !pendingApprovals.includes(v)).slice(0, 5);
 
   // 지도 도형: 편집 중 항로, 메뉴 미리보기. 보낸 임무는 기체별 현재 행동(MapView ActivityLayer)으로 그린다 (중복 도형 없음)
   const overlays: Overlay[] = [];
   if (draft) overlays.push(draftOverlay(draft));
   if (menu && preview) overlays.push(missionOverlay(preview, "pending", "", avgPos(live, targets)));
+  // GCS가 받은 공유 트랙(TrackShare, IMP-UI-090): 출처 기체를 붙인다. 표적 실제 위치(truth)가 아니다
+  for (const t of picture.sharedTracks(nowUs)) {
+    overlays.push({ points: [{ pos: t.pos, label: `트랙 ${t.targetId || t.trackId} ← ${t.source}`, style: "sent" }], lines: [], circles: [] });
+  }
+  // 편집 중인 교전 기준 영역
+  for (const [areas, name] of [[criteria.weaponsFree, "무기 사용"], [criteria.noStrike, "타격 금지"]] as const) {
+    for (const a of areas) overlays.push({ points: [{ pos: a.center, label: name, style: "draft" }], lines: [], circles: [{ center: a.center, radiusM: a.radiusM, style: "draft" }] });
+  }
   const overlayKey = JSON.stringify(overlays);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const overlay = useMemo(() => (overlays.length ? combine(...overlays) : emptyOverlay()), [overlayKey]);
@@ -439,6 +553,8 @@ export function App() {
           {menu && !draft && (
             <MissionMenu
               menu={menu}
+              polygon={poly}
+              onPolygon={setPoly}
               targetCount={targets.length}
               disabledReason={disabledReason}
               defaultAltM={avgAlt(targets)}
@@ -463,8 +579,20 @@ export function App() {
               onCancel={() => setDraft(null)}
             />
           )}
+          <ApprovalPanel
+            pending={pendingApprovals}
+            recent={recentApprovals}
+            remainingS={(v) => {
+              const t = params.get(v.requester, ParamOwner.MA)?.values?.["approval_timeout_s"];
+              return approvalRemainingS(v, typeof t === "number" ? t : undefined, nowUs);
+            }}
+            disabledReason={disabledReason}
+            onAnswer={answerApproval}
+          />
           <SelectionPanel
             ids={selection}
+            loadoutOf={(id) => picture.loadout(id)}
+            groupOf={(id) => picture.group(id)}
             entities={selection.map((id) => live.get(id))}
             followId={camera.id}
             cameraMode={camera.mode}
@@ -501,7 +629,20 @@ export function App() {
               setMenu(null);
               setDraft(route.draftFromSpec(t.mission, t.id, t.assignees));
             }}
+            onCancelTask={cancelTask}
           />
+          <section className="extra">
+            <CriteriaPanel
+              value={criteria}
+              onChange={setCriteria}
+              point={lastPoint}
+              dstCount={critDst.length}
+              dstLabel={targets.length ? "선택한 아군 기체" : "모든 아군 비행체"}
+              disabledReason={disabledReason}
+              onSend={() => issue((c) => c.engagementCriteria(criteria, critDst))}
+            />
+            <FaultPanel ids={selection} disabledReason={simCtrlReason} active={faults.active(nowUs)} onInject={injectFault} onClear={clearFault} />
+          </section>
         </aside>
       </div>
     </div>

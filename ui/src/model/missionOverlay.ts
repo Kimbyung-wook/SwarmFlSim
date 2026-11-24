@@ -1,5 +1,6 @@
 // IMP-UI-038: 임무 지도 표시 도형 (REQ-UI-003, REQ-UI-004, DEC-033)
 // 편집 중 항로, 임무 메뉴 지점, 보낸 임무(항로·선회·정찰·타격)를 점·선·원으로 바꾼다. Cesium에 의존하지 않는다.
+// IMP-UI-089: 정찰·재밍 다각형(그리는 중인 꼭짓점 번호와 윤곽)
 import type { GeoPoint, MissionSpec } from "./commands";
 import { racetrackGeometry } from "./racetrack";
 import type { RacetrackSpec } from "./racetrack";
@@ -91,10 +92,24 @@ export function missionOverlay(m: MissionSpec, style: OverlayStyle, label = "", 
       }
       break;
     case "search":
-      lead(m.center);
-      o.circles.push({ center: m.center, radiusM: m.radiusM, style });
-      o.points.push({ pos: m.center, label: label || "정찰", style });
+    case "jam": {
+      const name = m.kind === "jam" ? "재밍" : "정찰";
+      const poly = m.polygon ?? [];
+      if (poly.length > 0) {
+        // 그리는 중인 다각형: 꼭짓점 번호, 3점부터 닫은 윤곽
+        const c = centroid(poly);
+        lead(c);
+        poly.forEach((v, i) => o.points.push({ pos: v, label: i === 0 ? `${label || name} 1` : String(i + 1), style }));
+        o.lines.push({ positions: poly.length >= 3 ? [...poly, poly[0]] : poly, style });
+      } else {
+        lead(m.center);
+        o.circles.push({ center: m.center, radiusM: m.radiusM, style });
+        o.points.push({ pos: m.center, label: label || name, style });
+      }
       break;
+    }
+    case "track":
+      break; // 표적은 지도에 이미 있다
     case "strike":
       if (m.aimPoint) {
         lead(m.aimPoint);
@@ -116,6 +131,11 @@ export function missionOverlay(m: MissionSpec, style: OverlayStyle, label = "", 
       break;
   }
   return o;
+}
+
+export function centroid(ps: readonly GeoPoint[]): GeoPoint {
+  const n = ps.length;
+  return { latDeg: ps.reduce((a, p) => a + p.latDeg, 0) / n, lonDeg: ps.reduce((a, p) => a + p.lonDeg, 0) / n, altM: ps.reduce((a, p) => a + p.altM, 0) / n };
 }
 
 export function combine(...os: Overlay[]): Overlay {

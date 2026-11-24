@@ -6,6 +6,7 @@
 // - 귀환점: 그 기체가 처음 보고한 NavigationReport 위치 (Agent MA home 규칙, algorithms common.py TaskTracker.update와 같다)
 // - 타격 표적: aim_point, 없으면 GCS가 받은 TrackShare(rx/p2p) 중 그 target_id의 최근 위치
 // 편대 슬롯·flocking 목표처럼 GCS가 모르는 것은 그리지 않는다.
+// IMP-UI-085: 재밍 작업은 영역 윤곽(원·다각형)과 중심을 그린다
 import { fromBinary } from "@bufbuild/protobuf";
 import type { TaskCommand } from "../gen/swarm/v1/c2_pb";
 import { TaskCommandSchema, TaskStatusSchema } from "../gen/swarm/v1/c2_pb";
@@ -27,7 +28,7 @@ export const MA_DEFAULT_ACCEPTANCE_M = 80;
 /** 보고 뒤 이보다 오래 외삽하지 않는다(링크 상실 등). 이후에는 마지막 위치에 멈춘다 */
 export const MAX_EXTRAPOLATE_S = 3;
 
-export type ActivityKind = "moveTo" | "route" | "hold" | "returnToBase" | "strike" | "track" | "search";
+export type ActivityKind = "moveTo" | "route" | "hold" | "returnToBase" | "strike" | "track" | "search" | "jam";
 export type Glyph = "o" | "x";
 
 export interface ActivityMark {
@@ -94,6 +95,7 @@ const KIND_LABEL: Record<ActivityKind, string> = {
   strike: "타격",
   track: "추적",
   search: "정찰",
+  jam: "재밍",
 };
 
 /** 영역 윤곽(닫힘)과 중심. 원은 48각형으로 그린다 */
@@ -383,10 +385,11 @@ export class ActivityStore {
         if (!p) return null;
         return task.case === "strike" ? mk("strike", p, [{ pos: p, glyph: "x" }]) : mk("track", p, [{ pos: p, glyph: "o" }]);
       }
-      case "searchArea": {
+      case "searchArea":
+      case "jam": {
         const a = areaOutline(task.value.area, this.nav.get(id)?.pos.altM ?? 0);
         if (!a) return null;
-        return mk("search", a.center, [{ pos: a.center, glyph: "o" }], { paths: [a.outline] });
+        return mk(task.case === "jam" ? "jam" : "search", a.center, [{ pos: a.center, glyph: "o" }], { paths: [a.outline] });
       }
       case "route": {
         const wps = task.value.waypoints.flatMap((w) => {
@@ -415,7 +418,7 @@ export class ActivityStore {
         });
       }
       default:
-        return null; // jam 등 이동이 없는 작업
+        return null;
     }
   }
 
