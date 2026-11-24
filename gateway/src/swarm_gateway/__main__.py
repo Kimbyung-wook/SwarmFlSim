@@ -11,6 +11,7 @@ import uuid
 
 from swarm_api.bus import BusConfig, open_bus, zenoh_available
 
+from .codes import CodeTable
 from .gateway import DEFAULT_PARTICIPANT, GatewayConfig
 from .lacal import SCHEMA_VERSION
 from .runner import DEFAULT_SERVICE, start_gateway, start_stomp_gateway
@@ -72,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="응답이 없을 때 다음 조회까지 s (기본 %(default)s)")
     ap.add_argument("--scenario-query-timeout", type=float, default=1.0,
                     help="조회 한 번의 응답 대기 s (기본 %(default)s)")
+    ap.add_argument("--codes", default="", metavar="YAML",
+                    help="무장·플랫폼 종류 → MIL-STD-6016 번호표 (형식은 config/codes.example.yaml). 비우면 번호를 싣지 않고 "
+                         "Mnemonic·Environment만 낸다 (IMP-GW-040)")
     ap.add_argument("--participant", default=DEFAULT_PARTICIPANT,
                     help="발행 참여자 ID. LinkEnvelope.publisher에 싣는다 (기본 %(default)s, DEC-077)")
     ap.add_argument("--service", default=DEFAULT_SERVICE, help="CAL Server 설정의 service_id")
@@ -108,7 +112,8 @@ def gateway_config(args) -> GatewayConfig:
                          scenario_query_attempts=args.scenario_query_attempts,
                          scenario_query_interval_s=args.scenario_query_interval,
                          scenario_query_timeout_s=args.scenario_query_timeout,
-                         schema_version=args.schema_version, exclude_messages=exclude_list(args))
+                         schema_version=args.schema_version, exclude_messages=exclude_list(args),
+                         codes=CodeTable.load(args.codes))
 
 
 async def _run(args) -> None:

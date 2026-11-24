@@ -74,6 +74,13 @@ class TrackShareConverter(Converter):
         env = _ENVIRONMENT.get(msg.kind)
         if env:
             identity["Environment"] = [{"Environment": env, "Confidence": 100.0}]
+        code = ctx.codes.platforms.get(entity_pb2.EntityKind.Name(msg.kind).removeprefix("ENTITY_KIND_"))
+        if code is not None and (code.category or env):   # 번호표에 있는 종류만 (IMP-GW-040)
+            platform: dict = {"PlatformType": code.platform_type, "PlatformTypeCategory": code.category or env}
+            if code.threat:
+                platform["ThreatType"] = code.threat
+            platform["Confidence"] = 100.0
+            identity["Platform"] = [platform]
         out: dict = {
             "EntityID": ctx.ids.ref("entity", msg.track_id),
             "CreationTimestamp": {"DateTime": ts},

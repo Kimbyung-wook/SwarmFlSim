@@ -1,0 +1,18 @@
+# 무장·플랫폼 종류 → MIL-STD-6016 번호표 예시 (IMP-GW-040). `--codes <이 형식의 파일>`
+#
+# 6.0a XSD는 무장 종류(StoreType)와 플랫폼 종류(PlatformType)를 MIL-STD-6016 번호로 싣게 하고
+# 그 열거를 정의하지 않는다. 실제 번호는 운용자가 자기 출처에서 채운다. 이 저장소에는 번호를 두지 않는다.
+# 표가 비었거나 종류가 없으면 그 종류는 지금처럼 Mnemonic(탑재)·Environment(트랙)만 나간다.
+#
+# stores:      PayloadSpec.type(camera | jammer | aam_short | agm_short | fpv ...) → 무장 종류
+#   <type>: {store_type: <MIL-STD-6016 번호>, category: <StoreCategoryEnum: AIR | GROUND | ...>}
+#   → StoreLoadoutConfiguration Loadout[].Hardpoint[].PossibleStore[].Mission.StoreType
+#
+# platforms:   EntityKind 이름(UAV | FPV | MISSILE | AIR_TARGET | GROUND_TARGET | JAMMER_SITE | GCS) → 플랫폼 종류
+#   <kind>: {platform_type: <MIL-STD-6016 번호>, category: <EnvironmentEnum, 생략하면 트랙 환경>, threat: <ThreatEnum, 생략 가능>}
+#   → MA_Entity Identity.Platform[] {PlatformType, PlatformTypeCategory, ThreatType}
+#
+# 열거 값(category, threat)은 시작할 때 XSD 열거로 검사한다.
+
+stores: {}
+platforms: {}
