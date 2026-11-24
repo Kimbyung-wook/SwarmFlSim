@@ -60,7 +60,13 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | 옵션 | 기본값 | 내용 |
 |---|---|---|
 | `--gcs` | (필수) | GCS 엔티티 ID |
+| `--transport` | `lacal` | 외부 전송 경로 (DEC-110). `lacal`은 CAL Server OWP, `stomp`는 A-GRA 시험 하네스 버스(ActiveMQ STOMP). 아래 "시험 하네스 STOMP 경로" |
 | `--lacal` | `ws://127.0.0.1:8765` | CAL Server OWP 주소 |
+| `--stomp` | `127.0.0.1:61613` | STOMP 브로커 `host:port` (`--transport stomp`) |
+| `--stomp-login`, `--stomp-passcode` | 없음 | STOMP CONNECT `login`·`passcode`. 비우면 보내지 않는다 |
+| `--system-uuid` | GCS ID의 uuid5 | 우리 플랫폼 UUID(`MessageHeader.SystemID`, 받은 봉투 목적지 대조). STOMP에서만 쓴다. LA-CAL은 CAL Server가 준 값을 쓴다 |
+| `--schema-version` | `006.0.ASK` | `MessageHeader.SchemaVersion`. 5.0a 하네스는 `005.0a.ASK` |
+| `--exclude` | 없음(`005`로 시작하면 `MA_NavigationReport`·`MA_Entity`) | 내보내지 않을 UCI 메시지(여러 번 가능, `excluded.<이름>` 카운터). `none`이면 비운다 |
 | `--participant` | `gateway-0` | 발행 참여자 ID. `LinkEnvelope.publisher`에 싣는다 (DEC-077) |
 | `--service` | `swarm_gateway` | CAL Server 설정의 service_id |
 | `--topic-prefix` | `swarm` | LA-CAL 토픽 `<prefix>.<iface>` (vi, c2, p2p, ms) |
@@ -89,6 +95,22 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 - ASCII: 봉투 안 문자열은 ASCII다. 공개 XSD의 문자열 패턴도 `[ -~]`다. 봉투를 켜면 내보낼 문자열의 ASCII가 아닌 글자를 바꾼다(é → e, 그 밖은 `?`, `envelope_ascii_replaced`). 받은 내부 XML에 ASCII가 아닌 바이트가 있으면 거부한다.
 - 봉투를 켜면 봉투 없는 내부 메시지는 받지 않는다(`envelope required`). 기체 간(MA-MA)은 Datalink를 거치는 내부 P2P라 봉투와 무관하다.
 - 카운터: `envelope_tx`, `envelope_rx`, `envelope_not_addressed`, `envelope_invalid`, `envelope_ascii_replaced`.
+
+### 시험 하네스 STOMP 경로 (DEC-110)
+
+A-GRA 시험 하네스 버스(ActiveMQ STOMP 1.2)에 직접 붙는다. 변환·검증·봉투·알려진 기체 확인은 LA-CAL 경로와 같다.
+
+```bash
+cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --transport stomp --stomp 127.0.0.1:61613     --system-uuid <우리 UUID> --envelope-dest <C2 UUID> --schema-version 005.0a.ASK
+```
+
+- 토픽은 `/topic/<UCI 메시지 이름>`(MT 접미어 없음), 본문은 XSD를 통과한 UCI XML 문서다. XML의 UUID는 32자 hex다.
+- 받기: 봉투를 켜면 `/topic/MA_RxDataPayload`, 끄면 `/topic/<수신 UCI 이름>`(`MA_TaskCommand` 등)을 구독한다. 내보내기는 `/topic/MA_TxDataPayloadCommand`(끄면 `/topic/MA_TaskStatus` 등).
+- 하네스 토픽은 비지속이라 하네스보다 먼저 띄운다. 구독은 XSD 적재 전에 걸고 그동안 온 것은 쌓았다가 처리한다(O-13과 같은 규칙).
+- 시작·정지 신호: `/topic/TestHarness_StartSignal`·`StopSignal`의 `ServiceConfigurationChangeRequest`에 `/topic/TestHarness_SignalAck`로 `ServiceConfigurationChangeRequestStatus`를 낸다. `RequestID`는 그대로, 시작은 COMPLETED, 정지는 CANCELED. 신호는 정착 시간을 기다리지 않고 바로 응답한다.
+- 5.0a 하네스: `--schema-version 005.0a.ASK`이면 5.0a에 없는 `MA_NavigationReport`·`MA_Entity`를 내보내지 않는다. 공개 6.0a XSD로 검증한다(SchemaVersion 패턴상 005.0a.ASK도 맞다).
+- 플랫폼 UUID(`--system-uuid`)와 C2 UUID(`--envelope-dest`)를 설정한다. STOMP 클라이언트는 asyncio 스트림 위의 작은 구현이다(`stomp.py`, 의존성 추가 없음. `stomp.py` 패키지는 스레드 기반이라 쓰지 않았다).
+- 카운터: `signal_start`, `signal_stop`, `ext_invalid`(XML 아님·XSD 위반), `excluded.<이름>`.
 
 예: 같은 PC에서 Zenoh 라우터(또는 Datalink 등)에 직접 붙고 멀티캐스트를 끈다.
 
@@ -230,10 +252,11 @@ cd gateway && uv run python -m swarm_gateway --gcs gcs-01 --lacal ws://127.0.0.1
 | `src/swarm_gateway/ids.py` | 문자열 ID ⇄ UUID |
 | `src/swarm_gateway/converters/` | 메시지별 변환기 (vi, c2, p2p, ms, mp)와 uci_also 대상 변환기 (position: `MA_PositionReport`) |
 | `src/swarm_gateway/gateway.py` | 1단계·2단계 처리, 카운터, 거부 기록 |
-| `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결), 준비 전 외부 메시지 보관 (O-13) |
+| `src/swarm_gateway/runner.py` | LA-CAL 접속 (PUB/SUB 연결), STOMP 접속 (DEC-110), 준비 전 외부 메시지 보관 (O-13) |
 | `tools/measure_o13.py` | 재기동 준비 전 손실 측정 (QA O-13, 계획 §35.5) |
 | `src/swarm_gateway/command_state.py` | 외부 명령 상태 상태 기계 (DEC-097) |
 | `src/swarm_gateway/entities.py` | 알려진 기체 목록 (시나리오·수신 보고, D-35) |
+| `src/swarm_gateway/stomp.py` | STOMP 1.2 클라이언트 (DEC-110) |
 | `src/swarm_gateway/envelope.py` | 외부 교환 봉투 `MA_TxDataPayloadCommand`·`MA_RxDataPayload` (DEC-111) |
 | `src/swarm_gateway/retain.py` | 변화 보고 마지막 값 보관, 늦게 붙은 구독자 전달 (DEC-089) |
 | `src/swarm_gateway/__main__.py` | 진입점 |

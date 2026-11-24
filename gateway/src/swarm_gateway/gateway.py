@@ -13,11 +13,13 @@ import asyncio
 import datetime as dt
 import logging
 import threading
+import uuid
 from collections import Counter, deque
 from dataclasses import dataclass, field, replace
 from typing import Awaitable, Callable
 
 from google.protobuf.message import DecodeError
+from lxml import etree
 from swarm.v1 import c2_pb2, common_pb2, link_pb2, options_pb2, sim_pb2
 from swarm_api import keys
 from swarm_api.bus import Bus, Sample, protobuf_encoding
@@ -49,6 +51,16 @@ def inbound_entries(table: MappingTable, converters: dict[str, Converter]) -> li
     return [e for e in table.exportable()
             if e.l1 in INBOUND_L1 and e.full_name in converters and converters[e.full_name].supports_import()]
 
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False)
+
+
+def _root_name(body: bytes) -> str:
+    try:
+        return etree.QName(etree.fromstring(body, parser=_XML_PARSER)).localname
+    except (etree.XMLSyntaxError, ValueError):
+        return ""
+
+
 Sink = Callable[[str, dict], "Awaitable[None] | None"]
 
 
@@ -70,6 +82,8 @@ class GatewayConfig:
     # 라이브러리 기본은 끔(내부 메시지 그대로), 실행(CLI) 기본은 켬
     envelope: bool = False
     envelope_destinations: tuple[str, ...] = ()   # 송신 SpecificDestinationID (외부 시스템 UUID). 비우면 넣지 않는다
+    schema_version: str = SCHEMA_VERSION          # MessageHeader.SchemaVersion (DEC-110: 5.0a 하네스면 005.0a.ASK)
+    exclude_messages: tuple[str, ...] = ()        # 내보내지 않을 UCI 메시지 (DEC-110: 5.0a에 없는 MA_NavigationReport·MA_Entity)
     sim_epoch: dt.datetime | None = None   # 모의 시각 0의 UTC 명시 재정의. 비우면 시나리오 값, 그 전에는 첫 메시지 (DEC-098)
 
     def __post_init__(self) -> None:
@@ -230,7 +244,7 @@ class Gateway:
             "SecurityInformation": {"Classification": self.config.classification,
                                     "OwnerProducer": [{"GovernmentIdentifier": self.config.owner_producer}]},
             "MessageHeader": {"SystemID": {"UUID": self.system_uuid}, "Timestamp": uci_timestamp(at or self.ctx.now()),
-                              "SchemaVersion": SCHEMA_VERSION, "Mode": self.config.mode},
+                              "SchemaVersion": self.config.schema_version, "Mode": self.config.mode},
             "MessageData": data,
         }}
 
@@ -331,6 +345,9 @@ class Gateway:
         return conv if conv is not None and conv.supports_export() else None
 
     def _export_one(self, entry: MappingEntry, uci: str, msg, key: str, ctx: ConvContext, at: dt.datetime) -> Outcome:
+        if uci in self.config.exclude_messages:   # 상대 스키마 판에 없는 메시지 (DEC-110)
+            self.counters[f"excluded.{uci}"] += 1
+            return Outcome("excluded", proto=entry.full_name, uci_name=uci, key=key, reason="excluded by config")
         conv = self.converter_for(entry, uci)
         if conv is None:
             return self._reject(Outcome("unmapped", proto=entry.full_name, uci_name=uci, key=key,
@@ -415,6 +432,43 @@ class Gateway:
             self.counters["envelope_invalid"] += 1
             return self._reject(Outcome("rejected", uci_name=RX, reason=str(exc)))
         return self.handle_external(name, inner)
+
+    def handle_xml(self, body: bytes) -> Outcome:
+        """UCI XML 문서 한 건(STOMP 본문, DEC-110). XSD 검증 → OMS JSON → handle_incoming"""
+        try:
+            root = etree.fromstring(body, parser=_XML_PARSER)
+            self.codec.validate_xml(root)
+            obj = self.codec.xml_to_json(root)
+        except (etree.XMLSyntaxError, InvalidMessage, ValueError, KeyError) as exc:
+            self.counters["ext_rx"] += 1
+            self.counters["ext_invalid"] += 1
+            return self._reject(Outcome("rejected", uci_name=_root_name(body), reason=f"invalid XML: {exc}"))
+        return self.handle_incoming(next(iter(obj)), obj)
+
+    def signal_ack(self, body: bytes, start: bool) -> dict:
+        """시험 하네스 시작·정지 신호(ServiceConfigurationChangeRequest)의 응답 (DEC-110).
+        RequestID를 그대로 싣고 시작은 COMPLETED, 정지는 CANCELED. 신호는 검증하지 않고 RequestID만 읽는다"""
+        rid: dict = {}
+        try:
+            root = etree.fromstring(body, parser=_XML_PARSER)
+            node = root.find("{*}MessageData/{*}RequestID")
+            if node is not None:
+                u, label = node.findtext("{*}UUID"), node.findtext("{*}DescriptiveLabel")
+                if u:
+                    rid["UUID"] = str(uuid.UUID(u.strip()))
+                if label:
+                    rid["DescriptiveLabel"] = label
+        except (etree.XMLSyntaxError, ValueError):
+            pass
+        if "UUID" not in rid:
+            rid["UUID"] = str(uuid.uuid4())
+        self.counters["signal_start" if start else "signal_stop"] += 1
+        obj = self.envelope("ServiceConfigurationChangeRequestStatus",
+                            {"RequestID": rid, "RequestProcessingState": "COMPLETED" if start else "CANCELED"})
+        self.to_xml(obj)
+        log.info("gateway: test harness %s signal %s acked", "start" if start else "stop",
+                 rid.get("DescriptiveLabel", rid["UUID"]))
+        return obj
 
     def handle_external(self, uci_name: str, obj: dict) -> Outcome:
         """LA-CAL에서 받은 외부 메시지. 검증 → 변환 → swarm/<gcs>/tx/<c2|mp>/<msg>"""
