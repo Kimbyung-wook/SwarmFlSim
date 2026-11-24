@@ -205,6 +205,9 @@
 
 ## 메모
 
+- 11차 실하네스 확인(2026-11-24, 저장소 밖 scratchpad, 컨테이너·네트워크는 ID로 정리): ActiveMQ 6.1.2 + 하네스 1.2.2.a(5.0a)의 MA/C2 `common_query_data` 23건을 STOMP 경로 Gateway(`--transport stomp --schema-version 005.0a.ASK --system-uuid <하네스 플랫폼> --envelope-dest <하네스 C2> --bus memory`)에 실행. 통과 0/23. 23건 모두 1단계(`MA_RxDataPayload` 안 QueryDataRequest 수신·풀기), 신호 Ack(경고 없음), 첫 `QueryDataRequestStatus`(봉투 MessageType·목적지 필터·5.0a XSD 검증 통과)까지는 됐고, 두 번째 상태를 기다리다 6 s 시간초과. 하네스가 시드 42로 만든 요청의 `RequestState`가 23건 모두 CANCEL이라 Gateway가 CANCELED 하나만 냈다. NEW였다면 PROCESSING·COMPLETED 두 건이 나간다. CANCEL에도 두 건을 낼지는 PM 결정 사항으로 남긴다(보고서).
+- Windows에서 61613 근처 일부 포트(61620~61819 등)는 시스템 예약 범위라 브로커 포트 공개가 거부된다. 실험에서는 47613을 썼다.
+
 - DEC-089 전달 방식: OWP 1.0(agra_lacal)에는 보관(retained·durable) 메시지, 구독 알림, 상태 요청이 없다. 구독 시점을 아는 유일한 곳이 CAL Server 관리 포트의 그래프 API라 이를 쓴다. 관리 포트는 OWP 포트와 따로 열리고(기본 127.0.0.1:8766) 인증이 없다. 다른 PC에서 CAL Server를 띄우면 관리 포트를 Gateway에 열어 주거나 `--lacal-admin`을 지정해야 한다. 열 수 없으면 늦게 붙은 외부 시스템은 다음 변화까지 기다린다(1·2단계는 영향 없음).
 - 다시 PUB한 값은 OWP에 수신자 지정이 없어 같은 (메시지, 토픽)의 기존 구독자에게도 한 번 더 간다. 변화 보고는 마지막 상태라 뜻이 바뀌지 않는다. `MessageHeader.Timestamp`는 원래 보고 시각 그대로다.
 - Gateway가 재기동하면 보관 값이 없다. 그 경우의 복구는 Agent의 링크 복구 재송신(DEC-089 Agent 쪽)이나 다음 변화에 맡긴다.
